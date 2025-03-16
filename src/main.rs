@@ -76,6 +76,29 @@ fn main() {
     }
 }
 
+/// Executes a Wave file by reading, parsing, compiling, and running its contents.
+/// 
+/// This function performs the following steps:
+/// 
+/// 1. Reads the source code from the specified file path. If the file cannot be read,
+///    it prints an error message and exits the program.
+/// 2. Tokenizes the retrieved code and builds an abstract syntax tree (AST).
+/// 3. Generates an intermediate representation (IR) from the AST and compiles it to machine code.
+/// 4. Executes the compiled machine code and prints its output.
+/// 
+/// # Safety
+/// 
+/// This function is unsafe and must be called within an `unsafe` block since it executes
+/// arbitrary generated machine code.
+/// 
+/// # Examples
+///
+/// ```rust
+/// // Ensure that "example.wave" exists and contains valid code.
+/// unsafe {
+///     run_wave_file("example.wave");
+/// }
+/// ```
 unsafe fn run_wave_file(file_path: &str) {
     let code = match fs::read_to_string(file_path) {
         Ok(content) => content,

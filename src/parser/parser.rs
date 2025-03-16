@@ -331,7 +331,39 @@ fn parse_print(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
     }))
 }
 
-// IF parsing
+/// Parses an if statement from a stream of tokens into an AST node.
+///
+/// This function consumes tokens corresponding to an if statement following the syntax:
+/// `if (condition) { ... }`. It validates the presence of an opening parenthesis,
+/// parses the condition expression, and ensures a closing parenthesis and a function body enclosed in braces.
+/// Additionally, it supports optional `else if` branches and an optional `else` block.
+/// On encountering a syntactic error (such as a missing token or a malformed condition),
+/// it logs an error message and returns `None`.
+///
+/// # Examples
+///
+/// ```rust
+/// use std::iter::Peekable;
+/// use std::slice::Iter;
+///
+/// // Example tokens for a simple if statement: if (x > 0) { }
+/// let tokens = vec![
+///     Token { token_type: TokenType::If, lexeme: "if".to_owned() },
+///     Token { token_type: TokenType::Lparen, lexeme: "(".to_owned() },
+///     // Tokens representing a condition, e.g., x > 0
+///     Token { token_type: TokenType::Identifier, lexeme: "x".to_owned() },
+///     Token { token_type: TokenType::GreaterThan, lexeme: ">".to_owned() },
+///     Token { token_type: TokenType::Number, lexeme: "0".to_owned() },
+///     Token { token_type: TokenType::Rparen, lexeme: ")".to_owned() },
+///     Token { token_type: TokenType::Lbrace, lexeme: "{".to_owned() },
+///     // Block content tokens (empty block in this example)
+///     Token { token_type: TokenType::Rbrace, lexeme: "}".to_owned() },
+/// ];
+///
+/// let mut iter: Peekable<Iter<Token>> = tokens.iter().peekable();
+/// let if_node = parse_if(&mut iter);
+/// assert!(if_node.is_some());
+/// ```
 fn parse_if(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
     tokens.next(); // 'if'
 
@@ -421,7 +453,25 @@ fn parse_if(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
     }))
 }
 
-// FOR parsing
+/// Attempts to parse a `for` loop from the token stream.
+///
+/// This function is currently unimplemented and always returns `None`. In a complete parser,
+/// it would extract and construct an AST node representing the initialization, condition,
+/// increment, and body of a `for` loop.
+///
+/// # Examples
+///
+/// ```
+/// use std::iter::Peekable;
+/// use std::slice::Iter;
+///
+/// // Assuming `Token` and `ASTNode` are defined and the token stream is built accordingly.
+/// let tokens: Vec<Token> = vec![];
+/// let mut peekable = tokens.iter().peekable();
+///
+/// // Since this feature is not implemented yet, the function returns None.
+/// assert_eq!(parse_for(&mut peekable), None);
+/// ```
 fn parse_for(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
     /*
     // Check 'for' keyword and see if there is '()

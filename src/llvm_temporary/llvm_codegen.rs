@@ -9,6 +9,34 @@ use inkwell::types::{AnyTypeEnum, BasicType, BasicTypeEnum};
 use crate::lexer::TokenType;
 use crate::parser::parse_type;
 
+/// Generates LLVM Intermediate Representation (IR) as a string from the provided Abstract Syntax Tree (AST).
+///
+/// This unsafe function sets up an LLVM context, module, and builder to convert an AST into its corresponding LLVM IR.
+/// It handles function definitions with variable declarations (with optional initialization), print statements, conditional
+/// branches (if statements), and while loops. Unsupported constructs or nodes (including commented-out for-loop code)
+/// are ignored.
+///
+/// # Safety
+///
+/// This function is unsafe due to its direct manipulation of low-level LLVM constructs. Callers must ensure that the AST
+/// is valid and that any side effects of using LLVM objects are properly managed.
+///
+/// # Examples
+///
+/// ```
+/// // Assuming ASTNode and FunctionNode are defined appropriately in your project.
+/// let main_function = FunctionNode {
+///     name: String::from("main"),
+///     parameters: vec![],
+///     body: vec![], // Populate with desired AST nodes (e.g., Variable, Println, If, While, etc.)
+/// };
+/// let ast = ASTNode::Function(main_function);
+///
+/// unsafe {
+///     let ir = generate_ir(&ast);
+///     println!("{}", ir);
+/// }
+/// ```
 pub unsafe fn generate_ir(ast: &ASTNode) -> String {
     let context = Context::create();
     let module = context.create_module("main");
