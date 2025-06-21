@@ -436,6 +436,14 @@ pub fn generate_expression_ir<'ctx>(
 
             let constraints_str = constraint_parts.join(",");
 
+            for (reg, _) in outputs {
+                constraint_parts.push(format!("={}", reg))
+            }
+
+            for (reg, _) in inputs {
+                constraint_parts.push(reg.to_string());
+            }
+
             let fn_type = if outputs.is_empty() {
                 context.void_type().fn_type(&[], false)
             } else {

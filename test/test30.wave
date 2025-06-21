@@ -1,5 +1,6 @@
 fun main() {
     var msg_ptr: ptr<i8> = "Hello from syscall!\n";
+    var ret_val: i64;
 
     asm {
         "mov rax, 1"
@@ -7,5 +8,6 @@ fun main() {
         in("rdi") 1
         in("rsi") msg_ptr
         in("rdx") 20
+        out("rax") ret_val
     }
 }

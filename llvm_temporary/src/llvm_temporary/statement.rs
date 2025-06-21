@@ -509,19 +509,12 @@ pub fn generate_statement_ir<'ctx>(
 
             for (reg, var) in outputs {
                 if input_regs.contains(reg) {
-                    panic!("Register '{}' used in both input and output in inline asm", reg);
+                    panic!("Register '{}' used in both input and output", reg);
                 }
-
                 if !seen_regs.insert(reg.to_string()) {
                     panic!("Register '{}' duplicated in outputs", reg);
                 }
-
-                let info = variables
-                    .get(var)
-                    .unwrap_or_else(|| panic!("Output variable '{}' not found", var));
-                let dummy_val = builder.build_load(info.ptr, var).unwrap().into();
-                operand_vals.push(dummy_val);
-                constraint_parts.push(format!("={{{}}}", reg)); // e.g., ={rax}
+                constraint_parts.push(format!("={{{}}}", reg)); // ={rax}
             }
 
             for (reg, var) in inputs {
@@ -532,19 +525,22 @@ pub fn generate_statement_ir<'ctx>(
                 let val: BasicMetadataValueEnum = if let Ok(value) = var.parse::<i64>() {
                     context.i64_type().const_int(value as u64, false).into()
                 } else {
-                    let info = variables
-                        .get(var)
+                    let info = variables.get(var)
                         .unwrap_or_else(|| panic!("Input variable '{}' not found", var));
                     builder.build_load(info.ptr, var).unwrap().into()
                 };
 
                 operand_vals.push(val);
-                constraint_parts.push(format!("{{{}}}", reg));
+                constraint_parts.push(format!("{{{}}}", reg)); // {rdi}
             }
 
-            let constraints_str: String = constraint_parts.join(",");
+            let constraints_str = constraint_parts.join(",");
 
-            let fn_type = context.i64_type().fn_type(&[], false);
+            let (fn_type, expects_return) = if !outputs.is_empty() {
+                (context.i64_type().fn_type(&[], false), true)
+            } else {
+                (context.void_type().fn_type(&[], false), false)
+            };
 
             let inline_asm_ptr = context.create_inline_asm(
                 fn_type,
@@ -557,16 +553,16 @@ pub fn generate_statement_ir<'ctx>(
             );
 
             let inline_asm_fn = CallableValue::try_from(inline_asm_ptr)
-                .expect("Failed to convert inline asm to CallableValue");
+                .expect("Failed to convert inline asm");
 
-            let call = builder
-                .build_call(inline_asm_fn, &operand_vals, "inline_asm")
-                .unwrap();
+            let call = builder.build_call(inline_asm_fn, &operand_vals, "inline_asm").unwrap();
 
-            if let Some((_, out_var)) = outputs.first() {
-                let ret_ptr = variables.get(out_var).unwrap().ptr;
+            if expects_return {
                 let ret_val = call.try_as_basic_value().left().unwrap();
-                builder.build_store(ret_ptr, ret_val).unwrap();
+                let (_, var) = outputs.iter().next().unwrap();
+                let info = variables.get(var)
+                    .unwrap_or_else(|| panic!("Output variable '{}' not found", var));
+                builder.build_store(info.ptr, ret_val).unwrap();
             }
         }
         ASTNode::Statement(StatementNode::Expression(expr)) => {

@@ -1009,9 +1009,9 @@ fn parse_asm_block(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
                 };
 
                 if is_input {
-                    inputs.push((reg, value));
+                    inputs.push((reg.clone(), value));
                 } else {
-                    outputs.push((reg, value));
+                    outputs.push((reg.clone(), value));
                 }
             }
 
