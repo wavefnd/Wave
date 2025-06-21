@@ -640,7 +640,6 @@ pub fn generate_statement_ir<'ctx>(
         ASTNode::Statement(StatementNode::Continue) => {
             if let Some(target_block) = loop_continue_stack.last() {
                 let _ = builder.build_unconditional_branch(*target_block);
-                builder.build_unreachable().unwrap();
             } else {
                 panic!("continue used outside of loop!");
             }

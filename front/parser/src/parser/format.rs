@@ -445,10 +445,13 @@ where
             })
         }
         _ => {
-            if let TokenType::SemiColon = token.token_type { } else {
-                println!("Error: Expected primary expression, found {:?}", token.token_type);
+            match token.token_type {
+                TokenType::Continue | TokenType::Break | TokenType::Return | TokenType::SemiColon => None,
+                _ => {
+                    println!("Error: Expected primary expression, found {:?}", token.token_type);
+                    None
+                }
             }
-            None
         }
     }
 }

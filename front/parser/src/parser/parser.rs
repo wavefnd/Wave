@@ -215,11 +215,21 @@ pub fn extract_body(tokens: &mut Peekable<Iter<Token>>) -> Option<Vec<ASTNode>> 
             }
             TokenType::Println => {
                 tokens.next(); // consume 'println'
-                body.push(parse_println(tokens)?);
+                let node = parse_println(tokens)?;
+                // 세미콜론 처리 추가
+                if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
+                    tokens.next();
+                }
+                body.push(node);
             }
             TokenType::Print => {
-                tokens.next();
-                body.push(parse_print(tokens)?);
+                tokens.next(); // consume 'print'
+                let node = parse_print(tokens)?;
+                // 세미콜론 처리 추가
+                if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
+                    tokens.next();
+                }
+                body.push(node);
             }
             TokenType::If => {
                 tokens.next();
@@ -252,7 +262,7 @@ pub fn extract_body(tokens: &mut Peekable<Iter<Token>>) -> Option<Vec<ASTNode>> 
                 body.push(ASTNode::Statement(StatementNode::Break));
             }
             TokenType::Continue => {
-                tokens.next(); // consume 'break'
+                tokens.next(); // consume 'continue'
                 if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
                     tokens.next(); // consume ;
                 }
@@ -1116,40 +1126,65 @@ fn parse_block(tokens: &mut Peekable<Iter<Token>>) -> Option<Vec<ASTNode>> {
             TokenType::If => parse_if(tokens),
             TokenType::For => parse_for(tokens),
             TokenType::While => parse_while(tokens),
-            TokenType::Identifier(_) => parse_assignment(tokens, token),
-            TokenType::Break => {
-                if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
-                    tokens.next();
-                }
-                Some(ASTNode::Statement(StatementNode::Break))
-            }
             TokenType::Continue => {
                 if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
-                    tokens.next();
+                    tokens.next(); // consume ;
                 }
                 Some(ASTNode::Statement(StatementNode::Continue))
             }
+            TokenType::Break => {
+                if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
+                    tokens.next(); // consume ;
+                }
+                Some(ASTNode::Statement(StatementNode::Break))
+            }
+            TokenType::Identifier(_) => parse_assignment(tokens, token),
             TokenType::Return => {
                 let expr = if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
                     tokens.next(); // consume ;
                     None
                 } else {
-                    let value = parse_expression(tokens)?;
-                    if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
-                        tokens.next(); // consume ;
+                    if let Some(peek_token) = tokens.peek() {
+                        match peek_token.token_type {
+                            TokenType::Break | TokenType::Continue | TokenType::Return => {
+                                println!("Error: Invalid return expression starting with {:?}", peek_token.token_type);
+                                tokens.next(); // consume the invalid token
+                                if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
+                                    tokens.next(); // consume ;
+                                }
+                                None
+                            }
+                            _ => {
+                                let value = parse_expression(tokens)?;
+                                if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
+                                    tokens.next(); // consume ;
+                                }
+                                Some(value)
+                            }
+                        }
+                    } else {
+                        None
                     }
-                    Some(value)
                 };
                 Some(ASTNode::Statement(StatementNode::Return(expr)))
             }
             _ => {
-                if let Some(expr) = parse_expression(tokens) {
+                if matches!(token.token_type, TokenType::Continue | TokenType::Break | TokenType::Return) {
+                    None
+                } else if let Some(expr) = parse_expression(tokens) {
                     if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
                         tokens.next();
                     }
                     Some(ASTNode::Statement(StatementNode::Expression(expr)))
                 } else {
-                    println!("Error: Expected primary expression, found {:?}", token.token_type);
+                    if !matches!(token.token_type, TokenType::SemiColon) {
+                        println!("Error: Expected primary expression, found {:?}", token.token_type);
+                    }
+                    while let Some(tok) = tokens.next() {
+                        if tok.token_type == TokenType::SemiColon {
+                            break;
+                        }
+                    }
                     None
                 }
             }

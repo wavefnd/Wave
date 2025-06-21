@@ -150,10 +150,15 @@ pub fn generate_expression_ir<'ctx>(
             }
 
             let call_site = builder.build_call(function, &compiled_args, "calltmp").unwrap();
-            if let Some(ret_val) = call_site.try_as_basic_value().left() {
-                ret_val
+
+            if function_type.get_return_type().is_some() {
+                if let Some(ret_val) = call_site.try_as_basic_value().left() {
+                    ret_val
+                } else {
+                    panic!("Function '{}' should return a value but didn't", name);
+                }
             } else {
-                panic!("Function '{}' did not return a value", name);
+                context.i32_type().const_zero().as_basic_value_enum()
             }
         }
 
