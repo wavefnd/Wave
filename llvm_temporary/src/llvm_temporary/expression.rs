@@ -57,7 +57,16 @@ pub fn generate_expression_ir<'ctx>(
 
         Expression::Variable(var_name) => {
             if let Some(var_info) = variables.get(var_name) {
-                builder.build_load(var_info.ptr, var_name).unwrap()
+                let var_type = var_info.ptr.get_type().get_element_type();
+
+                match var_type {
+                    AnyTypeEnum::ArrayType(_) => {
+                        var_info.ptr.as_basic_value_enum()
+                    }
+                    _ => {
+                        builder.build_load(var_info.ptr, var_name).unwrap().as_basic_value_enum()
+                    }
+                }
             } else if module.get_function(var_name).is_some() {
                 panic!("Error: '{}' is a function name, not a variable", var_name);
             } else {
@@ -118,9 +127,7 @@ pub fn generate_expression_ir<'ctx>(
                     Expression::Variable(var_name) => {
                         let ptr = variables.get(var_name)
                             .unwrap_or_else(|| panic!("Variable {} not found", var_name));
-                        let alloca = builder.build_alloca(ptr.ptr.get_type(), "tmp_var_ptr").unwrap();
-                        builder.build_store(alloca, ptr.ptr).unwrap();
-                        alloca.as_basic_value_enum()
+                        ptr.ptr.as_basic_value_enum()
                     }
 
                     _ => panic!("& operator must be used on variable name or array literal"),
@@ -374,15 +381,21 @@ pub fn generate_expression_ir<'ctx>(
                             &[zero, index_int],
                             "array_index_gep",
                         ).unwrap();
-                        builder.build_load(gep, "load_array_elem").unwrap().as_basic_value_enum()
-                    }
 
-                    else {
+                        let elem_type = element_type.into_array_type().get_element_type();
+
+                        if elem_type.is_pointer_type() {
+                            builder.build_load(gep, "load_ptr_from_array").unwrap().as_basic_value_enum()
+                        } else {
+                            builder.build_load(gep, "load_array_elem").unwrap().as_basic_value_enum()
+                        }
+                    } else {
                         let gep = builder.build_in_bounds_gep(
                             ptr_val,
                             &[index_int],
                             "ptr_index_gep",
                         ).unwrap();
+
                         builder.build_load(gep, "load_ptr_elem").unwrap().as_basic_value_enum()
                     }
                 }
