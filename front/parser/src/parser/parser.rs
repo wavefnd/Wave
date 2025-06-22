@@ -101,7 +101,7 @@ pub fn parse_parameters(tokens: &mut Peekable<Iter<Token>>) -> Vec<ParameterNode
                 });
 
                 match tokens.peek().map(|t| &t.token_type) {
-                    Some(TokenType::SemiColon) => {
+                    Some(TokenType::Comma) => {
                         tokens.next(); // consume ';'
                         continue;
                     }
@@ -109,8 +109,8 @@ pub fn parse_parameters(tokens: &mut Peekable<Iter<Token>>) -> Vec<ParameterNode
                         tokens.next();
                         break;
                     }
-                    Some(TokenType::Comma) => {
-                        println!("Error: use `;` instead of `,` to separate parameters");
+                    Some(TokenType::SemiColon) => {
+                        println!("Error: use `,` instead of `;` to separate parameters");
                         break;
                     }
                     _ => break,

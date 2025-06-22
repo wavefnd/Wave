@@ -1,4 +1,4 @@
-fun hello(name :i32; namea :i32; nameb :str;) {
+fun hello(name :i32, namea :i32, nameb :str) {
     if (name > 10) {
         println("name is greater than 10");
     } else {

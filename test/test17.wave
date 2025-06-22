@@ -1,8 +1,8 @@
-fun add(a: i32; b: i32) -> i32 {
+fun add(a: i32, b: i32) -> i32 {
     return a + b;
 }
 
-fun complex(x: i32; y: i32; msg: str; sum: i32) {
+fun complex(x: i32, y: i32, msg: str, sum: i32) {
     println("START COMPLEX FUNCTION");
 
     if (x > y) {

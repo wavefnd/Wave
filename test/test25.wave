@@ -1,4 +1,4 @@
-fun make_http_get(host: str; path: str) {
+fun make_http_get(host: str, path: str) {
     println("GET {} HTTP/1.0", path);
     println("Host: {}", host);
     println("User-Agent: WaveLang/0.0.1");

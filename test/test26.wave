@@ -1,4 +1,4 @@
-fun main(q :i32 = 0; w :i32 = 10;) {
+fun main(q :i32 = 0, w :i32 = 10,) {
     var a :str = "World";
     let b :i32 = 2;
     let mut c :i32 = 3;

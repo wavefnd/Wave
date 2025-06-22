@@ -1,15 +1,15 @@
-fun add(a: i32; b: i32) -> i32 {
+fun add(a: i32, b: i32) -> i32 {
     return a + b;
 }
 
-fun sub(a: i32; b: i32) -> i32 {
+fun sub(a: i32, b: i32) -> i32 {
     return a - b;
 }
 
-fun mul(a: i32; b: i32) -> i32 {
+fun mul(a: i32, b: i32) -> i32 {
     return a * b;
 }
 
-fun div(a: i32; b: i32) -> i32 {
+fun div(a: i32, b: i32) -> i32 {
     return a / b;
 }
