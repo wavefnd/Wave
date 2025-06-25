@@ -52,7 +52,9 @@ pub fn parse_parameters(tokens: &mut Peekable<Iter<Token>>) -> Vec<ParameterNode
     let mut params = vec![];
 
     loop {
-        let Some(token) = tokens.peek() else { break; };
+        let Some(token) = tokens.peek() else {
+            break;
+        };
 
         match &token.token_type {
             TokenType::Identifier(name) => {
@@ -63,70 +65,71 @@ pub fn parse_parameters(tokens: &mut Peekable<Iter<Token>>) -> Vec<ParameterNode
                     println!("Error: Expected ':' after parameter name '{}'", name);
                     break;
                 }
-                let type_token = match tokens.next() {
-                    Some(token) => token.clone(),
-                    None => {
-                        println!("Error: Expected ':' after parameter name '{}'", name);
-                        break;
-                    }
-                };
+                tokens.next(); // consume ':'
 
-                let wave_type = if let TokenType::Identifier(ref base_type) = type_token.token_type {
-                    if let Some(Token { token_type: TokenType::Lchevr, .. }) = tokens.peek() {
-                        tokens.next();
+                let token = tokens.next();
+                let param_type = match token {
+                    Some(Token { token_type: TokenType::Identifier(type_name), .. }) => {
+                        if let Some(Token { token_type: TokenType::Lchevr, .. }) = tokens.peek() {
+                            tokens.next(); // consume '<'
 
-                        let mut inner = String::new();
-                        let mut depth = 1;
+                            let mut inner = String::new();
+                            let mut depth = 1;
 
-                        while let Some(t) = tokens.next() {
-                            match &t.token_type {
-                                TokenType::Lchevr => {
-                                    depth += 1;
-                                    inner.push('<');
+                            while let Some(t) = tokens.next() {
+                                match &t.token_type {
+                                    TokenType::Lchevr => {
+                                        depth += 1;
+                                        inner.push('<');
+                                    },
+                                    TokenType::Rchevr => {
+                                        depth -= 1;
+                                        if depth == 0 {
+                                            break;
+                                        } else {
+                                            inner.push('>');
+                                        }
+                                    },
+                                    _ => inner.push_str(&t.lexeme),
                                 }
-                                TokenType::Rchevr => {
-                                    depth -= 1;
-                                    if depth == 0 {
+                            }
+
+                            let full_type_str = format!("{}<{}>", type_name, inner);
+                            let parsed_type = parse_type(&full_type_str);
+
+                            match parsed_type {
+                                Some(ref parsed) => match token_type_to_wave_type(parsed) {
+                                    Some(wt) => wt,
+                                    None => {
+                                        println!("❌ Failed to convert generic type to WaveType: {}", full_type_str);
                                         break;
-                                    } else {
-                                        inner.push('>');
                                     }
+                                },
+                                None => {
+                                    println!("❌ Unknown generic type: {}", full_type_str);
+                                    break;
                                 }
-                                _ => inner.push_str(&t.lexeme),
+                            }
+                        } else {
+                            match parse_type(type_name).and_then(|tt| token_type_to_wave_type(&tt)) {
+                                Some(wt) => wt,
+                                None => {
+                                    println!("❌ Unknown type: {}", type_name);
+                                    break;
+                                }
                             }
                         }
-
-                        let full_type = format!("{}<{}>", base_type, inner);
-                        let parsed = parse_type(&full_type);
-
-                        if parsed.is_none() {
-                            println!("Unknown generic type: {}", full_type);
-                            break;
-                        }
-
-                        match token_type_to_wave_type(&parsed.unwrap()) {
-                            Some(wt) => wt,
-                            None => {
-                                println!("Failed to convert generic type: {}", full_type);
-                                break;
-                            }
-                        }
-                    } else {
-                        match parse_type(base_type).and_then(|t| token_type_to_wave_type(&t)) {
-                            Some(wt) => wt,
-                            None => {
-                                println!("Unknown type: {}", base_type);
-                                break;
-                            }
-                        }
-                    }
-                } else {
-                    match token_type_to_wave_type(&type_token.token_type) {
+                    },
+                    Some(Token { token_type, .. }) => match token_type_to_wave_type(token_type) {
                         Some(wt) => wt,
                         None => {
-                            println!("Unknown or unsupported type:{}", type_token.lexeme);
+                            println!("❌ Unsupported or unknown type token: {:?}", token_type);
                             break;
                         }
+                    },
+                    None => {
+                        println!("❌ Expected type after ':' for parameter '{}'", name);
+                        break;
                     }
                 };
 
@@ -144,13 +147,13 @@ pub fn parse_parameters(tokens: &mut Peekable<Iter<Token>>) -> Vec<ParameterNode
 
                 params.push(ParameterNode {
                     name,
-                    param_type: wave_type,
+                    param_type,
                     initial_value,
                 });
 
                 match tokens.peek().map(|t| &t.token_type) {
                     Some(TokenType::Comma) => {
-                        tokens.next(); // consume ';'
+                        tokens.next();
                         continue;
                     }
                     Some(TokenType::Rparen) => {
@@ -330,7 +333,7 @@ pub fn extract_body(tokens: &mut Peekable<Iter<Token>>) -> Option<Vec<ASTNode>> 
                             return None;
                         }
                     };
-                    
+
                     if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
                         tokens.next();
                     } else {
