@@ -523,7 +523,7 @@ pub fn generate_statement_ir<'ctx>(
                 }
 
                 let val: BasicMetadataValueEnum = if let Ok(value) = var.parse::<i64>() {
-                    context.i64_type().const_int(value as u64, false).into()
+                    context.i64_type().const_int(value as u64, true).into()
                 } else {
                     let info = variables.get(var)
                         .unwrap_or_else(|| panic!("Input variable '{}' not found", var));
