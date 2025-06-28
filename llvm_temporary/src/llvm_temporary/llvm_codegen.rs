@@ -8,6 +8,24 @@ use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum};
 use lexer::token::TokenType;
 use crate::llvm_temporary::statement::generate_statement_ir;
 
+use inkwell::passes::PassManager;
+
+pub fn optimize_functions(module: &inkwell::module::Module) {
+    let fpm = PassManager::create(module);
+
+    fpm.add_instruction_combining_pass();
+    fpm.add_reassociate_pass();
+    fpm.add_gvn_pass();
+    fpm.add_cfg_simplification_pass();
+    fpm.add_promote_memory_to_register_pass();
+
+    fpm.initialize();
+
+    for func in module.get_functions() {
+        fpm.run_on(&func);
+    }
+}
+
 pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
     let context = Context::create();
 
@@ -107,13 +125,13 @@ pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
                             generate_statement_ir(
                                 &context,
                                 &builder,
-                                &module,
+                                module,                // 3번째: &Module
                                 &mut string_counter,
                                 stmt,
                                 &mut variables,
                                 &mut loop_exit_stack,
                                 &mut loop_continue_stack,
-                                function,
+                                function,              // 9번째: FunctionValue
                             );
                         }
                         _ => panic!("Unsupported ASTNode in function body"),
@@ -125,7 +143,7 @@ pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
                 }
             }
         }
-
+        optimize_functions(module);
         module.print_to_string().to_string()
     };
     ir

@@ -1,8 +1,9 @@
 use std::collections::HashMap;
 use inkwell::{AddressSpace, FloatPredicate};
 use inkwell::basic_block::BasicBlock;
+use inkwell::builder::Builder;
 use inkwell::context::Context;
-use inkwell::module::Linkage;
+use inkwell::module::{Linkage, Module};
 use inkwell::types::{AnyTypeEnum, BasicType, BasicTypeEnum};
 use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue};
 use parser::ast::{ASTNode, Expression, Literal, Mutability, StatementNode, VariableNode, WaveType};
@@ -11,14 +12,14 @@ use crate::llvm_temporary::llvm_codegen::{generate_address_ir, wave_format_to_c,
 
 pub fn generate_statement_ir<'ctx>(
     context: &'ctx Context,
-    builder: &'ctx inkwell::builder::Builder<'ctx>,
-    module: &'ctx inkwell::module::Module<'ctx>,
+    builder: &'ctx Builder<'ctx>,
+    module: &'ctx Module<'ctx>,                 // ← 이게 세 번째 인자
     string_counter: &mut usize,
     stmt: &ASTNode,
     variables: &mut HashMap<String, VariableInfo<'ctx>>,
     loop_exit_stack: &mut Vec<BasicBlock<'ctx>>,
     loop_continue_stack: &mut Vec<BasicBlock<'ctx>>,
-    current_function: FunctionValue<'ctx>,
+    current_function: FunctionValue<'ctx>,      // ← 마지막 인자
 ) {
     match stmt {
         ASTNode::Variable(VariableNode {
