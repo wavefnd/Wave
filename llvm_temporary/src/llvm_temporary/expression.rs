@@ -56,6 +56,12 @@ pub fn generate_expression_ir<'ctx>(
         },
 
         Expression::Variable(var_name) => {
+            if var_name == "true" {
+                return context.bool_type().const_int(1, false).as_basic_value_enum();
+            } else if var_name == "false" {
+                return context.bool_type().const_int(0, false).as_basic_value_enum();
+            }
+
             if let Some(var_info) = variables.get(var_name) {
                 let var_type = var_info.ptr.get_type().get_element_type();
 
@@ -440,10 +446,9 @@ pub fn generate_expression_ir<'ctx>(
                 }
 
                 let val: BasicMetadataValueEnum = if let Ok(value) = var.parse::<i64>() {
-                    context.i64_type().const_int(value as u64, false).into()
+                    context.i64_type().const_int(value as u64, value < 0).into()
                 } else {
-                    let info = variables
-                        .get(var)
+                    let info = variables.get(var)
                         .unwrap_or_else(|| panic!("Input variable '{}' not found", var));
                     builder.build_load(info.ptr, var).unwrap().into()
                 };

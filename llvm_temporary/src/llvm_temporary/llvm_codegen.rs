@@ -16,6 +16,7 @@ pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
         let builder = Box::leak(Box::new(context.create_builder()));
         let mut functions: HashMap<String, FunctionValue> = HashMap::new();
 
+
         for ast in ast_nodes {
             if let ASTNode::Function(FunctionNode { name, parameters, return_type, .. }) = ast {
                 let param_types: Vec<BasicMetadataTypeEnum> = parameters.iter()
@@ -25,12 +26,7 @@ pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
                 let fn_type = match return_type {
                     Some(wave_ret_ty) => {
                         let llvm_ret_type = wave_type_to_llvm_type(&context, wave_ret_ty);
-                        match llvm_ret_type {
-                            BasicTypeEnum::IntType(int_ty) => int_ty.fn_type(&param_types, false),
-                            BasicTypeEnum::FloatType(float_ty) => float_ty.fn_type(&param_types, false),
-                            BasicTypeEnum::PointerType(ptr_ty) => ptr_ty.fn_type(&param_types, false),
-                            _ => panic!("Unsupported return type"),
-                        }
+                        llvm_ret_type.fn_type(&param_types, false)
                     }
                     None => context.void_type().fn_type(&param_types, false),
                 };
@@ -94,6 +90,7 @@ pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
                         VariableInfo {
                             ptr: alloca,
                             mutability: Mutability::Let,
+                            ty: param.param_type.clone(),
                         },
                     );
                 }
@@ -224,6 +221,7 @@ pub fn generate_address_ir<'ctx>(
 pub struct VariableInfo<'ctx> {
     pub ptr: PointerValue<'ctx>,
     pub mutability: Mutability,
+    pub ty: WaveType,
 }
 
 pub fn get_llvm_type<'a>(context: &'a Context, ty: &TokenType) -> BasicTypeEnum<'a> {

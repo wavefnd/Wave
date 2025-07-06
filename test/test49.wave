@@ -1,0 +1,15 @@
+fun main() {
+    var dummy_ptr: ptr<i8> = "dummy";
+    var ret_val: i64;
+
+    asm {
+        "mov rax, 257" // syscall openat
+        "syscall"
+        in("rdi") -100
+        in("rsi") dummy_ptr
+        in("rdx") 0
+        out("rax") ret_val
+    }
+
+    println("syscall result: {}", ret_val);
+}

@@ -61,6 +61,7 @@ pub fn generate_statement_ir<'ctx>(
                     VariableInfo {
                         ptr: alloca,
                         mutability: mutability.clone(),
+                        ty: type_name.clone(),
                     },
                 );
 
@@ -72,6 +73,7 @@ pub fn generate_statement_ir<'ctx>(
                 VariableInfo {
                     ptr: alloca,
                     mutability: mutability.clone(),
+                    ty: type_name.clone(),
                 },
             );
 
@@ -240,7 +242,7 @@ pub fn generate_statement_ir<'ctx>(
 
                         for (reg, var) in inputs {
                             let val = if let Ok(num) = var.parse::<i64>() {
-                                context.i64_type().const_int(num as u64, false).into()
+                                context.i64_type().const_int(num as u64, true).into()
                             } else if let Some(info) = variables.get(var) {
                                 builder.build_load(info.ptr, var).unwrap().into()
                             } else {
@@ -523,7 +525,7 @@ pub fn generate_statement_ir<'ctx>(
                 }
 
                 let val: BasicMetadataValueEnum = if let Ok(value) = var.parse::<i64>() {
-                    context.i64_type().const_int(value as u64, true).into()
+                    context.i64_type().const_int(value as u64, value < 0).into()
                 } else {
                     let info = variables.get(var)
                         .unwrap_or_else(|| panic!("Input variable '{}' not found", var));
@@ -562,7 +564,26 @@ pub fn generate_statement_ir<'ctx>(
                 let (_, var) = outputs.iter().next().unwrap();
                 let info = variables.get(var)
                     .unwrap_or_else(|| panic!("Output variable '{}' not found", var));
-                builder.build_store(info.ptr, ret_val).unwrap();
+
+                match &info.ty {
+                    WaveType::Int(64) => {
+                        builder.build_store(info.ptr, ret_val).unwrap();
+                    }
+                    WaveType::Pointer(inner) => {
+                        match **inner {
+                            WaveType::Int(8) => {
+                                let casted_ptr = builder.build_int_to_ptr(
+                                    ret_val.into_int_value(),
+                                    context.i8_type().ptr_type(AddressSpace::from(0)),
+                                    "casted_ptr",
+                                ).unwrap();
+                                builder.build_store(info.ptr, casted_ptr).unwrap();
+                            }
+                            _ => panic!("Unsupported pointer inner type in inline asm output"),
+                        }
+                    }
+                    _ => panic!("Unsupported return type from inline asm: {:?}", info.ty),
+                }
             }
         }
         ASTNode::Statement(StatementNode::Expression(expr)) => {
@@ -662,12 +683,24 @@ pub fn generate_statement_ir<'ctx>(
 
                 let value = match value {
                     BasicValueEnum::PointerValue(ptr) => {
-                        builder.build_load(ptr, "load_ret").unwrap().as_basic_value_enum()
+                        let ty = ptr.get_type().get_element_type();
+                        match ty {
+                            AnyTypeEnum::PointerType(_) => {
+                                builder.build_load(ptr, "load_ret").unwrap().as_basic_value_enum()
+                            }
+                            _ => ptr.as_basic_value_enum(),
+                        }
                     },
                     other => other,
                 };
 
                 let casted_value = match (value, expected_type) {
+                    (BasicValueEnum::PointerValue(ptr), BasicTypeEnum::IntType(_)) => {
+                        builder.build_ptr_to_int(ptr, expected_type.into_int_type(), "ptr_to_int").unwrap().as_basic_value_enum()
+                    }
+                    (BasicValueEnum::PointerValue(ptr), BasicTypeEnum::PointerType(_)) => {
+                        ptr.as_basic_value_enum()
+                    }
                     (BasicValueEnum::FloatValue(v), BasicTypeEnum::IntType(t)) => {
                         builder.build_float_to_signed_int(v, t, "float_to_int").unwrap().as_basic_value_enum()
                     }

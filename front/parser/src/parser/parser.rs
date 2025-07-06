@@ -1110,6 +1110,19 @@ fn parse_asm_block(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
 
                 let value_token = tokens.next();
                 let value = match value_token {
+                    Some(Token { token_type: TokenType::Minus, .. }) => {
+                        match tokens.next() {
+                            Some(Token { token_type: TokenType::Number(n), .. }) => format!("-{}", n),
+                            Some(other) => {
+                                println!("Expected number after '-', got {:?}", other.token_type);
+                                return None;
+                            }
+                            None => {
+                                println!("Expected number after '-'");
+                                return None;
+                            }
+                        }
+                    }
                     Some(Token { token_type: TokenType::Identifier(s), .. }) => s.clone(),
                     Some(Token { token_type: TokenType::Number(n), .. }) => n.to_string(),
                     Some(Token { token_type: TokenType::String(n), .. }) => n.to_string(),
