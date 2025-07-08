@@ -417,34 +417,107 @@ pub fn generate_statement_ir<'ctx>(
 
             let _ = builder.build_conditional_branch(cond_value.try_into().unwrap(), then_block, else_block_bb);
 
-            let then_has_terminator;
-            let else_has_terminator;
-
-            // then
+            // ---- then block ----
             builder.position_at_end(then_block);
             for stmt in body {
-                generate_statement_ir(context, builder, module, string_counter, stmt, variables, loop_exit_stack, loop_continue_stack, current_function);
+                generate_statement_ir(
+                    context,
+                    builder,
+                    module,
+                    string_counter,
+                    stmt,
+                    variables,
+                    loop_exit_stack,
+                    loop_continue_stack,
+                    current_function,
+                );
             }
-            then_has_terminator = then_block.get_terminator().is_some();
+            let then_has_terminator = then_block.get_terminator().is_some();
             if !then_has_terminator {
                 let _ = builder.build_unconditional_branch(merge_block);
             }
 
-            // else
+            // ---- else block ----
             builder.position_at_end(else_block_bb);
 
-            if let Some(else_ifs) = else_if_blocks {
-                for else_if in else_ifs.iter() {
-                    generate_statement_ir(context, builder, module, string_counter, else_if, variables, loop_exit_stack, loop_continue_stack, current_function);
+            let else_has_terminator = if let Some(else_ifs) = else_if_blocks {
+                let mut current_bb = else_block_bb;
+                for (else_if_cond, else_if_body) in else_ifs.iter() {
+                    let current_fn = builder.get_insert_block().unwrap().get_parent().unwrap();
+                    let cond_value = generate_expression_ir(
+                        context,
+                        builder,
+                        else_if_cond,
+                        variables,
+                        module,
+                        None,
+                    );
+                    let then_bb = context.append_basic_block(current_fn, "else_if_then");
+                    let next_check_bb = context.append_basic_block(current_fn, "next_else_if");
+                    builder.build_conditional_branch(
+                        cond_value.try_into().unwrap(),
+                        then_bb,
+                        next_check_bb,
+                    );
+                    builder.position_at_end(then_bb);
+                    for stmt in else_if_body {
+                        generate_statement_ir(
+                            context,
+                            builder,
+                            module,
+                            string_counter,
+                            stmt,
+                            variables,
+                            loop_exit_stack,
+                            loop_continue_stack,
+                            current_function,
+                        );
+                    }
+                    if then_bb.get_terminator().is_none() {
+                        builder.build_unconditional_branch(merge_block);
+                    }
+                    builder.position_at_end(next_check_bb);
+                    current_bb = next_check_bb;
                 }
-            }
 
-            if let Some(else_body) = else_block {
-                for stmt in else_body.iter() {
-                    generate_statement_ir(context, builder, module, string_counter, stmt, variables, loop_exit_stack, loop_continue_stack, current_function);
+                // === FIX: Generate else_block after else_if blocks ===
+                if let Some(else_body) = else_block {
+                    for stmt in else_body.iter() {
+                        generate_statement_ir(
+                            context,
+                            builder,
+                            module,
+                            string_counter,
+                            stmt,
+                            variables,
+                            loop_exit_stack,
+                            loop_continue_stack,
+                            current_function,
+                        );
+                    }
+                    current_bb.get_terminator().is_some()
+                } else {
+                    current_bb.get_terminator().is_some()
                 }
-            }
-            else_has_terminator = else_block_bb.get_terminator().is_some();
+            } else if let Some(else_body) = else_block {
+                for stmt in else_body.iter() {
+                    generate_statement_ir(
+                        context,
+                        builder,
+                        module,
+                        string_counter,
+                        stmt,
+                        variables,
+                        loop_exit_stack,
+                        loop_continue_stack,
+                        current_function,
+                    );
+                }
+                else_block_bb.get_terminator().is_some()
+            } else {
+                false
+            };
+
             if !else_has_terminator {
                 let _ = builder.build_unconditional_branch(merge_block);
             }

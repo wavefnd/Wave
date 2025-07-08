@@ -449,6 +449,8 @@ where
                 TokenType::Continue | TokenType::Break | TokenType::Return | TokenType::SemiColon => None,
                 _ => {
                     println!("Error: Expected primary expression, found {:?}", token.token_type);
+                    println!("Error: Expected primary expression, found {:?}", token.lexeme);
+                    println!("Error: Expected primary expression, found {:?}", token.line);
                     None
                 }
             }

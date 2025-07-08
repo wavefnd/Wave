@@ -163,4 +163,5 @@ pub enum TokenType {
     Break,
     Arrow,                  // ->
     Array,
+    Newline,
 }

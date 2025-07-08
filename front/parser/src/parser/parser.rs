@@ -892,7 +892,6 @@ fn skip_whitespace(tokens: &mut Peekable<Iter<Token>>) {
     }
 }
 
-// IF parsing
 fn parse_if(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
     if tokens.peek()?.token_type != TokenType::Lparen {
         println!("Error: Expected '(' after 'if'");
@@ -900,14 +899,7 @@ fn parse_if(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
     }
     tokens.next(); // Consume '('
 
-    let condition = match parse_expression(tokens) {
-        Some(expr) => {
-            expr
-        }
-        None => {
-            return None;
-        }
-    };
+    let condition = parse_expression(tokens)?;
 
     if tokens.peek()?.token_type != TokenType::Rparen {
         println!("Error: Expected ')' after 'if' condition");
@@ -915,55 +907,59 @@ fn parse_if(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
     }
     tokens.next(); // Consume ')'
 
-    // Expect '{' after condition
     if tokens.peek()?.token_type != TokenType::Lbrace {
         println!("Error: Expected '{{' after 'if' condition");
         return None;
     }
     tokens.next(); // Consume '{'
-
     let body = parse_block(tokens)?;
 
-    let mut else_if_blocks: Vec<ASTNode> = Vec::new();
+    let mut else_if_blocks: Vec<(Expression, Vec<ASTNode>)> = Vec::new(); // Changed to store conditions and bodies
     let mut else_block = None;
 
     while let Some(token) = tokens.peek() {
         if token.token_type != TokenType::Else {
             break;
         }
-        tokens.next(); // Consume 'else'
+        tokens.next(); // consume 'else'
 
-        // Check if it comes right after else
         if let Some(Token { token_type: TokenType::If, .. }) = tokens.peek() {
-            tokens.next();
-            let parsed = parse_if(tokens);
+            tokens.next(); // consume 'if'
 
-            match parsed {
-                Some(ASTNode::Statement(stmt @ StatementNode::If { .. })) => {
-                    else_if_blocks.push(ASTNode::Statement(stmt));
-                }
-                Some(other) => {
-                    return None;
-                }
-                None => {
-                    return None;
-                }
+            if tokens.peek()?.token_type != TokenType::Lparen {
+                println!("Error: Expected '(' after 'else if'");
+                return None;
             }
+            tokens.next();
+            let else_if_condition = parse_expression(tokens)?;
 
-            continue;
-        }
+            if tokens.peek()?.token_type != TokenType::Rparen {
+                println!("Error: Expected ')' after 'else if' condition");
+                return None;
+            }
+            tokens.next();
 
-        // Handle 'else' case
-        if tokens.peek()?.token_type != TokenType::Lbrace {
-            println!("Error: Expected '{{' after 'else'");
-            return None;
+            if tokens.peek()?.token_type != TokenType::Lbrace {
+                println!("Error: Expected '{{' after 'else if'");
+                return None;
+            }
+            tokens.next();
+            let else_if_body = parse_block(tokens)?;
+
+            // Store condition and body directly instead of nested If node
+            else_if_blocks.push((else_if_condition, else_if_body));
+        } else {
+            if tokens.peek()?.token_type != TokenType::Lbrace {
+                println!("Error: Expected '{{' after 'else'");
+                return None;
+            }
+            tokens.next();
+            else_block = Some(Box::new(parse_block(tokens)?));
+            break;
         }
-        tokens.next(); // Consume '{'
-        else_block = Some(Box::new(parse_block(tokens)?));
-        break;
     }
 
-    let result = ASTNode::Statement(StatementNode::If {
+    Some(ASTNode::Statement(StatementNode::If {
         condition,
         body,
         else_if_blocks: if else_if_blocks.is_empty() {
@@ -972,9 +968,7 @@ fn parse_if(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
             Some(Box::new(else_if_blocks))
         },
         else_block,
-    });
-
-    Some(result)
+    }))
 }
 
 // FOR parsing
@@ -1232,50 +1226,76 @@ fn parse_assignment(tokens: &mut Peekable<Iter<Token>>, first_token: &Token) -> 
 fn parse_block(tokens: &mut Peekable<Iter<Token>>) -> Option<Vec<ASTNode>> {
     let mut body = vec![];
 
-    while let Some(token) = tokens.next() {
+    while let Some(token) = tokens.peek().cloned() {
         if token.token_type == TokenType::Rbrace {
+            tokens.next(); // consume '}'
             break;
         }
 
         let node = match token.token_type {
-            TokenType::Var => parse_var(tokens),
-            TokenType::Println => parse_println(tokens),
-            TokenType::Print => parse_print(tokens),
-            TokenType::If => parse_if(tokens),
-            TokenType::For => parse_for(tokens),
-            TokenType::While => parse_while(tokens),
+            TokenType::Var => {
+                tokens.next();
+                parse_var(tokens)
+            }
+            TokenType::Println => {
+                tokens.next();
+                parse_println(tokens)
+            }
+            TokenType::Print => {
+                tokens.next();
+                parse_print(tokens)
+            }
+            TokenType::If => {
+                tokens.next();
+                let if_node = match parse_if(tokens) {
+                    Some(ASTNode::Statement(stmt @ StatementNode::If { .. })) => stmt,
+                    _ => return None,
+                };
+
+                Some(ASTNode::Statement(if_node))
+            }
+            TokenType::For => {
+                tokens.next();
+                parse_for(tokens)
+            }
+            TokenType::While => {
+                tokens.next();
+                parse_while(tokens)
+            }
             TokenType::Continue => {
+                tokens.next();
                 if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
-                    tokens.next(); // consume ;
+                    tokens.next();
                 }
                 Some(ASTNode::Statement(StatementNode::Continue))
             }
             TokenType::Break => {
+                tokens.next();
                 if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
-                    tokens.next(); // consume ;
+                    tokens.next();
                 }
                 Some(ASTNode::Statement(StatementNode::Break))
             }
-            TokenType::Identifier(_) => parse_assignment(tokens, token),
             TokenType::Return => {
+                tokens.next();
                 let expr = if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
-                    tokens.next(); // consume ;
+                    tokens.next();
                     None
                 } else {
                     if let Some(peek_token) = tokens.peek() {
                         match peek_token.token_type {
                             TokenType::Break | TokenType::Continue | TokenType::Return => {
                                 println!("Error: Invalid return expression starting with {:?}", peek_token.token_type);
-                                tokens.next(); // consume the invalid token
+                                tokens.next();
                                 if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
-                                    tokens.next(); // consume ;
+                                    tokens.next();
                                 }
                                 None
                             }
                             _ => {
                                 let value = parse_expression(tokens)?;
                                 if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
-                                    tokens.next(); // consume ;
+                                    tokens.next();
                                 }
                                 Some(value)
                             }
@@ -1287,16 +1307,20 @@ fn parse_block(tokens: &mut Peekable<Iter<Token>>) -> Option<Vec<ASTNode>> {
                 Some(ASTNode::Statement(StatementNode::Return(expr)))
             }
             _ => {
-                if matches!(token.token_type, TokenType::Continue | TokenType::Break | TokenType::Return) {
-                    None
-                } else if let Some(expr) = parse_expression(tokens) {
-                    if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
-                        tokens.next();
+                tokens.next(); // consume unknown
+
+                if is_expression_start(&token.token_type) {
+                    if let Some(expr) = parse_expression(tokens) {
+                        if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
+                            tokens.next();
+                        }
+                        Some(ASTNode::Statement(StatementNode::Expression(expr)))
+                    } else {
+                        None
                     }
-                    Some(ASTNode::Statement(StatementNode::Expression(expr)))
                 } else {
-                    if !matches!(token.token_type, TokenType::SemiColon) {
-                        println!("Error: Expected primary expression, found {:?}", token.token_type);
+                    if !matches!(token.token_type, TokenType::SemiColon | TokenType::Rbrace) {
+                        println!("Error: Unexpected token: {:?}", token.token_type);
                     }
                     while let Some(tok) = tokens.next() {
                         if tok.token_type == TokenType::SemiColon {
@@ -1314,6 +1338,19 @@ fn parse_block(tokens: &mut Peekable<Iter<Token>>) -> Option<Vec<ASTNode>> {
     }
 
     Some(body)
+}
+
+fn is_expression_start(token_type: &TokenType) -> bool {
+    matches!(
+        token_type,
+        TokenType::Identifier(_)
+            | TokenType::Number(_)
+            | TokenType::Float(_)
+            | TokenType::Lparen
+            | TokenType::String(_)
+            | TokenType::Lbrack
+            | TokenType::Asm
+    )
 }
 
 pub fn parse_type(type_str: &str) -> Option<TokenType> {

@@ -138,7 +138,7 @@ pub enum StatementNode {
     If {
         condition: Expression,
         body: Vec<ASTNode>,
-        else_if_blocks: Option<Box<Vec<ASTNode>>>,
+        else_if_blocks: Option<Box<Vec<(Expression, Vec<ASTNode>)>>>,
         else_block: Option<Box<Vec<ASTNode>>>,
     },
     For {
