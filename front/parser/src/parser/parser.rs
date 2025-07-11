@@ -609,9 +609,11 @@ fn parse_var(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<ASTNode> {
         None
     };
 
-    if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
-        tokens.next(); // Consume ';'
+    if tokens.peek().map(|t| &t.token_type) != Some(&TokenType::SemiColon) {
+        println!("Expected ';' after expression");
+        return None;
     }
+    tokens.next();
 
     if let (WaveType::Array(_, expected_len), Some(Expression::ArrayLiteral(elements))) = (&wave_type, &initial_value) {
         if *expected_len != elements.len() as u32 {
@@ -728,9 +730,11 @@ fn parse_let(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<ASTNode> {
         None
     };
 
-    if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
-        tokens.next(); // Consume ';'
+    if tokens.peek().map(|t| &t.token_type) != Some(&TokenType::SemiColon) {
+        println!("Expected ';' after expression");
+        return None;
     }
+    tokens.next();
 
     if let (WaveType::Array(_, expected_len), Some(Expression::ArrayLiteral(elements))) = (&wave_type, &initial_value) {
         if *expected_len != elements.len() as u32 {
@@ -779,6 +783,12 @@ fn parse_println(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
         }
         tokens.next(); // Consume ')'
 
+        if tokens.peek().map(|t| &t.token_type) != Some(&TokenType::SemiColon) {
+            println!("Expected ';' after expression");
+            return None;
+        }
+        tokens.next();
+
         return Some(ASTNode::Statement(StatementNode::Println(
             format!("{}\n", content),
         )));
@@ -800,6 +810,12 @@ fn parse_println(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
         return None;
     }
     tokens.next(); // Consume ')'
+
+    if tokens.peek().map(|t| &t.token_type) != Some(&TokenType::SemiColon) {
+        println!("Expected ';' after expression");
+        return None;
+    }
+    tokens.next();
 
     if placeholder_count != args.len() {
         println!(
@@ -844,6 +860,12 @@ fn parse_print(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
         }
         tokens.next(); // Consume ')'
 
+        if tokens.peek().map(|t| &t.token_type) != Some(&TokenType::SemiColon) {
+            println!("Expected ';' after expression");
+            return None;
+        }
+        tokens.next();
+
         return Some(ASTNode::Statement(StatementNode::Print(
             format!("{}", content),
         )));
@@ -859,13 +881,18 @@ fn parse_print(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
             return None;
         }
     }
-    tokens.next();
 
     if tokens.peek()?.token_type != TokenType::Rparen {
         println!("Error: Expected closing ')'");
         return None;
     }
     tokens.next(); // Consume ')'
+
+    if tokens.peek().map(|t| &t.token_type) != Some(&TokenType::SemiColon) {
+        println!("Expected ';' after expression");
+        return None;
+    }
+    tokens.next();
 
     if placeholder_count != args.len() {
         println!(
@@ -1222,122 +1249,118 @@ fn parse_assignment(tokens: &mut Peekable<Iter<Token>>, first_token: &Token) -> 
     }
 }
 
-// block parsing
 fn parse_block(tokens: &mut Peekable<Iter<Token>>) -> Option<Vec<ASTNode>> {
     let mut body = vec![];
 
-    while let Some(token) = tokens.peek().cloned() {
+    while let Some(token) = tokens.peek() {
         if token.token_type == TokenType::Rbrace {
-            tokens.next(); // consume '}'
             break;
         }
 
-        let node = match token.token_type {
-            TokenType::Var => {
-                tokens.next();
-                parse_var(tokens)
-            }
-            TokenType::Println => {
-                tokens.next();
-                parse_println(tokens)
-            }
-            TokenType::Print => {
-                tokens.next();
-                parse_print(tokens)
-            }
-            TokenType::If => {
-                tokens.next();
-                let if_node = match parse_if(tokens) {
-                    Some(ASTNode::Statement(stmt @ StatementNode::If { .. })) => stmt,
-                    _ => return None,
-                };
-
-                Some(ASTNode::Statement(if_node))
-            }
-            TokenType::For => {
-                tokens.next();
-                parse_for(tokens)
-            }
-            TokenType::While => {
-                tokens.next();
-                parse_while(tokens)
-            }
-            TokenType::Continue => {
-                tokens.next();
-                if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
-                    tokens.next();
-                }
-                Some(ASTNode::Statement(StatementNode::Continue))
-            }
-            TokenType::Break => {
-                tokens.next();
-                if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
-                    tokens.next();
-                }
-                Some(ASTNode::Statement(StatementNode::Break))
-            }
-            TokenType::Return => {
-                tokens.next();
-                let expr = if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
-                    tokens.next();
-                    None
-                } else {
-                    if let Some(peek_token) = tokens.peek() {
-                        match peek_token.token_type {
-                            TokenType::Break | TokenType::Continue | TokenType::Return => {
-                                println!("Error: Invalid return expression starting with {:?}", peek_token.token_type);
-                                tokens.next();
-                                if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
-                                    tokens.next();
-                                }
-                                None
-                            }
-                            _ => {
-                                let value = parse_expression(tokens)?;
-                                if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
-                                    tokens.next();
-                                }
-                                Some(value)
-                            }
-                        }
-                    } else {
-                        None
-                    }
-                };
-                Some(ASTNode::Statement(StatementNode::Return(expr)))
-            }
-            _ => {
-                tokens.next(); // consume unknown
-
-                if is_expression_start(&token.token_type) {
-                    if let Some(expr) = parse_expression(tokens) {
-                        if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
-                            tokens.next();
-                        }
-                        Some(ASTNode::Statement(StatementNode::Expression(expr)))
-                    } else {
-                        None
-                    }
-                } else {
-                    if !matches!(token.token_type, TokenType::SemiColon | TokenType::Rbrace) {
-                        println!("Error: Unexpected token: {:?}", token.token_type);
-                    }
-                    while let Some(tok) = tokens.next() {
-                        if tok.token_type == TokenType::SemiColon {
-                            break;
-                        }
-                    }
-                    None
-                }
-            }
-        };
-
-        if let Some(ast_node) = node {
-            body.push(ast_node);
+        if let Some(node) = parse_statement(tokens) {
+            body.push(node);
+        } else {
+            println!("Error: Failed to parse statement inside block.");
+            return None;
         }
     }
 
+    if let Some(token) = tokens.next() {
+        if token.token_type != TokenType::Rbrace {
+            println!("Error: Expected '}}' to close the block, but found {:?}", token.token_type);
+            return None;
+        }
+    } else {
+        println!("Error: Unexpected end of file, expected '}}'");
+        return None;
+    }
+
     Some(body)
+}
+
+fn parse_statement(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
+    let token = match tokens.peek() {
+        Some(t) => t.clone(),
+        None => return None,
+    };
+
+    let node = match token.token_type {
+        TokenType::Var => {
+            tokens.next();
+            parse_var(tokens)
+        }
+        TokenType::Println => {
+            tokens.next();
+            parse_println(tokens)
+        }
+        TokenType::Print => {
+            tokens.next();
+            parse_print(tokens)
+        }
+        TokenType::If => {
+            tokens.next();
+            parse_if(tokens)
+        }
+        TokenType::For => {
+            tokens.next();
+            parse_for(tokens)
+        }
+        TokenType::While => {
+            tokens.next();
+            parse_while(tokens)
+        }
+        TokenType::Continue => {
+            tokens.next();
+            if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
+                tokens.next();
+            }
+            Some(ASTNode::Statement(StatementNode::Continue))
+        }
+        TokenType::Break => {
+            tokens.next();
+            if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
+                tokens.next();
+            }
+            Some(ASTNode::Statement(StatementNode::Break))
+        }
+        TokenType::Return => {
+            tokens.next();
+            let expr = if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
+                tokens.next();
+                None
+            } else if tokens.peek().is_none() {
+                None
+            } else {
+                let value = parse_expression(tokens)?;
+                if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
+                    tokens.next();
+                }
+                Some(value)
+            };
+            Some(ASTNode::Statement(StatementNode::Return(expr)))
+        }
+        TokenType::Rbrace => None,
+
+        _ => {
+            if is_expression_start(&token.token_type) {
+                if let Some(expr) = parse_expression(tokens) {
+                    if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
+                        tokens.next();
+                    }
+                    Some(ASTNode::Statement(StatementNode::Expression(expr)))
+                } else {
+                    println!("Error: Failed to parse expression statement.");
+                    None
+                }
+            } else {
+                println!("Error: Unexpected token, cannot start a statement with: {:?}", token.token_type);
+                tokens.next();
+                None
+            }
+        }
+    };
+
+    node
 }
 
 fn is_expression_start(token_type: &TokenType) -> bool {
