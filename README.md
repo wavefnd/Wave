@@ -39,7 +39,7 @@ Our philosophy is simple: you should never have to choose between performance an
 <code class="language-wave">
 // Your first Wave program
 fun main() {
-println("Hello, powerful new world!");
+    println("Hello, powerful new world!");
 }
 </code>
 </pre>
