@@ -52,8 +52,6 @@ fun main() {
 > **Warning:**  
 > Wave is in its early stages of development. The first official version, v0.0.1, has not yet been released.
 
-Wave is a next-generation programming language designed for developing everything from operating systems and system software to applications—entirely in Wave. We are building a Wave compiler that provides full hardware access.
-
 ---
 
 ## Get Started in Seconds
