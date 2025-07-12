@@ -1,50 +1,95 @@
 <div align="center">
-  <img src="https://wave-lang.dev/img/favicon.ico" alt="Wave Programming Language Logo" width="100" />
-  <h1>Wave Programming Language</h1>
-  <p>
-    <a href="https://www.wave-lang.dev">Website</a> •
-    <a href="https://github.com/LunaStev/Wave/blob/master/CONTRIBUTING.md">Contributing</a> •
-    <a href="LICENSE">LICENSE</a>
-  </p>
+<a href="https://www.wave-lang.dev">
+<img src="https://wave-lang.dev/img/favicon.ico" alt="Wave Programming Language Logo" width="120" />
+</a>
+<br/>
+<h1>Wave</h1>
+<p><strong>The Systems Language for a New Era</strong></p>
+<p>
+<a href="https://www.wave-lang.dev"><strong>Website</strong></a> ·
+<a href="https://github.com/LunaStev/Wave/wiki/Contributing"><strong>Docs</strong></a> ·
+<a href="https://discord.gg/Kuk2qXFjc5"><strong>Community</strong></a>
+</p>
+<div>
+<a href="https://github.com/LunaStev/Wave/releases">
+<img src="https://img.shields.io/github/v/release/LunaStev/Wave?style=for-the-badge&include_prereleases&logo=github&color=5865F2" alt="Latest version"/>
+</a>
+<a href="https://github.com/LunaStev/Wave/actions/workflows/rust.yml">
+<img src="https://img.shields.io/github/actions/workflow/status/LunaStev/Wave/rust.yml?logo=rust&style=for-the-badge&branch=master&label=build" alt="Build Status"/>
+</a>
+<a href="https://discord.gg/Kuk2qXFjc5">
+<img src="https://img.shields.io/badge/Discord-Join%20Us-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord" />
+</a>
 </div>
-
-<div align="center">
-  <a href="https://discord.gg/Kuk2qXFjc5" target="_blank">
-    <img src="https://img.shields.io/badge/Discord-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord" />
-  </a>
-  <a href="mailto:lunastev@gurmstudios.com" target="_blank">
-    <img src="https://img.shields.io/badge/Email-D14836?style=for-the-badge&logo=gmail&logoColor=white" alt="Email" />
-  </a>
 </div>
+<br/>
+<table>
+<tr>
+<td valign="top" width="60%">
+<h3>What is Wave?</h3>
+<p>
+<strong>Wave</strong> is a next-generation systems programming language that harmonizes low-level control with high-level elegance. It is designed to empower developers to build everything from bare-metal operating systems to high-performance applications with a single, consistent toolchain.
+</p>
+<p>
+Our philosophy is simple: you should never have to choose between performance and productivity. Wave offers both.
+</p>
+</td>
+<td valign="top" width="40%">
+<pre>
+<code class="language-wave">
+// Your first Wave program
+fun main() {
+println("Hello, powerful new world!");
+}
+</code>
+</pre>
+</td>
+</tr>
+</table>
 
 ---
 
 > **Warning:**  
-> The official version of this project has not yet been released. The first version will be distributed as v0.0.1.
+> Wave is in its early stages of development. The first official version, v0.0.1, has not yet been released.
 
-![Latest version](https://img.shields.io/github/v/release/LunaStev/Wave?style=for-the-badge&include_prereleases)
-
-![Code size](https://img.shields.io/github/languages/code-size/LunaStev/Wave?style=for-the-badge&logo=github)
-![Downloads](https://img.shields.io/github/downloads/LunaStev/Wave/total?color=%2324cc24&style=for-the-badge&logo=github)
-![GitHub Workflow Status](https://img.shields.io/github/actions/workflow/status/LunaStev/Wave/rust.yml?logo=rust&style=for-the-badge&branch=master)
+Wave is a next-generation programming language designed for developing everything from operating systems and system software to applications—entirely in Wave. We are building a Wave compiler that provides full hardware access.
 
 ---
 
-## Overview
+## Get Started in Seconds
+Install the latest version of the Wave compiler and toolchain with a single command.
 
-**Wave** is a next-generation programming language designed for developing operating systems, system software, and applications—entirely using **Wave**.  
-We're building a **Wave** compiler with full hardware access.
+```bash
+curl -fsSL https://wave-lang.dev/install.sh | bash -s -- latest
+```
 
 ---
 
-## Sponsor Us
+## ✨ Core Principles
+<table width="100%">
+<tr align="center">
+<td width="33%">
+<h3>⚡️ Blazing Fast</h3>
+<p>Compile to native machine code with direct memory management and full hardware access. No VM, no garbage collector overhead. Just pure speed.</p>
+</td>
+<td width="33%">
+<h3>🛡️ Built for Safety</h3>
+<p>A modern type system and ownership model that helps eliminate entire classes of bugs at compile-time, ensuring robust and secure software.</p>
+</td>
+<td width="33%">
+<h3>✍️ Expressive Syntax</h3>
+<p>Enjoy a clean, intuitive syntax that makes code easy to read and write, allowing you to focus on logic rather than boilerplate.</p>
+</td>
+</tr>
+</table>
 
-Wave is an open-source programming language built with love, care, and a long-term vision.
-It’s a project that aims to push the boundaries of what low-level languages can be — without sacrificing clarity or safety.
+---
 
-If you believe in that vision, even a small gesture of support can make a big difference.
-Wave is developed by an independent creator with no corporate backing, and your sponsorship helps keep it alive and evolving.
+## ❤️ Sponsor Us
 
+Wave is an open-source programming language built with love, care, and a long-term vision. It’s a project that aims to push the boundaries of what low-level languages can be—without sacrificing clarity or safety.
+
+If you believe in our vision, your support can make a big difference. Wave is developed by an independent creator with no corporate backing, and your sponsorship helps keep the project alive and evolving.
 
 [![Sponsor LunaStev](https://img.shields.io/badge/Sponsor%20LunaStev-%23ea4aaa?style=for-the-badge&logo=github-sponsors&logoColor=white)](https://github.com/sponsors/LunaStev)
 
@@ -52,7 +97,8 @@ Wave is developed by an independent creator with no corporate backing, and your 
 
 ## Examples
 
-### Fibonacci sequence
+<details>
+<summary>► Click to see the <strong>Fibonacci Sequence</strong> example</summary>
 
 ```wave
 fun fibonacci(n: i32) -> i32 {
@@ -93,7 +139,11 @@ fun main() {
 }
 ```
 
-### Pointer Swap Example
+</details>
+<details>
+<summary>► Click to see the <strong>Pointer Swap</strong> example</summary>
+
+### Pointer Swap
 
 ```wave
 fun main() {
@@ -117,44 +167,41 @@ fun main() {
 }
 ```
 
+</details>
+<br/>
+
 More examples are available inside `test/`.
 
 ---
 
-## Concept
+## ❤️ Join the Wave
+Wave is built by the community, for the community. Your contribution, whether it's code, documentation, or feedback, helps shape the future of the language.
+<table width="100%">
+<tr align="center">
+<td width="50%">
+<h3>🤝 Contribute</h3>
+<p>Found a bug or have an idea? We'd love your help. Check out our contributing guide to get started.</p>
+<a href="https://github.com/LunaStev/Wave/blob/master/CONTRIBUTING.md">
+<img src="https://img.shields.io/badge/Contributing%20Guide-333?style=for-the-badge&logo=github" alt="Contributing Guide"/>
+</a>
+</td>
+<td width="50%">
+<h3>💖 Sponsor</h3>
+<p>If you believe in our vision, consider sponsoring the project. Your support keeps development going.</p>
+<a href="https://github.com/sponsors/LunaStev">
+<img src="https://img.shields.io/badge/Sponsor%20LunaStev-EA4AAA?style=for-the-badge&logo=github-sponsors" alt="Sponsor LunaStev"/>
+</a>
+</td>
+</tr>
+</table>
+
+---
 
 <p align="center">
-  <img src=".github/scalability1.svg" alt="Wave Concept Diagram" width="60%">
+<a href="https://star-history.com/#LunaStev/Wave&Date">
+<img src="https://api.star-history.com/svg?repos=LunaStev/Wave&type=Date" alt="Star History Chart" width="80%">
+</a>
 </p>
-
----
-
-## Sponsors ❤️
-
-A huge thank you to our sponsors for supporting this project!
-
 <p align="center">
-  <a href="https://ko-fi.com/heymanbug">
-    <img src="https://ko-fi.com/img/anon7.png?v=10" width="100" alt="heymanbug" />
-    <br>
-    <sub><b>heymanbug</b></sub>
-  </a>
+<sub>Released under the <a href="LICENSE">MPL-2.0 License</a>.</sub>
 </p>
-
----
-
-## Contributing
-
-Interested in contributing? Check out our [Contributing Guide](https://github.com/LunaStev/Wave/wiki/Contributing) to get started.
-
----
-
-## Cool graphs
-
-[![Star History Chart](https://api.star-history.com/svg?repos=LunaStev/Wave&type=Date)](https://star-history.com/#LunaStev/Wave&Date)
-
----
-
-## LICENSE
-
-Wave is released under the [MPL-2.0 License](LICENSE).
