@@ -85,13 +85,26 @@ curl -fsSL https://wave-lang.dev/install.sh | bash -s -- latest
 
 ---
 
-## ❤️ Sponsor Us
-
-Wave is an open-source programming language built with love, care, and a long-term vision. It’s a project that aims to push the boundaries of what low-level languages can be—without sacrificing clarity or safety.
-
-If you believe in our vision, your support can make a big difference. Wave is developed by an independent creator with no corporate backing, and your sponsorship helps keep the project alive and evolving.
-
-[![Sponsor LunaStev](https://img.shields.io/badge/Sponsor%20LunaStev-%23ea4aaa?style=for-the-badge&logo=github-sponsors&logoColor=white)](https://github.com/sponsors/LunaStev)
+## ❤️ Join the Wave
+Wave is built by the community, for the community. Your contribution, whether it's code, documentation, or feedback, helps shape the future of the language.
+<table width="100%">
+<tr align="center">
+<td width="50%">
+<h3>🤝 Contribute</h3>
+<p>Found a bug or have an idea? We'd love your help. Check out our contributing guide to get started.</p>
+<a href="https://github.com/LunaStev/Wave/blob/master/CONTRIBUTING.md">
+<img src="https://img.shields.io/badge/Contributing%20Guide-333?style=for-the-badge&logo=github" alt="Contributing Guide"/>
+</a>
+</td>
+<td width="50%">
+<h3>💖 Sponsor</h3>
+<p>If you believe in our vision, consider sponsoring the project. Your support keeps development going.</p>
+<a href="https://github.com/sponsors/LunaStev">
+<img src="https://img.shields.io/badge/Sponsor%20LunaStev-EA4AAA?style=for-the-badge&logo=github-sponsors" alt="Sponsor LunaStev"/>
+</a>
+</td>
+</tr>
+</table>
 
 ---
 
@@ -171,29 +184,6 @@ fun main() {
 <br/>
 
 More examples are available inside `test/`.
-
----
-
-## ❤️ Join the Wave
-Wave is built by the community, for the community. Your contribution, whether it's code, documentation, or feedback, helps shape the future of the language.
-<table width="100%">
-<tr align="center">
-<td width="50%">
-<h3>🤝 Contribute</h3>
-<p>Found a bug or have an idea? We'd love your help. Check out our contributing guide to get started.</p>
-<a href="https://github.com/LunaStev/Wave/blob/master/CONTRIBUTING.md">
-<img src="https://img.shields.io/badge/Contributing%20Guide-333?style=for-the-badge&logo=github" alt="Contributing Guide"/>
-</a>
-</td>
-<td width="50%">
-<h3>💖 Sponsor</h3>
-<p>If you believe in our vision, consider sponsoring the project. Your support keeps development going.</p>
-<a href="https://github.com/sponsors/LunaStev">
-<img src="https://img.shields.io/badge/Sponsor%20LunaStev-EA4AAA?style=for-the-badge&logo=github-sponsors" alt="Sponsor LunaStev"/>
-</a>
-</td>
-</tr>
-</table>
 
 ---
 
