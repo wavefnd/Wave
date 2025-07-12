@@ -7,7 +7,7 @@
 <p><strong>The Systems Language for a New Era</strong></p>
 <p>
 <a href="https://www.wave-lang.dev"><strong>Website</strong></a> ·
-<a href="https://github.com/LunaStev/Wave/wiki/Contributing"><strong>Docs</strong></a> ·
+<a href="https://www.wave-lang.dev/docs/intro/"><strong>Docs</strong></a> ·
 <a href="https://discord.gg/Kuk2qXFjc5"><strong>Community</strong></a>
 </p>
 <div>
