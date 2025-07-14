@@ -25,7 +25,7 @@ fun main() {
     println("{}", deref deref deref deref deref deref deref deref deref deref p10);
 
 
-    println("bonus:")
+    println("bonus:");
     println("{}", deref p10);
     println("{}", deref deref p10);
     println("{}", deref deref deref p10);

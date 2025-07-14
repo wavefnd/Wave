@@ -1,64 +1,101 @@
-use std::{env, process};
+use std::{env, fmt, process};
+use std::path::Path;
 use colorex::Colorize;
 use wavec::compile_and_run;
 use wavec::version_wave;
 
+#[derive(Debug)]
+enum CliError {
+    NotEnoughArgs,
+    UnknownCommand(String),
+    MissingArgument {
+        command: &'static str,
+        expected: &'static str,
+    },
+}
+
+impl fmt::Display for CliError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        match self {
+            CliError::NotEnoughArgs => {
+                write!(f, "{} Please provide a command.", "Error:".color("255,71,71"))
+            }
+            CliError::UnknownCommand(cmd) => {
+                write!(f, "{} Unknown command: '{}'", "Error:".color("255,71,71"), cmd)
+            }
+            CliError::MissingArgument { command, expected } => {
+                write!(
+                    f,
+                    "{} Missing argument for command '{}'. Expected: {}",
+                    "Error:".color("255,71,71"),
+                    command,
+                    expected
+                )
+            }
+        }
+    }
+}
+
 fn main() {
-    let args: Vec<String> = env::args().collect();
-
-    if args.len() < 2 {
-        eprintln!("{} {}",
-                  "Usage:".color("255,71,71"),
-                  "wave <command> [arguments]");
-
-        eprintln!("{}",
-                  "Commands:".color("145,161,2"));
-
-        eprintln!("  {}    {}",
-                  "run <file>".color("38,139,235"),
-                  "Execute the specified Wave file");
-
-        eprintln!("  {}     {}",
-                  "--version".color("38,139,235"),
-                  "Show the CLI version");
+    if let Err(e) = run() {
+        eprintln!("{}", e);
+        print_usage();
         process::exit(1);
     }
+}
 
-    match args[1].as_str() {
+fn run() -> Result<(), CliError> {
+    let mut args = env::args();
+
+    args.next();
+
+    let command = args.next().ok_or(CliError::NotEnoughArgs)?;
+
+    match command.as_str() {
         "--version" | "-V" => {
             version_wave();
-            return;
         }
-        "run" => unsafe {
-            if args.len() < 3 {
-                eprintln!("{} {}",
-                          "Usage:".color("255,71,71"),
-                          "wave run <file>");
-                process::exit(1);
-            }
+        "run" => {
+            let file_path_str = args.next().ok_or(CliError::MissingArgument {
+                command: "run",
+                expected: "<file>",
+            })?;
 
-            let file_path = &args[2];
-            compile_and_run(file_path.as_ref());
+            handle_run(Path::new(&file_path_str))?;
         }
         "help" => {
-            println!("{}", "Options:".color("145,161,2"));
-            println!("      {}       {}\n",
-                     "run <file>".color("38,139,235"),
-                     "Run the Wave code.");
-
-            println!("{}", "Commands:".color("145,161,2"));
-            println!("      {}    {}\n",
-                     "-V, --version".color("38,139,235"),
-                     "Verified the version of the Wave compiler.");
-            return;
+            print_help();
         }
-        _ => {
-            eprintln!("{} {}",
-                      "Unknown command:".color("255,71,71"),
-                      args[1]);
-            eprintln!("{}",
-                      "Use 'wave --version' or 'wave run <file>'".color("145,161,2"));
-            process::exit(1);
-        }
+        _ => return Err(CliError::UnknownCommand(command)),
     }
+
+    Ok(())
+}
+
+fn handle_run(file_path: &Path) -> Result<(), CliError> {
+    unsafe {
+        compile_and_run(file_path);
+    }
+    Ok(())
+}
+
+fn print_usage() {
+    eprintln!("\n{} {}",
+              "Usage:".color("255,71,71"),
+              "wave <command> [arguments]");
+}
+
+fn print_help() {
+    println!("{}", "A simple, fast, and modern compiler for the Wave language.".color("145,161,2"));
+    print_usage();
+    println!("\n{}", "Commands:".color("145,161,2"));
+    println!("  {}    {}",
+             "run <file>".color("38,139,235"),
+             "Execute the specified Wave file");
+    println!("  {}         {}",
+             "help".color("38,139,235"),
+             "Show this help message");
+    println!("  {}     {}",
+             "--version".color("38,139,235"),
+             "Show the CLI version");
 }
