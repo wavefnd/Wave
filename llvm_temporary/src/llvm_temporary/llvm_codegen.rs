@@ -1,7 +1,8 @@
 use parser::ast::{ASTNode, FunctionNode, Expression, WaveType, Mutability, Value};
 use inkwell::context::Context;
 use inkwell::values::{PointerValue, FunctionValue, BasicValue};
-use inkwell::{AddressSpace};
+use inkwell::{AddressSpace, OptimizationLevel};
+use inkwell::passes::{PassManager, PassManagerBuilder};
 
 use std::collections::HashMap;
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum};
@@ -9,123 +10,96 @@ use lexer::token::TokenType;
 use crate::llvm_temporary::statement::generate_statement_ir;
 
 pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
-    let context = Context::create();
+    let context: &'static Context = Box::leak(Box::new(Context::create()));
+    let module: &'static _ = Box::leak(Box::new(context.create_module("main")));
+    let builder: &'static _ = Box::leak(Box::new(context.create_builder()));
 
-    let ir = {
-        let module = Box::leak(Box::new(context.create_module("main")));
-        let builder = Box::leak(Box::new(context.create_builder()));
-        let mut functions: HashMap<String, FunctionValue> = HashMap::new();
+    let pass_manager_builder = PassManagerBuilder::create();
+    pass_manager_builder.set_optimization_level(OptimizationLevel::Aggressive);
+    let pass_manager: PassManager<inkwell::module::Module> = PassManager::create(());
+    pass_manager_builder.populate_module_pass_manager(&pass_manager);
 
+    let mut functions: HashMap<String, FunctionValue> = HashMap::new();
 
-        for ast in ast_nodes {
-            if let ASTNode::Function(FunctionNode { name, parameters, return_type, .. }) = ast {
-                let param_types: Vec<BasicMetadataTypeEnum> = parameters.iter()
-                    .map(|p| wave_type_to_llvm_type(&context, &p.param_type).into())
-                    .collect();
+    for ast in ast_nodes {
+        if let ASTNode::Function(FunctionNode { name, parameters, return_type, .. }) = ast {
+            let param_types: Vec<BasicMetadataTypeEnum> = parameters.iter()
+                .map(|p| wave_type_to_llvm_type(context, &p.param_type).into())
+                .collect();
 
-                let fn_type = match return_type {
-                    Some(wave_ret_ty) => {
-                        let llvm_ret_type = wave_type_to_llvm_type(&context, wave_ret_ty);
-                        llvm_ret_type.fn_type(&param_types, false)
-                    }
-                    None => context.void_type().fn_type(&param_types, false),
-                };
+            let fn_type = match return_type {
+                Some(wave_ret_ty) => {
+                    let llvm_ret_type = wave_type_to_llvm_type(context, wave_ret_ty);
+                    llvm_ret_type.fn_type(&param_types, false)
+                }
+                None => context.void_type().fn_type(&param_types, false),
+            };
 
-                let function = module.add_function(name, fn_type, None);
-                functions.insert(name.clone(), function);
-            }
+            let function = module.add_function(name, fn_type, None);
+            functions.insert(name.clone(), function);
         }
+    }
 
-        for ast in ast_nodes {
-            if let ASTNode::Function(FunctionNode { name, parameters, return_type, body }) = ast {
-                let function = *functions.get(name).unwrap();
+    for ast in ast_nodes {
+        if let ASTNode::Function(FunctionNode { name, parameters, return_type, body }) = ast {
+            let function = *functions.get(name).unwrap();
+            let entry_block = context.append_basic_block(function, "entry");
+            builder.position_at_end(entry_block);
 
-                let entry_block = context.append_basic_block(function, "entry");
-                builder.position_at_end(entry_block);
+            let mut variables: HashMap<String, VariableInfo> = HashMap::new();
+            let mut string_counter = 0;
+            let mut loop_exit_stack = vec![];
+            let mut loop_continue_stack = vec![];
 
-                let mut variables: HashMap<String, VariableInfo> = HashMap::new();
-                let mut string_counter = 0;
-                let mut loop_exit_stack = vec![];
-                let mut loop_continue_stack = vec![];
+            for (i, param) in parameters.iter().enumerate() {
+                let llvm_type = wave_type_to_llvm_type(context, &param.param_type);
+                let alloca = builder.build_alloca(llvm_type, &param.name).unwrap();
+                let param_val = function.get_nth_param(i as u32).unwrap();
+                builder.build_store(alloca, param_val).unwrap();
 
-                for (i, param) in parameters.iter().enumerate() {
-                    let llvm_type = wave_type_to_llvm_type(&context, &param.param_type);
-                    let alloca = builder.build_alloca(llvm_type, &param.name).unwrap();
+                variables.insert(
+                    param.name.clone(),
+                    VariableInfo {
+                        ptr: alloca,
+                        mutability: Mutability::Let,
+                        ty: param.param_type.clone(),
+                    },
+                );
+            }
 
-                    let init_value = if let Some(initial) = &param.initial_value {
-                        match (initial, llvm_type) {
-                            (Value::Int(v), BasicTypeEnum::IntType(int_ty)) => {
-                                Some(int_ty.const_int(*v as u64, false).as_basic_value_enum())
-                            }
-                            (Value::Float(f), BasicTypeEnum::FloatType(float_ty)) => {
-                                Some(float_ty.const_float(*f).as_basic_value_enum())
-                            }
-                            (Value::Text(s), BasicTypeEnum::PointerType(ptr_ty)) => unsafe {
-                                let mut bytes = s.as_bytes().to_vec();
-                                bytes.push(0);
-                                let const_str = context.const_string(&bytes, false);
-                                let global = module.add_global(
-                                    context.i8_type().array_type(bytes.len() as u32),
-                                    None,
-                                    &format!("param_str_{}", param.name),
-                                );
-                                global.set_initializer(&const_str);
-                                global.set_constant(true);
-                                let zero = context.i32_type().const_zero();
-                                let gep = builder.build_gep(global.as_pointer_value(), &[zero, zero], "gep").unwrap();
-                                Some(gep.as_basic_value_enum())
-                            }
-                            _ => None,
-                        }
-                    } else {
-                        Some(function.get_nth_param(i as u32).unwrap())
-                    };
-
-                    if let Some(init_val) = init_value {
-                        builder.build_store(alloca, init_val).unwrap();
+            for stmt in body {
+                match stmt {
+                    ASTNode::Variable(_) | ASTNode::Statement(_) => {
+                        generate_statement_ir(
+                            context,
+                            builder,
+                            module,
+                            &mut string_counter,
+                            stmt,
+                            &mut variables,
+                            &mut loop_exit_stack,
+                            &mut loop_continue_stack,
+                            function,
+                        );
                     }
-
-                    variables.insert(
-                        param.name.clone(),
-                        VariableInfo {
-                            ptr: alloca,
-                            mutability: Mutability::Let,
-                            ty: param.param_type.clone(),
-                        },
-                    );
+                    _ => panic!("Unsupported ASTNode in function body"),
                 }
+            }
 
-                let is_void_fn = return_type.is_none();
-                let did_return = false;
-
-                for stmt in body {
-                    match stmt {
-                        ASTNode::Variable(_) | ASTNode::Statement(_) => {
-                            generate_statement_ir(
-                                &context,
-                                &builder,
-                                &module,
-                                &mut string_counter,
-                                stmt,
-                                &mut variables,
-                                &mut loop_exit_stack,
-                                &mut loop_continue_stack,
-                                function,
-                            );
-                        }
-                        _ => panic!("Unsupported ASTNode in function body"),
-                    }
-                }
-
-                if !did_return && is_void_fn {
-                    let _ = builder.build_return(None);
+            let current_block = builder.get_insert_block().unwrap();
+            if current_block.get_terminator().is_none() {
+                if return_type.is_none() {
+                    builder.build_return(None).unwrap();
+                } else {
+                    builder.build_unreachable().unwrap();
                 }
             }
         }
+    }
 
-        module.print_to_string().to_string()
-    };
-    ir
+    pass_manager.run_on(module);
+
+    module.print_to_string().to_string()
 }
 
 pub fn wave_format_to_c(format: &str, arg_types: &[BasicTypeEnum]) -> String {
