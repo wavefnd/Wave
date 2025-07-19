@@ -172,6 +172,7 @@ pub enum Mutability {
     Var,
     Let,
     LetMut,
+    Const,
 }
 
 #[derive(Debug, Clone)]
