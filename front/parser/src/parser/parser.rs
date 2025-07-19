@@ -21,6 +21,14 @@ pub fn parse(tokens: &Vec<Token>) -> Option<Vec<ASTNode>> {
                     return None;
                 }
             }
+            TokenType::Const => {
+                iter.next();
+                if let Some(path) = parse_const(&mut iter) {
+                    nodes.push(path);
+                } else {
+                    return None;
+                }
+            }
             TokenType::Fun => {
                 if let Some(func) = parse_function(&mut iter) {
                     nodes.push(func);
