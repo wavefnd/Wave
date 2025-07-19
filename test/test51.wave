@@ -1,0 +1,93 @@
+fun factorial_simple(n: i32) -> i32 {
+    var result: i32 = 1;
+    var i: i32 = 1;
+    while (i <= n) {
+        result *= i;
+        i += 1;
+    }
+    return result;
+}
+
+fun string_len_simple(s: str) -> i32 {
+    var count: i32 = 0;
+    while (s[count] != 0) {
+        count += 1;
+    }
+    return count;
+}
+
+fun print_triangle_simple(levels: i32) -> i32 {
+    var i: i32 = 1;
+    while (i <= levels) {
+        var j: i32 = 1;
+        while (j <= i) {
+            print("#");
+            j += 1;
+        }
+        println(" ");
+        i += 1;
+    }
+    return 0;
+}
+
+fun main() {
+    println("=== WAVE SAFE ULTRA START ===");
+
+    var a: i32 = 10;
+    var b: i32 = 5;
+    var f: f32 = 3.5;
+    var g: f32 = 2.0;
+
+    a += b;
+    a *= 2;
+    f += g;
+    println("a={}, b={}, f={}, g={}", a, b, f, g);
+
+    if (a > b) {
+        println("a is bigger");
+    } else {
+        println("b is bigger or equal");
+    }
+
+    var p_a: ptr<i32> = &a;
+    var p_b: ptr<i32> = &b;
+    println("p_a={}, p_b={}", p_a, p_b);
+
+    var arr: ptr<array<i32, 3>> = &[1, 2, 3];
+    println("arr pointer={}", arr);
+
+    var msg: str = "Safe Wave!";
+    var len: i32 = string_len_simple(msg);
+    println("Message='{}', length={}", msg, len);
+
+    var i: i32 = 0;
+    while (i < 6) {
+        if (i == 2) {
+            println("skip {}", i);
+            i += 1;
+            continue;
+        }
+        println("loop i={}", i);
+        i += 1;
+    }
+
+    var n: i32 = 5;
+    var fact: i32 = factorial_simple(n);
+    println("factorial({}) = {}", n, fact);
+
+    print_triangle_simple(4);
+
+    var msg_ptr: ptr<i8> = "Hello from syscall!\n";
+    var ret_val: i64;
+    asm {
+        "mov rax, 1"
+        "syscall"
+        in("rdi") 1
+        in("rsi") msg_ptr
+        in("rdx") 21
+        out("rax") ret_val
+    }
+    println("syscall returned {}", ret_val);
+
+    println("=== WAVE SAFE ULTRA END ===");
+}

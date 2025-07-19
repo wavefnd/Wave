@@ -1,0 +1,37 @@
+proto Drawable {
+    fun draw() -> void;
+}
+
+proto Updatable {
+    fun update(dt: f32) -> void;
+}
+
+struct Text {
+    content: str;
+
+    fun draw() {
+        println("Draw text '{}'", content);
+    }
+
+    fun update(dt: f32) {
+        println("Update text '{}' with dt={}", content, dt);
+    }
+}
+
+fun process_draw(items: array<Drawable, 1>) {
+    items[0].draw();
+}
+
+fun process_update(items: array<Updatable, 1>) {
+    items[0].update(0.016);
+}
+
+fun main() {
+    var t: Text = Text { content: "Hello Proto!" };
+
+    var drawable_list: array<Drawable, 1> = [t];
+    var updatable_list: array<Updatable, 1> = [t];
+
+    process_draw(drawable_list);
+    process_update(updatable_list);
+}

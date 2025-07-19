@@ -1,0 +1,101 @@
+fun calc_sum(x: i32, y: i32) -> i32 {
+    println("Calculating sum of {} and {}", x, y);
+    var result: i32 = x + y;
+    return result;
+}
+
+fun string_len(s: str) -> i32 {
+    var count: i32 = 0;
+    while (s[count] != 0) {
+        count += 1;
+    }
+    return count;
+}
+
+fun print_triangle(levels: i32) -> i32 {
+    var i: i32 = 1;
+    while (i <= levels) {
+        var j: i32 = 1;
+        while (j <= i) {
+            print("#");
+            j += 1;
+        }
+        println(" ");
+        i += 1;
+    }
+    return 0;
+}
+
+fun main() {
+    println("=== WAVE MEGA PROGRAM START ===");
+
+    // 1) 기본 변수 선언 및 연산
+    var a: i32 = 12;
+    var b: i32 = 8;
+    var f: f32 = 5.0;
+    var g: f32 = 2.5;
+
+    a += b;      // 20
+    f *= g;      // 12.5
+    println("a: {}, b: {}, f: {}, g: {}", a, b, f, g);
+
+    if (a > 15) {
+        println("{} is greater than 15", a);
+    } else if (a == 15) {
+        println("{} is exactly 15", a);
+    } else {
+        println("{} is less than 15", a);
+    }
+
+    // 2) 포인터 실험
+    var p_a: ptr<i32> = &a;
+    var p_b: ptr<i32> = &b;
+    var pp_a: ptr<ptr<i32>> = &p_a;
+    println("Pointer p_a: {}, p_b: {}", p_a, p_b);
+    println("Deref p_a: {}, Deref p_b: {}", deref p_a, deref p_b);
+    println("Double pointer pp_a: {}", pp_a);
+
+    // 3) 배열 & 포인터
+    var arr: ptr<array<i32, 3>> = &[1, 2, 3];
+    println("Array ptr: {}", arr);
+
+    // 4) 함수 호출 테스트
+    var sum_val: i32 = calc_sum(a, b);
+    println("Sum result: {}", sum_val);
+
+    // 5) 문자열 길이 측정
+    var msg: str = "Hello, Wave!";
+    var msg_len: i32 = string_len(msg);
+    println("Message: '{}', Length: {}", msg, msg_len);
+
+    // 6) 반복문 & continue
+    var acc: i32 = 0;
+    var i: i32 = 0;
+    while (i < 10) {
+        if (i == 4) {
+            i += 1;
+            continue;
+        }
+        acc += i;
+        println("Loop i={}, acc={}", i, acc);
+        i += 1;
+    }
+
+    // 7) 패턴 출력 함수 호출
+    print_triangle(5);
+
+    // 8) inline syscall 예제
+    var msg_ptr: ptr<i8> = "Syscall says hi!\n";
+    var ret_val: i64;
+    asm {
+        "mov rax, 1"       // write syscall
+        "syscall"
+        in("rdi") 1        // stdout
+        in("rsi") msg_ptr  // message pointer
+        in("rdx") 18       // length
+        out("rax") ret_val
+    }
+    println("syscall returned: {}", ret_val);
+
+    println("=== WAVE MEGA PROGRAM END ===");
+}
