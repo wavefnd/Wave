@@ -155,6 +155,12 @@ pub fn wave_type_to_llvm_type<'ctx>(context: &'ctx Context, wave_type: &WaveType
             let inner_type = wave_type_to_llvm_type(context, inner);
             inner_type.array_type(*size).as_basic_type_enum()
         }
+        WaveType::Void => {
+            panic!("Void type cannot be represented as BasicTypeEnum");
+        }
+        _ => {
+            panic!("Unsupported wave type type");
+        }
     }
 }
 

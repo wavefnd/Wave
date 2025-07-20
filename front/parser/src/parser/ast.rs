@@ -5,7 +5,7 @@ pub enum Value {
     Text(String),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WaveType {
     Int(u16),
     Uint(u16),
@@ -16,6 +16,9 @@ pub enum WaveType {
     String,
     Pointer(Box<WaveType>),
     Array(Box<WaveType>, u32),
+    Void,
+    Struct(String),
+    Proto(String),
 }
 
 #[derive(Debug, Clone)]
@@ -25,6 +28,8 @@ pub enum ASTNode {
     Statement(StatementNode),
     Variable(VariableNode),
     Expression(Expression),
+    Struct(StructNode),
+    Proto(ProtoNode),
 }
 
 #[derive(Debug, Clone)]
@@ -33,6 +38,25 @@ pub struct FunctionNode {
     pub parameters: Vec<ParameterNode>,
     pub return_type: Option<WaveType>,
     pub body: Vec<ASTNode>,
+}
+
+#[derive(Debug, Clone)]
+pub struct StructNode {
+    pub name: String,
+    pub methods: Vec<FunctionSignature>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ProtoNode {
+    pub name: String,
+    pub methods: Vec<FunctionSignature>,
+}
+
+#[derive(Debug, Clone)]
+pub struct FunctionSignature {
+    pub name: String,
+    pub params: Vec<(String, WaveType)>,
+    pub return_type: WaveType,
 }
 
 #[derive(Debug, Clone)]

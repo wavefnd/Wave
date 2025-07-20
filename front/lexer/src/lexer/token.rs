@@ -164,4 +164,7 @@ pub enum TokenType {
     Arrow,                  // ->
     Array,
     Newline,
+    Proto,
+    Struct,
+    TypeVoid,
 }

@@ -568,6 +568,20 @@ impl<'a> Lexer<'a> {
                             line: self.line,
                         }
                     },
+                    "proto" => {
+                        Token {
+                            token_type: TokenType::Proto,
+                            lexeme: "proto".to_string(),
+                            line: self.line,
+                        }
+                    },
+                    "struct" => {
+                        Token {
+                            token_type: TokenType::Struct,
+                            lexeme: "struct".to_string(),
+                            line: self.line,
+                        }
+                    },
                     "while" => {
                         Token {
                             token_type: TokenType::While,

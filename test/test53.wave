@@ -1,0 +1,1 @@
+proto Drawable { fun draw() -> void; }
