@@ -1,7 +1,8 @@
 use std::{env, fmt, process};
 use std::path::Path;
 use colorex::Colorize;
-use wavec::compile_and_run;
+use llvm_temporary::llvm_temporary::llvm_backend::compile_ir_to_img_code;
+use wavec::{compile_and_img, compile_and_run};
 use wavec::version_wave;
 
 #[derive(Debug)]
@@ -56,12 +57,21 @@ fn run() -> Result<(), CliError> {
             version_wave();
         }
         "run" => {
-            let file_path_str = args.next().ok_or(CliError::MissingArgument {
+            let first_arg = args.next().ok_or(CliError::MissingArgument {
                 command: "run",
-                expected: "<file>",
+                expected: "<file> or --img <file>",
             })?;
 
-            handle_run(Path::new(&file_path_str))?;
+            if first_arg == "--img" {
+                let file_path_str = args.next().ok_or(CliError::MissingArgument {
+                    command: "run",
+                    expected: "<file>",
+                })?;
+
+                img_run(Path::new(&file_path_str))?;
+            } else {
+                handle_run(Path::new(&first_arg))?;
+            }
         }
         "help" => {
             print_help();
@@ -75,6 +85,13 @@ fn run() -> Result<(), CliError> {
 fn handle_run(file_path: &Path) -> Result<(), CliError> {
     unsafe {
         compile_and_run(file_path);
+    }
+    Ok(())
+}
+
+fn img_run(file_path: &Path) -> Result<(), CliError> {
+    unsafe {
+        compile_and_img(file_path);
     }
     Ok(())
 }
