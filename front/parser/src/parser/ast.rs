@@ -78,6 +78,11 @@ pub enum Expression {
         name: String,
         args: Vec<Expression>,
     },
+    MethodCall {
+        object: Box<Expression>,
+        name: String,
+        args: Vec<Expression>,
+    },
     Literal(Literal),
     Variable(String),
     Deref(Box<Expression>),

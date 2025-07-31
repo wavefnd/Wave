@@ -213,7 +213,7 @@ where
 {
     let token = tokens.peek()?.clone();
 
-    match &token.token_type {
+    let mut expr = match &token.token_type {
         TokenType::Number(value) => {
             tokens.next();
             Some(Expression::Literal(Literal::Number(*value)))
@@ -455,7 +455,71 @@ where
                 }
             }
         }
+    };
+
+    loop {
+        match tokens.peek().map(|t| &t.token_type) {
+            Some(TokenType::Dot) => {
+                tokens.next();
+
+                let name = if let Some(Token { token_type: TokenType::Identifier(name), .. }) = tokens.next() {
+                    name.clone()
+                } else {
+                    println!("Error: Expected identifier after Dot");
+                    return None;
+                };
+
+                if tokens.peek().map_or(true, |t| t.token_type != TokenType::Lparen) {
+                    println!("Error: Expected '(' for method call");
+                    return None;
+                }
+                tokens.next();
+
+                let mut args = vec![];
+                if tokens.peek().map_or(false, |t| t.token_type != TokenType::Rparen) {
+                    loop {
+                        let arg = parse_expression(tokens)?;
+                        args.push(arg);
+
+                        if let Some(Token { token_type: TokenType::Comma, .. }) = tokens.peek() {
+                            tokens.next();
+                        } else {
+                            break;
+                        }
+                    }
+                }
+
+                if tokens.peek().map_or(true, |t| t.token_type != TokenType::Rparen) {
+                    println!("Error: Expected ')' after method call arguments");
+                    return None;
+                }
+                tokens.next();
+
+                expr = Some(Expression::MethodCall {
+                    object: Box::new(expr?),
+                    name,
+                    args,
+                });
+            }
+            Some(TokenType::Lbrack) => {
+                tokens.next();
+                let index_expr = parse_expression(tokens)?;
+                if tokens.peek().map_or(true, |t| t.token_type != TokenType::Rbrack) {
+                    println!("Error: Expected ']' after index");
+                    return None;
+                }
+                tokens.next();
+                expr = Some(Expression::IndexAccess {
+                    target: Box::new(expr?),
+                    index: Box::new(index_expr),
+                });
+            }
+            _ => {
+                break;
+            }
+        }
     }
+    Some(expr?)
 }
 
 pub fn parse_parenthesized_expression<'a, T>(tokens: &mut Peekable<T>) -> Option<Expression>

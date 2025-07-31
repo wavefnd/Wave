@@ -175,6 +175,43 @@ pub fn generate_expression_ir<'ctx>(
             }
         }
 
+        Expression::MethodCall { object, name, args } => {
+            let function = module
+                .get_function(name)
+                .unwrap_or_else(|| panic!("Function '{}' not found as a global function", name));
+
+            let function_type = function.get_type();
+            let param_types: Vec<BasicTypeEnum> = function_type
+                .get_param_types()
+                .iter()
+                .map(|t| (*t).into())
+                .collect();
+
+            let object_expected_type = param_types.get(0).copied();
+            let object_val = generate_expression_ir(context, builder, object, variables, module, object_expected_type);
+
+            let mut compiled_args: Vec<inkwell::values::BasicMetadataValueEnum<'ctx>> = vec![object_val.into()];
+
+            for (i, arg) in args.iter().enumerate() {
+                let expected = param_types.get(i + 1).copied();
+                let val = generate_expression_ir(context, builder, arg, variables, module, expected);
+
+                compiled_args.push(val.into());
+            }
+
+            let call_site = builder.build_call(function, &compiled_args, &format!("call_{}", name)).unwrap();
+
+            if function_type.get_return_type().is_some() {
+                if let Some(ret_val) = call_site.try_as_basic_value().left() {
+                    ret_val
+                } else {
+                    panic!("Method '{}' should return a value but didn't", name);
+                }
+            } else {
+                context.i32_type().const_zero().as_basic_value_enum()
+            }
+        }
+
         Expression::AssignOperation { target, operator, value } => {
             let ptr = generate_address_ir(context, builder, target, variables, module);
 

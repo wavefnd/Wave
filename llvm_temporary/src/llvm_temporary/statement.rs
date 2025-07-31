@@ -183,7 +183,7 @@ pub fn generate_statement_ir<'ctx>(
                         let val = generate_expression_ir(context, builder, init, variables, module, Some(llvm_type));
                         builder.build_store(alloca, val).unwrap();
                     }
-                    (Expression::FunctionCall { .. }, _) => {
+                    (Expression::FunctionCall { .. } | Expression::MethodCall { .. }, _) => {
                         let val = generate_expression_ir(context, builder, init, variables, module, Some(llvm_type));
                         builder.build_store(alloca, val).unwrap();
                     }

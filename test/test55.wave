@@ -1,0 +1,36 @@
+fun len(s: str) -> i32 {
+    var count: i32 = 0;
+    while (s[count] != 0) {
+        count += 1;
+    }
+    return count;
+}
+
+// num.add(val) -> add(num, val)
+fun add(self: i32, value: i32) -> i32 {
+    return self + value;
+}
+
+fun subtract(self: i32, value: i32) -> i32 {
+    return self - value;
+}
+
+fun main() {
+    println("--- Test 55: Method Chaining ---");
+
+    println("\n[1. Simple Method Call]");
+    var my_string: str = "Hello from Wave's Chaining API!";
+    println("Testing string: '{}'", my_string);
+
+    var length: i32 = my_string.len();
+    println("Result of my_string.len(): {}", length);
+
+    println("\n[2. Chained Method Calls]");
+    var num: i32 = 10;
+    println("Initial number: {}", num);
+
+    var chained_result: i32 = num.add(5).subtract(3);
+    println("Result of num.add(5).subtract(3): {}", chained_result);
+
+    println("\n--- Test 55 Finished ---");
+}
