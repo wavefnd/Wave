@@ -509,7 +509,7 @@ impl<'a> Lexer<'a> {
                     line: self.line,
                 }
             },
-            'a'..='z' | 'A'..='Z' => {
+            'a'..='z' | 'A'..='Z' | '_' => {
                 let identifier = self.identifier();
                 match identifier.as_str() {
                     "fun" => {

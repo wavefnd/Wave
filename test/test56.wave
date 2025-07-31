@@ -1,0 +1,126 @@
+fun syscall1(id: i64) -> i64 {
+    var ret_val: i64;
+    asm {
+        "syscall"
+        in("rax") id
+        out("rax") ret_val
+    }
+    return ret_val;
+}
+
+fun syscall2(id: i64, arg1: i64) -> i64 {
+    var ret_val: i64;
+    asm {
+        "syscall"
+        in("rax") id
+        in("rdi") arg1
+        out("rax") ret_val
+    }
+    return ret_val;
+}
+
+fun syscall3(id: i64, arg1: i64, arg2: i64) -> i64 {
+    var ret_val: i64;
+    asm {
+        "syscall"
+        in("rax") id
+        in("rdi") arg1
+        in("rsi") arg2
+        out("rax") ret_val
+    }
+    return ret_val;
+}
+
+fun syscall4(id: i64, arg1: i64, arg2: i64, arg3: i64) -> i64 {
+    var ret_val: i64;
+    asm {
+        "syscall"
+        in("rax") id
+        in("rdi") arg1
+        in("rsi") arg2
+        in("rdx") arg3
+        out("rax") ret_val
+    }
+    return ret_val;
+}
+
+fun _socket_create() -> i32 {
+    return syscall4(41, 2, 1, 0);
+}
+
+fun _socket_bind(sockfd: i32, ip_addr: i32, port: i16) -> i32 {
+    asm {
+        out("rax") result
+        in("rdi") sockfd
+    }
+    return result;
+}
+
+fun _socket_listen(sockfd: i32, backlog: i32) -> i32 {
+    return syscall3(50, sockfd, backlog);
+}
+
+fun _socket_close(sockfd: i32) {
+    syscall2(3, sockfd);
+}
+
+fun new_server(ip_str: str, port: i16) -> ptr<i32> {
+    var sockfd: i32 = _socket_create();
+    if (sockfd < 0) {
+        println("Error: Failed to create socket.");
+        return 0;
+    }
+
+    if (_socket_bind(sockfd, 0, port) < 0) {
+        println("Error: Failed to bind socket.");
+        _socket_close(sockfd);
+        return 0;
+    }
+
+    return sockfd;
+}
+
+fun listen(server_fd: i32, backlog: i32) -> i32 {
+    if (_socket_listen(server_fd, backlog) < 0) {
+        println("Error: Failed to listen on socket.");
+        return -1;
+    }
+    println("Server is listening...");
+    return server_fd;
+}
+
+fun start(server_fd: i32) {
+    println("Server accepting connections...");
+
+    while (true) {
+        var client_fd: i32 = syscall3(43, server_fd, 0);
+
+        if (client_fd < 0) {
+            println("Error: Failed to accept connection.");
+            continue;
+        }
+
+        println("Client connected! fd: {}", client_fd);
+
+        var response: str = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nWelcome to the Wave HTTP Server!";
+
+        syscall4(1, client_fd, response, 82);
+
+        _socket_close(client_fd);
+        println("Client disconnected.");
+    }
+}
+
+
+fun main() {
+    println("--- Wave HTTP Server Application ---");
+
+    var server_instance: i32 = new_server("0.0.0.0", 8080)
+                                 .listen(10);
+
+    if (server_instance >= 0) {
+        server_instance.start();
+    } else {
+        println("Server failed to start.");
+    }
+}
