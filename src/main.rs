@@ -1,7 +1,6 @@
 use std::{env, fmt, process};
 use std::path::Path;
 use colorex::Colorize;
-use llvm_temporary::llvm_temporary::llvm_backend::compile_ir_to_img_code;
 use wavec::{compile_and_img, compile_and_run};
 use wavec::version_wave;
 
