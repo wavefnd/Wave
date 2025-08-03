@@ -139,8 +139,7 @@ Wave/
 │   ├── lexer/            # Tokenization
 │   ├── parser/           # Syntax analysis & AST generation
 │   └── error/            # Error handling and diagnostics
-├── middle/               # Middle-end (semantic analysis)
-├── back/                # Backend (LLVM code generation)
+├── llvm_temporary/       # Backend (LLVM code generation)
 ├── test/                # Wave language test files
 └── docs/               # Documentation
 ```
