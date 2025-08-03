@@ -1,0 +1,13 @@
+fun len(s: str) -> i32 {
+    var count: i32 = 0;
+    while (s[count] != 0) {
+        count += 1;
+    }
+    return count;
+}
+
+fun main() {
+    var my_string: str = "Hello World";
+    var length: i32 = my_string.len();
+    println("Result of my_string.len(): {}", length);
+}

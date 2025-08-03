@@ -3,12 +3,14 @@ use std::path::{Path, PathBuf};
 use error::error::{WaveError, WaveErrorKind};
 use crate::ast::ASTNode;
 use crate::parse;
+use crate::parser::stdlib::StdlibManager;
 use lexer::Lexer;
 
 pub fn local_import(
     path: &str,
     already_imported: &mut HashSet<String>,
     base_dir: &Path,
+    stdlib_manager: Option<&StdlibManager>,
 ) -> Result<Vec<ASTNode>, WaveError> {
     if path.trim().is_empty() {
         return Err(WaveError::new(
@@ -18,6 +20,16 @@ pub fn local_import(
             0,
             0,
         ));
+    }
+
+    // Handle standard library imports (std::*)
+    if path.starts_with("std::") {
+        return handle_std_import(path, already_imported, stdlib_manager);
+    }
+
+    // Handle external library imports (contain :: but not std::)
+    if path.contains("::") && !path.starts_with("std::") {
+        return external_import(path, already_imported);
     }
 
     let target_file_name = if path.ends_with(".wave") {
@@ -86,6 +98,51 @@ pub fn local_import(
     })?;
 
     Ok(ast)
+}
+
+fn handle_std_import(
+    path: &str,
+    already_imported: &mut HashSet<String>,
+    stdlib_manager: Option<&StdlibManager>,
+) -> Result<Vec<ASTNode>, WaveError> {
+    if already_imported.contains(path) {
+        return Ok(vec![]);
+    }
+    already_imported.insert(path.to_string());
+
+    // Extract the module name after "std::"
+    let module_name = path.strip_prefix("std::").unwrap_or(path);
+    
+    // Check if stdlib manager is available (Vex integration)
+    if let Some(_manager) = stdlib_manager {
+        // TODO: Implement actual stdlib import validation with Vex communication
+        // In Vex integration mode, only import is allowed and actual validation is handled by Vex
+        // Wave compiler only recognizes std:: import syntax
+        println!("Standard library import '{}' will be handled by Vex", path);
+        Ok(vec![])
+    } else {
+        // Wave compiler used standalone - no standard library access
+        Err(WaveError::stdlib_requires_vex(module_name, path, 0, 0))
+    }
+}
+
+pub fn external_import(
+    path: &str,
+    already_imported: &mut HashSet<String>,
+) -> Result<Vec<ASTNode>, WaveError> {
+    if already_imported.contains(path) {
+        return Ok(vec![]);
+    }
+    already_imported.insert(path.to_string());
+
+    // For external libraries, we would typically:
+    // 1. Check if the library exists in a known path
+    // 2. Load the library's interface/header information
+    // 3. Return the appropriate AST nodes
+    
+    // For now, return empty AST as external library handling 
+    // would be implemented by the package manager (Vex)
+    Ok(vec![])
 }
 
 fn find_wave_file_recursive(dir: &Path, target_file_name: &str) -> Option<PathBuf> {

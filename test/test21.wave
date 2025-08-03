@@ -1,4 +1,4 @@
-import("iosys");
+import("std::iosys");
 
 fun main() {
     println("{}", ((0b110111010) & 0x1FF));

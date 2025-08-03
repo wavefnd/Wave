@@ -1,120 +1,365 @@
-# ⚠️Warning⚠️
+# Contributing to Wave
 
-> **You must fully understand the project's requirements and guidelines to contribute effectively and avoid inconvenience.**
+<div align="center">
+<img src="https://img.shields.io/badge/contributions-welcome-brightgreen.svg?style=for-the-badge" alt="Contributions Welcome"/>
+<img src="https://img.shields.io/badge/PRs-welcome-brightgreen.svg?style=for-the-badge" alt="PRs Welcome"/>
+<img src="https://img.shields.io/badge/first--timers--only-friendly-blue.svg?style=for-the-badge" alt="First Timers Only"/>
+</div>
+
+Thank you for your interest in contributing to **Wave**! We welcome contributions from developers of all experience levels. Whether you're fixing bugs, adding features, improving documentation, or sharing feedback, every contribution helps make Wave better.
 
 ---
 
-# How to Contribute to Wave
+## 🚀 Quick Start for Contributors
 
-Wave is an open-source project, and contributions from anyone are welcome. However, please follow these guidelines to ensure your contributions align with the project's goals and standards.
+### Prerequisites
+- Rust toolchain (1.70+)
+- LLVM 14+
+- Git
+- Familiarity with systems programming concepts (helpful but not required)
+
+### Setting Up Your Development Environment
+
+1. **Fork and Clone**
+   ```bash
+   git clone https://github.com/YOUR_USERNAME/Wave.git
+   cd Wave
+   ```
+
+2. **Build and Test**
+   ```bash
+   cargo build
+   cargo test
+   ```
+
+3. **Run Wave Examples**
+   ```bash
+   ./target/debug/wavec build test/test.wave
+   ./target/debug/wavec run test/test.wave
+   ```
 
 ---
 
-## Programming Languages
+## 📋 Types of Contributions
 
-We use **Rust** as the primary programming language for developing Wave and its core tools.
+We welcome various types of contributions:
 
-In certain cases, we may use other languages such as **C**, **Zig**, or **Python** when technically necessary or appropriate. However, **any language other than Rust must go through sufficient discussion and justification** before being accepted into the codebase.
+<table>
+<tr>
+<td width="50%">
 
-Our long-term goal is to transition all major components—including the compiler, toolchain (Whale), and package manager (Vex)—to the **Wave** language itself once bootstrapping becomes feasible.
+### 🐛 Bug Fixes
+- Fix compiler errors or crashes
+- Improve error messages
+- Resolve parsing issues
+- Performance optimizations
 
-### Supported Languages
+### ✨ Features
+- Language features (syntax, semantics)
+- Compiler improvements
+- CLI enhancements
+- Tool integrations
 
-- **[Rust](https://www.rust-lang.org/)** – Main implementation language  
-- **[Wave](https://www.wave-lang.dev/)** – Planned for full migration after bootstrapping  
-- Other languages – Accepted case-by-case, with technical justification
+</td>
+<td width="50%">
 
---- 
+### 📚 Documentation
+- API documentation
+- Tutorial improvements
+- Code examples
+- Architecture guides
 
-## Code Conventions
+### 🧪 Testing
+- Unit tests
+- Integration tests
+- Language test cases
+- Performance benchmarks
 
-To maintain consistency across the project, we strictly follow the K&R style. Contributions using styles like BSD, GNU, or others may be rejected or require modifications to adhere to K&R.
+</td>
+</tr>
+</table>
 
-#### Examples
+---
 
-* Correct:
+## 🎯 Development Guidelines
+
+### Code Style & Standards
+
+Wave follows **Rust standard conventions** with these additional guidelines:
+
+- **Function Naming**: Use `snake_case` for functions and variables
+- **Type Naming**: Use `PascalCase` for types and enums  
+- **Constants**: Use `SCREAMING_SNAKE_CASE`
+- **Bracing**: K&R style (opening brace on same line)
+
+**Example:**
 ```rust
-fn main() {
-    println!("Hello World!");
-}
-```
-
-* Incorrect:
-```rust
-fn main() 
-{
-    println!("Hello World!");
-}
-```
-
-```rust
-fn main() 
-    {
-        println!("Hello World!");
+// ✅ Correct
+fn parse_expression(tokens: &[Token]) -> Result<ASTNode, WaveError> {
+    if tokens.is_empty() {
+        return Err(WaveError::empty_expression());
     }
+    // ...
+}
+
+// ❌ Incorrect  
+fn parse_expression(tokens: &[Token]) -> Result<ASTNode, WaveError>
+{
+    if tokens.is_empty()
+    {
+        return Err(WaveError::empty_expression());
+    }
+    // ...
+}
+```
+
+### Language Philosophy
+
+Wave is a **pure systems programming language** with these core principles:
+
+- **Zero builtin functions** - Wave compiler provides only syntax support
+- **Dual-mode architecture** - Low-level (standalone) vs High-level (with Vex)
+- **No runtime overhead** - Direct compilation to machine code
+- **Explicit is better than implicit** - No hidden behavior or magic
+
+⚠️ **Important**: Never add builtin functions to the Wave compiler. All standard library functionality must come through external package managers like Vex.
+
+---
+
+## 🏗️ Project Architecture
+
+Understanding Wave's structure will help you contribute effectively:
+
+```
+Wave/
+├── src/                    # Main compiler CLI
+│   ├── main.rs            # CLI interface and commands
+│   └── compiler_config.rs # Compiler configuration management
+├── front/                 # Frontend (lexer, parser, AST)
+│   ├── lexer/            # Tokenization
+│   ├── parser/           # Syntax analysis & AST generation
+│   └── error/            # Error handling and diagnostics
+├── middle/               # Middle-end (semantic analysis)
+├── back/                # Backend (LLVM code generation)
+├── test/                # Wave language test files
+└── docs/               # Documentation
+```
+
+### Key Components
+
+- **Lexer** (`front/lexer/`): Tokenizes Wave source code
+- **Parser** (`front/parser/`): Builds Abstract Syntax Tree (AST)
+- **Error System** (`front/error/`): Provides Rust-style diagnostics
+- **Compiler Config** (`src/compiler_config.rs`): Manages compilation modes
+- **Standard Library Integration** (`front/parser/src/parser/stdlib.rs`): Handles Vex communication
+
+---
+
+## 🔄 Contribution Workflow
+
+### 1. Choose an Issue
+
+- Browse [open issues](https://github.com/LunaStev/Wave/issues)
+- Look for `good first issue` or `help wanted` labels
+- Comment on the issue to let others know you're working on it
+
+### 2. Create a Feature Branch
+
+```bash
+git checkout -b feature/your-feature-name
+# or
+git checkout -b fix/bug-description
+```
+
+### 3. Make Your Changes
+
+- Write clear, focused commits
+- Add tests for new functionality
+- Update documentation if needed
+- Ensure all tests pass
+
+### 4. Test Your Changes
+
+```bash
+# Run the full test suite
+cargo test
+
+# Test specific Wave programs
+./target/debug/wavec build test/test.wave
+./target/debug/wavec run test/test.wave
+
+# Test error handling
+./target/debug/wavec build test/invalid.wave  # Should show helpful errors
+```
+
+### 5. Submit a Pull Request
+
+- Target the `master` branch (we use trunk-based development)
+- Write a clear PR description
+- Include screenshots/examples if applicable
+- Link related issues
+
+**PR Template:**
+```markdown
+## Summary
+Brief description of your changes.
+
+## Type of Change
+- [ ] Bug fix
+- [ ] New feature  
+- [ ] Documentation update
+- [ ] Performance improvement
+
+## Testing
+- [ ] Added/updated tests
+- [ ] All tests pass
+- [ ] Manual testing performed
+
+## Related Issues
+Closes #123
 ```
 
 ---
 
-## How to Contribute
+## 🧪 Testing Guidelines
 
-### Fork the Repository
+### Test Types
 
-Start by forking the project repository to your GitHub account. Make changes in your forked repository and submit a pull request when ready.
+1. **Unit Tests**: Test individual functions/modules
+   ```bash
+   cargo test -p parser
+   cargo test -p error
+   ```
 
-### Understand the Project Structure
+2. **Integration Tests**: Test Wave language features
+   ```bash
+   ./target/debug/wavec build test/test*.wave
+   ```
 
-Before contributing, familiarize yourself with the standard Rust project structure:
+3. **Error Message Tests**: Verify helpful diagnostics
+   ```bash
+   ./target/debug/wavec build test/invalid_syntax.wave
+   ```
 
+### Adding New Tests
+
+- **Language Tests**: Add `.wave` files to `test/` directory
+- **Unit Tests**: Add `#[cfg(test)]` modules to relevant source files
+- **Error Tests**: Test both valid and invalid Wave programs
+
+---
+
+## 📝 Documentation Standards
+
+### Code Documentation
+
+- **Public APIs**: Must have rustdoc comments
+- **Complex Logic**: Add inline comments explaining the "why"
+- **Error Messages**: Should be helpful and actionable
+
+**Example:**
+```rust
+/// Parses a Wave import statement and resolves the module path.
+/// 
+/// # Arguments
+/// * `path` - The import path (e.g., "std::iosys" or "mymodule")
+/// * `stdlib_manager` - Optional standard library manager for Vex integration
+/// 
+/// # Returns
+/// * `Ok(Vec<ASTNode>)` - Parsed AST nodes from the imported module
+/// * `Err(WaveError)` - Import resolution or parsing error
+pub fn local_import(
+    path: &str,
+    already_imported: &mut HashSet<String>,
+    base_dir: &Path,
+    stdlib_manager: Option<&StdlibManager>,
+) -> Result<Vec<ASTNode>, WaveError> {
+    // Implementation...
+}
 ```
-project_root/  
-├── src/  
-│   ├── main.rs  
-│   ├── lib.rs  
-│   └── [feature-specific modules]  
-├── tests/  
-├── examples/  
-├── Cargo.toml  
-└── README.md  
-```
 
-* New Features: Create a new module under `src/` or extend an existing one.
-* Bug Fixes: Locate the affected file and modify it directly.
-* Tests: Add test cases in the `tests/` directory or expand existing test files.
+### Wave Language Examples
 
-#### Note:
-Do not create folders named after contributors. Track contributions using Git and list contributor information in the `CONTRIBUTORS` file, if necessary.
+When adding new language features, include examples in multiple contexts:
+- Minimal working example
+- Real-world use case
+- Error cases (what doesn't work)
 
 ---
 
-### Build and Test
+## 🚧 Common Contribution Areas
 
-Before submitting your changes:
+### High-Priority Areas
 
-* **Build**: Ensure your code compiles without errors.
-* **Run Tests**: Verify that all existing tests pass successfully.
-* **Add Tests**: Write and run tests for any new functionality.
-* **Code Style**: Confirm adherence to the project's coding standards.
+1. **Error Messages**: Improve compiler diagnostics
+2. **Language Features**: Implement missing syntax (for loops, etc.)
+3. **Standard Library Interface**: Vex integration improvements
+4. **Documentation**: Tutorial content and API docs
+5. **Testing**: More comprehensive test coverage
 
-Only submit a pull request after all tests pass and your code is fully validated.
+### Beginner-Friendly Tasks
 
----
+- Fix typos in documentation
+- Add more Wave language examples
+- Improve error message text
+- Add unit tests for existing functionality
+- Update outdated comments
 
-### Submit a Pull Request
+### Advanced Tasks
 
-Submit your pull request to the official repository. Please submit it to the `develop` branch.
-[GitHub Repository](https://github.com/LunaStev/Wave)
-
-**Include the Following Details:**
-
-* **Purpose and functionality** of your changes.
-* **Programming language** used.
-* **Libraries used** (including any self-developed libraries with detailed explanations).
-* **Frameworks used** (including any self-developed frameworks).
-* **Technologies or methodologies** applied in your contribution.
-
-Providing detailed information helps maintainers evaluate and integrate your contribution effectively.
+- LLVM backend improvements
+- New language feature implementation
+- Vex package manager integration
+- Cross-platform support (Windows)
+- Performance optimizations
 
 ---
 
-By adhering to these guidelines, you help maintain the quality, stability, and consistency of the Wave project. Thank you for contributing!
+## 💬 Getting Help
+
+### Community Resources
+
+- **Discord**: [Join our community](https://discord.gg/Kuk2qXFjc5)
+- **GitHub Issues**: Ask questions with the `question` label
+- **Discussions**: [GitHub Discussions](https://github.com/LunaStev/Wave/discussions)
+
+### Finding Mentorship
+
+- Look for issues labeled `mentorship available`
+- Ask in Discord for guidance on larger contributions
+- Review existing PRs to understand contribution patterns
+
+---
+
+## 🏆 Recognition
+
+Contributors are recognized in several ways:
+
+- Listed in the project's contributors list
+- Mentioned in release notes for significant contributions
+- Recognition in our Discord community
+- Special contributor badges for ongoing contributions
+
+---
+
+## ⚖️ Code of Conduct
+
+We follow the [Contributor Covenant](https://www.contributor-covenant.org/) to ensure a welcoming environment for all contributors. Please:
+
+- Be respectful and inclusive
+- Focus on constructive feedback
+- Help newcomers learn and contribute
+- Assume good intentions
+
+---
+
+## 📄 License
+
+By contributing to Wave, you agree that your contributions will be licensed under the [Mozilla Public License 2.0](LICENSE).
+
+---
+
+<p align="center">
+<strong>Thank you for contributing to Wave! 🌊</strong><br/>
+<sub>Every contribution, no matter how small, helps build the future of systems programming.</sub>
+</p>

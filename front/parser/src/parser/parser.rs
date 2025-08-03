@@ -230,7 +230,6 @@ fn token_type_to_wave_type(token_type: &TokenType) -> Option<WaveType> {
             FloatType::F256 => Some(WaveType::Float(256)),
             FloatType::F512 => Some(WaveType::Float(512)),
             FloatType::F1024 => Some(WaveType::Float(1024)),
-            _ => panic!("Unhandled float type: {:?}", float_type),
         },
         TokenType::TypeFloat(bits) => Some(WaveType::Float(*bits)),
         TokenType::TypeBool => Some(WaveType::Bool),
@@ -284,7 +283,7 @@ pub fn extract_body(tokens: &mut Peekable<Iter<Token>>) -> Option<Vec<ASTNode>> 
             TokenType::Println => {
                 tokens.next(); // consume 'println'
                 let node = parse_println(tokens)?;
-                // 세미콜론 처리 추가
+                // Added semicolon handling
                 if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
                     tokens.next();
                 }
@@ -293,7 +292,7 @@ pub fn extract_body(tokens: &mut Peekable<Iter<Token>>) -> Option<Vec<ASTNode>> 
             TokenType::Print => {
                 tokens.next(); // consume 'print'
                 let node = parse_print(tokens)?;
-                // 세미콜론 처리 추가
+                // Added semicolon handling
                 if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
                     tokens.next();
                 }
@@ -363,7 +362,7 @@ pub fn extract_body(tokens: &mut Peekable<Iter<Token>>) -> Option<Vec<ASTNode>> 
                 body.push(ASTNode::Statement(StatementNode::Return(expr)));
             }
             TokenType::Deref => {
-                let token = token.clone();
+                let token = (*token).clone();
                 tokens.next();
                 body.push(parse_assignment(tokens, &token)?);
             }
@@ -1032,7 +1031,8 @@ fn parse_if(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
 }
 
 // FOR parsing
-fn parse_for(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
+fn parse_for(_tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
+    // TODO: Implement proper for loop parsing
     /*
     // Check 'for' keyword and see if there is '()
     if tokens.peek()?.token_type != TokenType::Lparen {
@@ -1425,7 +1425,7 @@ fn parse_block(tokens: &mut Peekable<Iter<Token>>) -> Option<Vec<ASTNode>> {
 
 fn parse_statement(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
     let token = match tokens.peek() {
-        Some(t) => t.clone(),
+        Some(t) => (*t).clone(),
         None => return None,
     };
 

@@ -10,11 +10,11 @@ fun main() {
         println("ewe");
     }
 
-    for (i :i32 = 0; i <= 10; i++) {
+    for (i :i32 = 0; i <= 10; i += 1) {
         var j :i32 = 0;
         while (j <= 10) {
             println("{}", j);
-            j++;
+            j += 1;
         }
     }
 

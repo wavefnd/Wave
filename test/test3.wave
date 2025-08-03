@@ -1,4 +1,4 @@
-import("iosys");
+import("std::iosys");
 
 fun main() {
     let a :i32 = 10;

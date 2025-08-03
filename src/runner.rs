@@ -27,15 +27,13 @@ pub(crate) unsafe fn run_wave_file(file_path: &Path) {
 
     for node in &ast {
         if let ASTNode::Statement(StatementNode::Import(path)) = node {
-            if !path.starts_with("std::") {
-                match local_import(&path, &mut already_imported, &base_dir) {
-                    Ok(mut imported_nodes) => {
-                        extended_ast.append(&mut imported_nodes);
-                    }
-                    Err(err) => {
-                        err.display();
-                        process::exit(1);
-                    }
+            match local_import(&path, &mut already_imported, &base_dir, None) {
+                Ok(mut imported_nodes) => {
+                    extended_ast.append(&mut imported_nodes);
+                }
+                Err(err) => {
+                    err.display();
+                    process::exit(1);
                 }
             }
         } else {
@@ -85,15 +83,13 @@ pub(crate) unsafe fn img_wave_file(file_path: &Path) {
 
     for node in &ast {
         if let ASTNode::Statement(StatementNode::Import(path)) = node {
-            if !path.starts_with("std::") {
-                match local_import(&path, &mut already_imported, &base_dir) {
-                    Ok(mut imported_nodes) => {
-                        extended_ast.append(&mut imported_nodes);
-                    }
-                    Err(err) => {
-                        err.display();
-                        process::exit(1);
-                    }
+            match local_import(&path, &mut already_imported, &base_dir, None) {
+                Ok(mut imported_nodes) => {
+                    extended_ast.append(&mut imported_nodes);
+                }
+                Err(err) => {
+                    err.display();
+                    process::exit(1);
                 }
             }
         } else {

@@ -29,7 +29,7 @@ fun print_triangle(levels: i32) -> i32 {
 fun main() {
     println("=== WAVE MEGA PROGRAM START ===");
 
-    // 1) 기본 변수 선언 및 연산
+    // 1) Basic variable declaration and operations
     var a: i32 = 12;
     var b: i32 = 8;
     var f: f32 = 5.0;
@@ -47,7 +47,7 @@ fun main() {
         println("{} is less than 15", a);
     }
 
-    // 2) 포인터 실험
+    // 2) Pointer experiments
     var p_a: ptr<i32> = &a;
     var p_b: ptr<i32> = &b;
     var pp_a: ptr<ptr<i32>> = &p_a;
@@ -55,20 +55,20 @@ fun main() {
     println("Deref p_a: {}, Deref p_b: {}", deref p_a, deref p_b);
     println("Double pointer pp_a: {}", pp_a);
 
-    // 3) 배열 & 포인터
+    // 3) Arrays & pointers
     var arr: ptr<array<i32, 3>> = &[1, 2, 3];
     println("Array ptr: {}", arr);
 
-    // 4) 함수 호출 테스트
+    // 4) Function call tests
     var sum_val: i32 = calc_sum(a, b);
     println("Sum result: {}", sum_val);
 
-    // 5) 문자열 길이 측정
+    // 5) String length measurement
     var msg: str = "Hello, Wave!";
     var msg_len: i32 = string_len(msg);
     println("Message: '{}', Length: {}", msg, msg_len);
 
-    // 6) 반복문 & continue
+    // 6) Loops & continue
     var acc: i32 = 0;
     var i: i32 = 0;
     while (i < 10) {
@@ -81,10 +81,10 @@ fun main() {
         i += 1;
     }
 
-    // 7) 패턴 출력 함수 호출
+    // 7) Pattern output function call
     print_triangle(5);
 
-    // 8) inline syscall 예제
+    // 8) Inline syscall example
     var msg_ptr: ptr<i8> = "Syscall says hi!\n";
     var ret_val: i64;
     asm {

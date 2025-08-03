@@ -211,7 +211,7 @@ pub fn parse_primary_expression<'a, T>(tokens: &mut Peekable<T>) -> Option<Expre
 where
     T: Iterator<Item = &'a Token>,
 {
-    let token = tokens.peek()?.clone();
+    let token = (*tokens.peek()?).clone();
 
     let mut expr = match &token.token_type {
         TokenType::Number(value) => {
