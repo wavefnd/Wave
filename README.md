@@ -8,7 +8,7 @@
 <p>
 <a href="https://www.wave-lang.dev"><strong>Website</strong></a> ·
 <a href="https://www.wave-lang.dev/docs/intro/"><strong>Docs</strong></a> ·
-<a href="https://discord.gg/Kuk2qXFjc5"><strong>Community</strong></a>
+<a href="https://discord.gg/3nev5nHqq9"><strong>Community</strong></a>
 </p>
 <div>
 <a href="https://github.com/LunaStev/Wave/releases">
@@ -17,7 +17,7 @@
 <a href="https://github.com/LunaStev/Wave/actions/workflows/rust.yml">
 <img src="https://img.shields.io/github/actions/workflow/status/LunaStev/Wave/rust.yml?logo=rust&style=for-the-badge&branch=master&label=build" alt="Build Status"/>
 </a>
-<a href="https://discord.gg/Kuk2qXFjc5">
+<a href="https://discord.gg/3nev5nHqq9">
 <img src="https://img.shields.io/badge/Discord-Join%20Us-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord" />
 </a>
 <a href="https://github.com/LunaStev/Wave/blob/master/LICENSE">
@@ -186,7 +186,7 @@ Wave is an open-source project and we welcome contributions! Whether you're fixi
 <td width="50%">
 <h3>💬 Community</h3>
 <p>Join our Discord community to discuss features, get help, and connect with other Wave developers.</p>
-<a href="https://discord.gg/Kuk2qXFjc5">
+<a href="https://discord.gg/3nev5nHqq9">
 <img src="https://img.shields.io/badge/Discord-Join%20Us-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord" />
 </a>
 </td>
