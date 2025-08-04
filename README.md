@@ -110,28 +110,6 @@ wavec build hello.wave --with-vex
 </tr>
 </table>
 
-## 🛠️ Compiler Modes
-
-Wave's unique dual-mode architecture gives you unprecedented flexibility:
-
-### Low-level Mode (Default)
-```bash
-wavec build program.wave
-```
-- ❌ No standard library
-- ✅ Direct system calls and inline assembly 
-- ✅ Perfect for kernels, embedded systems, and bare-metal
-- ✅ Zero runtime overhead
-
-### High-level Mode (with Vex)
-```bash  
-wavec build program.wave --with-vex
-```
-- ✅ Full standard library ecosystem
-- ✅ Package management via Vex
-- ✅ Rich I/O, math, and utility functions
-- ✅ Application development focused
-
 ---
 
 ## 📚 Documentation & CLI
