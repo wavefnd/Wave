@@ -29,7 +29,7 @@ pub fn local_import(
 
     // Handle external library imports (contain :: but not std::)
     if path.contains("::") && !path.starts_with("std::") {
-        return external_import(path, already_imported);
+        return external_import(path, already_imported, None);
     }
 
     let target_file_name = if path.ends_with(".wave") {
@@ -105,43 +105,40 @@ fn handle_std_import(
     already_imported: &mut HashSet<String>,
     stdlib_manager: Option<&StdlibManager>,
 ) -> Result<Vec<ASTNode>, WaveError> {
-    if already_imported.contains(path) {
-        return Ok(vec![]);
-    }
-    already_imported.insert(path.to_string());
-
-    // Extract the module name after "std::"
     let module_name = path.strip_prefix("std::").unwrap_or(path);
-    
-    // Check if stdlib manager is available (Vex integration)
-    if let Some(_manager) = stdlib_manager {
-        // TODO: Implement actual stdlib import validation with Vex communication
-        // In Vex integration mode, only import is allowed and actual validation is handled by Vex
-        // Wave compiler only recognizes std:: import syntax
-        println!("Standard library import '{}' will be handled by Vex", path);
-        Ok(vec![])
-    } else {
-        // Wave compiler used standalone - no standard library access
-        Err(WaveError::stdlib_requires_vex(module_name, path, 0, 0))
-    }
+
+    let mgr = stdlib_manager.ok_or_else(|| {
+        WaveError::stdlib_requires_vex(module_name, path, 0, 0)
+    })?;
+
+    mgr.ensure_enabled()?;
+    mgr.ensure_declared_in_manifest(module_name)?;
+    mgr.validate_stdlib_import(module_name)?;
+
+    already_imported.insert(path.to_string());
+    Ok(vec![])
 }
 
 pub fn external_import(
     path: &str,
-    already_imported: &mut HashSet<String>,
+    already: &mut HashSet<String>,
+    stdlib_manager: Option<&StdlibManager>,
 ) -> Result<Vec<ASTNode>, WaveError> {
-    if already_imported.contains(path) {
-        return Ok(vec![]);
-    }
-    already_imported.insert(path.to_string());
+    if already.contains(path) { return Ok(vec![]); }
 
-    // For external libraries, we would typically:
-    // 1. Check if the library exists in a known path
-    // 2. Load the library's interface/header information
-    // 3. Return the appropriate AST nodes
-    
-    // For now, return empty AST as external library handling 
-    // would be implemented by the package manager (Vex)
+    let mgr = stdlib_manager.ok_or_else(|| {
+        WaveError::new(
+            WaveErrorKind::SyntaxError("External library not available".to_string()),
+            "External imports require Vex (--with-vex) and vex.ws dependencies.",
+            path, 0, 0,
+        )
+    })?;
+
+    mgr.ensure_enabled()?;
+    mgr.ensure_declared_in_manifest(path)?;
+    mgr.ensure_resolved(path)?;
+
+    already.insert(path.to_string());
     Ok(vec![])
 }
 

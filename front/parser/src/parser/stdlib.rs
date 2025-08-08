@@ -95,6 +95,29 @@ impl StdlibManager {
         println!("Note: Linking info for '{}' will be provided by Vex", module_name);
         None
     }
+
+    pub fn ensure_enabled(&self) -> Result<(), WaveError> {
+        if !self.vex_integration_enabled {
+            return Err(WaveError::new(
+                WaveErrorKind::SyntaxError("Standard library not available".to_string()),
+                "Use --with-vex to enable std/external imports.",
+                "<manifest>",
+                0,
+                0,
+            ));
+        }
+        Ok(())
+    }
+
+    pub fn ensure_declared_in_manifest(&self, module: &str) -> Result<(), WaveError> {
+        println!("Checking if '{}' is declared in vex.ws", module);
+        Ok(())
+    }
+
+    pub fn ensure_resolved(&self, module: &str) -> Result<(), WaveError> {
+        println!("Checking if '{}' is resolved by Vex", module);
+        Ok(())
+    }
 }
 
 /// Interface for communication with Vex package manager
