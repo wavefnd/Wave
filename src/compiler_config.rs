@@ -27,6 +27,8 @@ pub struct CompilerConfig {
     
     /// Project root directory
     pub project_root: PathBuf,
+
+    pub show_info: bool,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -49,7 +51,13 @@ impl CompilerConfig {
             optimization_level: OptimizationLevel::None,
             vex_binary_path: None,
             project_root: std::env::current_dir().unwrap_or_else(|_| PathBuf::from(".")),
+            show_info: cfg!(debug_assertions),
         }
+    }
+
+    pub fn with_info(mut self, show: bool) -> Self {
+        self.show_info = show;
+        self
     }
 
     /// Configure for Vex integration mode
@@ -137,6 +145,10 @@ impl CompilerConfig {
 
     /// Print compilation information
     pub fn print_info(&self) {
+        if !self.show_info {
+            return;
+        }
+
         println!("Wave Compiler Configuration:");
         println!("  Mode: {}", if self.vex_integration { "Vex Integration" } else { "Standalone (Low-level)" });
         println!("  Source files: {}", self.source_files.len());

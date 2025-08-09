@@ -196,7 +196,7 @@ pub enum StatementNode {
     Expression(Expression),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum Mutability {
     Var,
     Let,

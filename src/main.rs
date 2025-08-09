@@ -48,40 +48,46 @@ fn main() {
 }
 
 fn run() -> Result<(), CliError> {
-    let mut args = env::args();
+    let mut args: Vec<String> = env::args().collect();
+    if !args.is_empty() {
+        args.remove(0);
+    }
 
-    args.next();
+    let mut show_info = false;
+    if let Some(pos) = args.iter().position(|r| r == "--verbose" || r == "-v") {
+        show_info = true;
+        args.remove(pos);
+    }
 
-    let command = args.next().ok_or(CliError::NotEnoughArgs)?;
+    let command = args.get(0).cloned().ok_or(CliError::NotEnoughArgs)?;
+    let mut args_iter = args.into_iter().skip(1);
 
     match command.as_str() {
         "--version" | "-V" => {
             version_wave();
         }
         "run" => {
-            let first_arg = args.next().ok_or(CliError::MissingArgument {
+            let first_arg = args_iter.next().ok_or(CliError::MissingArgument {
                 command: "run",
                 expected: "<file> or --img <file>",
             })?;
 
             if first_arg == "--img" {
-                let file_path_str = args.next().ok_or(CliError::MissingArgument {
+                let file_path_str = args_iter.next().ok_or(CliError::MissingArgument {
                     command: "run",
                     expected: "<file>",
                 })?;
-
                 img_run(Path::new(&file_path_str))?;
             } else {
-                handle_run(Path::new(&first_arg))?;
+                handle_run(Path::new(&first_arg), show_info)?;
             }
         }
         "build" => {
-            let file_path_str = args.next().ok_or(CliError::MissingArgument {
+            let file_path_str = args_iter.next().ok_or(CliError::MissingArgument {
                 command: "build",
                 expected: "<file>",
             })?;
-            
-            handle_build(Path::new(&file_path_str), &mut args)?;
+            handle_build(Path::new(&file_path_str), &mut args_iter, show_info)?;
         }
         "help" => {
             print_help();
@@ -92,26 +98,32 @@ fn run() -> Result<(), CliError> {
     Ok(())
 }
 
-fn handle_run(file_path: &Path) -> Result<(), CliError> {
-    // Create compiler config for standalone mode
-    let config = CompilerConfig::new()
+fn handle_run(file_path: &Path, show_info: bool) -> Result<(), CliError> {
+    let mut config = CompilerConfig::new()
         .standalone_mode()
         .add_source_file(file_path.to_path_buf());
-    
+
+    if show_info {
+        config = config.with_info(true);
+    }
+
     config.print_info();
-    
+
     unsafe {
         compile_and_run(file_path);
     }
     Ok(())
 }
 
-fn handle_build(file_path: &Path, args: &mut env::Args) -> Result<(), CliError> {
+fn handle_build(file_path: &Path, args: &mut impl Iterator<Item = String>, show_info: bool) -> Result<(), CliError> {
     let mut config = CompilerConfig::new()
         .standalone_mode()
         .add_source_file(file_path.to_path_buf());
-    
-    // Parse additional build arguments
+
+    if show_info {
+        config = config.with_info(true);
+    }
+
     while let Some(arg) = args.next() {
         match arg.as_str() {
             "-o" | "--output" => {
@@ -128,7 +140,6 @@ fn handle_build(file_path: &Path, args: &mut env::Args) -> Result<(), CliError> 
             "-O2" => config = config.with_optimization(OptimizationLevel::O2),
             "-O3" => config = config.with_optimization(OptimizationLevel::O3),
             "--with-vex" => {
-                // TODO: Implement actual Vex binary detection and path resolution
                 let vex_path = args.next().unwrap_or_else(|| "vex".to_string());
                 config = config.with_vex_integration(vex_path);
             }
@@ -137,26 +148,23 @@ fn handle_build(file_path: &Path, args: &mut env::Args) -> Result<(), CliError> 
             }
         }
     }
-    
+
     if let Err(e) = config.validate() {
         eprintln!("Configuration error: {}", e);
         return Ok(());
     }
-    
+
     config.print_info();
-    
+
     if config.is_low_level_mode() {
         println!("\n{}", "Building in low-level mode (no standard library)".color("255,204,0"));
         println!("Only system calls and inline assembly are available.");
     }
-    
-    // TODO: Integrate new compiler configuration with actual compilation process
-    // TODO: Pass stdlib_manager and Vex integration settings to compilation
-    // For now, use existing compile function
+
     unsafe {
         compile_and_img(file_path);
     }
-    
+
     Ok(())
 }
 
@@ -189,7 +197,7 @@ fn print_help() {
     println!("  {}       {}",
              "--version".color("38,139,235"),
              "Show the CLI version");
-    
+
     println!("\n{}", "Build Options:".color("145,161,2"));
     println!("  {}             {}",
              "-o <path>".color("38,139,235"),
@@ -203,7 +211,10 @@ fn print_help() {
     println!("  {}     {}",
              "--with-vex".color("38,139,235"),
              "Enable Vex integration (standard library access)");
-    
+    println!("  {}        {}",
+             "-v, --verbose".color("38,139,235"),
+             "Print compilation information");
+
     println!("\n{}", "Mode Information:".color("145,161,2"));
     println!("  {} Wave compiler runs in two modes:", "•".color("38,139,235"));
     println!("    {} Low-level system programming (default)", "•".color("145,161,2"));

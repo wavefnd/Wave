@@ -19,6 +19,7 @@ pub fn generate_statement_ir<'ctx>(
     loop_exit_stack: &mut Vec<BasicBlock<'ctx>>,
     loop_continue_stack: &mut Vec<BasicBlock<'ctx>>,
     current_function: FunctionValue<'ctx>,
+    global_consts: &HashMap<String, BasicValueEnum<'ctx>>,
 ) {
     match stmt {
         ASTNode::Variable(VariableNode {
@@ -42,7 +43,7 @@ pub fn generate_statement_ir<'ctx>(
                 let llvm_element_type = wave_type_to_llvm_type(context, element_type);
 
                 for (i, value_expr) in values.iter().enumerate() {
-                    let value = generate_expression_ir(context, builder, value_expr, variables, module, Some(llvm_element_type));
+                    let value = generate_expression_ir(context, builder, value_expr, variables, module, Some(llvm_element_type), global_consts);
 
                     let gep = builder.build_in_bounds_gep(
                         alloca,
@@ -150,6 +151,7 @@ pub fn generate_statement_ir<'ctx>(
                                         variables,
                                         module,
                                         Some(elem_type),
+                                        global_consts,
                                     );
                                     let gep = builder.build_in_bounds_gep(
                                         tmp_alloca,
@@ -180,15 +182,15 @@ pub fn generate_statement_ir<'ctx>(
                         let _ = builder.build_store(alloca, val);
                     }
                     (Expression::IndexAccess { target, index }, _) => {
-                        let val = generate_expression_ir(context, builder, init, variables, module, Some(llvm_type));
+                        let val = generate_expression_ir(context, builder, init, variables, module, Some(llvm_type), global_consts);
                         builder.build_store(alloca, val).unwrap();
                     }
                     (Expression::FunctionCall { .. } | Expression::MethodCall { .. }, _) => {
-                        let val = generate_expression_ir(context, builder, init, variables, module, Some(llvm_type));
+                        let val = generate_expression_ir(context, builder, init, variables, module, Some(llvm_type), global_consts);
                         builder.build_store(alloca, val).unwrap();
                     }
                     (Expression::BinaryExpression { .. }, _) => {
-                        let val = generate_expression_ir(context, builder, init, variables, module, Some(llvm_type));
+                        let val = generate_expression_ir(context, builder, init, variables, module, Some(llvm_type), global_consts);
 
                         let casted_val = match (val, llvm_type) {
                             (BasicValueEnum::FloatValue(v), BasicTypeEnum::IntType(t)) => {
@@ -334,7 +336,7 @@ pub fn generate_statement_ir<'ctx>(
         ASTNode::Statement(StatementNode::PrintFormat { format, args }) => {
             let mut arg_types = vec![];
             for arg in args {
-                let val = generate_expression_ir(context, builder, arg, variables, module, None);
+                let val = generate_expression_ir(context, builder, arg, variables, module, None, global_consts);
                 arg_types.push(val.get_type());
             }
             let c_format_string = wave_format_to_c(&format, &arg_types);
@@ -372,7 +374,7 @@ pub fn generate_statement_ir<'ctx>(
 
             let mut printf_args = vec![gep.into()];
             for arg in args {
-                let value = generate_expression_ir(context, builder, arg, variables, module, None);
+                let value = generate_expression_ir(context, builder, arg, variables, module, None, global_consts);
 
                 let casted_value = match value {
                     BasicValueEnum::PointerValue(ptr_val) => {
@@ -409,7 +411,7 @@ pub fn generate_statement_ir<'ctx>(
                            }) => {
             let current_fn = builder.get_insert_block().unwrap().get_parent().unwrap();
 
-            let cond_value = generate_expression_ir(context, builder, condition, variables, module, None);
+            let cond_value = generate_expression_ir(context, builder, condition, variables, module, None, global_consts);
 
             let then_block = context.append_basic_block(current_fn, "then");
             let else_block_bb = context.append_basic_block(current_fn, "else");
@@ -430,6 +432,7 @@ pub fn generate_statement_ir<'ctx>(
                     loop_exit_stack,
                     loop_continue_stack,
                     current_function,
+                    global_consts,
                 );
             }
             let then_has_terminator = then_block.get_terminator().is_some();
@@ -451,6 +454,7 @@ pub fn generate_statement_ir<'ctx>(
                         variables,
                         module,
                         None,
+                        global_consts,
                     );
                     let then_bb = context.append_basic_block(current_fn, "else_if_then");
                     let next_check_bb = context.append_basic_block(current_fn, "next_else_if");
@@ -471,6 +475,7 @@ pub fn generate_statement_ir<'ctx>(
                             loop_exit_stack,
                             loop_continue_stack,
                             current_function,
+                            global_consts,
                         );
                     }
                     if then_bb.get_terminator().is_none() {
@@ -493,6 +498,7 @@ pub fn generate_statement_ir<'ctx>(
                             loop_exit_stack,
                             loop_continue_stack,
                             current_function,
+                            global_consts
                         );
                     }
                     current_bb.get_terminator().is_some()
@@ -511,6 +517,7 @@ pub fn generate_statement_ir<'ctx>(
                         loop_exit_stack,
                         loop_continue_stack,
                         current_function,
+                        global_consts,
                     );
                 }
                 else_block_bb.get_terminator().is_some()
@@ -539,7 +546,7 @@ pub fn generate_statement_ir<'ctx>(
             let _ = builder.build_unconditional_branch(cond_block);
             builder.position_at_end(cond_block);
 
-            let cond_val = generate_expression_ir(context, builder, condition, variables, module, None);
+            let cond_val = generate_expression_ir(context, builder, condition, variables, module, None, global_consts);
 
             let cond_bool = match cond_val {
                 BasicValueEnum::IntValue(val) => {
@@ -561,7 +568,7 @@ pub fn generate_statement_ir<'ctx>(
 
             builder.position_at_end(body_block);
             for stmt in body.iter() {
-                generate_statement_ir(context, builder, module, string_counter, stmt, variables, loop_exit_stack, loop_continue_stack, current_function);
+                generate_statement_ir(context, builder, module, string_counter, stmt, variables, loop_exit_stack, loop_continue_stack, current_function, global_consts);
             }
             let _ = builder.build_unconditional_branch(cond_block);
 
@@ -660,14 +667,14 @@ pub fn generate_statement_ir<'ctx>(
             }
         }
         ASTNode::Statement(StatementNode::Expression(expr)) => {
-            let _ = generate_expression_ir(context, builder, expr, variables, module, None);
+            let _ = generate_expression_ir(context, builder, expr, variables, module, None, global_consts);
         }
         ASTNode::Statement(StatementNode::Assign { variable, value }) => {
             if variable == "deref" {
                 if let Expression::BinaryExpression { left, operator: _, right } = value {
                     if let Expression::Deref(inner_expr) = &**left {
                         let target_ptr = generate_address_ir(context, builder, inner_expr, variables, module);
-                        let val = generate_expression_ir(context, builder, right, variables, module, None);
+                        let val = generate_expression_ir(context, builder, right, variables, module, None, global_consts);
                         builder.build_store(target_ptr, val).unwrap();
                     }
                 }
@@ -693,7 +700,7 @@ pub fn generate_statement_ir<'ctx>(
                 _ => panic!("Unsupported LLVM type in assignment"),
             };
 
-            let val = generate_expression_ir(context, builder, value, variables, module, Some(expected_type));
+            let val = generate_expression_ir(context, builder, value, variables, module, Some(expected_type), global_consts);
 
             if let Some(var_info) = variables.get(variable) {
                 if matches!(var_info.mutability, Mutability::Let) {
@@ -752,6 +759,7 @@ pub fn generate_statement_ir<'ctx>(
                     variables,
                     module,
                     Some(expected_type),
+                    global_consts,
                 );
 
                 let value = match value {
@@ -789,7 +797,7 @@ pub fn generate_statement_ir<'ctx>(
             }
         }
         ASTNode::Statement(StatementNode::Expression(expr)) => {
-            generate_expression_ir(context, builder, expr, variables, module, None);
+            generate_expression_ir(context, builder, expr, variables, module, None, global_consts);
         }
         _ => {}
     }

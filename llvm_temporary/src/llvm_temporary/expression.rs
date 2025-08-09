@@ -13,6 +13,7 @@ pub fn generate_expression_ir<'ctx>(
     variables: &mut HashMap<String, VariableInfo<'ctx>>,
     module: &'ctx inkwell::module::Module<'ctx>,
     expected_type: Option<BasicTypeEnum<'ctx>>,
+    global_consts: &HashMap<String, BasicValueEnum<'ctx>>,
 ) -> BasicValueEnum<'ctx> {
     match expr {
         Expression::Literal(lit) => match lit {
@@ -62,6 +63,10 @@ pub fn generate_expression_ir<'ctx>(
                 return context.bool_type().const_int(0, false).as_basic_value_enum();
             }
 
+            if let Some(const_val) = global_consts.get(var_name) {
+                return *const_val;
+            }
+
             if let Some(var_info) = variables.get(var_name) {
                 let var_type = var_info.ptr.get_type().get_element_type();
 
@@ -88,7 +93,7 @@ pub fn generate_expression_ir<'ctx>(
                     builder.build_load(actual_ptr, "deref_load").unwrap().as_basic_value_enum()
                 }
                 _ => {
-                    let ptr_val = generate_expression_ir(context, builder, inner_expr, variables, module, None);
+                    let ptr_val = generate_expression_ir(context, builder, inner_expr, variables, module, None, global_consts);
                     let ptr = ptr_val.into_pointer_value();
                     builder.build_load(ptr, "deref_load").unwrap().as_basic_value_enum()
                 }
@@ -113,6 +118,7 @@ pub fn generate_expression_ir<'ctx>(
                                 variables,
                                 module,
                                 Some(elem_type),
+                                global_consts,
                             );
                             let gep = builder.build_in_bounds_gep(
                                 tmp_alloca,
@@ -158,7 +164,7 @@ pub fn generate_expression_ir<'ctx>(
             let mut compiled_args = vec![];
             for (i, arg) in args.iter().enumerate() {
                 let expected = param_types.get(i).copied();
-                let val = generate_expression_ir(context, builder, arg, variables, module, expected);
+                let val = generate_expression_ir(context, builder, arg, variables, module, expected, global_consts);
                 compiled_args.push(val.into());
             }
 
@@ -188,13 +194,13 @@ pub fn generate_expression_ir<'ctx>(
                 .collect();
 
             let object_expected_type = param_types.get(0).copied();
-            let object_val = generate_expression_ir(context, builder, object, variables, module, object_expected_type);
+            let object_val = generate_expression_ir(context, builder, object, variables, module, object_expected_type, global_consts);
 
             let mut compiled_args: Vec<inkwell::values::BasicMetadataValueEnum<'ctx>> = vec![object_val.into()];
 
             for (i, arg) in args.iter().enumerate() {
                 let expected = param_types.get(i + 1).copied();
-                let val = generate_expression_ir(context, builder, arg, variables, module, expected);
+                let val = generate_expression_ir(context, builder, arg, variables, module, expected, global_consts);
 
                 compiled_args.push(val.into());
             }
@@ -217,7 +223,7 @@ pub fn generate_expression_ir<'ctx>(
 
             let current_val = builder.build_load(ptr, "load_current").unwrap();
 
-            let new_val = generate_expression_ir(context, builder, value, variables, module, Some(current_val.get_type()));
+            let new_val = generate_expression_ir(context, builder, value, variables, module, Some(current_val.get_type()), global_consts);
 
             let (current_val, new_val) = match (current_val, new_val) {
                 (BasicValueEnum::FloatValue(lhs), BasicValueEnum::IntValue(rhs)) => {
@@ -288,7 +294,8 @@ pub fn generate_expression_ir<'ctx>(
                 value,
                 variables,
                 module,
-                Some(ptr.get_type().get_element_type().try_into().unwrap())
+                Some(ptr.get_type().get_element_type().try_into().unwrap()),
+                global_consts,
             );
 
             let value = match value {
@@ -303,8 +310,8 @@ pub fn generate_expression_ir<'ctx>(
         }
 
         Expression::BinaryExpression { left, operator, right } => {
-            let left_val = generate_expression_ir(context, builder, left, variables, module, None);
-            let right_val = generate_expression_ir(context, builder, right, variables, module, None);
+            let left_val = generate_expression_ir(context, builder, left, variables, module, None, global_consts);
+            let right_val = generate_expression_ir(context, builder, right, variables, module, None, global_consts);
 
             // Branch after Type Examination
             match (left_val, right_val) {
@@ -404,9 +411,9 @@ pub fn generate_expression_ir<'ctx>(
         }
 
         Expression::IndexAccess { target, index } => unsafe {
-            let target_val = generate_expression_ir(context, builder, target, variables, module, None);
+            let target_val = generate_expression_ir(context, builder, target, variables, module, None, global_consts);
 
-            let index_val = generate_expression_ir(context, builder, index, variables, module, None);
+            let index_val = generate_expression_ir(context, builder, index, variables, module, None, global_consts);
             let index_int = match index_val {
                 BasicValueEnum::IntValue(i) => i,
                 _ => panic!("Index must be an integer"),

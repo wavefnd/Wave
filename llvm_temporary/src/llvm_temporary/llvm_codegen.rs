@@ -1,6 +1,6 @@
-use parser::ast::{ASTNode, FunctionNode, Expression, WaveType, Mutability, Value};
+use parser::ast::{ASTNode, FunctionNode, Expression, WaveType, Mutability, Value, Literal, VariableNode};
 use inkwell::context::Context;
-use inkwell::values::{PointerValue, FunctionValue, BasicValue};
+use inkwell::values::{PointerValue, FunctionValue, BasicValue, BasicValueEnum};
 use inkwell::{AddressSpace, OptimizationLevel};
 use inkwell::passes::{PassManager, PassManagerBuilder};
 
@@ -18,6 +18,21 @@ pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
     pass_manager_builder.set_optimization_level(OptimizationLevel::Aggressive);
     let pass_manager: PassManager<inkwell::module::Module> = PassManager::create(());
     pass_manager_builder.populate_module_pass_manager(&pass_manager);
+
+    let mut global_consts: HashMap<String, BasicValueEnum> = HashMap::new();
+
+    for ast in ast_nodes {
+        if let ASTNode::Variable(VariableNode { name, type_name, initial_value, mutability}) = ast {
+            if *mutability == Mutability::Const {
+                let initial_value = initial_value
+                    .as_ref()
+                    .expect("Constant must be initialized.");
+
+                let const_val = create_llvm_const_value(context, type_name, initial_value);
+                global_consts.insert(name.clone(), const_val);
+            }
+        }
+    }
 
     let mut functions: HashMap<String, FunctionValue> = HashMap::new();
 
@@ -80,6 +95,7 @@ pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
                             &mut loop_exit_stack,
                             &mut loop_continue_stack,
                             function,
+                            &global_consts,
                         );
                     }
                     _ => panic!("Unsupported ASTNode in function body"),
@@ -100,6 +116,24 @@ pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
     pass_manager.run_on(module);
 
     module.print_to_string().to_string()
+}
+
+fn create_llvm_const_value<'ctx>(
+    context: &'ctx Context,
+    ty: &WaveType,
+    expr: &Expression,
+) -> BasicValueEnum<'ctx> {
+    let llvm_type = wave_type_to_llvm_type(context, ty);
+    match (expr, llvm_type) {
+        (Expression::Literal(Literal::Number(n)), BasicTypeEnum::IntType(int_ty)) => {
+            int_ty.const_int(*n as u64, true).as_basic_value_enum()
+        }
+        (Expression::Literal(Literal::Float(f)), BasicTypeEnum::FloatType(float_ty)) => {
+            float_ty.const_float(*f).as_basic_value_enum()
+        }
+        // TODO: Other constant expressions (for example, true, false, string constant) can also be added here.
+        _ => panic!("Constant expression must be a literal of a compatible type."),
+    }
 }
 
 pub fn wave_format_to_c(format: &str, arg_types: &[BasicTypeEnum]) -> String {
