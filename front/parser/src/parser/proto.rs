@@ -1,4 +1,4 @@
-use crate::ast::{FunctionSignature, ProtoNode, StructNode, WaveType};
+use crate::ast::{FunctionNode, FunctionSignature, ProtoNode, StructNode, WaveType};
 
 pub fn struct_implements_proto(struct_node: &StructNode, proto_node: &ProtoNode) -> bool {
     proto_node.methods.iter().all(|proto_method| {
@@ -12,21 +12,29 @@ pub fn check_proto_assignment(proto: &ProtoNode, target_struct: &StructNode) -> 
     struct_implements_proto(target_struct, proto)
 }
 
-pub fn method_matches(struct_method: &FunctionSignature, proto_method: &FunctionSignature) -> bool {
+pub fn method_matches(struct_method: &FunctionNode, proto_method: &FunctionSignature) -> bool {
     if struct_method.name != proto_method.name {
         return false;
     }
 
-    if struct_method.params.len() != proto_method.params.len() {
+    if struct_method.parameters.len() != proto_method.params.len() {
         return false;
     }
 
-    for (i, (_, proto_param_type)) in proto_method.params.iter().enumerate() {
-        let (_, struct_param_type) = &struct_method.params[i];
+    for (struct_param, proto_param) in struct_method.parameters.iter().zip(proto_method.params.iter()) {
+        let struct_param_type = &struct_param.param_type;
+        let proto_param_type = &proto_param.1;
+
         if struct_param_type != proto_param_type {
             return false;
         }
     }
 
-    struct_method.return_type == proto_method.return_type
+    let struct_return_type = struct_method.return_type.as_ref().unwrap_or(&WaveType::Void);
+
+    if struct_return_type != &proto_method.return_type {
+        return false;
+    }
+
+    true
 }

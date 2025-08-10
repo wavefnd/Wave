@@ -1,1 +1,3 @@
-proto Drawable { fun draw() -> void; }
+proto Drawable {
+    fun draw() -> void;
+}

@@ -43,25 +43,25 @@ pub(crate) unsafe fn run_wave_file(file_path: &Path) {
 
     ast = extended_ast;
 
-    // println!("{}\n", code);
-    // println!("AST:\n{:#?}", ast);
+    println!("{}\n", code);
+    println!("AST:\n{:#?}", ast);
 
-    let ir = generate_ir(&ast);
-    let path = Path::new(file_path);
-    let file_stem = path.file_stem().unwrap().to_str().unwrap();
-    let machine_code_path = compile_ir_to_machine_code(&ir, file_stem);
-
-    if machine_code_path.is_empty() {
-        eprintln!("Failed to generate machine code");
-        return;
-    }
-
-    let output = Command::new(machine_code_path)
-        .output()
-        .expect("Failed to execute machine code");
-
-    // println!("Generated LLVM IR:\n{}", ir);
-    println!("{}", String::from_utf8_lossy(&output.stdout));
+    //let ir = generate_ir(&ast);
+    //let path = Path::new(file_path);
+    //let file_stem = path.file_stem().unwrap().to_str().unwrap();
+    //let machine_code_path = compile_ir_to_machine_code(&ir, file_stem);
+//
+    //if machine_code_path.is_empty() {
+    //    eprintln!("Failed to generate machine code");
+    //    return;
+    //}
+//
+    //let output = Command::new(machine_code_path)
+    //    .output()
+    //    .expect("Failed to execute machine code");
+//
+    //println!("Generated LLVM IR:\n{}", ir);
+    //println!("{}", String::from_utf8_lossy(&output.stdout));
 }
 
 pub(crate) unsafe fn img_wave_file(file_path: &Path) {
