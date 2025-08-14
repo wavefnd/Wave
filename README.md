@@ -21,7 +21,7 @@
 <img src="https://img.shields.io/badge/Discord-Join%20Us-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord" />
 </a>
 <a href="https://github.com/LunaStev/Wave/blob/master/LICENSE">
-<img src="https://img.shields.io/badge/License-MPL--2.0-blue?style=for-the-badge" alt="License"/>
+<img src="https://img.shields.io/badge/License-LSD License-blue?style=for-the-badge" alt="License"/>
 </a>
 </div>
 </div>
@@ -259,7 +259,7 @@ See our [GitHub Projects](https://github.com/LunaStev/Wave/projects) for detaile
 
 ## 📄 License & Attribution
 
-Wave is released under the [Mozilla Public License 2.0](LICENSE).
+Wave is released under the [LSD License](LICENSE).
 
 ### Core Contributors
 - [@LunaStev](https://github.com/LunaStev) - Creator and Lead Developer
@@ -279,5 +279,5 @@ Wave is released under the [Mozilla Public License 2.0](LICENSE).
 
 <p align="center">
 <strong>Built with ❤️ by the Wave community</strong><br/>
-<sub>© 2024 Wave Programming Language • <a href="LICENSE">MPL-2.0 License</a></sub>
+<sub>© 2024 Wave Programming Language • <a href="LICENSE">LSD License</a></sub>
 </p>
