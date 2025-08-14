@@ -43,8 +43,7 @@ pub struct FunctionNode {
 #[derive(Debug, Clone)]
 pub struct StructNode {
     pub name: String,
-    pub fields: Vec<(String, WaveType)>,
-    pub methods: Vec<FunctionNode>,
+    pub methods: Vec<FunctionSignature>,
 }
 
 #[derive(Debug, Clone)]
@@ -75,10 +74,6 @@ pub enum FormatPart {
 
 #[derive(Debug, Clone)]
 pub enum Expression {
-    StructLiteral {
-        name: String,
-        fields: Vec<(String, Expression)>,
-    },
     FunctionCall {
         name: String,
         args: Vec<Expression>,
