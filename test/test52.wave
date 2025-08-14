@@ -10,11 +10,11 @@ struct Text {
     content: str;
 
     fun draw() {
-        println("Draw text '{}'", content);
+        println("Draw text {}", content);
     }
 
     fun update(dt: f32) {
-        println("Update text '{}' with dt={}", content, dt);
+        println("Update text {} with dt={}", content, dt);
     }
 }
 

@@ -42,7 +42,7 @@ impl StdlibManager {
         // TODO: Implement actual metadata loading from Vex package manager
         // Wave compiler has no builtin functions
         // All standard library definitions must be provided by Vex package manager
-        
+
         // Currently only creates empty modules - actual definitions will be loaded from Vex
         println!("Note: Standard library definitions will be loaded from Vex package manager");
     }
@@ -69,12 +69,12 @@ impl StdlibManager {
     /// Function call validation is handled by Vex - Wave only checks syntax
     pub fn validate_function_call(&self, module_name: &str, function_name: &str, _arg_types: &[WaveType]) -> Result<(), WaveError> {
         self.validate_stdlib_import(module_name)?;
-        
+
         // TODO: Implement actual function signature validation with Vex
         // Wave compiler does not know function signatures
         // Type validation and function existence is Vex package manager's responsibility
         println!("Note: Function '{}::{}' will be validated by Vex package manager", module_name, function_name);
-        
+
         Ok(())
     }
 
@@ -140,7 +140,7 @@ impl VexInterface {
         // TODO: Implement actual Vex binary execution to get standard library information
         // Example: vex stdlib-info std::iosys
         println!("Querying Vex for stdlib info: {}", module_name);
-        
+
         // Wave compiler does not know module contents
         // Only forwards information provided by Vex
         Ok(format!("Module '{}' metadata will be provided by Vex", module_name))
@@ -151,7 +151,7 @@ impl VexInterface {
         // TODO: Implement actual dependency checking from Vex.toml or similar config file
         // Check dependencies from Vex.toml or similar configuration file
         println!("Checking stdlib dependencies in project: {}", self.project_root);
-        
+
         // Wave compiler does not analyze dependencies directly
         // Forwards information provided by Vex as-is
         Ok(vec![])
