@@ -123,7 +123,6 @@ pub enum TokenType {
     TypeChar,
     TypeByte,
     TypeString,
-    TypeCustom(String),
     TypePointer(Box<TokenType>),
     TypeArray(Box<TokenType>, u32),
     Identifier(String),
