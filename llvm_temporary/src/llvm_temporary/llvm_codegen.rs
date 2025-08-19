@@ -154,7 +154,7 @@ pub fn wave_format_to_c(format: &str, arg_types: &[BasicTypeEnum]) -> String {
                             if ptr_ty.get_element_type().is_int_type() && ptr_ty.get_element_type().into_int_type().get_bit_width() == 8 {
                                 "%s"
                             } else {
-                                "%ld"
+                                "%p"
                             }
                         },
                         _ => "%d", // fallback
