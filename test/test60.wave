@@ -1,0 +1,99 @@
+const SYS_WRITE: i32 = 1;
+
+const SYS_READ: i32 = 0;
+
+const SYS_MMAP: i32 = 9;
+const SYS_MUNMAP: i32 = 11;
+const SYS_CLOSE: i32 = 3;
+const SYS_SOCKET: i32 = 41;
+const SYS_CONNECT: i32 = 42;
+const SYS_BIND: i32 = 49;
+const SYS_LISTEN: i32 = 50;
+const SYS_ACCEPT: i32 = 43;
+const SYS_SENDTO: i32 = 44;
+const SYS_RECVFROM: i32 = 45;
+
+const PROT_READ: i32 = 1;
+const PROT_WRITE: i32 = 2;
+const MAP_PRIVATE: i32 = 2;
+const MAP_ANONYMOUS: i32 = 32;
+
+fun syscall_write(fd: i32, buf: ptr<i8>, len: i32) {
+    let r: i32;
+    asm {
+        "mov rax, 1"
+        "syscall"
+        in("rdi") fd
+        in("rsi") buf
+        in("rdx") len
+        out("rax") r
+    }
+}
+
+fun syscall_read(fd: i32, buf: ptr<i8>, len:i32) -> i32 {
+    let r: i32;
+    asm {
+        "mov rax, 0"
+        "syscall"
+        in("rdi") fd
+        in("rsi") buf
+        in("rdx") len
+        out("rax") r
+    }
+    return r;
+}
+
+fun syscall_close(fd: i32) -> i32 {
+    let r: i32;
+    asm {
+        "mov rax, 3"
+        "syscall"
+        in("rdi") fd
+        out("rax") r
+    }
+    return r;
+}
+
+fun syscall_mmap(addr: ptr<u8>, length: i32, prot: i32, flags: i32, fd: i32, offset: i32) -> ptr<u8> {
+    let r: ptr<u8>;
+    asm {
+        "mov rax, 9"
+        "syscall"
+        in("rdi") addr
+        in("rsi") length
+        in("rdx") prot
+        in("r10") flags
+        in("r8") fd
+        in("r9") offset
+        out("rax") r
+    }
+    return r;
+}
+
+fun syscall_munmap(addr: ptr<u8>, length: i32) -> i32 {
+    let r: i32;
+    asm {
+        "mov rax, 11"
+        "syscall"
+        in("rdi") addr
+        in("rsi") length
+        out("rax") r
+    }
+    return r;
+}
+
+fun main() {
+    let length: i32 = 4096;
+    var mem: ptr<u8> = syscall_mmap(
+        null, length,
+        PROT_READ | PROT_WRITE,
+        MAP_PRIVATE | MAP_ANONYMOUS,
+        -1, 0
+    );
+
+    var msg: str = "Hello from Wave syscall!\n";
+    var msg_ptr: ptr<i8> = msg;
+
+    syscall_write(1, msg_ptr, 24);
+    syscall_munmap(mem, length);
+}
