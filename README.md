@@ -11,11 +11,11 @@
 <a href="https://discord.gg/3nev5nHqq9"><strong>Community</strong></a>
 </p>
 <div>
-<a href="https://github.com/LunaStev/Wave/releases">
-<img src="https://img.shields.io/github/v/release/LunaStev/Wave?style=for-the-badge&include_prereleases&logo=github&color=5865F2" alt="Latest version"/>
+<a href="https://github.com/wavefnd/Wave/releases">
+<img src="https://img.shields.io/github/v/release/wavefnd/Wave?style=for-the-badge&include_prereleases&logo=github&color=5865F2" alt="Latest version"/>
 </a>
-<a href="https://github.com/LunaStev/Wave/actions/workflows/rust.yml">
-<img src="https://img.shields.io/github/actions/workflow/status/LunaStev/Wave/rust.yml?logo=rust&style=for-the-badge&branch=master&label=build" alt="Build Status"/>
+<a href="https://github.com/wavefnd/Wave/actions/workflows/rust.yml">
+<img src="https://img.shields.io/github/actions/workflow/status/wavefnd/Wave/rust.yml?logo=rust&style=for-the-badge&branch=master&label=build" alt="Build Status"/>
 </a>
 <a href="https://discord.gg/3nev5nHqq9">
 <img src="https://img.shields.io/badge/Discord-Join%20Us-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord" />
