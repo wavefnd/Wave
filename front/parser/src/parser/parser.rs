@@ -78,53 +78,52 @@ pub fn param(parameter: String, param_type: WaveType, initial_value: Option<Valu
 }
 
 fn parse_type_from_stream(tokens: &mut Peekable<Iter<Token>>) -> Option<WaveType> {
-    let type_token = tokens.next()?;
+    let type_token = tokens.next()?; // consume identifier
 
     if let TokenType::Identifier(name) = &type_token.token_type {
         if let Some(Token { token_type: TokenType::Lchevr, .. }) = tokens.peek() {
-            tokens.next();
+            tokens.next(); // consume '<'
 
-            let inner_type1 = parse_type_from_stream(tokens)?;
+            let inner_type = parse_type_from_stream(tokens)?;
 
-            if tokens.peek()?.token_type != TokenType::Comma {
+            if tokens.peek()?.token_type == TokenType::Comma {
+                tokens.next(); // consume ','
+
+                let size_token = tokens.next()?;
+                let size = if let TokenType::Number(n) = size_token.token_type {
+                    n as u32
+                } else {
+                    println!("Error: Expected number for array size");
+                    return None;
+                };
+
+                if tokens.peek()?.token_type != TokenType::Rchevr {
+                    println!("Error: Expected '>' after array type");
+                    return None;
+                }
+                tokens.next(); // consume '>'
+
+                return Some(WaveType::Array(Box::new(inner_type), size));
+            } else {
                 if tokens.peek()?.token_type == TokenType::Rchevr {
-                    tokens.next();
+                    tokens.next(); // consume '>'
                     if name == "ptr" {
-                        return Some(WaveType::Pointer(Box::new(inner_type1)));
+                        return Some(WaveType::Pointer(Box::new(inner_type)));
                     } else {
                         println!("Error: Unsupported generic type '{}'", name);
                         return None;
                     }
+                } else {
+                    println!("Error: Expected ',' or '>' in generic type");
+                    return None;
                 }
-                println!("Error: Expected ',' in generic type argument list");
-                return None;
-            }
-            tokens.next();
-
-            let size_token = tokens.next()?;
-            let size = if let TokenType::Number(n) = size_token.token_type {
-                n as u32
-            } else {
-                println!("Error: Expected number for array size");
-                return None;
-            };
-
-            if tokens.peek()?.token_type != TokenType::Rchevr {
-                println!("Error: Expected '>' to close generic type arguments");
-                return None;
-            }
-            tokens.next();
-
-            if name == "array" {
-                return Some(WaveType::Array(Box::new(inner_type1), size));
-            } else {
-                println!("Error: Unsupported generic type '{}'", name);
-                return None;
             }
         }
+
+        return parse_type(name).and_then(|t| token_type_to_wave_type(&t));
     }
 
-    parse_type_from_token(Some(type_token))
+    token_type_to_wave_type(&type_token.token_type)
 }
 
 pub fn parse_parameters(tokens: &mut Peekable<Iter<Token>>) -> Vec<ParameterNode> {
@@ -151,16 +150,42 @@ pub fn parse_parameters(tokens: &mut Peekable<Iter<Token>>) -> Vec<ParameterNode
             }
         };
 
+        let initial_value = if tokens.peek().map_or(false, |t| t.token_type == TokenType::Equal) {
+            tokens.next(); // consume '='
+            match tokens.next() {
+                Some(Token { token_type: TokenType::Number(n), .. }) => Some(Value::Int(*n)),
+                Some(Token { token_type: TokenType::Float(f), .. }) => Some(Value::Float(*f)),
+                Some(Token { token_type: TokenType::String(s), .. }) => Some(Value::Text(s.clone())),
+                _ => {
+                    println!("Error: Unsupported initializer for parameter '{}'", name);
+                    None
+                }
+            }
+        } else {
+            None
+        };
+
         params.push(ParameterNode {
             name,
             param_type,
-            initial_value: None,
+            initial_value,
         });
 
-        if tokens.peek().map_or(false, |t| t.token_type == TokenType::Comma) {
-            tokens.next();
-        } else {
-            break;
+        match tokens.peek().map(|t| &t.token_type) {
+            Some(TokenType::Comma) => {
+                tokens.next(); // consume ','
+            }
+            Some(TokenType::SemiColon) => {
+                println!("Error: use `,` instead of `;` to separate parameters");
+                break;
+            }
+            Some(TokenType::Rparen) => {
+                // 루프 끝
+            }
+            _ => {
+                println!("Error: Expected ',' or ')' after parameter");
+                break;
+            }
         }
     }
 
