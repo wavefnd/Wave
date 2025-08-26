@@ -1,8 +1,9 @@
-mod parser;
+pub mod parser;
 pub mod ast;
-mod format;
+pub mod format;
 pub mod import;
-mod proto;
+pub mod proto;
 pub mod stdlib;
+pub mod type_system;
 
 pub use parser::*;

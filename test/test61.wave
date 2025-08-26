@@ -1,0 +1,78 @@
+const AF_INET: i32 = 2;
+const SOCK_DGRAM: i32 = 2;
+const SYS_SOCKET: i64 = 41;
+const SYS_BIND: i64 = 49;
+const SYS_RECVFROM: i64 = 45;
+const SYS_WRITE: i64 = 1;
+
+fun main() {
+    var sockfd: i64;
+    asm {
+        "mov rax, {0}"
+        "mov rdi, {1}"
+        "mov rsi, {2}"
+        "mov rdx, 0"
+        "syscall"
+        out("rax") sockfd
+        in("0") SYS_SOCKET
+        in("1") AF_INET
+        in("2") SOCK_DGRAM
+    }
+    println("socket fd = {}", sockfd);
+
+    var addr: array<i8, 16> = [2, 0, 0x1F, 0x90, 0,0,0,0, 0,0,0,0, 0,0,0,0];
+
+    var ret: i64;
+    asm {
+        "mov rax, {0}"
+        "mov rdi, {1}"
+        "mov rsi, {2}"
+        "mov rdx, {3}"
+        "syscall"
+        out("rax") ret
+        in("0") SYS_BIND
+        in("1") sockfd
+        in("2") &addr
+        in("3") 16
+    }
+    println("bind ret = {}", ret);
+
+    // 3. recvfrom 준비
+    var buf: array<i8, 128>;
+    var src: array<i8, 16>;
+    var srclen: i64 = 16;
+
+    var n: i64;
+    asm {
+        "mov rax, {0}"
+        "mov rdi, {1}"
+        "mov rsi, {2}"
+        "mov rdx, {3}"
+        "mov r10, 0"
+        "mov r8,  {4}"
+        "mov r9,  {5}"
+        "syscall"
+        out("rax") n
+        in("0") SYS_RECVFROM
+        in("1") sockfd
+        in("2") &buf
+        in("3") 128
+        in("4") &src
+        in("5") &srclen
+    }
+
+    println("recvfrom got {} bytes", n);
+
+    var ret2: i64;
+    asm {
+        "mov rax, {0}"
+        "mov rdi, 1"
+        "mov rsi, {1}"
+        "mov rdx, {2}"
+        "syscall"
+        out("rax") ret2
+        in("0") SYS_WRITE
+        in("1") &buf
+        in("2") n
+    }
+}
