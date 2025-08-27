@@ -1,4 +1,4 @@
-use parser::ast::{ASTNode, FunctionNode, Expression, WaveType, Mutability, Value, Literal, VariableNode};
+use parser::ast::{ASTNode, FunctionNode, Expression, WaveType, Mutability, Literal, VariableNode};
 use inkwell::context::Context;
 use inkwell::values::{PointerValue, FunctionValue, BasicValue, BasicValueEnum};
 use inkwell::{AddressSpace, OptimizationLevel};

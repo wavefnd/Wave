@@ -243,12 +243,16 @@ pub fn generate_statement_ir<'ctx>(
                         let mut constraint_parts = vec![];
 
                         for (reg, var) in inputs {
-                            let val = if let Ok(num) = var.parse::<i64>() {
-                                context.i64_type().const_int(num as u64, true).into()
-                            } else if let Some(info) = variables.get(var) {
-                                builder.build_load(info.ptr, var).unwrap().into()
+                            let val = if let Expression::Literal(Literal::Number(n)) = var {
+                                context.i64_type().const_int(*n as u64, true).into()
+                            } else if let Some(name) = var.as_identifier() {
+                                if let Some(info) = variables.get(name) {
+                                    builder.build_load(info.ptr, name).unwrap().into()
+                                } else {
+                                    panic!("Variable '{}' not found", name);
+                                }
                             } else {
-                                panic!("Input variable '{}' not found", var);
+                                panic!("Unsupported expression in statement: {:?}", var);
                             };
 
                             operand_vals.push(val);

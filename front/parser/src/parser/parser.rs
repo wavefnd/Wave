@@ -70,14 +70,6 @@ pub fn parse(tokens: &Vec<Token>) -> Option<Vec<ASTNode>> {
     Some(nodes)
 }
 
-pub fn param(parameter: String, param_type: WaveType, initial_value: Option<Value>) -> ParameterNode {
-    ParameterNode {
-        name: parameter,
-        param_type,
-        initial_value,
-    }
-}
-
 pub fn parse_parameters(tokens: &mut Peekable<Iter<Token>>) -> Vec<ParameterNode> {
     let mut params = vec![];
     while tokens.peek().map_or(false, |t| t.token_type != TokenType::Rparen) {

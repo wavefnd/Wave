@@ -476,12 +476,15 @@ pub fn generate_expression_ir<'ctx>(
                     panic!("Register '{}' duplicated in outputs", reg);
                 }
 
-                let info = variables
-                    .get(var)
-                    .unwrap_or_else(|| panic!("Output variable '{}' not found", var));
-                let dummy_val = builder.build_load(info.ptr, var).unwrap().into();
-                operand_vals.push(dummy_val);
-                constraint_parts.push(format!("={{{}}}", reg));
+                if let Some(name) = var.as_identifier() {
+                    let info = variables.get(name)
+                        .unwrap_or_else(|| panic!("Output variable '{}' not found", name));
+                    let dummy_val = builder.build_load(info.ptr, name).unwrap().into();
+                    operand_vals.push(dummy_val);
+                    constraint_parts.push(format!("={{{}}}", reg));
+                } else {
+                    panic!("Unsupported asm output: {:?}", var);
+                }
             }
 
             for (reg, var) in inputs {
@@ -489,12 +492,16 @@ pub fn generate_expression_ir<'ctx>(
                     panic!("Register '{}' duplicated in inputs", reg);
                 }
 
-                let val: BasicMetadataValueEnum = if let Ok(value) = var.parse::<i64>() {
-                    context.i64_type().const_int(value as u64, value < 0).into()
+                let val: BasicMetadataValueEnum = if let Expression::Literal(Literal::Number(n)) = var {
+                    context.i64_type().const_int(*n as u64, true).into()
+                } else if let Some(name) = var.as_identifier() {
+                    if let Some(info) = variables.get(name) {
+                        builder.build_load(info.ptr, name).unwrap().into()
+                    } else {
+                        panic!("Input variable '{}' not found", name);
+                    }
                 } else {
-                    let info = variables.get(var)
-                        .unwrap_or_else(|| panic!("Input variable '{}' not found", var));
-                    builder.build_load(info.ptr, var).unwrap().into()
+                    panic!("Unsupported expression in variable context: {:?}", var);
                 };
 
                 operand_vals.push(val);

@@ -114,8 +114,8 @@ pub enum Expression {
     },
     AsmBlock {
         instructions: Vec<String>,
-        inputs: Vec<(String, String)>,
-        outputs: Vec<(String, String)>,
+        inputs: Vec<(String, Expression)>,
+        outputs: Vec<(String, Expression)>,
     }
 }
 
@@ -215,4 +215,20 @@ pub struct VariableNode {
     pub type_name: WaveType,
     pub initial_value: Option<Expression>,
     pub mutability: Mutability,
+}
+
+impl Expression {
+    pub fn as_identifier(&self) -> Option<&str> {
+        match self {
+            Expression::Variable(name) => Some(name.as_str()),
+            Expression::AddressOf(inner) => {
+                if let Expression::Variable(name) = &**inner {
+                    Some(name.as_str())
+                } else {
+                    None
+                }
+            }
+            _ => None,
+        }
+    }
 }

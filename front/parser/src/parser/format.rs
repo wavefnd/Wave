@@ -2,6 +2,7 @@ use std::iter::Peekable;
 use std::slice::Iter;
 use lexer::{Token, TokenType};
 use crate::ast::{Operator, Expression, FormatPart, Literal, AssignOperator};
+use crate::ast::Expression::Variable;
 
 pub fn parse_format_string(s: &str) -> Vec<FormatPart> {
     let mut parts = Vec::new();
@@ -380,25 +381,13 @@ where
                         }
                         tokens.next();
 
-                        let value_token = tokens.next();
-                        let value = match value_token {
-                            Some(Token { token_type: TokenType::Identifier(s), .. }) => s.clone(),
-                            Some(Token { token_type: TokenType::Number(n), .. }) => n.to_string(),
-                            Some(Token { token_type: TokenType::String(n), .. }) => n.to_string(),
-                            Some(other) => {
-                                println!("Expected identifier or number after in/out(...), got {:?}", other.token_type);
-                                return None;
-                            }
-                            None => {
-                                println!("Expected value after in/out(...)");
-                                return None;
-                            }
-                        };
+                        let value = parse_asm_value(tokens)?;
 
+                        let value_expr = parse_expression(tokens)?;
                         if is_input {
-                            inputs.push((reg, value));
+                            inputs.push((reg, value_expr));
                         } else {
-                            outputs.push((reg, value));
+                            outputs.push((reg, value_expr));
                         }
                     }
 
@@ -433,24 +422,12 @@ where
                         }
                         tokens.next();
 
-                        let value_token = tokens.next();
-                        let value = match value_token {
-                            Some(Token { token_type: TokenType::Identifier(s), .. }) => s.clone(),
-                            Some(Token { token_type: TokenType::Number(n), .. })     => n.to_string(),
-                            Some(other) => {
-                                println!("Expected identifier or number after in/out(...), got {:?}", other.token_type);
-                                return None;
-                            }
-                            None => {
-                                println!("Expected value after in/out(...)");
-                                return None;
-                            }
-                        };
+                        let value = parse_asm_value(tokens)?;
 
                         if is_input {
-                            inputs.push((reg, value));
+                            inputs.push((reg, Variable(value)));
                         } else {
-                            outputs.push((reg, value));
+                            outputs.push((reg, Variable(value)));
                         }
                     }
 
@@ -589,5 +566,29 @@ pub fn parse_expression_from_token(first_token: &Token, tokens: &mut Peekable<It
         }
 
         _ => None,
+    }
+}
+
+fn parse_asm_value<'a, T>(tokens: &mut Peekable<T>) -> Option<String>
+where
+    T: Iterator<Item = &'a Token>,
+{
+    let token = tokens.next()?;
+    match &token.token_type {
+        TokenType::Identifier(s) => Some(s.clone()),
+        TokenType::Number(n) => Some(n.to_string()),
+        TokenType::String(s) => Some(s.clone()),
+        TokenType::AddressOf => {
+            if let Some(Token { token_type: TokenType::Identifier(s), .. }) = tokens.next() {
+                Some(format!("&{}", s))
+            } else {
+                println!("Expected identifier after '&' in in/out(...)");
+                None
+            }
+        }
+        other => {
+            println!("Expected identifier or number after in/out(...), got {:?}", other);
+            None
+        }
     }
 }

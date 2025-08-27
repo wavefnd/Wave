@@ -898,39 +898,50 @@ impl<'a> Lexer<'a> {
                 }
             },
             '0'..='9' => {
-                let mut num_str = self.number().to_string(); // Converting Numbers to Strings
-                
+                let mut num_str = self.number().to_string(); // 첫 숫자만 읽음
+
+                // 16진수 접두사 체크
+                if num_str == "0" && (self.peek() == 'x' || self.peek() == 'X') {
+                    num_str.push(self.advance()); // 'x' 붙이기
+
+                    while self.peek().is_digit(16) {
+                        num_str.push(self.advance());
+                    }
+
+                    let value = i64::from_str_radix(&num_str[2..], 16).unwrap_or(0);
+                    return Token {
+                        token_type: TokenType::Number(value),
+                        lexeme: num_str,
+                        line: self.line,
+                    };
+                }
+
+                // float 처리
                 let is_float = if self.peek() == '.' {
                     num_str.push('.');
                     self.advance();
-                    
+
                     while self.peek().is_digit(10) {
-                        num_str.push(self.advance()); // Keep adding numbers
+                        num_str.push(self.advance()); // 소수점 뒤 숫자
                     }
-                    
                     true
                 } else {
                     false
                 };
 
+                // 일반 숫자/실수 토큰 결정
                 let token_type = if is_float {
-                    match num_str.parse::<f64>() {
-                        Ok(n) => TokenType::Float(n),
-                        Err(_) => TokenType::Float(0.0),
-                    }
+                    num_str.parse::<f64>().map(TokenType::Float).unwrap_or(TokenType::Float(0.0))
                 } else {
-                    match num_str.parse::<i64>() {
-                        Ok(n) => TokenType::Number(n),
-                        Err(_) => TokenType::Number(0),
-                    }
+                    num_str.parse::<i64>().map(TokenType::Number).unwrap_or(TokenType::Number(0))
                 };
-                
+
                 Token {
                     token_type,
-                    lexeme: num_str, // Save real string to lexeme
+                    lexeme: num_str,
                     line: self.line,
                 }
-            },
+            }
             _ => {
                 if c == '\0' {
                     eprintln!("[eprintln] Null character encountered — likely unintended");
