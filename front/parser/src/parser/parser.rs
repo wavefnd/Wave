@@ -1287,6 +1287,19 @@ fn parse_asm_block(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
                             }
                         }
                     }
+                    Some(Token { token_type: TokenType::AddressOf, .. }) => {
+                        match tokens.next() {
+                            Some(Token { token_type: TokenType::Identifier(s), .. }) => format!("&{}", s),
+                            Some(other) => {
+                                println!("Expected identifier after '&', got {:?}", other.token_type);
+                                return None;
+                            }
+                            None => {
+                                println!("Expected identifier after '&'");
+                                return None;
+                            }
+                        }
+                    },
                     Some(Token { token_type: TokenType::Identifier(s), .. }) => s.clone(),
                     Some(Token { token_type: TokenType::Number(n), .. }) => n.to_string(),
                     Some(Token { token_type: TokenType::String(n), .. }) => n.to_string(),

@@ -594,7 +594,7 @@ pub fn generate_statement_ir<'ctx>(
             let mut seen_regs: HashSet<String> = HashSet::new();
 
             for (reg, var) in outputs {
-                if input_regs.contains(reg) {
+                if input_regs.contains(reg) && reg != "rax" {
                     panic!("Register '{}' used in both input and output", reg);
                 }
                 if !seen_regs.insert(reg.to_string()) {
@@ -608,16 +608,38 @@ pub fn generate_statement_ir<'ctx>(
                     panic!("Register '{}' duplicated in inputs", reg);
                 }
 
-                let val: BasicMetadataValueEnum = if let Ok(value) = var.parse::<i64>() {
-                    context.i64_type().const_int(value as u64, value < 0).into()
+                let clean_var = if var.starts_with('&') {
+                    &var[1..]
                 } else {
-                    let info = variables.get(var)
-                        .unwrap_or_else(|| panic!("Input variable '{}' not found", var));
-                    builder.build_load(info.ptr, var).unwrap().into()
+                    var.as_str()
                 };
 
+                let val: BasicMetadataValueEnum =
+                    if let Ok(value) = var.parse::<i64>() {
+                        context.i64_type().const_int(value as u64, value < 0).into()
+                    } else if let Some(const_val) = global_consts.get(var) {
+                        (*const_val).into()
+                    } else {
+                        let info = variables.get(clean_var)
+                            .unwrap_or_else(|| panic!("Input variable '{}' not found", clean_var));
+
+                        if var.starts_with('&') {
+                            let ptr_val = builder
+                                .build_bit_cast(
+                                    info.ptr,
+                                    context.i8_type().ptr_type(AddressSpace::from(0)),
+                                    "addr_ptr",
+                                )
+                                .unwrap()
+                                .into();
+                            ptr_val
+                        } else {
+                            builder.build_load(info.ptr, var).unwrap().into()
+                        }
+                    };
+
                 operand_vals.push(val);
-                constraint_parts.push(format!("{{{}}}", reg)); // {rdi}
+                constraint_parts.push(format!("{{{}}}", reg));
             }
 
             let constraints_str = constraint_parts.join(",");
