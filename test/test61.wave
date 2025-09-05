@@ -30,7 +30,6 @@ fun main() {
     }
     println("bind ret = {}", ret);
 
-    // 3. recvfrom 준비
     var buf: array<i8, 128>;
     var src: array<i8, 16>;
     var srclen: i64 = 16;
@@ -43,8 +42,9 @@ fun main() {
         in("rdi") sockfd
         in("rsi") &buf
         in("rdx") 128
-        in("r10") &src
-        in("r8")  &srclen
+        in("rcx") 0        // flags = 0 (blocking mod)
+        in("r8")  &src
+        in("r9")  &srclen
     }
 
     println("recvfrom got {} bytes", n);
