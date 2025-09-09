@@ -605,7 +605,9 @@ pub fn generate_statement_ir<'ctx>(
 
             for (reg, var) in inputs {
                 if !seen_regs.insert(reg.to_string()) {
-                    panic!("Register '{}' duplicated in inputs", reg);
+                    if reg != "rax" {
+                        panic!("Register '{}' duplicated in inputs", reg);
+                    }
                 }
 
                 let clean_var = if var.starts_with('&') {

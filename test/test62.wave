@@ -5,7 +5,7 @@ const SYS_BIND: i64 = 49;
 const SYS_RECVFROM: i64 = 45;
 const SYS_WRITE: i64 = 1;
 
-fun do_recv(sockfd: i64, buf: ptr<i8>, src: ptr<i8>, srclen: ptr<i64>) -> i64 {
+fun do_recv(sockfd: i64, buf: ptr<array<i8, 128>>, src: ptr<array<i8, 16>>, srclen: ptr<i64>) -> i64 {
     var n: i64;
     asm {
         "syscall"
