@@ -1,3 +1,3 @@
 pub mod error;
 
-use error::*;
+pub use error::*;

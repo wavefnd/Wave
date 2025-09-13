@@ -12,6 +12,7 @@ edition = "2021"
 colorex = "0.1.0"
 lexer = { path = "front/lexer" }
 parser = { path = "front/parser" }
+error = { path = "front/error" }
 llvm_temporary = { path = "./llvm_temporary" }
 
 [workspace]
