@@ -1077,12 +1077,24 @@ fn parse_proto(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
                             tokens.next(); // consume ':'
 
                             let type_token = tokens.next();
-                            let wave_type = parse_type_from_token(type_token)?;
+                            let wave_type = parse_type_from_token(type_token.as_ref())?;
                             params.push((name, wave_type));
 
                             // ',' or ')'
-                            if tokens.peek()?.token_type == TokenType::Comma {
-                                tokens.next(); // consume ','
+                            match tokens.peek()?.token_type {
+                                TokenType::Comma => {
+                                    tokens.next(); // consume ','
+                                }
+                                TokenType::Rparen => {
+                                    // 그냥 루프에서 ')' 처리되도록 냅둠
+                                }
+                                _ => {
+                                    println!(
+                                        "Error: Expected ',' or ')' after param in proto method '{}'",
+                                        method_name
+                                    );
+                                    return None;
+                                }
                             }
                         }
 
@@ -1100,7 +1112,7 @@ fn parse_proto(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
                 tokens.next(); // consume '->'
 
                 let return_token = tokens.next();
-                let return_type = parse_type_from_token(return_token)?;
+                let return_type = parse_type_from_token(return_token.as_ref())?;
 
                 if tokens.peek()?.token_type != TokenType::SemiColon {
                     println!("Error: Expected ';' after proto method signature '{}'", method_name);
@@ -1185,7 +1197,7 @@ fn parse_struct(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
                     tokens.next();
 
                     let type_token = tokens.next();
-                    let wave_type = parse_type_from_token(type_token).or_else(|| {
+                    let wave_type = parse_type_from_token(type_token.as_ref()).or_else(|| {
                         if let Some(Token { token_type: TokenType::Identifier(id), .. }) = type_token {
                             Some(WaveType::Struct(id.clone()))
                         } else {

@@ -1,0 +1,96 @@
+fun set_insert(visited: ptr<array<i32, 5>>, x: i32) {
+    deref visited[x] = 1;
+}
+
+fun set_contains(visited: ptr<array<i32, 5>>, x: i32) -> bool {
+    if (deref visited[x] == 1) {
+        return true;
+    }
+    return false;
+}
+
+struct Queue {
+    data: array<i32, 10>;
+    front: i32;
+    rear: i32;
+}
+
+fun queue_new() -> Queue {
+    var q: Queue;
+    q.front = 0;
+    q.rear = 0;
+    return q;
+}
+
+fun queue_push(q: ptr<Queue>, x: i32) {
+    deref q.data[deref q.rear] = x;
+    deref q.rear += 1;
+}
+
+fun queue_pop(q: ptr<Queue>) -> i32 {
+    var x: i32 = deref q.data[deref q.front];
+    deref q.front += 1;
+    return x;
+}
+
+fun queue_empty(q: ptr<Queue>) -> bool {
+    if (deref q.front >= deref q.rear) {
+        return true;
+    }
+    return false;
+}
+
+// DFS
+fun dfs(v: i32, graph: array<array<i32, 5>, 5>, visited: ptr<array<i32, 5>>) {
+    set_insert(visited, v);
+    println("DFS visit {}", v);
+
+    var i: i32 = 0;
+    while (i < 5) {
+        if (graph[v][i] == 1 && !set_contains(visited, i)) {
+            dfs(i, graph, visited);
+        }
+        i += 1;
+    }
+}
+
+// BFS
+fun bfs(start: i32, graph: array<array<i32, 5>, 5>) {
+    var visited: array<i32, 5> = [0,0,0,0,0];
+    var q: Queue = queue_new();
+
+    set_insert(&visited, start);
+    queue_push(&q, start);
+
+    while (!queue_empty(&q)) {
+        var v: i32 = queue_pop(&q);
+        println("BFS visit {}", v);
+
+        var i: i32 = 0;
+        while (i < 5) {
+            if (graph[v][i] == 1 && !set_contains(&visited, i)) {
+                set_insert(&visited, i);
+                queue_push(&q, i);
+            }
+            i += 1;
+        }
+    }
+}
+
+fun main() {
+    var graph: array<array<i32, 5>, 5> = [
+        [0,1,1,0,0],
+        [1,0,0,1,0],
+        [1,0,0,0,1],
+        [0,1,0,0,0],
+        [0,0,1,0,0]
+    ];
+
+    var visited: array<i32, 5> = [0,0,0,0,0];
+
+    println("=== DFS ===");
+    dfs(0, graph, &visited);
+
+    println("=== BFS ===");
+    bfs(0, graph);
+}
