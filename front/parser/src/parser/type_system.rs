@@ -112,7 +112,7 @@ pub fn validate_type(expected: &TokenType, actual: &TokenType) -> bool {
     }
 }
 
-pub fn parse_type_from_token(token_opt: Option<&Token>) -> Option<WaveType> {
+pub fn parse_type_from_token(token_opt: Option<&&Token>) -> Option<WaveType> {
     let token = token_opt?;
 
     match &token.token_type {
