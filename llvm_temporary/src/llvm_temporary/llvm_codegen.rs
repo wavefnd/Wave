@@ -5,6 +5,7 @@ use inkwell::{AddressSpace, OptimizationLevel};
 use inkwell::passes::{PassManager, PassManagerBuilder};
 
 use std::collections::HashMap;
+use std::hash::Hash;
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum};
 use lexer::token::TokenType;
 use crate::llvm_temporary::statement::generate_statement_ir;
@@ -34,17 +35,66 @@ pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
         }
     }
 
+    let mut struct_types: HashMap<String, inkwell::types::StructType> = HashMap::new();
+
+    for ast in ast_nodes {
+        if let ASTNode::Struct(struct_node) = ast {
+            let field_types: Vec<BasicTypeEnum> = struct_node.fields.iter()
+                .map(|(_, ty)| wave_type_to_llvm_type(context, ty, &struct_types))
+                .collect();
+
+            let struct_ty = context.struct_type(&field_types, false);
+            struct_types.insert(struct_node.name.clone(), struct_ty);
+        }
+    }
+
+    let mut proto_types: HashMap<String, (inkwell::types::StructType, inkwell::types::StructType)> = HashMap::new();
+
+    for ast in ast_nodes {
+        if let ASTNode::Proto(proto_node) = ast {
+            let vtable_field_types: Vec<BasicTypeEnum> = proto_node.methods.iter()
+                .map(|sig| {
+                    let mut param_tys: Vec<BasicMetadataTypeEnum> = sig.params.iter()
+                        .map(|(_, ty)| wave_type_to_llvm_type(context, ty, &struct_types).into())
+                        .collect();
+
+                    param_tys.insert(0, context.i8_type().ptr_type(AddressSpace::default()).into());
+
+                    let fn_type = match &sig.return_type {
+                        WaveType::Void => context.void_type().fn_type(&param_tys, false),
+                        other_ty => {
+                            let ret_ty = wave_type_to_llvm_type(context, other_ty, &struct_types);
+                            ret_ty.fn_type(&param_tys, false)
+                        }
+                    };
+
+                    fn_type.ptr_type(AddressSpace::default()).as_basic_type_enum()
+                })
+                .collect();
+
+            let vtable_ty = context.struct_type(&vtable_field_types, false);
+            let fat_ty = context.struct_type(
+                &[
+                    context.i8_type().ptr_type(AddressSpace::default()).as_basic_type_enum(),
+                    vtable_ty.ptr_type(AddressSpace::default()).as_basic_type_enum()
+                ],
+                false,
+            );
+            proto_types.insert(proto_node.name.clone(), (fat_ty, vtable_ty));
+        }
+    }
+
     let mut functions: HashMap<String, FunctionValue> = HashMap::new();
 
     for ast in ast_nodes {
         if let ASTNode::Function(FunctionNode { name, parameters, return_type, .. }) = ast {
             let param_types: Vec<BasicMetadataTypeEnum> = parameters.iter()
-                .map(|p| wave_type_to_llvm_type(context, &p.param_type).into())
+                .map(|p| wave_type_to_llvm_type(context, &p.param_type, &struct_types).into())
                 .collect();
 
             let fn_type = match return_type {
                 Some(wave_ret_ty) => {
-                    let llvm_ret_type = wave_type_to_llvm_type(context, wave_ret_ty);
+                    let llvm_ret_type = wave_type_to_llvm_type(context, wave_ret_ty, &struct_types);
                     llvm_ret_type.fn_type(&param_types, false)
                 }
                 None => context.void_type().fn_type(&param_types, false),
@@ -67,7 +117,7 @@ pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
             let mut loop_continue_stack = vec![];
 
             for (i, param) in parameters.iter().enumerate() {
-                let llvm_type = wave_type_to_llvm_type(context, &param.param_type);
+                let llvm_type = wave_type_to_llvm_type(context, &param.param_type, &struct_types);
                 let alloca = builder.build_alloca(llvm_type, &param.name).unwrap();
                 let param_val = function.get_nth_param(i as u32).unwrap();
                 builder.build_store(alloca, param_val).unwrap();
@@ -96,6 +146,8 @@ pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
                             &mut loop_continue_stack,
                             function,
                             &global_consts,
+                            &struct_types,
+                            &proto_types,
                         );
                     }
                     _ => panic!("Unsupported ASTNode in function body"),
@@ -123,7 +175,8 @@ fn create_llvm_const_value<'ctx>(
     ty: &WaveType,
     expr: &Expression,
 ) -> BasicValueEnum<'ctx> {
-    let llvm_type = wave_type_to_llvm_type(context, ty);
+    let struct_types = HashMap::new();
+    let llvm_type = wave_type_to_llvm_type(context, ty, &struct_types);
     match (expr, llvm_type) {
         (Expression::Literal(Literal::Number(n)), BasicTypeEnum::IntType(int_ty)) => {
             int_ty.const_int(*n as u64, true).as_basic_value_enum()
@@ -171,7 +224,11 @@ pub fn wave_format_to_c(format: &str, arg_types: &[BasicTypeEnum]) -> String {
     result
 }
 
-pub fn wave_type_to_llvm_type<'ctx>(context: &'ctx Context, wave_type: &WaveType) -> BasicTypeEnum<'ctx> {
+pub fn wave_type_to_llvm_type<'ctx>(
+    context: &'ctx Context,
+    wave_type: &WaveType,
+    struct_types: &HashMap<String, inkwell::types::StructType<'ctx>>,
+) -> BasicTypeEnum<'ctx> {
     match wave_type {
         WaveType::Int(bits) => context.custom_width_int_type(*bits as u32).as_basic_type_enum(),
         WaveType::Uint(bits) => context.custom_width_int_type(*bits as u32).as_basic_type_enum(),
@@ -184,10 +241,15 @@ pub fn wave_type_to_llvm_type<'ctx>(context: &'ctx Context, wave_type: &WaveType
         WaveType::Char => context.i8_type().as_basic_type_enum(), // assuming 1-byte char
         WaveType::Byte => context.i8_type().as_basic_type_enum(),
         WaveType::String => context.i8_type().ptr_type(AddressSpace::default()).as_basic_type_enum(),
-        WaveType::Pointer(inner) => wave_type_to_llvm_type(context, inner).ptr_type(AddressSpace::default()).as_basic_type_enum(),
+        WaveType::Pointer(inner) => wave_type_to_llvm_type(context, inner, struct_types).ptr_type(AddressSpace::default()).as_basic_type_enum(),
         WaveType::Array(inner, size) => {
-            let inner_type = wave_type_to_llvm_type(context, inner);
+            let inner_type = wave_type_to_llvm_type(context, inner, struct_types);
             inner_type.array_type(*size).as_basic_type_enum()
+        }
+        WaveType::Struct(name) => {
+            let struct_ty = struct_types.get(name)
+                .unwrap_or_else(|| panic!("Struct type '{}' not found in struct_types", name));
+            struct_ty.as_basic_type_enum()
         }
         WaveType::Void => {
             panic!("Void type cannot be represented as BasicTypeEnum");

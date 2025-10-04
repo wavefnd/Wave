@@ -1,10 +1,16 @@
 use std::collections::HashMap;
 use inkwell::context::Context;
 use inkwell::{FloatPredicate, IntPredicate};
-use inkwell::types::{AnyTypeEnum, BasicType, BasicTypeEnum};
+use inkwell::types::{AnyTypeEnum, BasicType, BasicTypeEnum, StructType};
 use inkwell::values::{BasicValue, BasicValueEnum};
-use parser::ast::{AssignOperator, Expression, Literal, Operator};
+use parser::ast::{ASTNode, AssignOperator, Expression, Literal, Operator, WaveType};
 use crate::llvm_temporary::llvm_codegen::{generate_address_ir, VariableInfo};
+
+pub struct ProtoInfo<'ctx> {
+    pub vtable_ty: StructType<'ctx>,
+    pub fat_ty: StructType<'ctx>,
+    pub methods: Vec<String>,
+}
 
 pub fn generate_expression_ir<'ctx>(
     context: &'ctx Context,
@@ -14,6 +20,8 @@ pub fn generate_expression_ir<'ctx>(
     module: &'ctx inkwell::module::Module<'ctx>,
     expected_type: Option<BasicTypeEnum<'ctx>>,
     global_consts: &HashMap<String, BasicValueEnum<'ctx>>,
+    struct_types: &HashMap<String, StructType<'ctx>>,
+    proto_types: &HashMap<String, ProtoInfo<'ctx>>,
 ) -> BasicValueEnum<'ctx> {
     match expr {
         Expression::Literal(lit) => match lit {
@@ -93,7 +101,7 @@ pub fn generate_expression_ir<'ctx>(
                     builder.build_load(actual_ptr, "deref_load").unwrap().as_basic_value_enum()
                 }
                 _ => {
-                    let ptr_val = generate_expression_ir(context, builder, inner_expr, variables, module, None, global_consts);
+                    let ptr_val = generate_expression_ir(context, builder, inner_expr, variables, module, None, global_consts, &struct_types, &proto_types);
                     let ptr = ptr_val.into_pointer_value();
                     builder.build_load(ptr, "deref_load").unwrap().as_basic_value_enum()
                 }
@@ -119,6 +127,8 @@ pub fn generate_expression_ir<'ctx>(
                                 module,
                                 Some(elem_type),
                                 global_consts,
+                                &struct_types,
+                                &proto_types,
                             );
                             let gep = builder.build_in_bounds_gep(
                                 tmp_alloca,
@@ -149,81 +159,102 @@ pub fn generate_expression_ir<'ctx>(
             }
         }
 
-        Expression::FunctionCall { name, args } => {
-            let function = module
-                .get_function(name)
-                .unwrap_or_else(|| panic!("Function '{}' not found", name));
-
-            let function_type = function.get_type();
-            let param_types: Vec<BasicTypeEnum> = function_type
-                .get_param_types()
-                .iter()
-                .map(|t| t.clone().into())
-                .collect();
-
-            let mut compiled_args = vec![];
-            for (i, arg) in args.iter().enumerate() {
-                let expected = param_types.get(i).copied();
-                let val = generate_expression_ir(context, builder, arg, variables, module, expected, global_consts);
-                compiled_args.push(val.into());
-            }
-
-            let call_site = builder.build_call(function, &compiled_args, "calltmp").unwrap();
-
-            if function_type.get_return_type().is_some() {
-                if let Some(ret_val) = call_site.try_as_basic_value().left() {
-                    ret_val
-                } else {
-                    panic!("Function '{}' should return a value but didn't", name);
-                }
-            } else {
-                context.i32_type().const_zero().as_basic_value_enum()
-            }
-        }
-
         Expression::MethodCall { object, name, args } => {
-            let function = module
-                .get_function(name)
-                .unwrap_or_else(|| panic!("Function '{}' not found as a global function", name));
+            let obj_val = generate_expression_ir(
+                context,
+                builder,
+                object,
+                variables,
+                module,
+                None,
+                global_consts,
+                &struct_types,
+                &proto_types
+            );
 
-            let function_type = function.get_type();
-            let param_types: Vec<BasicTypeEnum> = function_type
-                .get_param_types()
-                .iter()
-                .map(|t| (*t).into())
-                .collect();
+            if let WaveType::Struct(struct_name) = &object.get_wave_type(&Default::default()) {
+                let fn_name = format!("{}_{}", struct_name, name);
+                let function = module
+                    .get_function(&fn_name)
+                    .unwrap_or_else(|| panic!("Function '{}' not found", fn_name));
 
-            let object_expected_type = param_types.get(0).copied();
-            let object_val = generate_expression_ir(context, builder, object, variables, module, object_expected_type, global_consts);
+                let mut call_args: Vec<inkwell::values::BasicMetadataValueEnum> = vec![obj_val.into()];
+                for arg in args {
+                    let val = generate_expression_ir(context, builder, arg, variables, module, None, global_consts, &struct_types, &proto_types);
+                    call_args.push(val.into());
+                }
 
-            let mut compiled_args: Vec<inkwell::values::BasicMetadataValueEnum<'ctx>> = vec![object_val.into()];
-
-            for (i, arg) in args.iter().enumerate() {
-                let expected = param_types.get(i + 1).copied();
-                let val = generate_expression_ir(context, builder, arg, variables, module, expected, global_consts);
-
-                compiled_args.push(val.into());
+                let call_site = builder.build_call(function, &call_args, &format!("call_{}", fn_name)).unwrap();
+                if function.get_type().get_return_type().is_some() {
+                    call_site.try_as_basic_value().left().unwrap()
+                } else {
+                    context.i32_type().const_zero().as_basic_value_enum()
+                }
             }
 
-            let call_site = builder.build_call(function, &compiled_args, &format!("call_{}", name)).unwrap();
+            else if let WaveType::Proto(proto_name) = &object.get_wave_type(&Default::default()) {
+                let fat_struct = obj_val.into_struct_value();
+                let obj_ptr = builder
+                    .build_extract_value(fat_struct, 0, "obj_ptr")
+                    .unwrap()
+                    .into_pointer_value();
+                let vtable_ptr = builder
+                    .build_extract_value(fat_struct, 1, "vtable_ptr")
+                    .unwrap()
+                    .into_pointer_value();
 
-            if function_type.get_return_type().is_some() {
-                if let Some(ret_val) = call_site.try_as_basic_value().left() {
-                    ret_val
-                } else {
-                    panic!("Method '{}' should return a value but didn't", name);
+                let proto_info = proto_types
+                    .get(&proto_name)
+                    .unwrap_or_else(|| panic!("Proto '{}' not found", proto_name));
+
+                let method_index = proto_info.methods.iter()
+                    .position(|m| m == name)
+                    .unwrap_or_else(|| panic!("Method '{}' not found in proto '{}'", name, proto_name));
+
+                let fn_ptr_ptr = builder
+                    .build_struct_gep(vtable_ptr, method_index as u32, "fn_gep")
+                    .unwrap();
+                let fn_ptr_val = builder.build_load(fn_ptr_ptr, "fn_ptr").unwrap().into_pointer_value();
+
+                let mut call_args: Vec<inkwell::values::BasicMetadataValueEnum> = vec![obj_ptr.into()];
+                for arg in args {
+                    let val = generate_expression_ir(
+                        context,
+                        builder,
+                        arg,
+                        variables,
+                        module,
+                        None,
+                        global_consts,
+                        struct_types,
+                        proto_types,
+                    );
+                    call_args.push(val.into());
                 }
-            } else {
-                context.i32_type().const_zero().as_basic_value_enum()
+
+                let fn_type = fn_ptr_val.get_type().get_element_type().into_function_type();
+                let call_site = builder
+                    .build_indirect_call(fn_type, fn_ptr_val, &call_args, &format!("dyn_call_{}", name))
+                    .unwrap();
+
+                if fn_type.get_return_type().is_some() {
+                    call_site.try_as_basic_value().left().unwrap()
+                } else {
+                    context.i32_type().const_zero().as_basic_value_enum()
+                }
+            }
+            else {
+                panic!("MethodCall not supported for this object type");
             }
         }
+
 
         Expression::AssignOperation { target, operator, value } => {
             let ptr = generate_address_ir(context, builder, target, variables, module);
 
             let current_val = builder.build_load(ptr, "load_current").unwrap();
 
-            let new_val = generate_expression_ir(context, builder, value, variables, module, Some(current_val.get_type()), global_consts);
+            let new_val = generate_expression_ir(context, builder, value, variables, module, Some(current_val.get_type()), global_consts, &struct_types, &proto_types);
 
             let (current_val, new_val) = match (current_val, new_val) {
                 (BasicValueEnum::FloatValue(lhs), BasicValueEnum::IntValue(rhs)) => {
@@ -296,6 +327,8 @@ pub fn generate_expression_ir<'ctx>(
                 module,
                 Some(ptr.get_type().get_element_type().try_into().unwrap()),
                 global_consts,
+                &struct_types,
+                &proto_types
             );
 
             let value = match value {
@@ -310,8 +343,8 @@ pub fn generate_expression_ir<'ctx>(
         }
 
         Expression::BinaryExpression { left, operator, right } => {
-            let left_val = generate_expression_ir(context, builder, left, variables, module, None, global_consts);
-            let right_val = generate_expression_ir(context, builder, right, variables, module, None, global_consts);
+            let left_val = generate_expression_ir(context, builder, left, variables, module, None, global_consts, &struct_types, &proto_types);
+            let right_val = generate_expression_ir(context, builder, right, variables, module, None, global_consts, &struct_types, &proto_types);
 
             // Branch after Type Examination
             match (left_val, right_val) {
@@ -411,9 +444,9 @@ pub fn generate_expression_ir<'ctx>(
         }
 
         Expression::IndexAccess { target, index } => unsafe {
-            let target_val = generate_expression_ir(context, builder, target, variables, module, None, global_consts);
+            let target_val = generate_expression_ir(context, builder, target, variables, module, None, global_consts, &struct_types, &proto_types);
 
-            let index_val = generate_expression_ir(context, builder, index, variables, module, None, global_consts);
+            let index_val = generate_expression_ir(context, builder, index, variables, module, None, global_consts, &struct_types, &proto_types);
             let index_int = match index_val {
                 BasicValueEnum::IntValue(i) => i,
                 _ => panic!("Index must be an integer"),

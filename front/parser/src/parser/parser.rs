@@ -1057,7 +1057,6 @@ fn parse_proto(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
                 }
                 tokens.next(); // consume '('
 
-                // 여기서 기존 parse_parameters 사용!
                 let parameters = parse_parameters(tokens);
 
                 if tokens.peek()?.token_type != TokenType::Arrow {
