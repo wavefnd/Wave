@@ -33,6 +33,9 @@ Created by <a href="https://github.com/LunaStev" style="color: #777; text-decora
 </div>
 </div>
 
+---
+
+The information about this project is official and can be found on the [TechPedia Wiki](https://techpedia.wiki/) and the [official website](https://wave-lang.dev/).
 
 ---
 
