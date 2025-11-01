@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 #[derive(Debug, Clone)]
 pub enum Value {
     Int(i64),
@@ -18,7 +20,6 @@ pub enum WaveType {
     Array(Box<WaveType>, u32),
     Void,
     Struct(String),
-    Proto(String),
 }
 
 #[derive(Debug, Clone)]
@@ -29,7 +30,7 @@ pub enum ASTNode {
     Variable(VariableNode),
     Expression(Expression),
     Struct(StructNode),
-    Proto(ProtoNode),
+    ProtoImpl(ProtoImplNode),
 }
 
 #[derive(Debug, Clone)]
@@ -48,9 +49,9 @@ pub struct StructNode {
 }
 
 #[derive(Debug, Clone)]
-pub struct ProtoNode {
-    pub name: String,
-    pub methods: Vec<FunctionSignature>,
+pub struct ProtoImplNode {
+    pub target: String,
+    pub methods: Vec<FunctionNode>,
 }
 
 #[derive(Debug, Clone)]
@@ -217,6 +218,13 @@ pub struct VariableNode {
     pub mutability: Mutability,
 }
 
+#[derive(Clone)]
+pub struct VariableInfo {
+    pub name: String,
+    pub mutable: bool,
+    pub ty: WaveType,
+}
+
 impl Expression {
     pub fn as_identifier(&self) -> Option<&str> {
         match self {
@@ -229,6 +237,21 @@ impl Expression {
                 }
             }
             _ => None,
+        }
+    }
+
+    pub fn get_wave_type(&self, variables: &HashMap<String, VariableInfo>) -> WaveType {
+        match self {
+            Expression::Variable(name) => {
+                variables.get(name)
+                    .unwrap_or_else(|| panic!("Variable '{}' not found", name))
+                    .ty.clone()
+            }
+            Expression::Literal(Literal::Number(_)) => WaveType::Int(32), // 기본 int
+            Expression::Literal(Literal::Float(_)) => WaveType::Float(32),
+            Expression::Literal(Literal::String(_)) => WaveType::String,
+            Expression::MethodCall { .. } => panic!("nested method call type inference not supported yet"),
+            _ => panic!("get_wave_type not implemented for {:?}", self),
         }
     }
 }

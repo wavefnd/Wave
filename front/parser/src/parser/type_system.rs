@@ -127,16 +127,35 @@ pub fn parse_type_from_token(token_opt: Option<&&Token>) -> Option<WaveType> {
         | ty @ TokenType::TypeArray(_, _) => token_type_to_wave_type(ty),
 
         TokenType::Identifier(name) => {
-            if let Some(tt) = parse_type(name) {
-                token_type_to_wave_type(&tt)
-            } else {
-                Some(WaveType::Struct(name.clone()))
+            match name.as_str() {
+                "i8" => Some(WaveType::Int(8)),
+                "i16" => Some(WaveType::Int(16)),
+                "i32" => Some(WaveType::Int(32)),
+                "i64" => Some(WaveType::Int(64)),
+                "u8" => Some(WaveType::Uint(8)),
+                "u16" => Some(WaveType::Uint(16)),
+                "u32" => Some(WaveType::Uint(32)),
+                "u64" => Some(WaveType::Uint(64)),
+                "f32" => Some(WaveType::Float(32)),
+                "f64" => Some(WaveType::Float(64)),
+                "bool" => Some(WaveType::Bool),
+                "char" => Some(WaveType::Char),
+                "byte" => Some(WaveType::Byte),
+                "str" => Some(WaveType::String),
+                _ => {
+                    if let Some(tt) = parse_type(name) {
+                        token_type_to_wave_type(&tt)
+                    } else {
+                        Some(WaveType::Struct(name.clone()))
+                    }
+                }
             }
         }
 
         _ => None,
     }
 }
+
 
 pub fn parse_type_from_stream(tokens: &mut Peekable<Iter<Token>>) -> Option<WaveType> {
     let type_token = tokens.next()?; // consume identifier
