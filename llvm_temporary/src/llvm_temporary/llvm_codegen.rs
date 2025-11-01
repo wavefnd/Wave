@@ -23,12 +23,9 @@ pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
     let mut global_consts: HashMap<String, BasicValueEnum> = HashMap::new();
 
     for ast in ast_nodes {
-        if let ASTNode::Variable(VariableNode { name, type_name, initial_value, mutability}) = ast {
+        if let ASTNode::Variable(VariableNode { name, type_name, initial_value, mutability }) = ast {
             if *mutability == Mutability::Const {
-                let initial_value = initial_value
-                    .as_ref()
-                    .expect("Constant must be initialized.");
-
+                let initial_value = initial_value.as_ref().expect("Constant must be initialized.");
                 let const_val = create_llvm_const_value(context, type_name, initial_value);
                 global_consts.insert(name.clone(), const_val);
             }
@@ -36,137 +33,112 @@ pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
     }
 
     let mut struct_types: HashMap<String, inkwell::types::StructType> = HashMap::new();
-
     for ast in ast_nodes {
         if let ASTNode::Struct(struct_node) = ast {
             let field_types: Vec<BasicTypeEnum> = struct_node.fields.iter()
                 .map(|(_, ty)| wave_type_to_llvm_type(context, ty, &struct_types))
                 .collect();
-
             let struct_ty = context.struct_type(&field_types, false);
             struct_types.insert(struct_node.name.clone(), struct_ty);
         }
     }
 
-    let mut proto_types: HashMap<String, (inkwell::types::StructType, inkwell::types::StructType)> = HashMap::new();
-
+    let mut proto_functions: Vec<(String, FunctionNode)> = Vec::new();
     for ast in ast_nodes {
-        if let ASTNode::Proto(proto_node) = ast {
-            let vtable_field_types: Vec<BasicTypeEnum> = proto_node.methods.iter()
-                .map(|sig| {
-                    let mut param_tys: Vec<BasicMetadataTypeEnum> = sig.params.iter()
-                        .map(|(_, ty)| wave_type_to_llvm_type(context, ty, &struct_types).into())
-                        .collect();
-
-                    param_tys.insert(0, context.i8_type().ptr_type(AddressSpace::default()).into());
-
-                    let fn_type = match &sig.return_type {
-                        WaveType::Void => context.void_type().fn_type(&param_tys, false),
-                        other_ty => {
-                            let ret_ty = wave_type_to_llvm_type(context, other_ty, &struct_types);
-                            ret_ty.fn_type(&param_tys, false)
-                        }
-                    };
-
-                    fn_type.ptr_type(AddressSpace::default()).as_basic_type_enum()
-                })
-                .collect();
-
-            let vtable_ty = context.struct_type(&vtable_field_types, false);
-            let fat_ty = context.struct_type(
-                &[
-                    context.i8_type().ptr_type(AddressSpace::default()).as_basic_type_enum(),
-                    vtable_ty.ptr_type(AddressSpace::default()).as_basic_type_enum()
-                ],
-                false,
-            );
-            proto_types.insert(proto_node.name.clone(), (fat_ty, vtable_ty));
+        if let ASTNode::ProtoImpl(proto_impl) = ast {
+            for method in &proto_impl.methods {
+                let new_name = format!("{}_{}", proto_impl.target, method.name);
+                let mut new_fn = method.clone();
+                new_fn.name = new_name.clone();
+                proto_functions.push((new_name, new_fn));
+            }
         }
     }
 
     let mut functions: HashMap<String, FunctionValue> = HashMap::new();
 
-    for ast in ast_nodes {
-        if let ASTNode::Function(FunctionNode { name, parameters, return_type, .. }) = ast {
-            let param_types: Vec<BasicMetadataTypeEnum> = parameters.iter()
-                .map(|p| wave_type_to_llvm_type(context, &p.param_type, &struct_types).into())
-                .collect();
-
-            let fn_type = match return_type {
-                Some(wave_ret_ty) => {
-                    let llvm_ret_type = wave_type_to_llvm_type(context, wave_ret_ty, &struct_types);
-                    llvm_ret_type.fn_type(&param_types, false)
-                }
-                None => context.void_type().fn_type(&param_types, false),
-            };
-
-            let function = module.add_function(name, fn_type, None);
-            functions.insert(name.clone(), function);
+    let function_nodes: Vec<FunctionNode> = ast_nodes.iter().filter_map(|ast| {
+        if let ASTNode::Function(f) = ast {
+            Some(f.clone())
+        } else {
+            None
         }
+    }).chain(proto_functions.iter().map(|(_, f)| f.clone())).collect();
+
+    for FunctionNode { name, parameters, return_type, .. } in &function_nodes {
+        let param_types: Vec<BasicMetadataTypeEnum> = parameters.iter()
+            .map(|p| wave_type_to_llvm_type(context, &p.param_type, &struct_types).into())
+            .collect();
+
+        let fn_type = match return_type {
+            Some(wave_ret_ty) => {
+                let llvm_ret_type = wave_type_to_llvm_type(context, wave_ret_ty, &struct_types);
+                llvm_ret_type.fn_type(&param_types, false)
+            }
+            None => context.void_type().fn_type(&param_types, false),
+        };
+
+        let function = module.add_function(name, fn_type, None);
+        functions.insert(name.clone(), function);
     }
 
-    for ast in ast_nodes {
-        if let ASTNode::Function(FunctionNode { name, parameters, return_type, body }) = ast {
-            let function = *functions.get(name).unwrap();
-            let entry_block = context.append_basic_block(function, "entry");
-            builder.position_at_end(entry_block);
+    for func_node in &function_nodes {
+        let function = *functions.get(&func_node.name).unwrap();
+        let entry_block = context.append_basic_block(function, "entry");
+        builder.position_at_end(entry_block);
 
-            let mut variables: HashMap<String, VariableInfo> = HashMap::new();
-            let mut string_counter = 0;
-            let mut loop_exit_stack = vec![];
-            let mut loop_continue_stack = vec![];
+        let mut variables: HashMap<String, VariableInfo> = HashMap::new();
+        let mut string_counter = 0;
+        let mut loop_exit_stack = vec![];
+        let mut loop_continue_stack = vec![];
 
-            for (i, param) in parameters.iter().enumerate() {
-                let llvm_type = wave_type_to_llvm_type(context, &param.param_type, &struct_types);
-                let alloca = builder.build_alloca(llvm_type, &param.name).unwrap();
-                let param_val = function.get_nth_param(i as u32).unwrap();
-                builder.build_store(alloca, param_val).unwrap();
+        for (i, param) in func_node.parameters.iter().enumerate() {
+            let llvm_type = wave_type_to_llvm_type(context, &param.param_type, &struct_types);
+            let alloca = builder.build_alloca(llvm_type, &param.name).unwrap();
+            let param_val = function.get_nth_param(i as u32).unwrap();
+            builder.build_store(alloca, param_val).unwrap();
 
-                variables.insert(
-                    param.name.clone(),
-                    VariableInfo {
-                        ptr: alloca,
-                        mutability: Mutability::Let,
-                        ty: param.param_type.clone(),
-                    },
+            variables.insert(
+                param.name.clone(),
+                VariableInfo {
+                    ptr: alloca,
+                    mutability: Mutability::Let,
+                    ty: param.param_type.clone(),
+                },
+            );
+        }
+
+        for stmt in &func_node.body {
+            if let ASTNode::Statement(_) | ASTNode::Variable(_) = stmt {
+                generate_statement_ir(
+                    context,
+                    builder,
+                    module,
+                    &mut string_counter,
+                    stmt,
+                    &mut variables,
+                    &mut loop_exit_stack,
+                    &mut loop_continue_stack,
+                    function,
+                    &global_consts,
+                    &struct_types,
                 );
+            } else {
+                panic!("Unsupported node inside function '{}'", func_node.name);
             }
+        }
 
-            for stmt in body {
-                match stmt {
-                    ASTNode::Variable(_) | ASTNode::Statement(_) => {
-                        generate_statement_ir(
-                            context,
-                            builder,
-                            module,
-                            &mut string_counter,
-                            stmt,
-                            &mut variables,
-                            &mut loop_exit_stack,
-                            &mut loop_continue_stack,
-                            function,
-                            &global_consts,
-                            &struct_types,
-                            &proto_types,
-                        );
-                    }
-                    _ => panic!("Unsupported ASTNode in function body"),
-                }
-            }
-
-            let current_block = builder.get_insert_block().unwrap();
-            if current_block.get_terminator().is_none() {
-                if return_type.is_none() {
-                    builder.build_return(None).unwrap();
-                } else {
-                    builder.build_unreachable().unwrap();
-                }
+        let current_block = builder.get_insert_block().unwrap();
+        if current_block.get_terminator().is_none() {
+            if func_node.return_type.is_none() {
+                builder.build_return(None).unwrap();
+            } else {
+                builder.build_unreachable().unwrap();
             }
         }
     }
 
     pass_manager.run_on(module);
-
     module.print_to_string().to_string()
 }
 

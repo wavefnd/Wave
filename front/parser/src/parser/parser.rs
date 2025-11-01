@@ -36,9 +36,10 @@ pub fn parse(tokens: &Vec<Token>) -> Option<Vec<ASTNode>> {
             }
             TokenType::Proto => {
                 iter.next();
-                if let Some(proto) = parse_proto(&mut iter) {
-                    nodes.push(proto);
+                if let Some(proto_impl) = parse_proto(&mut iter) {
+                    nodes.push(proto_impl);
                 } else {
+                    println!("Failed to parse proto impl");
                     return None;
                 }
             }
@@ -1017,16 +1018,16 @@ fn parse_import(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
 }
 
 fn parse_proto(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
-    let proto_name = match tokens.next() {
+    let target_struct = match tokens.next() {
         Some(Token { token_type: TokenType::Identifier(name), .. }) => name.clone(),
         other => {
-            println!("Error: Expected identifier after 'proto', found {:?}", other);
+            println!("Error: Expected struct name after 'proto', found {:?}", other);
             return None;
         }
     };
 
     if tokens.peek()?.token_type != TokenType::Lbrace {
-        println!("Error: Expected '{{' after proto name '{}'", proto_name);
+        println!("Error: Expected '{{' after proto target '{}'", target_struct);
         return None;
     }
     tokens.next(); // consume '{'
@@ -1034,64 +1035,11 @@ fn parse_proto(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
     let mut methods = Vec::new();
 
     while let Some(token) = tokens.peek() {
-        match token.token_type {
-            TokenType::Rbrace => {
-                tokens.next(); // consume '}'
-                break;
-            }
 
-            TokenType::Fun => {
-                tokens.next(); // consume 'fun'
-
-                let method_name = match tokens.next() {
-                    Some(Token { token_type: TokenType::Identifier(name), .. }) => name.clone(),
-                    other => {
-                        println!("Error: Expected function name in proto, found {:?}", other);
-                        return None;
-                    }
-                };
-
-                if tokens.peek()?.token_type != TokenType::Lparen {
-                    println!("Error: Expected '(' after proto method name '{}'", method_name);
-                    return None;
-                }
-                tokens.next(); // consume '('
-
-                let parameters = parse_parameters(tokens);
-
-                if tokens.peek()?.token_type != TokenType::Arrow {
-                    println!("Error: Expected '->' in proto method '{}'", method_name);
-                    return None;
-                }
-                tokens.next(); // consume '->'
-
-                let return_type = parse_type_from_stream(tokens)?;
-
-                if tokens.peek()?.token_type != TokenType::SemiColon {
-                    println!("Error: Expected ';' after proto method signature '{}'", method_name);
-                    return None;
-                }
-                tokens.next(); // consume ';'
-
-                methods.push(FunctionSignature {
-                    name: method_name,
-                    params: parameters
-                        .into_iter()
-                        .map(|p| (p.name, p.param_type))
-                        .collect(),
-                    return_type,
-                });
-            }
-
-            _ => {
-                println!("Error: Unexpected token in proto body: {:?}", token);
-                return None;
-            }
-        }
     }
 
-    Some(ASTNode::Proto(ProtoNode {
-        name: proto_name,
+    Some(ASTNode::ProtoImpl(ProtoImplNode {
+        target: target_struct,
         methods,
     }))
 }

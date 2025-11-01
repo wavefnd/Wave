@@ -1,3 +1,14 @@
-proto Drawable {
-    fun draw() -> void;
+struct Box {
+    size: i32;
+}
+
+proto Box {
+    fun print_size(self) {
+        println("Box size = {}", self.size);
+    }
+}
+
+fun main() {
+    var b: Box = Box { size: 42 };
+    b.print_size();
 }

@@ -20,7 +20,6 @@ pub enum WaveType {
     Array(Box<WaveType>, u32),
     Void,
     Struct(String),
-    Proto(String),
 }
 
 #[derive(Debug, Clone)]
@@ -31,7 +30,7 @@ pub enum ASTNode {
     Variable(VariableNode),
     Expression(Expression),
     Struct(StructNode),
-    Proto(ProtoNode),
+    ProtoImpl(ProtoImplNode),
 }
 
 #[derive(Debug, Clone)]
@@ -50,9 +49,9 @@ pub struct StructNode {
 }
 
 #[derive(Debug, Clone)]
-pub struct ProtoNode {
-    pub name: String,
-    pub methods: Vec<FunctionSignature>,
+pub struct ProtoImplNode {
+    pub target: String,
+    pub methods: Vec<FunctionNode>,
 }
 
 #[derive(Debug, Clone)]

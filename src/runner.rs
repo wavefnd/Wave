@@ -75,7 +75,7 @@ pub(crate) unsafe fn run_wave_file(file_path: &Path) {
 
     let path = Path::new(file_path);
     let file_stem = path.file_stem().unwrap().to_str().unwrap();
-    let machine_code_path = compile_ir_to_machine_code(&ir, file_stem); // 이것도 그냥 String
+    let machine_code_path = compile_ir_to_machine_code(&ir, file_stem);
     if machine_code_path.is_empty() {
         let err = WaveError::new(
             WaveErrorKind::CompilationFailed("empty machine code path".to_string()),
