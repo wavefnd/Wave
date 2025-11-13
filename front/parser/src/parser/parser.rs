@@ -1034,8 +1034,41 @@ fn parse_proto(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
 
     let mut methods = Vec::new();
 
-    while let Some(token) = tokens.peek() {
+    loop {
+        let token_type = if let Some(t) = tokens.peek() {
+            t.token_type.clone()
+        } else {
+            println!("Error: Unexpected end of file inside proto '{}' definition.", target_struct);
+            return None;
+        };
 
+        match token_type {
+            TokenType::Rbrace => {
+                tokens.next();
+                break;
+            }
+
+            TokenType::Fun => {
+                if let Some(ASTNode::Function(mut func_node)) = parse_function(tokens) {
+                    if func_node.return_type.is_none() {
+                        func_node.return_type = Some(WaveType::Void);
+                    }
+                    methods.push(func_node);
+                } else {
+                    println!("Error: Failed to parse method inside proto '{}'.", target_struct);
+                    return None;
+                }
+            }
+
+            TokenType::Whitespace | TokenType::Newline => {
+                tokens.next();
+            }
+
+            other => {
+                println!("Error: Unexpected token inside proto body: {:?}", other);
+                return None;
+            }
+        }
     }
 
     Some(ASTNode::ProtoImpl(ProtoImplNode {

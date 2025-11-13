@@ -469,61 +469,88 @@ where
     loop {
         match tokens.peek().map(|t| &t.token_type) {
             Some(TokenType::Dot) => {
-                tokens.next();
+                tokens.next(); // consume '.'
 
                 let name = if let Some(Token { token_type: TokenType::Identifier(name), .. }) = tokens.next() {
                     name.clone()
                 } else {
-                    println!("Error: Expected identifier after '.' for method call");
+                    println!("Error: Expected identifier after '.'");
                     return None;
                 };
 
-                if tokens.peek().map_or(true, |t| t.token_type != TokenType::Lparen) {
-                    println!("Error: Expected '(' for method call");
-                    return None;
-                }
-                tokens.next();
+                // 기존 expr(Option<Expression>)에서 실제 Expression 꺼내기
+                let base_expr = match expr.take() {
+                    Some(e) => e,
+                    None => {
+                        println!("Internal parser error: missing base expression before '.'");
+                        return None;
+                    }
+                };
 
-                let mut args = vec![];
-                if tokens.peek().map_or(false, |t| t.token_type != TokenType::Rparen) {
-                    loop {
-                        args.push(parse_expression(tokens)?);
-                        if let Some(Token { token_type: TokenType::Comma, .. }) = tokens.peek() {
-                            tokens.next();
-                        } else {
-                            break;
+                // 다음 토큰이 '(' 이면 메서드 호출, 아니면 필드 접근
+                if let Some(Token { token_type: TokenType::Lparen, .. }) = tokens.peek() {
+                    // ----- MethodCall -----
+                    tokens.next(); // consume '('
+
+                    let mut args = Vec::new();
+                    if tokens.peek().map_or(false, |t| t.token_type != TokenType::Rparen) {
+                        loop {
+                            let arg = parse_expression(tokens)?;
+                            args.push(arg);
+
+                            if let Some(Token { token_type: TokenType::Comma, .. }) = tokens.peek() {
+                                tokens.next(); // consume ','
+                            } else {
+                                break;
+                            }
                         }
                     }
-                }
 
-                if tokens.peek().map_or(true, |t| t.token_type != TokenType::Rparen) {
-                    println!("Error: Expected ')' after method call arguments");
-                    return None;
-                }
-                tokens.next();
+                    if tokens.peek().map_or(true, |t| t.token_type != TokenType::Rparen) {
+                        println!("Error: Expected ')' after method call arguments");
+                        return None;
+                    }
+                    tokens.next(); // consume ')'
 
-                expr = Some(Expression::MethodCall {
-                    object: Box::new(expr.unwrap()),
-                    name,
-                    args,
-                });
+                    expr = Some(Expression::MethodCall {
+                        object: Box::new(base_expr),
+                        name,
+                        args,
+                    });
+                } else {
+                    // ----- FieldAccess -----
+                    expr = Some(Expression::FieldAccess {
+                        object: Box::new(base_expr),
+                        field: name,
+                    });
+                }
             }
+
             Some(TokenType::Lbrack) => {
-                tokens.next();
+                tokens.next(); // consume '['
+
                 let index_expr = parse_expression(tokens)?;
                 if tokens.peek().map_or(true, |t| t.token_type != TokenType::Rbrack) {
                     println!("Error: Expected ']' after index");
                     return None;
                 }
-                tokens.next();
+                tokens.next(); // consume ']'
+
+                let base_expr = match expr.take() {
+                    Some(e) => e,
+                    None => {
+                        println!("Internal parser error: missing base expression before '['");
+                        return None;
+                    }
+                };
+
                 expr = Some(Expression::IndexAccess {
-                    target: Box::new(expr.unwrap()),
+                    target: Box::new(base_expr),
                     index: Box::new(index_expr),
                 });
             }
-            _ => {
-                break;
-            }
+
+            _ => break,
         }
     }
 

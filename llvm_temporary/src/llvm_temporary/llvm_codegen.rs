@@ -20,6 +20,9 @@ pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
     let pass_manager: PassManager<inkwell::module::Module> = PassManager::create(());
     pass_manager_builder.populate_module_pass_manager(&pass_manager);
 
+    let mut struct_types: HashMap<String, inkwell::types::StructType> = HashMap::new();
+    let mut struct_field_indices: HashMap<String, HashMap<String, u32>> = HashMap::new();
+
     let mut global_consts: HashMap<String, BasicValueEnum> = HashMap::new();
 
     for ast in ast_nodes {
@@ -40,6 +43,12 @@ pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
                 .collect();
             let struct_ty = context.struct_type(&field_types, false);
             struct_types.insert(struct_node.name.clone(), struct_ty);
+
+            let mut index_map = HashMap::new();
+            for (i, (field_name, _)) in struct_node.fields.iter().enumerate() {
+                index_map.insert(field_name.clone(), i as u32);
+            }
+            struct_field_indices.insert(struct_node.name.clone(), index_map);
         }
     }
 
@@ -71,11 +80,11 @@ pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
             .collect();
 
         let fn_type = match return_type {
+            None | Some(WaveType::Void) => context.void_type().fn_type(&param_types, false),
             Some(wave_ret_ty) => {
                 let llvm_ret_type = wave_type_to_llvm_type(context, wave_ret_ty, &struct_types);
                 llvm_ret_type.fn_type(&param_types, false)
             }
-            None => context.void_type().fn_type(&param_types, false),
         };
 
         let function = module.add_function(name, fn_type, None);
@@ -122,6 +131,7 @@ pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
                     function,
                     &global_consts,
                     &struct_types,
+                    &struct_field_indices
                 );
             } else {
                 panic!("Unsupported node inside function '{}'", func_node.name);
@@ -130,10 +140,17 @@ pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
 
         let current_block = builder.get_insert_block().unwrap();
         if current_block.get_terminator().is_none() {
-            if func_node.return_type.is_none() {
+            let is_void_like = match &func_node.return_type {
+                None => true,
+                Some(WaveType::Void) => true,
+                _ => false,
+            };
+
+            if is_void_like {
                 builder.build_return(None).unwrap();
             } else {
-                builder.build_unreachable().unwrap();
+                panic!("Non-void function '{}' is missing a return statement", func_node.name);
+                // builder.build_unreachable().unwrap();
             }
         }
     }

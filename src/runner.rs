@@ -103,6 +103,9 @@ pub(crate) unsafe fn run_wave_file(file_path: &Path) {
         }
     };
 
+    // println!("AST:\n{:#?}", ast);
+    // println!("Generated LLVM IR:\n{}", ir);
+
     println!("{}", String::from_utf8_lossy(&output.stdout));
 }
 

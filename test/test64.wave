@@ -1,0 +1,10 @@
+proto Box {
+    fun double_size(self: Box) -> i32 {
+        self.size * 2
+    }
+}
+
+fun main() {
+    var b: Box = Box { size: 21 };
+    println("{}", b.double_size());
+}

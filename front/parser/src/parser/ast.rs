@@ -117,7 +117,11 @@ pub enum Expression {
         instructions: Vec<String>,
         inputs: Vec<(String, Expression)>,
         outputs: Vec<(String, Expression)>,
-    }
+    },
+    FieldAccess {
+        object: Box<Expression>,
+        field: String,
+    },
 }
 
 #[derive(Debug, Clone)]

@@ -3,11 +3,11 @@ struct Text {
 }
 
 proto Text {
-    fun draw(self) {
+    fun draw(self: Text) {
         println("Draw text {}", self.content);
     }
 
-    fun update(self, dt: f32) {
+    fun update(self: Text, dt: f32) {
         println("Update text {} with dt={}", self.content, dt);
     }
 }

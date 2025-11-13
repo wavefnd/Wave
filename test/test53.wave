@@ -3,7 +3,7 @@ struct Box {
 }
 
 proto Box {
-    fun print_size(self) {
+    fun print_size(self: Box) {
         println("Box size = {}", self.size);
     }
 }

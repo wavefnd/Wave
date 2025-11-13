@@ -124,7 +124,11 @@ pub fn parse_type_from_token(token_opt: Option<&&Token>) -> Option<WaveType> {
         | ty @ TokenType::TypeByte
         | ty @ TokenType::TypeString
         | ty @ TokenType::TypePointer(_)
-        | ty @ TokenType::TypeArray(_, _) => token_type_to_wave_type(ty),
+        | ty @ TokenType::TypeArray(_, _)
+        | ty @ TokenType::TokenTypeInt(_)
+        | ty @ TokenType::TokenTypeUint(_)
+        | ty @ TokenType::TokenTypeFloat(_)
+        => token_type_to_wave_type(ty),
 
         TokenType::Identifier(name) => {
             match name.as_str() {
