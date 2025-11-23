@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use inkwell::context::Context;
 use inkwell::{FloatPredicate, IntPredicate};
 use inkwell::types::{AnyTypeEnum, BasicType, BasicTypeEnum, StructType};
-use inkwell::values::{BasicValue, BasicValueEnum};
+use inkwell::values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum};
 use parser::ast::{ASTNode, AssignOperator, Expression, Literal, Operator, WaveType};
 use crate::llvm_temporary::llvm_codegen::{generate_address_ir, VariableInfo};
 
@@ -160,52 +160,147 @@ pub fn generate_expression_ir<'ctx>(
         }
 
         Expression::MethodCall { object, name, args } => {
+            if let Expression::Variable(var_name) = &**object {
+                if let Some(var_info) = variables.get(var_name) {
+                    if let WaveType::Struct(struct_name) = &var_info.ty {
+                        let fn_name = format!("{}_{}", struct_name, name);
+
+                        let function = module
+                            .get_function(&fn_name)
+                            .unwrap_or_else(|| panic!("Function '{}' not found", fn_name));
+
+                        let fn_type = function.get_type();
+                        let param_types = fn_type.get_param_types();
+
+                        let expected_self = param_types.get(0).cloned();
+
+                        let obj_val = generate_expression_ir(
+                            context,
+                            builder,
+                            object,
+                            variables,
+                            module,
+                            expected_self,
+                            global_consts,
+                            struct_types,
+                            struct_field_indices,
+                        );
+
+                        let mut call_args: Vec<BasicMetadataValueEnum> = Vec::new();
+                        call_args.push(obj_val.into());
+
+                        for (i, arg_expr) in args.iter().enumerate() {
+                            let expected_ty = param_types.get(i + 1).cloned();
+
+                            let arg_val = generate_expression_ir(
+                                context,
+                                builder,
+                                arg_expr,
+                                variables,
+                                module,
+                                expected_ty,
+                                global_consts,
+                                struct_types,
+                                struct_field_indices,
+                            );
+                            call_args.push(arg_val.into());
+                        }
+
+                        let call_site = builder
+                            .build_call(function, &call_args, &format!("call_{}", fn_name))
+                            .unwrap();
+
+                        if function.get_type().get_return_type().is_some() {
+                            return call_site
+                                .try_as_basic_value()
+                                .left()
+                                .expect("Expected a return value from struct method");
+                        } else {
+                            return context.i32_type().const_zero().as_basic_value_enum();
+                        }
+                    }
+                }
+            }
+
+            let function = module
+                .get_function(name)
+                .unwrap_or_else(|| panic!("Function '{}' not found for method-style call", name));
+
+            let fn_type = function.get_type();
+            let param_types = fn_type.get_param_types();
+
+            if param_types.is_empty() {
+                panic!(
+                    "Method-style call {}() requires at least 1 parameter (self)",
+                    name
+                );
+            }
+
+            let expected_self = param_types.get(0).cloned();
+
             let obj_val = generate_expression_ir(
                 context,
                 builder,
                 object,
                 variables,
                 module,
-                None,
+                expected_self,
                 global_consts,
-                &struct_types,
+                struct_types,
                 struct_field_indices,
             );
 
-            let struct_name = match &**object {
-                Expression::Variable(var_name) => {
-                    let var_info = variables
-                        .get(var_name)
-                        .unwrap_or_else(|| panic!("Variable '{}' not found for method call", var_name));
+            let mut call_args: Vec<BasicMetadataValueEnum> = Vec::new();
+            call_args.push(obj_val.into());
 
-                    match &var_info.ty {
-                        WaveType::Struct(name) => name.clone(),
-                        other_ty => panic!(
-                            "Method call on non-struct type {:?} for variable '{}'",
-                            other_ty, var_name
-                        ),
-                    }
-                }
-                other => {
-                    panic!("MethodCall receiver not supported yet: {:?}", other);
-                }
-            };
-            let fn_name = format!("{}_{}", struct_name, name);
+            for (i, arg_expr) in args.iter().enumerate() {
+                let expected_ty = param_types.get(i + 1).cloned();
 
+                let arg_val = generate_expression_ir(
+                    context,
+                    builder,
+                    arg_expr,
+                    variables,
+                    module,
+                    expected_ty,
+                    global_consts,
+                    struct_types,
+                    struct_field_indices,
+                );
+                call_args.push(arg_val.into());
+            }
+
+            let call_site = builder
+                .build_call(function, &call_args, &format!("call_{}", name))
+                .unwrap();
+
+            if function.get_type().get_return_type().is_some() {
+                call_site.try_as_basic_value().left().unwrap()
+            } else {
+                context.i32_type().const_zero().as_basic_value_enum()
+            }
+        }
+
+        Expression::FunctionCall { name, args } => {
             let function = module
-                .get_function(&fn_name)
-                .unwrap_or_else(|| panic!("Function '{}' not found", fn_name));
+                .get_function(name)
+                .unwrap_or_else(|| panic!("Function '{}' not found", name));
 
-            let mut call_args: Vec<inkwell::values::BasicMetadataValueEnum> = vec![obj_val.into()];
+            let fn_type = function.get_type();
+            let param_types: Vec<BasicTypeEnum> = fn_type.get_param_types();
 
-            for arg in args {
+            let mut call_args: Vec<inkwell::values::BasicMetadataValueEnum> = Vec::new();
+
+            for (i, arg) in args.iter().enumerate() {
+                let expected = param_types.get(i).cloned();
+
                 let val = generate_expression_ir(
                     context,
                     builder,
                     arg,
                     variables,
                     module,
-                    None,
+                    expected,
                     global_consts,
                     struct_types,
                     struct_field_indices,
@@ -214,17 +309,15 @@ pub fn generate_expression_ir<'ctx>(
             }
 
             let call_site = builder
-                .build_call(function, &call_args, &format!("call_{}", fn_name))
+                .build_call(function, &call_args, &format!("call_{}", name))
                 .unwrap();
 
             if function.get_type().get_return_type().is_some() {
                 call_site.try_as_basic_value().left().unwrap()
             } else {
-                // void 메서드는 "값 없음" 처리 → 일단 i32 0 반환해둔 상태
                 context.i32_type().const_zero().as_basic_value_enum()
             }
         }
-
 
         Expression::AssignOperation { target, operator, value } => {
             let ptr = generate_address_ir(context, builder, target, variables, module);

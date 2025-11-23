@@ -1,6 +1,10 @@
+struct Box {
+    size: i32;
+}
+
 proto Box {
     fun double_size(self: Box) -> i32 {
-        self.size * 2
+        return self.size * 2;
     }
 }
 

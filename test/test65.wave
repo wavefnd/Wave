@@ -1,0 +1,100 @@
+fun factorial_simple(n: i32) -> i32 {
+    var result: i32 = 1;
+    var i: i32 = 1;
+    while (i <= n) {
+        result *= i;
+        i += 1;
+    }
+    return result;
+}
+
+fun string_len_simple(s: str) -> i32 {
+    var count: i32 = 0;
+    while (s[count] != 0) {
+        count += 1;
+    }
+    return count;
+}
+
+fun print_triangle_simple(levels: i32) -> i32 {
+    var i: i32 = 1;
+    while (i <= levels) {
+        var j: i32 = 1;
+        while (j <= i) {
+            print("#");
+            j += 1;
+        }
+        println(" ");
+        i += 1;
+    }
+    return 0;
+}
+
+struct Text {
+    content: str;
+}
+
+proto Text {
+    fun draw(self: Text) {
+        println("Draw text '{}'", self.content);
+    }
+
+    fun update(self: Text, dt: f32) {
+        println("Update text '{}' with dt={}", self.content, dt);
+    }
+}
+
+struct Box {
+    size: i32;
+}
+
+proto Box {
+    fun print_size(self: Box) {
+        println("Box size = {}", self.size);
+    }
+
+    fun double_size(self: Box) -> i32 {
+        return self.size * 2;
+    }
+}
+
+fun describe_scene(t: Text, b: Box) {
+    println("=== Scene Info ===");
+
+    t.draw();
+    t.update(0.016);
+
+    var text_len: i32 = string_len_simple(t.content);
+    println("Text length = {}", text_len);
+
+    b.print_size();
+    var doubled: i32 = b.double_size();
+    println("Box double_size() = {}", doubled);
+
+    var small_n: i32 = 5;
+    var fact: i32 = factorial_simple(small_n);
+    println("factorial({}) = {}", small_n, fact);
+}
+
+fun main() {
+    println("=== TEST 65: Struct + Proto Integration ===");
+
+    var title: str = "Wave Struct & Proto Demo";
+    println("Title: '{}'", title);
+
+    var ui_text: Text = Text { content: "Hello from Wave proto!" };
+    var ui_box: Box = Box { size: 4 };
+
+    println("\n[1] Describe scene");
+    describe_scene(ui_text, ui_box);
+
+    println("\n[2] Triangles with Box.size and double_size()");
+    println("Triangle with levels = {}", ui_box.size);
+    print_triangle_simple(ui_box.size);
+
+    var big_levels: i32 = ui_box.double_size();
+    println("Triangle with levels = {}", big_levels);
+    print_triangle_simple(big_levels);
+
+    println("\n=== TEST 65 DONE ===");
+}
