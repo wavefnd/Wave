@@ -299,27 +299,20 @@ pub fn generate_statement_ir<'ctx>(
                             builder.build_store(alloca, result).unwrap();
                         }
                     }
-                    (Expression::StructLiteral { name: struct_name, fields }, BasicTypeEnum::StructType(_)) => {
-                        let struct_ty = struct_types.get(struct_name)
-                            .unwrap_or_else(|| panic!("Struct {} not found", struct_name));
+                    (init_expr @ Expression::StructLiteral { .. }, _) => {
+                        let val = generate_expression_ir(
+                            context,
+                            builder,
+                            init_expr,
+                            variables,
+                            module,
+                            Some(llvm_type),
+                            global_consts,
+                            struct_types,
+                            struct_field_indices,
+                        );
 
-                        for (i, (field_name, expr)) in fields.iter().enumerate() {
-                            let field_val = generate_expression_ir(
-                                context,
-                                builder,
-                                expr,
-                                variables,
-                                module,
-                                None,
-                                global_consts,
-                                &struct_types,
-                                struct_field_indices
-                            );
-
-                            let field_ptr = builder.build_struct_gep(alloca, i as u32, &format!("{}_ptr", field_name)).unwrap();
-                            builder.build_store(field_ptr, field_val).unwrap();
-                        }
-
+                        builder.build_store(alloca, val).unwrap();
                     }
                     _ => {
                         panic!("Unsupported type/value combination for initialization: {:?}", init);

@@ -1,0 +1,213 @@
+struct Data {
+    value: i32;
+}
+
+proto Data {
+    fun inc(self: Data) -> Data {
+        return Data { value: self.value + 1 };
+    }
+
+    fun print_s(self: Data) {
+        println("Data(value={})", self.value);
+    }
+}
+
+fun test_basic_copy() {
+    println("[1] Basic Copy");
+    var a: Data = Data { value: 10 };
+    var b: Data = a;
+    b.value = 99;
+    println("a.value = {}", a.value);
+    println("b.value = {}", b.value);
+    a.inc().print_s();
+}
+
+
+struct Vec2 {
+    x: f32;
+    y: f32;
+}
+
+struct Transform {
+    pos: Vec2;
+    scale: f32;
+}
+
+proto Transform {
+    fun describe(self: Transform) {
+        println("Transform({}, {}, {})", self.pos.x, self.pos.y, self.scale);
+    }
+}
+
+fun test_nested_struct() {
+    println("[2] Nested Struct");
+    var t: Transform = Transform {
+        pos: Vec2 { x: 1.5, y: 2.5 },
+        scale: 3.0
+    };
+    t.describe();
+}
+
+
+struct Inventory {
+    items: array<i32>;
+}
+
+proto Inventory {
+    fun print_all(self: Inventory) {
+        var i: i32 = 0;
+        while (i < 5) {
+            println("Item[{}] = {}", i, self.items[i]);
+            i += 1;
+        }
+    }
+}
+
+fun test_struct_array() {
+    println("[3] Struct + Array");
+    var inv: Inventory = Inventory {
+        items: [10, 20, 30, 40, 50]
+    };
+    inv.print_all();
+}
+
+
+struct Node {
+    value: i32;
+    next: ptr<Node>;
+}
+
+proto Node {
+    fun print_chain(self: Node) {
+        var cur: ptr<Node> = &self;
+        var i: i32 = 0;
+        while (cur != 0 && i < 10) {
+            println("Node {} = {}", i, (*cur).value);
+            cur = (*cur).next;
+            i += 1;
+        }
+    }
+}
+
+fun test_recursive() {
+    println("[4] Recursive Struct");
+    var n3: Node = Node { value: 300, next: 0 };
+    var n2: Node = Node { value: 200, next: &n3 };
+    var n1: Node = Node { value: 100, next: &n2 };
+    n1.print_chain();
+}
+
+
+struct Number {
+    v: i32;
+}
+
+proto Number {
+    fun add(self: Number, x: i32) -> Number {
+        return Number { v: self.v + x };
+    }
+    fun mul(self: Number, x: i32) -> Number {
+        return Number { v: self.v * x };
+    }
+    fun print_n(self: Number) {
+        println("Number = {}", self.v);
+    }
+}
+
+fun test_chain() {
+    println("[5] Method Chain");
+    var n: Number = Number { v: 5 };
+    n.add(3).mul(2).add(10).print_n();
+}
+
+
+struct Stats {
+    hp: i32;
+    mp: i32;
+}
+
+struct Player {
+    name: str;
+    stats: Stats;
+}
+
+struct GameState {
+    p: Player;
+    level: i32;
+}
+
+proto GameState {
+    fun summary(self: GameState) {
+        println("Player '{}' HP={} MP={} Lv={}",
+            self.p.name, self.p.stats.hp, self.p.stats.mp, self.level);
+    }
+}
+
+fun test_deep_nested() {
+    println("[6] Deep Nested Struct");
+    var gs: GameState = GameState {
+        p: Player {
+            name: "LunaStev",
+            stats: Stats { hp: 120, mp: 80 }
+        },
+        level: 7
+    };
+    gs.summary();
+}
+
+
+fun upgrade_stats(s: Stats) -> Stats {
+    return Stats { hp: s.hp + 50, mp: s.mp + 20 };
+}
+
+fun test_return_struct() {
+    println("[7] Struct Return");
+    var s: Stats = Stats { hp: 100, mp: 40 };
+    var u: Stats = upgrade_stats(s);
+    println("Original = {} {}", s.hp, s.mp);
+    println("Upgraded = {} {}", u.hp, u.mp);
+}
+
+fun test_mutability() {
+    println("[8] Mutability Test");
+
+    // var: mutable variable
+    var a: i32 = 10;
+    a = 20;
+    println("var a = {}", a);
+
+    // let: immutable variable
+    let b: i32 = 30;
+    println("let b = {}", b);
+
+    // let mut: immutable binding but mutable inner data
+    let mut c: Data = Data { value: 5 };
+    c.value = 77;
+    println("let mut c.value = {}", c.value);
+
+    // struct with let mut: fields can change
+    let mut t: Transform = Transform {
+        pos: Vec2 { x: 3.0, y: 4.0 },
+        scale: 1.0
+    };
+    t.pos.x = 10.0;
+    t.scale = 5.0;
+    println("let mut Transform({}, {}, {})", t.pos.x, t.pos.y, t.scale);
+
+    // let: inner mutation must be rejected by compiler
+    let p: Stats = Stats { hp: 50, mp: 25 };
+    println("let p.hp = {}", p.hp);
+}
+
+fun main() {
+    println("=== TEST 66 START ===");
+    test_basic_copy();
+    test_nested_struct();
+    test_struct_array();
+    test_recursive();
+    test_chain();
+    test_deep_nested();
+    test_return_struct();
+    test_mutability();
+    println("=== TEST 66 END ===");
+}

@@ -19,11 +19,9 @@ NAME = "wave"
 def detect_targets():
     os_name = platform.system()
 
-    # Mac → macOS 바이너리만
     if os_name == "Darwin":
         return ["aarch64-apple-darwin"]
 
-    # Linux (WSL 포함) → Linux + Windows
     if os_name == "Linux":
         return [
             "x86_64-unknown-linux-gnu",
