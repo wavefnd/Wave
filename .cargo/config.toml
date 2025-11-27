@@ -1,8 +1,6 @@
-[build]
-target = "x86_64-unknown-linux-gnu"
-
 # === Linux Targets ===
 [target.x86_64-unknown-linux-gnu]
+target = "x86_64-unknown-linux-gnu"
 
 [target.x86_64-unknown-linux-musl]
 linker = "musl-gcc"  # Static linking for Linux
@@ -25,10 +23,10 @@ linker = "i686-w64-mingw32-gcc"
 
 # === macOS Targets ===
 [target.x86_64-apple-darwin]
-linker = "x86_64-apple-darwin20-clang"  # Only works on macOS hosts
+linker = "clang"  # Only works on macOS hosts
 
 [target.aarch64-apple-darwin]
-linker = "aarch64-apple-darwin20-clang"
+linker = "clang"
 
 # === WebAssembly ===
 [target.wasm32-unknown-unknown]

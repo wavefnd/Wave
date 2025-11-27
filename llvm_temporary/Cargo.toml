@@ -2,6 +2,7 @@
 name = "llvm_temporary"
 version = "0.1.0"
 edition = "2021"
+build = "build.rs"
 
 [dependencies]
 parser = { path = "../front/parser" }
