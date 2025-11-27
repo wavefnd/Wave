@@ -5,6 +5,12 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
     let target = env::var("TARGET").unwrap();
+    let host = env::var("HOST").unwrap();
+
+    if target != host {
+        println!("cargo:warning=Cross compilation detected; skipping LLVM detection");
+        return;
+    }
 
     if target.contains("apple-darwin") {
         try_macos_paths();
