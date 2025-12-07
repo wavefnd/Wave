@@ -3,6 +3,10 @@ name = "wavec"
 version = "0.1.5-pre-beta"
 edition = "2021"
 
+[lib]
+name = "wavec"
+path = "src/lib.rs"
+
 # [target.x86_64-apple-darwin]
 # linker = "clang"
 # [target.aarch64-apple-darwin]

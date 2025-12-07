@@ -8,20 +8,25 @@ use ::parser::*;
 use ::parser::ast::{ASTNode, StatementNode};
 use ::parser::import::local_import;
 use ::error::*;
+use crate::commands::DebugFlags;
 
-pub(crate) unsafe fn run_wave_file(file_path: &Path) {
+pub(crate) unsafe fn run_wave_file(
+    file_path: &Path,
+    opt_flag: &str,
+    debug: &DebugFlags,
+) {
     let code = match fs::read_to_string(file_path) {
         Ok(c) => c,
         Err(_) => {
-            let err = WaveError::new(
+            WaveError::new(
                 WaveErrorKind::FileReadError(file_path.display().to_string()),
                 format!("failed to read file `{}`", file_path.display()),
                 file_path.display().to_string(),
                 0,
                 0,
             )
-                .with_help("check if the file exists and you have permission to read it");
-            err.display();
+                .with_help("check if the file exists and you have permission to read it")
+                .display();
             process::exit(1);
         }
     };
@@ -29,84 +34,61 @@ pub(crate) unsafe fn run_wave_file(file_path: &Path) {
     let mut lexer = Lexer::new(&code);
     let tokens = lexer.tokenize();
 
-    let mut ast = match parse(&tokens) {
+    let ast = match parse(&tokens) {
         Some(ast) => ast,
         None => {
-            let err = WaveError::new(
+            WaveError::new(
                 WaveErrorKind::SyntaxError("failed to parse Wave code".to_string()),
                 "failed to parse Wave code",
                 file_path.display().to_string(),
                 0,
                 0,
-            );
-            err.display();
+            )
+                .display();
             process::exit(1);
         }
     };
 
-    let file_path = Path::new(file_path);
-    let base_dir = file_path.canonicalize()
-        .ok()
-        .and_then(|p| p.parent().map(|p| p.to_path_buf()))
-        .unwrap_or_else(|| Path::new(".").to_path_buf());
-
-    let mut already_imported = HashSet::new();
-    let mut extended_ast = vec![];
-
-    for node in &ast {
-        if let ASTNode::Statement(StatementNode::Import(path)) = node {
-            match local_import(&path, &mut already_imported, &base_dir, None) {
-                Ok(mut imported_nodes) => {
-                    extended_ast.append(&mut imported_nodes);
-                }
-                Err(err) => {
-                    err.display();
-                    process::exit(1);
-                }
-            }
-        } else {
-            extended_ast.push(node.clone());
+    if debug.tokens {
+        println!("\n===== Tokens =====");
+        for token in &tokens {
+            println!("{:?}", token);
         }
     }
 
-    ast = extended_ast;
+    if debug.ast {
+        println!("\n===== AST =====\n{:#?}", ast);
+    }
 
     let ir = generate_ir(&ast);
 
-    let path = Path::new(file_path);
-    let file_stem = path.file_stem().unwrap().to_str().unwrap();
-    let machine_code_path = compile_ir_to_machine_code(&ir, file_stem);
-    if machine_code_path.is_empty() {
-        let err = WaveError::new(
-            WaveErrorKind::CompilationFailed("empty machine code path".to_string()),
-            "failed to generate machine code",
-            file_path.display().to_string(),
-            0,
-            0,
-        );
-        err.display();
-        return;
+    if debug.ir {
+        println!("\n===== LLVM IR =====\n{}", ir);
     }
 
-    let output = match Command::new(machine_code_path).output() {
-        Ok(out) => out,
-        Err(_) => {
-            let err = WaveError::new(
-                WaveErrorKind::LinkingFailed(file_path.display().to_string()),
-                "failed to execute generated machine code",
-                file_path.display().to_string(),
-                0,
-                0,
-            );
-            err.display();
-            return;
+    let file_stem = file_path.file_stem().unwrap().to_str().unwrap();
+    let machine_code_path =
+        compile_ir_to_machine_code(&ir, file_stem, opt_flag);
+
+    if debug.mc {
+        println!("\n===== MACHINE CODE PATH =====");
+        println!("{}", machine_code_path);
+    }
+
+    if debug.hex {
+        println!("\n===== HEX DUMP =====");
+        let data = fs::read(&machine_code_path).unwrap();
+        for (i, b) in data.iter().enumerate() {
+            if i % 16 == 0 {
+                print!("\n{:04x}: ", i);
+            }
+            print!("{:02x} ", b);
         }
-    };
+        println!();
+    }
 
-    // println!("AST:\n{:#?}", ast);
-    // println!("Generated LLVM IR:\n{}", ir);
-
-    println!("{}", String::from_utf8_lossy(&output.stdout));
+    let output = Command::new(machine_code_path).output();
+    println!("{}", String::from_utf8_lossy(&output.unwrap().stdout));
 }
 
 pub(crate) unsafe fn img_wave_file(file_path: &Path) {
