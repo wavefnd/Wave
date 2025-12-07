@@ -68,4 +68,4 @@ fun main() {
 
 ---
 
-<p align="center"> <strong>Built with ❤️ by the Wave community</strong><br/> <sub>© 2025 Wave Programming Language • LunaStev • <a href="LICENSE">LSD License</a></sub> </p>
+<p align="center"> <strong>Built with ❤️ by the Wave community</strong><br/> <sub>© 2025 Wave Programming Language • LunaStev • <a href="LICENSE">Mozilla Public License 2.0</a></sub> </p>
