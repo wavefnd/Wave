@@ -28,7 +28,7 @@ Created by <a href="https://github.com/LunaStev" style="color: #777; text-decora
 <img src="https://img.shields.io/badge/Discord-Join%20Us-5865F2?style=for-the-badge&logo=discord&logoColor=white" alt="Discord" />
 </a>
 <a href="https://github.com/wavefnd/Wave/blob/master/LICENSE">
-<img src="https://img.shields.io/badge/License-LSD%20License-blue?style=for-the-badge" alt="License"/>
+<img src="https://img.shields.io/badge/License-MPL%202.0-blue?style=for-the-badge" alt="License"/>
 </a>
 </div>
 </div>
