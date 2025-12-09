@@ -1,0 +1,23 @@
+[Compiler Frontend - Lexer]
+M: luna@lunastev.org
+F: front/lexer/
+
+[Compiler Frontend - Parser]
+M: luna@lunastev.org
+F: front/parser/
+
+[Error System]
+M: luna@lunastev.org
+F: front/error/
+
+[LLVM Temporary Backend]
+M: luna@lunastev.org
+F: llvm_temporary/
+
+[Wave CLI]
+M: luna@lunastev.org
+F: src/
+
+[Test Suite]
+M: luna@lunastev.org
+F: test/
