@@ -1,0 +1,14 @@
+fun main() {
+    var max: i1024 = 1;
+    var i: i32 = 0;
+
+    while (i < 1023) {
+        max = max << 1;
+        i = i + 1;
+    }
+
+    println("before overflow: {}", max);
+
+    var overflow = max + 1;
+    println("after overflow: {}", overflow);
+}

@@ -1,0 +1,12 @@
+fun main() {
+    var one: i1024 = 1;
+    var x: i1024 = one;
+
+    var i: i32 = 0;
+    while (i < 1023) {
+        x = x << 1;
+        i = i + 1;
+    }
+
+    println("i1024 max-ish: {}", x);
+}

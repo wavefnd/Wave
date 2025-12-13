@@ -173,10 +173,6 @@ pub fn token_type_to_wave_type(token_type: &TokenType) -> Option<WaveType> {
         TokenType::TokenTypeFloat(float_type) => match float_type {
             FloatType::F32 => Some(WaveType::Float(32)),
             FloatType::F64 => Some(WaveType::Float(64)),
-            FloatType::F128 => Some(WaveType::Float(128)),
-            FloatType::F256 => Some(WaveType::Float(256)),
-            FloatType::F512 => Some(WaveType::Float(512)),
-            FloatType::F1024 => Some(WaveType::Float(1024)),
         },
         TokenType::TypeFloat(bits) => Some(WaveType::Float(*bits)),
         TokenType::TypeBool => Some(WaveType::Bool),

@@ -30,10 +30,6 @@ pub enum UnsignedIntegerType {
 pub enum FloatType {
     F32,
     F64,
-    F128,
-    F256,
-    F512,
-    F1024,
 }
 
 impl fmt::Display for IntegerType {
