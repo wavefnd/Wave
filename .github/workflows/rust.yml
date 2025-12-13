@@ -31,6 +31,27 @@ jobs:
       - name: Run tests
         run: cargo test --verbose
 
+  build-fedora:
+    runs-on: fedora-latest
+
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install LLVM 14
+        run: |
+          sudo dnf update
+          sudo dnf install -y llvm14 llvm14-devel clang clang-libs
+          sudo ln -s /usr/lib64/llvm14/lib/libLLVM-14.so /usr/lib64/libllvm14.so
+      - name: Set LLVM environment variables
+        run: |
+          export LLVM_SYS_140_PREFIX=/usr/lib64/llvm14
+      - name: Build
+        run: |
+          source ~/.bashrc
+          cargo clean
+          cargo build --verbose
+      - name: Run tests
+        run: cargo test --verbose
+
   build-macos:
     runs-on: macos-latest
 
