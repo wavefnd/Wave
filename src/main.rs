@@ -85,25 +85,80 @@ fn print_usage() {
 }
 
 fn print_help() {
-    println!("{}", "Wave Compiler — Commands & Options".color("145,161,2"));
+    println!("{}", "Wave Compiler".color("145,161,2"));
+    println!("{}", "Commands & Options");
     print_usage();
 
     println!("\nCommands:");
-    println!("  {}      {}", "run <file>".color("38,139,235"), "Execute Wave file");
-    println!("  {}    {}", "build <file>".color("38,139,235"), "Compile Wave file");
-    println!("  {}           {}", "--help".color("38,139,235"), "Show help");
-    println!("  {}       {}", "--version".color("38,139,235"), "Show version");
+    println!(
+        "  {:<18} {}",
+        "run <file>".color("38,139,235"),
+        "Execute Wave file"
+    );
+    println!(
+        "  {:<18} {}",
+        "build <file>".color("38,139,235"),
+        "Compile Wave file"
+    );
+    println!(
+        "  {:<18} {}",
+        "--help".color("38,139,235"),
+        "Show this help message"
+    );
+    println!(
+        "  {:<18} {}",
+        "--version".color("38,139,235"),
+        "Show compiler version"
+    );
 
     println!("\nOptimization:");
-    println!("  -O0, -O1, -O2, -O3, -Oz, -Ofast");
+    println!(
+        "  {:<18} {}",
+        "-O0 .. -O3".color("38,139,235"),
+        "Set optimization level"
+    );
+    println!(
+        "  {:<18} {}",
+        "-Oz".color("38,139,235"),
+        "Optimize for binary size"
+    );
+    println!(
+        "  {:<18} {}",
+        "-Ofast".color("38,139,235"),
+        "Enable aggressive optimizations"
+    );
 
     println!("\nDebug options:");
-    println!("  --debug-wave=tokens");
-    println!("  --debug-wave=ast");
-    println!("  --debug-wave=ir");
-    println!("  --debug-wave=mc");
-    println!("  --debug-wave=hex");
-    println!("  --debug-wave=all");
+    println!(
+        "  {:<22} {}",
+        "--debug-wave=tokens".color("38,139,235"),
+        "Print lexer tokens"
+    );
+    println!(
+        "  {:<22} {}",
+        "--debug-wave=ast".color("38,139,235"),
+        "Print AST"
+    );
+    println!(
+        "  {:<22} {}",
+        "--debug-wave=ir".color("38,139,235"),
+        "Print LLVM IR"
+    );
+    println!(
+        "  {:<22} {}",
+        "--debug-wave=mc".color("38,139,235"),
+        "Print machine code"
+    );
+    println!(
+        "  {:<22} {}",
+        "--debug-wave=hex".color("38,139,235"),
+        "Print raw hex output"
+    );
+    println!(
+        "  {:<22} {}",
+        "--debug-wave=all".color("38,139,235"),
+        "Enable all debug outputs"
+    );
 
     println!("\nExamples:");
     println!("  wavec run test.wave");

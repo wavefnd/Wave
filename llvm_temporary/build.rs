@@ -27,6 +27,8 @@ fn linux_original() {
     println!("cargo:rustc-link-lib=llvm-14");
     println!("cargo:rustc-link-search=native=/usr/lib/llvm-14/lib");
 
+    println!("cargo:rustc-env=WAVE_LLVM_MAJOR=14");
+
     println!("cargo:rustc-link-lib=stdc++");
     println!("cargo:rustc-link-lib=ffi");
     println!("cargo:rustc-link-lib=z");
@@ -53,6 +55,7 @@ fn try_macos_paths() {
 }
 
 fn link_macos(prefix: PathBuf) {
+    println!("cargo:rustc-env=WAVE_LLVM_MAJOR=14");
     let lib = prefix.join("lib");
 
     println!("cargo:rustc-link-search=native={}", lib.display());
@@ -83,6 +86,7 @@ fn try_windows_paths() {
 }
 
 fn link_windows(prefix: PathBuf) {
+    println!("cargo:rustc-env=WAVE_LLVM_MAJOR=14");
     let lib = prefix.join("lib");
 
     println!("cargo:rustc-link-search=native={}", lib.display());

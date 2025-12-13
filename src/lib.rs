@@ -8,6 +8,7 @@ use colorex::Colorize;
 use crate::version::get_os_pretty_name;
 
 use commands::DebugFlags;
+use llvm_temporary::backend;
 
 pub unsafe fn compile_and_run(path: &Path, opt_flag: &str, debug: &DebugFlags) {
     runner::run_wave_file(path, opt_flag, debug);
@@ -26,4 +27,10 @@ pub fn version_wave() {
         version::version().color("2,161,47"),
         os
     );
+
+    if let Some(backend) = backend() {
+        println!("  backend: {}", backend.color("117,117,117"));
+    } else {
+        println!("{}", "  backend: unknown backend".color("117,117,117"));
+    }
 }
