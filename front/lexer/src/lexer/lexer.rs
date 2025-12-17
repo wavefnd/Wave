@@ -638,17 +638,17 @@ impl<'a> Lexer<'a> {
                             line: self.line,
                         }
                     },
-                    "rol" => {
+                    "<<" => {
                         Token {
                             token_type: TokenType::Rol,
-                            lexeme: "rol".to_string(),
+                            lexeme: "<<".to_string(),
                             line: self.line,
                         }
                     },
-                    "ror" => {
+                    ">>" => {
                         Token {
                             token_type: TokenType::Ror,
-                            lexeme: "ror".to_string(),
+                            lexeme: ">>".to_string(),
                             line: self.line,
                         }
                     },

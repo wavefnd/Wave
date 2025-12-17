@@ -440,6 +440,8 @@ pub fn generate_expression_ir<'ctx>(
                         Operator::Multiply => builder.build_int_mul(l_casted, r_casted, "multmp"),
                         Operator::Divide => builder.build_int_signed_div(l_casted, r_casted, "divtmp"),
                         Operator::Remainder => builder.build_int_signed_rem(l_casted, r_casted, "modtmp"),
+                        Operator::ShiftLeft => builder.build_left_shift(l_casted, r_casted, "shl"),
+                        Operator::ShiftRight => builder.build_right_shift(l_casted, r_casted, true, "shr"),
                         Operator::Greater => builder.build_int_compare(IntPredicate::SGT, l_casted, r_casted, "cmptmp"),
                         Operator::Less => builder.build_int_compare(IntPredicate::SLT, l_casted, r_casted, "cmptmp"),
                         Operator::Equal => builder.build_int_compare(IntPredicate::EQ, l_casted, r_casted, "cmptmp"),
@@ -729,6 +731,34 @@ pub fn generate_expression_ir<'ctx>(
                 .build_load(field_ptr, &format!("load_{}_{}", var_name, field))
                 .unwrap()
                 .as_basic_value_enum()
+        }
+
+        Expression::Unary { operator, expr } => {
+            let val = generate_expression_ir(
+                context,
+                builder,
+                expr,
+                variables,
+                module,
+                None,
+                global_consts,
+                struct_types,
+                struct_field_indices,
+            );
+
+            match (operator, val) {
+                // ! (logical not)
+                (Operator::LogicalNot, BasicValueEnum::IntValue(v)) => {
+                    let one = v.get_type().const_int(1, false);
+                    builder.build_xor(v, one, "logical_not").unwrap().as_basic_value_enum()
+                }
+
+                (Operator::BitwiseNot, BasicValueEnum::IntValue(v)) => {
+                    builder.build_not(v, "bitwise_not").unwrap().as_basic_value_enum()
+                }
+
+                _ => panic!("Unsupported unary operator {:?} for value {:?}", operator, val),
+            }
         }
 
         _ => unimplemented!("Unsupported expression type"),

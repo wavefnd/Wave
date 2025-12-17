@@ -1,0 +1,53 @@
+fun main() {
+    var a: i32 = 10;
+    var b: i32 = 3;
+
+    println("a + b = {}", a + b);
+    println("a - b = {}", a - b);
+    println("a * b = {}", a * b);
+    println("a / b = {}", a / b);
+    println("a % b = {}", a % b);
+
+    var x: i32 = 5;
+    x += 2;
+    println("x += 2 -> {}", x);
+    x -= 1;
+    println("x -= 1 -> {}", x);
+    x *= 3;
+    println("x *= 3 -> {}", x);
+    x /= 2;
+    println("x /= 2 -> {}", x);
+
+    println("a == b -> {}", a == b);
+    println("a != b -> {}", a != b);
+    println("a < b  -> {}", a < b);
+    println("a <= b -> {}", a <= b);
+    println("a > b  -> {}", a > b);
+    println("a >= b -> {}", a >= b);
+
+    var t: bool = true;
+    var f: bool = false;
+
+    println("t && f -> {}", t && f);
+    println("t || f -> {}", t || f);
+    println("!t -> {}", !t);
+
+    var m: i32 = 0b1010; // 10
+    var n: i32 = 0b0110; // 6
+
+    println("m | n  -> {}", m | n);
+    println("m ^ n  -> {}", m ^ n);
+    println("~m     -> {}", ~m);
+
+    println("a << 1 -> {}", a << 1);
+    println("a >> 1 -> {}", a >> 1);
+
+    var y: i32 = a + b * 2;
+    println("a + b * 2 -> {}", y);
+
+    var z: bool = a > b && b < 5;
+    println("a > b && b < 5 -> {}", z);
+
+    var w: i32 = (a + b) << 2;
+    println("(a + b) << 2 -> {}", w);
+}

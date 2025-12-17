@@ -37,6 +37,24 @@ pub fn parse_expression<'a, T>(tokens: &mut Peekable<T>) -> Option<Expression>
 where
     T: Iterator<Item = &'a Token>,
 {
+    if let Some(Token { token_type: TokenType::Not, .. }) = tokens.peek() {
+        tokens.next();
+        let inner = parse_expression(tokens)?;
+        return Some(Expression::Unary {
+            operator: Operator::LogicalNot,
+            expr: Box::new(inner),
+        });
+    }
+    
+    if let Some(Token { token_type: TokenType::BitwiseNot, .. }) = tokens.peek() {
+        tokens.next();
+        let inner = parse_expression(tokens)?;
+        return Some(Expression::Unary {
+            operator: Operator::BitwiseNot,
+            expr: Box::new(inner),
+        });
+    }
+
     if let Some(Token { token_type: TokenType::AddressOf, .. }) = tokens.peek() {
         tokens.next(); // consume '&'
         let inner = parse_expression(tokens)?;
@@ -86,7 +104,7 @@ pub fn parse_logical_expression<'a, T>(tokens: &mut Peekable<T>) -> Option<Expre
 where
     T: Iterator<Item = &'a Token>,
 {
-    let mut left = parse_relational_expression(tokens)?;
+    let mut left = parse_bitwise_expression(tokens)?;
 
     while let Some(token) = tokens.peek() {
         match token.token_type {
@@ -618,4 +636,52 @@ where
             None
         }
     }
+}
+
+pub fn parse_shift_expression<'a, T>(tokens: &mut Peekable<T>) -> Option<Expression>
+where
+    T: Iterator<Item = &'a Token>,
+{
+    let mut left = parse_relational_expression(tokens)?;
+
+    while let Some(token) = tokens.peek() {
+        let op = match token.token_type {
+            TokenType::Rol => Operator::ShiftLeft,
+            TokenType::Ror => Operator::ShiftRight,
+            _ => break,
+        };
+
+        tokens.next();
+        let right = parse_relational_expression(tokens)?;
+        left = Expression::BinaryExpression {
+            left: Box::new(left),
+            operator: op,
+            right: Box::new(right),
+        };
+    }
+    Some(left)
+}
+
+pub fn parse_bitwise_expression<'a, T>(tokens: &mut Peekable<T>) -> Option<Expression>
+where
+    T: Iterator<Item = &'a Token>,
+{
+    let mut left = parse_shift_expression(tokens)?;
+
+    while let Some(token) = tokens.peek() {
+        let op = match token.token_type {
+            TokenType::BitwiseOr => Operator::BitwiseOr,
+            TokenType::Xor => Operator::BitwiseXor,
+            _ => break,
+        };
+
+        tokens.next();
+        let right = parse_shift_expression(tokens)?;
+        left = Expression::BinaryExpression {
+            left: Box::new(left),
+            operator: op,
+            right: Box::new(right),
+        };
+    }
+    Some(left)
 }

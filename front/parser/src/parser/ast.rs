@@ -122,6 +122,10 @@ pub enum Expression {
         object: Box<Expression>,
         field: String,
     },
+    Unary {
+        operator: Operator,
+        expr: Box<Expression>,
+    },
 }
 
 #[derive(Debug, Clone)]
@@ -149,6 +153,11 @@ pub enum Operator {
     LogicalOr,
     BitwiseOr,
     Assign,
+    ShiftLeft,              // <<
+    ShiftRight,             // >>
+    BitwiseXor,
+    LogicalNot,
+    BitwiseNot,
 }
 
 #[derive(Debug, Clone)]
