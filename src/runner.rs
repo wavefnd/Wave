@@ -67,17 +67,17 @@ pub(crate) unsafe fn run_wave_file(
     }
 
     let file_stem = file_path.file_stem().unwrap().to_str().unwrap();
-    let machine_code_path =
-        compile_ir_to_machine_code(&ir, file_stem, opt_flag);
+    let object_patch =
+        compile_ir_to_object(&ir, file_stem, opt_flag);
 
     if debug.mc {
         println!("\n===== MACHINE CODE PATH =====");
-        println!("{}", machine_code_path);
+        println!("{}", object_patch);
     }
 
     if debug.hex {
         println!("\n===== HEX DUMP =====");
-        let data = fs::read(&machine_code_path).unwrap();
+        let data = fs::read(&object_patch).unwrap();
         for (i, b) in data.iter().enumerate() {
             if i % 16 == 0 {
                 print!("\n{:04x}: ", i);
@@ -87,7 +87,19 @@ pub(crate) unsafe fn run_wave_file(
         println!();
     }
 
-    let output = Command::new(machine_code_path).output();
+    let exe_patch = format!("target/{}", file_stem);
+
+    let link_libs: Vec<String> = Vec::new();
+    let link_lib_paths: Vec<String> = Vec::new();
+
+    link_objects(
+        &[object_patch.clone()],
+        &exe_patch,
+        &link_libs,
+        &link_lib_paths,
+    );
+
+    let output = Command::new(&exe_patch).output();
     println!("{}", String::from_utf8_lossy(&output.unwrap().stdout));
 }
 

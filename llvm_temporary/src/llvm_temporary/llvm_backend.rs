@@ -2,28 +2,62 @@ use std::process::Command;
 use std::fs;
 use std::path::Path;
 
-pub fn compile_ir_to_machine_code(ir: &str, file_stem: &str, opt_flag: &str) -> String {
-    let ir_path = "target/temp.ll";
-    fs::write(ir_path, ir).unwrap();
+pub fn compile_ir_to_object(ir: &str, file_stem: &str, opt_flag: &str) -> String {
+    let object_path = format!("target/{}.o", file_stem);
 
-    let machine_code_path = format!("target/{}", file_stem);
-
-    let output = Command::new("clang")
+    let mut child = Command::new("clang")
         .arg(opt_flag)
+        .arg("-c")
+        .arg("-x")
+        .arg("ir")
+        .arg("-")
         .arg("-o")
-        .arg(&machine_code_path)
-        .arg(ir_path)
-        .arg("-lc")
-        .arg("-lm")
-        .output()
+        .arg(&object_path)
+        .stdin(std::process::Stdio::piped())
+        .stdin(std::process::Stdio::piped())
+        .spawn()
         .expect("Failed to execute clang");
 
+    use std::io::Write;
+    child.stdin.as_mut().unwrap().write_all(ir.as_bytes()).unwrap();
+
+    let output = child.wait_with_output().unwrap();
     if !output.status.success() {
         eprintln!("clang failed: {}", String::from_utf8_lossy(&output.stderr));
         return String::new();
     }
 
-    machine_code_path
+    object_path
+}
+
+pub fn link_objects(
+    objects: &[String],
+    output: &str,
+    libs: &[String],
+    lib_paths: &[String],
+) {
+    let mut cmd = Command::new("clang");
+
+    for obj in objects {
+        cmd.arg(obj);
+    }
+
+    for path in lib_paths {
+        cmd.arg(format!("-L{}", path));
+    }
+
+    for lib in libs {
+        cmd.arg(format!("-l{}", lib));
+    }
+
+    cmd.arg("-o").arg(output)
+        .arg("-lc")
+        .arg("-lm");
+
+    let output = cmd.output().expect("Failed to link");
+    if !output.status.success() {
+        eprintln!("link failed: {}", String::from_utf8_lossy(&output.stderr));
+    }
 }
 
 pub fn compile_ir_to_img_code(ir: &str, file_stem: &str) -> String {
