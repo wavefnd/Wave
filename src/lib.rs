@@ -1,11 +1,11 @@
-pub mod runner;
-pub mod version;
 pub mod commands;
 pub mod errors;
+pub mod runner;
+pub mod version;
 
-use std::path::Path;
-use colorex::Colorize;
 use crate::version::get_os_pretty_name;
+use colorex::Colorize;
+use std::path::Path;
 
 use commands::DebugFlags;
 use llvm_temporary::backend;

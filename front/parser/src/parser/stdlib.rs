@@ -1,6 +1,6 @@
-use std::collections::HashMap;
-use crate::ast::{WaveType, FunctionSignature};
+use crate::ast::{FunctionSignature, WaveType};
 use error::error::{WaveError, WaveErrorKind};
+use std::collections::HashMap;
 
 /// Struct for managing symbol information of standard library modules
 #[derive(Debug, Clone)]
@@ -67,13 +67,21 @@ impl StdlibManager {
     }
 
     /// Function call validation is handled by Vex - Wave only checks syntax
-    pub fn validate_function_call(&self, module_name: &str, function_name: &str, _arg_types: &[WaveType]) -> Result<(), WaveError> {
+    pub fn validate_function_call(
+        &self,
+        module_name: &str,
+        function_name: &str,
+        _arg_types: &[WaveType],
+    ) -> Result<(), WaveError> {
         self.validate_stdlib_import(module_name)?;
 
         // TODO: Implement actual function signature validation with Vex
         // Wave compiler does not know function signatures
         // Type validation and function existence is Vex package manager's responsibility
-        println!("Note: Function '{}::{}' will be validated by Vex package manager", module_name, function_name);
+        println!(
+            "Note: Function '{}::{}' will be validated by Vex package manager",
+            module_name, function_name
+        );
 
         Ok(())
     }
@@ -83,7 +91,10 @@ impl StdlibManager {
         // TODO: Implement actual manifest file parsing and metadata loading
         // Load information from standard library manifest file provided by Vex
         // Wave compiler only acts as an interface
-        println!("Loading stdlib metadata from Vex manifest: {}", manifest_path);
+        println!(
+            "Loading stdlib metadata from Vex manifest: {}",
+            manifest_path
+        );
         Ok(())
     }
 
@@ -92,7 +103,10 @@ impl StdlibManager {
         // TODO: Implement actual linking information retrieval from Vex
         // Wave compiler does not have linking information
         // All linking information is provided by Vex package manager
-        println!("Note: Linking info for '{}' will be provided by Vex", module_name);
+        println!(
+            "Note: Linking info for '{}' will be provided by Vex",
+            module_name
+        );
         None
     }
 
@@ -143,14 +157,20 @@ impl VexInterface {
 
         // Wave compiler does not know module contents
         // Only forwards information provided by Vex
-        Ok(format!("Module '{}' metadata will be provided by Vex", module_name))
+        Ok(format!(
+            "Module '{}' metadata will be provided by Vex",
+            module_name
+        ))
     }
 
     /// Check if project has standard library dependencies
     pub fn check_stdlib_dependencies(&self) -> Result<Vec<String>, WaveError> {
         // TODO: Implement actual dependency checking from Vex.toml or similar config file
         // Check dependencies from Vex.toml or similar configuration file
-        println!("Checking stdlib dependencies in project: {}", self.project_root);
+        println!(
+            "Checking stdlib dependencies in project: {}",
+            self.project_root
+        );
 
         // Wave compiler does not analyze dependencies directly
         // Forwards information provided by Vex as-is

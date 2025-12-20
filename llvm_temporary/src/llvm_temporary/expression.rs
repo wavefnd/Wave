@@ -1,10 +1,10 @@
-use std::collections::HashMap;
+use crate::llvm_temporary::llvm_codegen::{generate_address_ir, VariableInfo};
 use inkwell::context::Context;
-use inkwell::{FloatPredicate, IntPredicate};
 use inkwell::types::{AnyTypeEnum, BasicType, BasicTypeEnum, StructType};
 use inkwell::values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum};
+use inkwell::{FloatPredicate, IntPredicate};
 use parser::ast::{ASTNode, AssignOperator, Expression, Literal, Operator, WaveType};
-use crate::llvm_temporary::llvm_codegen::{generate_address_ir, VariableInfo};
+use std::collections::HashMap;
 
 pub struct ProtoInfo<'ctx> {
     pub vtable_ty: StructType<'ctx>,
@@ -25,25 +25,34 @@ pub fn generate_expression_ir<'ctx>(
 ) -> BasicValueEnum<'ctx> {
     match expr {
         Expression::Literal(lit) => match lit {
-            Literal::Number(v) => {
-                match expected_type {
-                    Some(BasicTypeEnum::IntType(int_ty)) => {
-                        int_ty.const_int(*v as u64, false).as_basic_value_enum()
-                    }
-                    None => {
-                        context.i64_type().const_int(*v as u64, false).as_basic_value_enum()
-                    }
-                    _ => panic!("Expected integer type for numeric literal, got {:?}", expected_type),
+            Literal::Number(v) => match expected_type {
+                Some(BasicTypeEnum::IntType(int_ty)) => {
+                    int_ty.const_int(*v as u64, false).as_basic_value_enum()
                 }
-            }
-            Literal::Float(value) => {
-                match expected_type {
-                    Some(BasicTypeEnum::FloatType(float_ty)) => float_ty.const_float(*value).as_basic_value_enum(),
-                    Some(BasicTypeEnum::IntType(int_ty)) => builder.build_float_to_signed_int(context.f32_type().const_float(*value), int_ty, "f32_to_int").unwrap().as_basic_value_enum(),
-                    None => context.f32_type().const_float(*value).as_basic_value_enum(),
-                    _ => panic!("Unsupported expected_type for float"),
+                None => context
+                    .i64_type()
+                    .const_int(*v as u64, false)
+                    .as_basic_value_enum(),
+                _ => panic!(
+                    "Expected integer type for numeric literal, got {:?}",
+                    expected_type
+                ),
+            },
+            Literal::Float(value) => match expected_type {
+                Some(BasicTypeEnum::FloatType(float_ty)) => {
+                    float_ty.const_float(*value).as_basic_value_enum()
                 }
-            }
+                Some(BasicTypeEnum::IntType(int_ty)) => builder
+                    .build_float_to_signed_int(
+                        context.f32_type().const_float(*value),
+                        int_ty,
+                        "f32_to_int",
+                    )
+                    .unwrap()
+                    .as_basic_value_enum(),
+                None => context.f32_type().const_float(*value).as_basic_value_enum(),
+                _ => panic!("Unsupported expected_type for float"),
+            },
             Literal::String(value) => unsafe {
                 let bytes = value.as_bytes();
                 let mut null_terminated = bytes.to_vec();
@@ -57,18 +66,26 @@ pub fn generate_expression_ir<'ctx>(
 
                 let zero = context.i32_type().const_zero();
                 let indices = [zero, zero];
-                let gep = builder.build_gep(global.as_pointer_value(), &indices, "str_gep").unwrap();
+                let gep = builder
+                    .build_gep(global.as_pointer_value(), &indices, "str_gep")
+                    .unwrap();
 
                 gep.as_basic_value_enum()
-            }
+            },
             _ => unimplemented!("Unsupported literal type"),
         },
 
         Expression::Variable(var_name) => {
             if var_name == "true" {
-                return context.bool_type().const_int(1, false).as_basic_value_enum();
+                return context
+                    .bool_type()
+                    .const_int(1, false)
+                    .as_basic_value_enum();
             } else if var_name == "false" {
-                return context.bool_type().const_int(0, false).as_basic_value_enum();
+                return context
+                    .bool_type()
+                    .const_int(0, false)
+                    .as_basic_value_enum();
             }
 
             if let Some(const_val) = global_consts.get(var_name) {
@@ -79,12 +96,11 @@ pub fn generate_expression_ir<'ctx>(
                 let var_type = var_info.ptr.get_type().get_element_type();
 
                 match var_type {
-                    AnyTypeEnum::ArrayType(_) => {
-                        var_info.ptr.as_basic_value_enum()
-                    }
-                    _ => {
-                        builder.build_load(var_info.ptr, var_name).unwrap().as_basic_value_enum()
-                    }
+                    AnyTypeEnum::ArrayType(_) => var_info.ptr.as_basic_value_enum(),
+                    _ => builder
+                        .build_load(var_info.ptr, var_name)
+                        .unwrap()
+                        .as_basic_value_enum(),
                 }
             } else if module.get_function(var_name).is_some() {
                 panic!("Error: '{}' is a function name, not a variable", var_name);
@@ -93,20 +109,37 @@ pub fn generate_expression_ir<'ctx>(
             }
         }
 
-        Expression::Deref(inner_expr) => {
-            match &**inner_expr {
-                Expression::Variable(var_name) => {
-                    let ptr_to_value = variables.get(var_name).unwrap().ptr;
-                    let actual_ptr = builder.build_load(ptr_to_value, "deref_target").unwrap().into_pointer_value();
-                    builder.build_load(actual_ptr, "deref_load").unwrap().as_basic_value_enum()
-                }
-                _ => {
-                    let ptr_val = generate_expression_ir(context, builder, inner_expr, variables, module, None, global_consts, &struct_types, struct_field_indices);
-                    let ptr = ptr_val.into_pointer_value();
-                    builder.build_load(ptr, "deref_load").unwrap().as_basic_value_enum()
-                }
+        Expression::Deref(inner_expr) => match &**inner_expr {
+            Expression::Variable(var_name) => {
+                let ptr_to_value = variables.get(var_name).unwrap().ptr;
+                let actual_ptr = builder
+                    .build_load(ptr_to_value, "deref_target")
+                    .unwrap()
+                    .into_pointer_value();
+                builder
+                    .build_load(actual_ptr, "deref_load")
+                    .unwrap()
+                    .as_basic_value_enum()
             }
-        }
+            _ => {
+                let ptr_val = generate_expression_ir(
+                    context,
+                    builder,
+                    inner_expr,
+                    variables,
+                    module,
+                    None,
+                    global_consts,
+                    &struct_types,
+                    struct_field_indices,
+                );
+                let ptr = ptr_val.into_pointer_value();
+                builder
+                    .build_load(ptr, "deref_load")
+                    .unwrap()
+                    .as_basic_value_enum()
+            }
+        },
 
         Expression::AddressOf(inner_expr) => {
             if let Some(BasicTypeEnum::PointerType(ptr_ty)) = expected_type {
@@ -130,24 +163,29 @@ pub fn generate_expression_ir<'ctx>(
                                 &struct_types,
                                 struct_field_indices,
                             );
-                            let gep = builder.build_in_bounds_gep(
-                                tmp_alloca,
-                                &[
-                                    context.i32_type().const_zero(),
-                                    context.i32_type().const_int(i as u64, false),
-                                ],
-                                &format!("array_idx_{}", i),
-                            ).unwrap();
+                            let gep = builder
+                                .build_in_bounds_gep(
+                                    tmp_alloca,
+                                    &[
+                                        context.i32_type().const_zero(),
+                                        context.i32_type().const_int(i as u64, false),
+                                    ],
+                                    &format!("array_idx_{}", i),
+                                )
+                                .unwrap();
                             builder.build_store(gep, val).unwrap();
                         }
 
-                        let alloca = builder.build_alloca(tmp_alloca.get_type(), "tmp_array_ptr").unwrap();
+                        let alloca = builder
+                            .build_alloca(tmp_alloca.get_type(), "tmp_array_ptr")
+                            .unwrap();
                         builder.build_store(alloca, tmp_alloca).unwrap();
                         alloca.as_basic_value_enum()
-                    }
+                    },
 
                     Expression::Variable(var_name) => {
-                        let ptr = variables.get(var_name)
+                        let ptr = variables
+                            .get(var_name)
                             .unwrap_or_else(|| panic!("Variable {} not found", var_name));
                         ptr.ptr.as_basic_value_enum()
                     }
@@ -319,44 +357,96 @@ pub fn generate_expression_ir<'ctx>(
             }
         }
 
-        Expression::AssignOperation { target, operator, value } => {
+        Expression::AssignOperation {
+            target,
+            operator,
+            value,
+        } => {
             let ptr = generate_address_ir(context, builder, target, variables, module);
 
             let current_val = builder.build_load(ptr, "load_current").unwrap();
 
-            let new_val = generate_expression_ir(context, builder, value, variables, module, Some(current_val.get_type()), global_consts, &struct_types, struct_field_indices);
+            let new_val = generate_expression_ir(
+                context,
+                builder,
+                value,
+                variables,
+                module,
+                Some(current_val.get_type()),
+                global_consts,
+                &struct_types,
+                struct_field_indices,
+            );
 
             let (current_val, new_val) = match (current_val, new_val) {
                 (BasicValueEnum::FloatValue(lhs), BasicValueEnum::IntValue(rhs)) => {
-                    let rhs_casted = builder.build_signed_int_to_float(rhs, lhs.get_type(), "int_to_float").unwrap();
-                    (BasicValueEnum::FloatValue(lhs), BasicValueEnum::FloatValue(rhs_casted))
+                    let rhs_casted = builder
+                        .build_signed_int_to_float(rhs, lhs.get_type(), "int_to_float")
+                        .unwrap();
+                    (
+                        BasicValueEnum::FloatValue(lhs),
+                        BasicValueEnum::FloatValue(rhs_casted),
+                    )
                 }
                 (BasicValueEnum::IntValue(lhs), BasicValueEnum::FloatValue(rhs)) => {
-                    let lhs_casted = builder.build_signed_int_to_float(lhs, rhs.get_type(), "int_to_float").unwrap();
-                    (BasicValueEnum::FloatValue(lhs_casted), BasicValueEnum::FloatValue(rhs))
+                    let lhs_casted = builder
+                        .build_signed_int_to_float(lhs, rhs.get_type(), "int_to_float")
+                        .unwrap();
+                    (
+                        BasicValueEnum::FloatValue(lhs_casted),
+                        BasicValueEnum::FloatValue(rhs),
+                    )
                 }
                 other => other,
             };
 
             let result = match (current_val, new_val) {
-                (BasicValueEnum::IntValue(lhs), BasicValueEnum::IntValue(rhs)) => {
-                    match operator {
-                        AssignOperator::Assign => rhs.as_basic_value_enum(),
-                        AssignOperator::AddAssign => builder.build_int_add(lhs, rhs, "add_assign").unwrap().as_basic_value_enum(),
-                        AssignOperator::SubAssign => builder.build_int_sub(lhs, rhs, "sub_assign").unwrap().as_basic_value_enum(),
-                        AssignOperator::MulAssign => builder.build_int_mul(lhs, rhs, "mul_assign").unwrap().as_basic_value_enum(),
-                        AssignOperator::DivAssign => builder.build_int_signed_div(lhs, rhs, "div_assign").unwrap().as_basic_value_enum(),
-                        AssignOperator::RemAssign => builder.build_int_signed_rem(lhs, rhs, "rem_assign").unwrap().as_basic_value_enum(),
-                    }
-                }
+                (BasicValueEnum::IntValue(lhs), BasicValueEnum::IntValue(rhs)) => match operator {
+                    AssignOperator::Assign => rhs.as_basic_value_enum(),
+                    AssignOperator::AddAssign => builder
+                        .build_int_add(lhs, rhs, "add_assign")
+                        .unwrap()
+                        .as_basic_value_enum(),
+                    AssignOperator::SubAssign => builder
+                        .build_int_sub(lhs, rhs, "sub_assign")
+                        .unwrap()
+                        .as_basic_value_enum(),
+                    AssignOperator::MulAssign => builder
+                        .build_int_mul(lhs, rhs, "mul_assign")
+                        .unwrap()
+                        .as_basic_value_enum(),
+                    AssignOperator::DivAssign => builder
+                        .build_int_signed_div(lhs, rhs, "div_assign")
+                        .unwrap()
+                        .as_basic_value_enum(),
+                    AssignOperator::RemAssign => builder
+                        .build_int_signed_rem(lhs, rhs, "rem_assign")
+                        .unwrap()
+                        .as_basic_value_enum(),
+                },
                 (BasicValueEnum::FloatValue(lhs), BasicValueEnum::FloatValue(rhs)) => {
                     match operator {
                         AssignOperator::Assign => rhs.as_basic_value_enum(),
-                        AssignOperator::AddAssign => builder.build_float_add(lhs, rhs, "add_assign").unwrap().as_basic_value_enum(),
-                        AssignOperator::SubAssign => builder.build_float_sub(lhs, rhs, "sub_assign").unwrap().as_basic_value_enum(),
-                        AssignOperator::MulAssign => builder.build_float_mul(lhs, rhs, "mul_assign").unwrap().as_basic_value_enum(),
-                        AssignOperator::DivAssign => builder.build_float_div(lhs, rhs, "div_assign").unwrap().as_basic_value_enum(),
-                        AssignOperator::RemAssign => builder.build_float_rem(lhs, rhs, "rem_assign").unwrap().as_basic_value_enum(),
+                        AssignOperator::AddAssign => builder
+                            .build_float_add(lhs, rhs, "add_assign")
+                            .unwrap()
+                            .as_basic_value_enum(),
+                        AssignOperator::SubAssign => builder
+                            .build_float_sub(lhs, rhs, "sub_assign")
+                            .unwrap()
+                            .as_basic_value_enum(),
+                        AssignOperator::MulAssign => builder
+                            .build_float_mul(lhs, rhs, "mul_assign")
+                            .unwrap()
+                            .as_basic_value_enum(),
+                        AssignOperator::DivAssign => builder
+                            .build_float_div(lhs, rhs, "div_assign")
+                            .unwrap()
+                            .as_basic_value_enum(),
+                        AssignOperator::RemAssign => builder
+                            .build_float_rem(lhs, rhs, "rem_assign")
+                            .unwrap()
+                            .as_basic_value_enum(),
                     }
                 }
                 _ => panic!("Type mismatch or unsupported type in AssignOperation"),
@@ -373,12 +463,14 @@ pub fn generate_expression_ir<'ctx>(
             };
 
             let result_casted = match (result, element_type) {
-                (BasicValueEnum::FloatValue(val), BasicTypeEnum::IntType(int_ty)) => {
-                    builder.build_float_to_signed_int(val, int_ty, "float_to_int").unwrap().as_basic_value_enum()
-                }
-                (BasicValueEnum::IntValue(val), BasicTypeEnum::FloatType(float_ty)) => {
-                    builder.build_signed_int_to_float(val, float_ty, "int_to_float").unwrap().as_basic_value_enum()
-                }
+                (BasicValueEnum::FloatValue(val), BasicTypeEnum::IntType(int_ty)) => builder
+                    .build_float_to_signed_int(val, int_ty, "float_to_int")
+                    .unwrap()
+                    .as_basic_value_enum(),
+                (BasicValueEnum::IntValue(val), BasicTypeEnum::FloatType(float_ty)) => builder
+                    .build_signed_int_to_float(val, float_ty, "int_to_float")
+                    .unwrap()
+                    .as_basic_value_enum(),
                 _ => result,
             };
 
@@ -412,9 +504,33 @@ pub fn generate_expression_ir<'ctx>(
             value
         }
 
-        Expression::BinaryExpression { left, operator, right } => {
-            let left_val = generate_expression_ir(context, builder, left, variables, module, None, global_consts, &struct_types, struct_field_indices);
-            let right_val = generate_expression_ir(context, builder, right, variables, module, None, global_consts, &struct_types, struct_field_indices);
+        Expression::BinaryExpression {
+            left,
+            operator,
+            right,
+        } => {
+            let left_val = generate_expression_ir(
+                context,
+                builder,
+                left,
+                variables,
+                module,
+                None,
+                global_consts,
+                &struct_types,
+                struct_field_indices,
+            );
+            let right_val = generate_expression_ir(
+                context,
+                builder,
+                right,
+                variables,
+                module,
+                None,
+                global_consts,
+                &struct_types,
+                struct_field_indices,
+            );
 
             // Branch after Type Examination
             match (left_val, right_val) {
@@ -438,75 +554,203 @@ pub fn generate_expression_ir<'ctx>(
                         Operator::Add => builder.build_int_add(l_casted, r_casted, "addtmp"),
                         Operator::Subtract => builder.build_int_sub(l_casted, r_casted, "subtmp"),
                         Operator::Multiply => builder.build_int_mul(l_casted, r_casted, "multmp"),
-                        Operator::Divide => builder.build_int_signed_div(l_casted, r_casted, "divtmp"),
-                        Operator::Remainder => builder.build_int_signed_rem(l_casted, r_casted, "modtmp"),
+                        Operator::Divide => {
+                            builder.build_int_signed_div(l_casted, r_casted, "divtmp")
+                        }
+                        Operator::Remainder => {
+                            builder.build_int_signed_rem(l_casted, r_casted, "modtmp")
+                        }
                         Operator::ShiftLeft => builder.build_left_shift(l_casted, r_casted, "shl"),
-                        Operator::ShiftRight => builder.build_right_shift(l_casted, r_casted, true, "shr"),
-                        Operator::Greater => builder.build_int_compare(IntPredicate::SGT, l_casted, r_casted, "cmptmp"),
-                        Operator::Less => builder.build_int_compare(IntPredicate::SLT, l_casted, r_casted, "cmptmp"),
-                        Operator::Equal => builder.build_int_compare(IntPredicate::EQ, l_casted, r_casted, "cmptmp"),
-                        Operator::NotEqual => builder.build_int_compare(IntPredicate::NE, l_casted, r_casted, "cmptmp"),
-                        Operator::GreaterEqual => builder.build_int_compare(IntPredicate::SGE, l_casted, r_casted, "cmptmp"),
-                        Operator::LessEqual => builder.build_int_compare(IntPredicate::SLE, l_casted, r_casted, "cmptmp"),
+                        Operator::ShiftRight => {
+                            builder.build_right_shift(l_casted, r_casted, true, "shr")
+                        }
+                        Operator::Greater => builder.build_int_compare(
+                            IntPredicate::SGT,
+                            l_casted,
+                            r_casted,
+                            "cmptmp",
+                        ),
+                        Operator::Less => builder.build_int_compare(
+                            IntPredicate::SLT,
+                            l_casted,
+                            r_casted,
+                            "cmptmp",
+                        ),
+                        Operator::Equal => builder.build_int_compare(
+                            IntPredicate::EQ,
+                            l_casted,
+                            r_casted,
+                            "cmptmp",
+                        ),
+                        Operator::NotEqual => builder.build_int_compare(
+                            IntPredicate::NE,
+                            l_casted,
+                            r_casted,
+                            "cmptmp",
+                        ),
+                        Operator::GreaterEqual => builder.build_int_compare(
+                            IntPredicate::SGE,
+                            l_casted,
+                            r_casted,
+                            "cmptmp",
+                        ),
+                        Operator::LessEqual => builder.build_int_compare(
+                            IntPredicate::SLE,
+                            l_casted,
+                            r_casted,
+                            "cmptmp",
+                        ),
                         _ => panic!("Unsupported binary operator"),
-                    }.unwrap();
+                    }
+                    .unwrap();
 
                     if let Some(BasicTypeEnum::IntType(target_ty)) = expected_type {
                         let result_ty = result.get_type();
 
                         if result_ty != target_ty {
-                            result = builder.build_int_cast(result, target_ty, "cast_result").unwrap();
+                            result = builder
+                                .build_int_cast(result, target_ty, "cast_result")
+                                .unwrap();
                         }
                     }
 
                     result.as_basic_value_enum()
                 }
 
-                (BasicValueEnum::FloatValue(l), BasicValueEnum::FloatValue(r)) => {
-                    match operator {
-                        Operator::Greater => builder.build_float_compare(FloatPredicate::OGT, l, r, "fcmpgt").unwrap().as_basic_value_enum(),
-                        Operator::Less => builder.build_float_compare(FloatPredicate::OLT, l, r, "fcmplt").unwrap().as_basic_value_enum(),
-                        Operator::Equal => builder.build_float_compare(FloatPredicate::OEQ, l, r, "fcmpeq").unwrap().as_basic_value_enum(),
-                        Operator::NotEqual => builder.build_float_compare(FloatPredicate::ONE, l, r, "fcmpne").unwrap().as_basic_value_enum(),
-                        Operator::GreaterEqual => builder.build_float_compare(FloatPredicate::OGE, l, r, "fcmpge").unwrap().as_basic_value_enum(),
-                        Operator::LessEqual => builder.build_float_compare(FloatPredicate::OLE, l, r, "fcmple").unwrap().as_basic_value_enum(),
-                        Operator::Remainder => builder.build_float_rem(l, r, "modtmp").unwrap().as_basic_value_enum(),
-                        _ => panic!("Unsupported float operator"),
-                    }
-                }
+                (BasicValueEnum::FloatValue(l), BasicValueEnum::FloatValue(r)) => match operator {
+                    Operator::Greater => builder
+                        .build_float_compare(FloatPredicate::OGT, l, r, "fcmpgt")
+                        .unwrap()
+                        .as_basic_value_enum(),
+                    Operator::Less => builder
+                        .build_float_compare(FloatPredicate::OLT, l, r, "fcmplt")
+                        .unwrap()
+                        .as_basic_value_enum(),
+                    Operator::Equal => builder
+                        .build_float_compare(FloatPredicate::OEQ, l, r, "fcmpeq")
+                        .unwrap()
+                        .as_basic_value_enum(),
+                    Operator::NotEqual => builder
+                        .build_float_compare(FloatPredicate::ONE, l, r, "fcmpne")
+                        .unwrap()
+                        .as_basic_value_enum(),
+                    Operator::GreaterEqual => builder
+                        .build_float_compare(FloatPredicate::OGE, l, r, "fcmpge")
+                        .unwrap()
+                        .as_basic_value_enum(),
+                    Operator::LessEqual => builder
+                        .build_float_compare(FloatPredicate::OLE, l, r, "fcmple")
+                        .unwrap()
+                        .as_basic_value_enum(),
+                    Operator::Remainder => builder
+                        .build_float_rem(l, r, "modtmp")
+                        .unwrap()
+                        .as_basic_value_enum(),
+                    _ => panic!("Unsupported float operator"),
+                },
 
                 (BasicValueEnum::IntValue(int_val), BasicValueEnum::FloatValue(float_val)) => {
-                    let casted = builder.build_signed_int_to_float(int_val, float_val.get_type(), "cast_lhs").unwrap();
+                    let casted = builder
+                        .build_signed_int_to_float(int_val, float_val.get_type(), "cast_lhs")
+                        .unwrap();
                     match operator {
-                        Operator::Add => builder.build_float_add(casted, float_val, "addtmp").unwrap().as_basic_value_enum(),
-                        Operator::Subtract => builder.build_float_sub(casted, float_val, "subtmp").unwrap().as_basic_value_enum(),
-                        Operator::Multiply => builder.build_float_mul(casted, float_val, "multmp").unwrap().as_basic_value_enum(),
-                        Operator::Divide => builder.build_float_div(casted, float_val, "divtmp").unwrap().as_basic_value_enum(),
-                        Operator::Remainder => builder.build_float_rem(casted, float_val, "modtmp").unwrap().as_basic_value_enum(),
-                        Operator::Greater => builder.build_float_compare(FloatPredicate::OGT, casted, float_val, "fcmpgt").unwrap().as_basic_value_enum(),
-                        Operator::Less => builder.build_float_compare(FloatPredicate::OLT, casted, float_val, "fcmplt").unwrap().as_basic_value_enum(),
-                        Operator::Equal => builder.build_float_compare(FloatPredicate::OEQ, casted, float_val, "fcmpeq").unwrap().as_basic_value_enum(),
-                        Operator::NotEqual => builder.build_float_compare(FloatPredicate::ONE, casted, float_val, "fcmpne").unwrap().as_basic_value_enum(),
-                        Operator::GreaterEqual => builder.build_float_compare(FloatPredicate::OGE, casted, float_val, "fcmpge").unwrap().as_basic_value_enum(),
-                        Operator::LessEqual => builder.build_float_compare(FloatPredicate::OLE, casted, float_val, "fcmple").unwrap().as_basic_value_enum(),
+                        Operator::Add => builder
+                            .build_float_add(casted, float_val, "addtmp")
+                            .unwrap()
+                            .as_basic_value_enum(),
+                        Operator::Subtract => builder
+                            .build_float_sub(casted, float_val, "subtmp")
+                            .unwrap()
+                            .as_basic_value_enum(),
+                        Operator::Multiply => builder
+                            .build_float_mul(casted, float_val, "multmp")
+                            .unwrap()
+                            .as_basic_value_enum(),
+                        Operator::Divide => builder
+                            .build_float_div(casted, float_val, "divtmp")
+                            .unwrap()
+                            .as_basic_value_enum(),
+                        Operator::Remainder => builder
+                            .build_float_rem(casted, float_val, "modtmp")
+                            .unwrap()
+                            .as_basic_value_enum(),
+                        Operator::Greater => builder
+                            .build_float_compare(FloatPredicate::OGT, casted, float_val, "fcmpgt")
+                            .unwrap()
+                            .as_basic_value_enum(),
+                        Operator::Less => builder
+                            .build_float_compare(FloatPredicate::OLT, casted, float_val, "fcmplt")
+                            .unwrap()
+                            .as_basic_value_enum(),
+                        Operator::Equal => builder
+                            .build_float_compare(FloatPredicate::OEQ, casted, float_val, "fcmpeq")
+                            .unwrap()
+                            .as_basic_value_enum(),
+                        Operator::NotEqual => builder
+                            .build_float_compare(FloatPredicate::ONE, casted, float_val, "fcmpne")
+                            .unwrap()
+                            .as_basic_value_enum(),
+                        Operator::GreaterEqual => builder
+                            .build_float_compare(FloatPredicate::OGE, casted, float_val, "fcmpge")
+                            .unwrap()
+                            .as_basic_value_enum(),
+                        Operator::LessEqual => builder
+                            .build_float_compare(FloatPredicate::OLE, casted, float_val, "fcmple")
+                            .unwrap()
+                            .as_basic_value_enum(),
                         _ => panic!("Unsupported mixed-type operator (int + float)"),
                     }
                 }
 
                 (BasicValueEnum::FloatValue(float_val), BasicValueEnum::IntValue(int_val)) => {
-                    let casted = builder.build_signed_int_to_float(int_val, float_val.get_type(), "cast_rhs").unwrap();
+                    let casted = builder
+                        .build_signed_int_to_float(int_val, float_val.get_type(), "cast_rhs")
+                        .unwrap();
                     match operator {
-                        Operator::Add => builder.build_float_add(float_val, casted, "addtmp").unwrap().as_basic_value_enum(),
-                        Operator::Subtract => builder.build_float_sub(float_val, casted, "subtmp").unwrap().as_basic_value_enum(),
-                        Operator::Multiply => builder.build_float_mul(float_val, casted, "multmp").unwrap().as_basic_value_enum(),
-                        Operator::Divide => builder.build_float_div(float_val, casted, "divtmp").unwrap().as_basic_value_enum(),
-                        Operator::Remainder => builder.build_float_rem(float_val, casted, "modtmp").unwrap().as_basic_value_enum(),
-                        Operator::Greater => builder.build_float_compare(FloatPredicate::OGT, float_val, casted, "fcmpgt").unwrap().as_basic_value_enum(),
-                        Operator::Less => builder.build_float_compare(FloatPredicate::OLT, float_val, casted, "fcmplt").unwrap().as_basic_value_enum(),
-                        Operator::Equal => builder.build_float_compare(FloatPredicate::OEQ, float_val, casted, "fcmpeq").unwrap().as_basic_value_enum(),
-                        Operator::NotEqual => builder.build_float_compare(FloatPredicate::ONE, float_val, casted, "fcmpne").unwrap().as_basic_value_enum(),
-                        Operator::GreaterEqual => builder.build_float_compare(FloatPredicate::OGE, float_val, casted, "fcmpge").unwrap().as_basic_value_enum(),
-                        Operator::LessEqual => builder.build_float_compare(FloatPredicate::OLE, float_val, casted, "fcmple").unwrap().as_basic_value_enum(),
+                        Operator::Add => builder
+                            .build_float_add(float_val, casted, "addtmp")
+                            .unwrap()
+                            .as_basic_value_enum(),
+                        Operator::Subtract => builder
+                            .build_float_sub(float_val, casted, "subtmp")
+                            .unwrap()
+                            .as_basic_value_enum(),
+                        Operator::Multiply => builder
+                            .build_float_mul(float_val, casted, "multmp")
+                            .unwrap()
+                            .as_basic_value_enum(),
+                        Operator::Divide => builder
+                            .build_float_div(float_val, casted, "divtmp")
+                            .unwrap()
+                            .as_basic_value_enum(),
+                        Operator::Remainder => builder
+                            .build_float_rem(float_val, casted, "modtmp")
+                            .unwrap()
+                            .as_basic_value_enum(),
+                        Operator::Greater => builder
+                            .build_float_compare(FloatPredicate::OGT, float_val, casted, "fcmpgt")
+                            .unwrap()
+                            .as_basic_value_enum(),
+                        Operator::Less => builder
+                            .build_float_compare(FloatPredicate::OLT, float_val, casted, "fcmplt")
+                            .unwrap()
+                            .as_basic_value_enum(),
+                        Operator::Equal => builder
+                            .build_float_compare(FloatPredicate::OEQ, float_val, casted, "fcmpeq")
+                            .unwrap()
+                            .as_basic_value_enum(),
+                        Operator::NotEqual => builder
+                            .build_float_compare(FloatPredicate::ONE, float_val, casted, "fcmpne")
+                            .unwrap()
+                            .as_basic_value_enum(),
+                        Operator::GreaterEqual => builder
+                            .build_float_compare(FloatPredicate::OGE, float_val, casted, "fcmpge")
+                            .unwrap()
+                            .as_basic_value_enum(),
+                        Operator::LessEqual => builder
+                            .build_float_compare(FloatPredicate::OLE, float_val, casted, "fcmple")
+                            .unwrap()
+                            .as_basic_value_enum(),
                         _ => panic!("Unsupported mixed-type operator (float + int)"),
                     }
                 }
@@ -516,9 +760,29 @@ pub fn generate_expression_ir<'ctx>(
         }
 
         Expression::IndexAccess { target, index } => unsafe {
-            let target_val = generate_expression_ir(context, builder, target, variables, module, None, global_consts, &struct_types, struct_field_indices);
+            let target_val = generate_expression_ir(
+                context,
+                builder,
+                target,
+                variables,
+                module,
+                None,
+                global_consts,
+                &struct_types,
+                struct_field_indices,
+            );
 
-            let index_val = generate_expression_ir(context, builder, index, variables, module, None, global_consts, &struct_types, struct_field_indices);
+            let index_val = generate_expression_ir(
+                context,
+                builder,
+                index,
+                variables,
+                module,
+                None,
+                global_consts,
+                &struct_types,
+                struct_field_indices,
+            );
             let index_int = match index_val {
                 BasicValueEnum::IntValue(i) => i,
                 _ => panic!("Index must be an integer"),
@@ -531,37 +795,46 @@ pub fn generate_expression_ir<'ctx>(
                     let element_type = ptr_val.get_type().get_element_type();
 
                     if element_type.is_array_type() {
-                        let gep = builder.build_in_bounds_gep(
-                            ptr_val,
-                            &[zero, index_int],
-                            "array_index_gep",
-                        ).unwrap();
+                        let gep = builder
+                            .build_in_bounds_gep(ptr_val, &[zero, index_int], "array_index_gep")
+                            .unwrap();
 
                         let elem_type = element_type.into_array_type().get_element_type();
 
                         if elem_type.is_pointer_type() {
-                            builder.build_load(gep, "load_ptr_from_array").unwrap().as_basic_value_enum()
+                            builder
+                                .build_load(gep, "load_ptr_from_array")
+                                .unwrap()
+                                .as_basic_value_enum()
                         } else {
-                            builder.build_load(gep, "load_array_elem").unwrap().as_basic_value_enum()
+                            builder
+                                .build_load(gep, "load_array_elem")
+                                .unwrap()
+                                .as_basic_value_enum()
                         }
                     } else {
-                        let gep = builder.build_in_bounds_gep(
-                            ptr_val,
-                            &[index_int],
-                            "ptr_index_gep",
-                        ).unwrap();
+                        let gep = builder
+                            .build_in_bounds_gep(ptr_val, &[index_int], "ptr_index_gep")
+                            .unwrap();
 
-                        builder.build_load(gep, "load_ptr_elem").unwrap().as_basic_value_enum()
+                        builder
+                            .build_load(gep, "load_ptr_elem")
+                            .unwrap()
+                            .as_basic_value_enum()
                     }
                 }
 
                 _ => panic!("Unsupported target in IndexAccess"),
             }
-        }
+        },
 
-        Expression::AsmBlock { instructions, inputs, outputs } => {
-            use inkwell::InlineAsmDialect;
+        Expression::AsmBlock {
+            instructions,
+            inputs,
+            outputs,
+        } => {
             use inkwell::values::{BasicMetadataValueEnum, CallableValue};
+            use inkwell::InlineAsmDialect;
             use std::collections::HashSet;
 
             let asm_code: String = instructions.join("\n");
@@ -574,7 +847,10 @@ pub fn generate_expression_ir<'ctx>(
 
             for (reg, var) in outputs {
                 if input_regs.contains(reg) {
-                    panic!("Register '{}' used in both input and output in inline asm", reg);
+                    panic!(
+                        "Register '{}' used in both input and output in inline asm",
+                        reg
+                    );
                 }
 
                 if !seen_regs.insert(reg.to_string()) {
@@ -582,7 +858,8 @@ pub fn generate_expression_ir<'ctx>(
                 }
 
                 if let Some(name) = var.as_identifier() {
-                    let info = variables.get(name)
+                    let info = variables
+                        .get(name)
                         .unwrap_or_else(|| panic!("Output variable '{}' not found", name));
                     let dummy_val = builder.build_load(info.ptr, name).unwrap().into();
                     operand_vals.push(dummy_val);
@@ -597,17 +874,18 @@ pub fn generate_expression_ir<'ctx>(
                     panic!("Register '{}' duplicated in inputs", reg);
                 }
 
-                let val: BasicMetadataValueEnum = if let Expression::Literal(Literal::Number(n)) = var {
-                    context.i64_type().const_int(*n as u64, true).into()
-                } else if let Some(name) = var.as_identifier() {
-                    if let Some(info) = variables.get(name) {
-                        builder.build_load(info.ptr, name).unwrap().into()
+                let val: BasicMetadataValueEnum =
+                    if let Expression::Literal(Literal::Number(n)) = var {
+                        context.i64_type().const_int(*n as u64, true).into()
+                    } else if let Some(name) = var.as_identifier() {
+                        if let Some(info) = variables.get(name) {
+                            builder.build_load(info.ptr, name).unwrap().into()
+                        } else {
+                            panic!("Input variable '{}' not found", name);
+                        }
                     } else {
-                        panic!("Input variable '{}' not found", name);
-                    }
-                } else {
-                    panic!("Unsupported expression in variable context: {:?}", var);
-                };
+                        panic!("Unsupported expression in variable context: {:?}", var);
+                    };
 
                 operand_vals.push(val);
                 constraint_parts.push(format!("{{{}}}", reg));
@@ -663,11 +941,9 @@ pub fn generate_expression_ir<'ctx>(
                 .unwrap();
 
             for (field_name, field_expr) in fields {
-                let idx = field_indices
-                    .get(field_name)
-                    .unwrap_or_else(|| {
-                        panic!("Field '{}' not found in struct '{}'", field_name, name)
-                    });
+                let idx = field_indices.get(field_name).unwrap_or_else(|| {
+                    panic!("Field '{}' not found in struct '{}'", field_name, name)
+                });
 
                 let field_val = generate_expression_ir(
                     context,
@@ -715,13 +991,13 @@ pub fn generate_expression_ir<'ctx>(
                 ),
             };
 
-            let field_indices = struct_field_indices
-                .get(struct_name)
-                .unwrap_or_else(|| panic!("Field index map for struct '{}' not found", struct_name));
+            let field_indices = struct_field_indices.get(struct_name).unwrap_or_else(|| {
+                panic!("Field index map for struct '{}' not found", struct_name)
+            });
 
-            let idx = field_indices
-                .get(field)
-                .unwrap_or_else(|| panic!("Field '{}' not found in struct '{}'", field, struct_name));
+            let idx = field_indices.get(field).unwrap_or_else(|| {
+                panic!("Field '{}' not found in struct '{}'", field, struct_name)
+            });
 
             let field_ptr = builder
                 .build_struct_gep(var_info.ptr, *idx, &format!("{}.{}", var_name, field))
@@ -750,14 +1026,21 @@ pub fn generate_expression_ir<'ctx>(
                 // ! (logical not)
                 (Operator::LogicalNot, BasicValueEnum::IntValue(v)) => {
                     let one = v.get_type().const_int(1, false);
-                    builder.build_xor(v, one, "logical_not").unwrap().as_basic_value_enum()
+                    builder
+                        .build_xor(v, one, "logical_not")
+                        .unwrap()
+                        .as_basic_value_enum()
                 }
 
-                (Operator::BitwiseNot, BasicValueEnum::IntValue(v)) => {
-                    builder.build_not(v, "bitwise_not").unwrap().as_basic_value_enum()
-                }
+                (Operator::BitwiseNot, BasicValueEnum::IntValue(v)) => builder
+                    .build_not(v, "bitwise_not")
+                    .unwrap()
+                    .as_basic_value_enum(),
 
-                _ => panic!("Unsupported unary operator {:?} for value {:?}", operator, val),
+                _ => panic!(
+                    "Unsupported unary operator {:?} for value {:?}",
+                    operator, val
+                ),
             }
         }
 

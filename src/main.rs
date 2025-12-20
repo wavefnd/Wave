@@ -1,5 +1,5 @@
-use std::{env, fmt, process};
 use std::path::Path;
+use std::{env, fmt, process};
 
 use colorex::Colorize;
 use wavec::commands::{handle_build, handle_run, DebugFlags};

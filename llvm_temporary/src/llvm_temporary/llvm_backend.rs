@@ -1,6 +1,6 @@
-use std::process::Command;
 use std::fs;
 use std::path::Path;
+use std::process::Command;
 
 pub fn compile_ir_to_object(ir: &str, file_stem: &str, opt_flag: &str) -> String {
     let object_path = format!("target/{}.o", file_stem);
@@ -19,7 +19,12 @@ pub fn compile_ir_to_object(ir: &str, file_stem: &str, opt_flag: &str) -> String
         .expect("Failed to execute clang");
 
     use std::io::Write;
-    child.stdin.as_mut().unwrap().write_all(ir.as_bytes()).unwrap();
+    child
+        .stdin
+        .as_mut()
+        .unwrap()
+        .write_all(ir.as_bytes())
+        .unwrap();
 
     let output = child.wait_with_output().unwrap();
     if !output.status.success() {
@@ -30,12 +35,7 @@ pub fn compile_ir_to_object(ir: &str, file_stem: &str, opt_flag: &str) -> String
     object_path
 }
 
-pub fn link_objects(
-    objects: &[String],
-    output: &str,
-    libs: &[String],
-    lib_paths: &[String],
-) {
+pub fn link_objects(objects: &[String], output: &str, libs: &[String], lib_paths: &[String]) {
     let mut cmd = Command::new("clang");
 
     for obj in objects {
@@ -50,9 +50,7 @@ pub fn link_objects(
         cmd.arg(format!("-l{}", lib));
     }
 
-    cmd.arg("-o").arg(output)
-        .arg("-lc")
-        .arg("-lm");
+    cmd.arg("-o").arg(output).arg("-lc").arg("-lm");
 
     let output = cmd.output().expect("Failed to link");
     if !output.status.success() {

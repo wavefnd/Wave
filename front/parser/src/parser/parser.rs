@@ -1,12 +1,12 @@
+use crate::parser::format::*;
+use crate::type_system::*;
+use crate::*;
+use ::lexer::*;
+use parser::ast::*;
+use regex::Regex;
 use std::collections::HashSet;
 use std::iter::Peekable;
 use std::slice::Iter;
-use regex::Regex;
-use ::lexer::*;
-use parser::ast::*;
-use crate::*;
-use crate::parser::format::*;
-use crate::type_system::*;
 
 pub fn parse(tokens: &Vec<Token>) -> Option<Vec<ASTNode>> {
     let mut iter = tokens.iter().peekable();
@@ -73,15 +73,25 @@ pub fn parse(tokens: &Vec<Token>) -> Option<Vec<ASTNode>> {
 
 pub fn parse_parameters(tokens: &mut Peekable<Iter<Token>>) -> Vec<ParameterNode> {
     let mut params = vec![];
-    while tokens.peek().map_or(false, |t| t.token_type != TokenType::Rparen) {
-        let name = if let Some(Token { token_type: TokenType::Identifier(n), .. }) = tokens.next() {
+    while tokens
+        .peek()
+        .map_or(false, |t| t.token_type != TokenType::Rparen)
+    {
+        let name = if let Some(Token {
+            token_type: TokenType::Identifier(n),
+            ..
+        }) = tokens.next()
+        {
             n.clone()
         } else {
             println!("Error: Expected parameter name");
             break;
         };
 
-        if tokens.peek().map_or(true, |t| t.token_type != TokenType::Colon) {
+        if tokens
+            .peek()
+            .map_or(true, |t| t.token_type != TokenType::Colon)
+        {
             println!("Error: Expected ':' after parameter name '{}'", name);
             break;
         }
@@ -95,12 +105,24 @@ pub fn parse_parameters(tokens: &mut Peekable<Iter<Token>>) -> Vec<ParameterNode
             }
         };
 
-        let initial_value = if tokens.peek().map_or(false, |t| t.token_type == TokenType::Equal) {
+        let initial_value = if tokens
+            .peek()
+            .map_or(false, |t| t.token_type == TokenType::Equal)
+        {
             tokens.next(); // consume '='
             match tokens.next() {
-                Some(Token { token_type: TokenType::Number(n), .. }) => Some(Value::Int(*n)),
-                Some(Token { token_type: TokenType::Float(f), .. }) => Some(Value::Float(*f)),
-                Some(Token { token_type: TokenType::String(s), .. }) => Some(Value::Text(s.clone())),
+                Some(Token {
+                    token_type: TokenType::Number(n),
+                    ..
+                }) => Some(Value::Int(*n)),
+                Some(Token {
+                    token_type: TokenType::Float(f),
+                    ..
+                }) => Some(Value::Float(*f)),
+                Some(Token {
+                    token_type: TokenType::String(s),
+                    ..
+                }) => Some(Value::Text(s.clone())),
                 _ => {
                     println!("Error: Unsupported initializer for parameter '{}'", name);
                     None
@@ -134,7 +156,10 @@ pub fn parse_parameters(tokens: &mut Peekable<Iter<Token>>) -> Vec<ParameterNode
         }
     }
 
-    if tokens.peek().map_or(true, |t| t.token_type != TokenType::Rparen) {
+    if tokens
+        .peek()
+        .map_or(true, |t| t.token_type != TokenType::Rparen)
+    {
         println!("Error: Expected ')' or ',' in parameter list");
     } else {
         tokens.next();
@@ -185,9 +210,7 @@ pub fn token_type_to_wave_type(token_type: &TokenType) -> Option<WaveType> {
         TokenType::TypeArray(inner, size) => {
             token_type_to_wave_type(inner).map(|t| WaveType::Array(Box::new(t), *size))
         }
-        TokenType::TypeCustom(name) => {
-            Some(WaveType::Struct(name.clone()))
-        }
+        TokenType::TypeCustom(name) => Some(WaveType::Struct(name.clone())),
         _ => None,
     }
 }
@@ -230,7 +253,11 @@ pub fn extract_body(tokens: &mut Peekable<Iter<Token>>) -> Option<Vec<ASTNode>> 
                 tokens.next(); // consume 'println'
                 let node = parse_println(tokens)?;
                 // Added semicolon handling
-                if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
+                if let Some(Token {
+                    token_type: TokenType::SemiColon,
+                    ..
+                }) = tokens.peek()
+                {
                     tokens.next();
                 }
                 body.push(node);
@@ -239,7 +266,11 @@ pub fn extract_body(tokens: &mut Peekable<Iter<Token>>) -> Option<Vec<ASTNode>> 
                 tokens.next(); // consume 'print'
                 let node = parse_print(tokens)?;
                 // Added semicolon handling
-                if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
+                if let Some(Token {
+                    token_type: TokenType::SemiColon,
+                    ..
+                }) = tokens.peek()
+                {
                     tokens.next();
                 }
                 body.push(node);
@@ -258,7 +289,11 @@ pub fn extract_body(tokens: &mut Peekable<Iter<Token>>) -> Option<Vec<ASTNode>> 
             }
             TokenType::Identifier(_) => {
                 if let Some(expr) = parse_expression(tokens) {
-                    if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
+                    if let Some(Token {
+                        token_type: TokenType::SemiColon,
+                        ..
+                    }) = tokens.peek()
+                    {
                         tokens.next(); // consume ';'
                     }
                     body.push(ASTNode::Statement(StatementNode::Expression(expr)));
@@ -269,14 +304,22 @@ pub fn extract_body(tokens: &mut Peekable<Iter<Token>>) -> Option<Vec<ASTNode>> 
             }
             TokenType::Break => {
                 tokens.next(); // consume 'break'
-                if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
+                if let Some(Token {
+                    token_type: TokenType::SemiColon,
+                    ..
+                }) = tokens.peek()
+                {
                     tokens.next(); // consume ;
                 }
                 body.push(ASTNode::Statement(StatementNode::Break));
             }
             TokenType::Continue => {
                 tokens.next(); // consume 'continue'
-                if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
+                if let Some(Token {
+                    token_type: TokenType::SemiColon,
+                    ..
+                }) = tokens.peek()
+                {
                     tokens.next(); // consume ;
                 }
                 body.push(ASTNode::Statement(StatementNode::Continue));
@@ -284,7 +327,11 @@ pub fn extract_body(tokens: &mut Peekable<Iter<Token>>) -> Option<Vec<ASTNode>> 
             TokenType::Return => {
                 tokens.next(); // consume 'return'
 
-                let expr = if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
+                let expr = if let Some(Token {
+                    token_type: TokenType::SemiColon,
+                    ..
+                }) = tokens.peek()
+                {
                     tokens.next(); // return;
                     None
                 } else {
@@ -296,7 +343,11 @@ pub fn extract_body(tokens: &mut Peekable<Iter<Token>>) -> Option<Vec<ASTNode>> 
                         }
                     };
 
-                    if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
+                    if let Some(Token {
+                        token_type: TokenType::SemiColon,
+                        ..
+                    }) = tokens.peek()
+                    {
                         tokens.next();
                     } else {
                         println!("Error: Missing semicolon after return expression");
@@ -314,7 +365,11 @@ pub fn extract_body(tokens: &mut Peekable<Iter<Token>>) -> Option<Vec<ASTNode>> 
             }
             _ => {
                 if let Some(expr) = parse_expression(tokens) {
-                    if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
+                    if let Some(Token {
+                        token_type: TokenType::SemiColon,
+                        ..
+                    }) = tokens.peek()
+                    {
                         tokens.next(); // consume ;
                     }
                     body.push(ASTNode::Statement(StatementNode::Expression(expr)));
@@ -328,7 +383,10 @@ pub fn extract_body(tokens: &mut Peekable<Iter<Token>>) -> Option<Vec<ASTNode>> 
     Some(body)
 }
 
-pub fn parse_function_call(name: Option<String>, tokens: &mut Peekable<Iter<Token>>) -> Option<Expression> {
+pub fn parse_function_call(
+    name: Option<String>,
+    tokens: &mut Peekable<Iter<Token>>,
+) -> Option<Expression> {
     let name = name?;
 
     if tokens.peek()?.token_type != TokenType::Lparen {
@@ -354,16 +412,16 @@ pub fn parse_function_call(name: Option<String>, tokens: &mut Peekable<Iter<Toke
             }
             Some(TokenType::Rparen) => continue,
             _ => {
-                println!("❌ Unexpected token in function arguments: {:?}", tokens.peek());
+                println!(
+                    "❌ Unexpected token in function arguments: {:?}",
+                    tokens.peek()
+                );
                 return None;
             }
         }
     }
 
-    Some(Expression::FunctionCall {
-        name,
-        args,
-    })
+    Some(Expression::FunctionCall { name, args })
 }
 
 fn parse_parentheses(tokens: &mut Peekable<Iter<Token>>) -> Vec<Token> {
@@ -391,7 +449,10 @@ fn parse_function(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
     tokens.next();
 
     let name = match tokens.next() {
-        Some(Token { token_type: TokenType::Identifier(name), .. }) => name.clone(),
+        Some(Token {
+            token_type: TokenType::Identifier(name),
+            ..
+        }) => name.clone(),
         _ => return None,
     };
 
@@ -405,12 +466,19 @@ fn parse_function(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
     let mut param_names = HashSet::new();
     for param in &parameters {
         if !param_names.insert(param.name.clone()) {
-            println!("Error: Parameter '{}' is declared multiple times", param.name);
+            println!(
+                "Error: Parameter '{}' is declared multiple times",
+                param.name
+            );
             return None;
         }
     }
 
-    let return_type = if let Some(Token { token_type: TokenType::Arrow, .. }) = tokens.peek() {
+    let return_type = if let Some(Token {
+        token_type: TokenType::Arrow,
+        ..
+    }) = tokens.peek()
+    {
         tokens.next(); // consume '->'
         parse_type_from_stream(tokens)
     } else {
@@ -426,10 +494,7 @@ fn parse_function(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
     }))
 }
 
-fn parse_variable_decl(
-    tokens: &mut Peekable<Iter<'_, Token>>,
-    is_const: bool
-) -> Option<ASTNode> {
+fn parse_variable_decl(tokens: &mut Peekable<Iter<'_, Token>>, is_const: bool) -> Option<ASTNode> {
     let mut mutability = if is_const {
         Mutability::Const
     } else {
@@ -437,16 +502,26 @@ fn parse_variable_decl(
     };
 
     if !is_const {
-        if let Some(Token { token_type: TokenType::Mut, .. }) = tokens.peek() {
+        if let Some(Token {
+            token_type: TokenType::Mut,
+            ..
+        }) = tokens.peek()
+        {
             tokens.next(); // consume `mut`
             mutability = Mutability::LetMut;
         }
     }
 
     let name = match tokens.next() {
-        Some(Token { token_type: TokenType::Identifier(name), .. }) => name.clone(),
+        Some(Token {
+            token_type: TokenType::Identifier(name),
+            ..
+        }) => name.clone(),
         _ => {
-            println!("Expected identifier after `{}`", if is_const { "const" } else { "let" });
+            println!(
+                "Expected identifier after `{}`",
+                if is_const { "const" } else { "let" }
+            );
             return None;
         }
     };
@@ -465,7 +540,11 @@ fn parse_variable_decl(
     };
 
     let wave_type = if let TokenType::Identifier(ref name) = type_token.token_type {
-        if let Some(Token { token_type: TokenType::Lchevr, .. }) = tokens.peek() {
+        if let Some(Token {
+            token_type: TokenType::Lchevr,
+            ..
+        }) = tokens.peek()
+        {
             tokens.next(); // consume '<'
 
             let mut inner = String::new();
@@ -476,7 +555,7 @@ fn parse_variable_decl(
                     TokenType::Lchevr => {
                         depth += 1;
                         inner.push('<');
-                    },
+                    }
                     TokenType::Rchevr => {
                         depth -= 1;
                         if depth == 0 {
@@ -484,7 +563,7 @@ fn parse_variable_decl(
                         } else {
                             inner.push('>');
                         }
-                    },
+                    }
                     _ => inner.push_str(&t.lexeme),
                 }
             }
@@ -523,7 +602,11 @@ fn parse_variable_decl(
         }
     };
 
-    let initial_value = if let Some(Token { token_type: TokenType::Equal, .. }) = tokens.peek() {
+    let initial_value = if let Some(Token {
+        token_type: TokenType::Equal,
+        ..
+    }) = tokens.peek()
+    {
         tokens.next(); // consume '='
         let expr = parse_expression(tokens)?;
         Some(expr)
@@ -537,7 +620,9 @@ fn parse_variable_decl(
     }
     tokens.next();
 
-    if let (WaveType::Array(_, expected_len), Some(Expression::ArrayLiteral(elements))) = (&wave_type, &initial_value) {
+    if let (WaveType::Array(_, expected_len), Some(Expression::ArrayLiteral(elements))) =
+        (&wave_type, &initial_value)
+    {
         if *expected_len != elements.len() as u32 {
             println!(
                 "❌ Error: Array length mismatch. Expected {}, but got {} elements",
@@ -569,7 +654,10 @@ fn parse_var(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<ASTNode> {
     let mutability = Mutability::Var;
 
     let name = match tokens.next() {
-        Some(Token { token_type: TokenType::Identifier(name), .. }) => name.clone(),
+        Some(Token {
+            token_type: TokenType::Identifier(name),
+            ..
+        }) => name.clone(),
         _ => {
             println!("Expected identifier");
             return None;
@@ -590,7 +678,11 @@ fn parse_var(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<ASTNode> {
     };
 
     let wave_type = if let TokenType::Identifier(ref name) = type_token.token_type {
-        if let Some(Token { token_type: TokenType::Lchevr, .. }) = tokens.peek() {
+        if let Some(Token {
+            token_type: TokenType::Lchevr,
+            ..
+        }) = tokens.peek()
+        {
             tokens.next(); // consume '<'
 
             let mut inner = String::new();
@@ -601,7 +693,7 @@ fn parse_var(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<ASTNode> {
                     TokenType::Lchevr => {
                         depth += 1;
                         inner.push('<');
-                    },
+                    }
                     TokenType::Rchevr => {
                         depth -= 1;
                         if depth == 0 {
@@ -609,7 +701,7 @@ fn parse_var(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<ASTNode> {
                         } else {
                             inner.push('>');
                         }
-                    },
+                    }
                     _ => inner.push_str(&t.lexeme),
                 }
             }
@@ -648,7 +740,11 @@ fn parse_var(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<ASTNode> {
         }
     };
 
-    let initial_value = if let Some(Token { token_type: TokenType::Equal, .. }) = tokens.peek() {
+    let initial_value = if let Some(Token {
+        token_type: TokenType::Equal,
+        ..
+    }) = tokens.peek()
+    {
         tokens.next(); // consume '='
         let expr = parse_expression(tokens)?;
         Some(expr)
@@ -662,7 +758,9 @@ fn parse_var(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<ASTNode> {
     }
     tokens.next();
 
-    if let (WaveType::Array(_, expected_len), Some(Expression::ArrayLiteral(elements))) = (&wave_type, &initial_value) {
+    if let (WaveType::Array(_, expected_len), Some(Expression::ArrayLiteral(elements))) =
+        (&wave_type, &initial_value)
+    {
         if *expected_len != elements.len() as u32 {
             println!(
                 "❌ Error: Array length mismatch. Expected {}, but got {} elements",
@@ -689,7 +787,11 @@ fn parse_println(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
     }
     tokens.next(); // Consume '('
 
-    let content = if let Some(Token { token_type: TokenType::String(content), .. }) = tokens.next() {
+    let content = if let Some(Token {
+        token_type: TokenType::String(content),
+        ..
+    }) = tokens.next()
+    {
         content.clone()
     } else {
         println!("Error: Expected string literal in 'println'");
@@ -714,13 +816,18 @@ fn parse_println(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
         }
         tokens.next();
 
-        return Some(ASTNode::Statement(StatementNode::Println(
-            format!("{}\n", content),
-        )));
+        return Some(ASTNode::Statement(StatementNode::Println(format!(
+            "{}\n",
+            content
+        ))));
     }
 
     let mut args = Vec::new();
-    while let Some(Token { token_type: TokenType::Comma, .. }) = tokens.peek() {
+    while let Some(Token {
+        token_type: TokenType::Comma,
+        ..
+    }) = tokens.peek()
+    {
         tokens.next(); // Consume ','
         if let Some(expr) = parse_expression(tokens) {
             args.push(expr);
@@ -765,7 +872,11 @@ fn parse_print(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
     }
     tokens.next(); // Consume '('
 
-    let content = if let Some(Token { token_type: TokenType::String(content), .. }) = tokens.next() {
+    let content = if let Some(Token {
+        token_type: TokenType::String(content),
+        ..
+    }) = tokens.next()
+    {
         content.clone() // Need clone() because it is String
     } else {
         println!("Error: Expected string literal in 'println'");
@@ -791,13 +902,18 @@ fn parse_print(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
         }
         tokens.next();
 
-        return Some(ASTNode::Statement(StatementNode::Print(
-            format!("{}", content),
-        )));
+        return Some(ASTNode::Statement(StatementNode::Print(format!(
+            "{}",
+            content
+        ))));
     }
 
     let mut args = Vec::new();
-    while let Some(Token { token_type: TokenType::Comma, .. }) = tokens.peek() {
+    while let Some(Token {
+        token_type: TokenType::Comma,
+        ..
+    }) = tokens.peek()
+    {
         tokens.next(); // Consume ','
         if let Some(expr) = parse_expression(tokens) {
             args.push(expr);
@@ -875,7 +991,11 @@ fn parse_if(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
         }
         tokens.next(); // consume 'else'
 
-        if let Some(Token { token_type: TokenType::If, .. }) = tokens.peek() {
+        if let Some(Token {
+            token_type: TokenType::If,
+            ..
+        }) = tokens.peek()
+        {
             tokens.next(); // consume 'if'
 
             if tokens.peek()?.token_type != TokenType::Lparen {
@@ -991,9 +1111,15 @@ fn parse_import(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
     tokens.next();
 
     let import_path = match tokens.next() {
-        Some(Token { token_type: TokenType::String(s), .. }) => s.clone(),
+        Some(Token {
+            token_type: TokenType::String(s),
+            ..
+        }) => s.clone(),
         other => {
-            println!("Error: Expected string literal in import, found {:?}", other);
+            println!(
+                "Error: Expected string literal in import, found {:?}",
+                other
+            );
             return None;
         }
     };
@@ -1015,15 +1141,24 @@ fn parse_import(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
 
 fn parse_proto(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
     let target_struct = match tokens.next() {
-        Some(Token { token_type: TokenType::Identifier(name), .. }) => name.clone(),
+        Some(Token {
+            token_type: TokenType::Identifier(name),
+            ..
+        }) => name.clone(),
         other => {
-            println!("Error: Expected struct name after 'proto', found {:?}", other);
+            println!(
+                "Error: Expected struct name after 'proto', found {:?}",
+                other
+            );
             return None;
         }
     };
 
     if tokens.peek()?.token_type != TokenType::Lbrace {
-        println!("Error: Expected '{{' after proto target '{}'", target_struct);
+        println!(
+            "Error: Expected '{{' after proto target '{}'",
+            target_struct
+        );
         return None;
     }
     tokens.next(); // consume '{'
@@ -1034,7 +1169,10 @@ fn parse_proto(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
         let token_type = if let Some(t) = tokens.peek() {
             t.token_type.clone()
         } else {
-            println!("Error: Unexpected end of file inside proto '{}' definition.", target_struct);
+            println!(
+                "Error: Unexpected end of file inside proto '{}' definition.",
+                target_struct
+            );
             return None;
         };
 
@@ -1051,7 +1189,10 @@ fn parse_proto(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
                     }
                     methods.push(func_node);
                 } else {
-                    println!("Error: Failed to parse method inside proto '{}'.", target_struct);
+                    println!(
+                        "Error: Failed to parse method inside proto '{}'.",
+                        target_struct
+                    );
                     return None;
                 }
             }
@@ -1075,14 +1216,20 @@ fn parse_proto(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
 
 fn parse_struct(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
     let name = match tokens.next() {
-        Some(Token { token_type: TokenType::Identifier(name), .. }) => name.clone(),
+        Some(Token {
+            token_type: TokenType::Identifier(name),
+            ..
+        }) => name.clone(),
         _ => {
             println!("Error: Expected struct name after 'struct' keyword.");
             return None;
         }
     };
 
-    if tokens.peek().map_or(true, |t| t.token_type != TokenType::Lbrace) {
+    if tokens
+        .peek()
+        .map_or(true, |t| t.token_type != TokenType::Lbrace)
+    {
         println!("Error: Expected '{{' after struct name '{}'.", name);
         return None;
     }
@@ -1095,7 +1242,10 @@ fn parse_struct(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
         let token_type = if let Some(t) = tokens.peek() {
             t.token_type.clone()
         } else {
-            println!("Error: Unexpected end of file inside struct '{}' definition.", name);
+            println!(
+                "Error: Unexpected end of file inside struct '{}' definition.",
+                name
+            );
             return None;
         };
 
@@ -1122,16 +1272,30 @@ fn parse_struct(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
                 let mut lookahead = tokens.clone();
                 lookahead.next();
 
-                if let Some(Token { token_type: TokenType::Colon, .. }) = lookahead.peek() {
-                    let field_name = if let Some(Token { token_type: TokenType::Identifier(n), .. }) = tokens.next() {
+                if let Some(Token {
+                    token_type: TokenType::Colon,
+                    ..
+                }) = lookahead.peek()
+                {
+                    let field_name = if let Some(Token {
+                        token_type: TokenType::Identifier(n),
+                        ..
+                    }) = tokens.next()
+                    {
                         n.clone()
-                    } else { unreachable!() };
+                    } else {
+                        unreachable!()
+                    };
 
                     tokens.next();
 
                     let type_token = tokens.next();
                     let wave_type = parse_type_from_token(type_token.as_ref()).or_else(|| {
-                        if let Some(Token { token_type: TokenType::Identifier(id), .. }) = type_token {
+                        if let Some(Token {
+                            token_type: TokenType::Identifier(id),
+                            ..
+                        }) = type_token
+                        {
                             Some(WaveType::Struct(id.clone()))
                         } else {
                             None
@@ -1139,29 +1303,42 @@ fn parse_struct(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
                     });
 
                     if wave_type.is_none() {
-                        println!("Error: Invalid type for field '{}' in struct '{}'.", field_name, name);
+                        println!(
+                            "Error: Invalid type for field '{}' in struct '{}'.",
+                            field_name, name
+                        );
                         return None;
                     }
 
-                    if tokens.peek().map_or(true, |t| t.token_type != TokenType::SemiColon) {
-                        println!("Error: Expected ';' after field declaration in struct '{}'.", name);
+                    if tokens
+                        .peek()
+                        .map_or(true, |t| t.token_type != TokenType::SemiColon)
+                    {
+                        println!(
+                            "Error: Expected ';' after field declaration in struct '{}'.",
+                            name
+                        );
                         return None;
                     }
                     tokens.next();
 
                     fields.push((field_name, wave_type.unwrap()));
                 } else {
-                    let id_str = if let TokenType::Identifier(id) = &tokens.peek().unwrap().token_type {
-                        id.clone()
-                    } else {
-                        "".to_string()
-                    };
+                    let id_str =
+                        if let TokenType::Identifier(id) = &tokens.peek().unwrap().token_type {
+                            id.clone()
+                        } else {
+                            "".to_string()
+                        };
                     println!("Error: Unexpected identifier '{}' in struct '{}' body. Expected field or method.", id_str, name);
                     return None;
                 }
             }
             other_token => {
-                println!("Error: Unexpected token inside struct body: {:?}", other_token);
+                println!(
+                    "Error: Unexpected token inside struct body: {:?}",
+                    other_token
+                );
                 return None;
             }
         }
@@ -1173,7 +1350,6 @@ fn parse_struct(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
         methods,
     }))
 }
-
 
 fn parse_asm_block(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
     if tokens.peek()?.token_type != TokenType::Lbrace {
@@ -1200,10 +1376,19 @@ fn parse_asm_block(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
 
                 let reg_token = tokens.next();
                 let reg = match reg_token {
-                    Some(Token { token_type: TokenType::String(s), .. }) => s.clone(),
-                    Some(Token { token_type: TokenType::Identifier(s), .. }) => s.clone(),
+                    Some(Token {
+                        token_type: TokenType::String(s),
+                        ..
+                    }) => s.clone(),
+                    Some(Token {
+                        token_type: TokenType::Identifier(s),
+                        ..
+                    }) => s.clone(),
                     Some(other) => {
-                        println!("Expected register string or identifier, got {:?}", other.token_type);
+                        println!(
+                            "Expected register string or identifier, got {:?}",
+                            other.token_type
+                        );
                         return None;
                     }
                     None => {
@@ -1219,37 +1404,57 @@ fn parse_asm_block(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
 
                 let value_token = tokens.next();
                 let value = match value_token {
-                    Some(Token { token_type: TokenType::Minus, .. }) => {
-                        match tokens.next() {
-                            Some(Token { token_type: TokenType::Number(n), .. }) => format!("-{}", n),
-                            Some(other) => {
-                                println!("Expected number after '-', got {:?}", other.token_type);
-                                return None;
-                            }
-                            None => {
-                                println!("Expected number after '-'");
-                                return None;
-                            }
+                    Some(Token {
+                        token_type: TokenType::Minus,
+                        ..
+                    }) => match tokens.next() {
+                        Some(Token {
+                            token_type: TokenType::Number(n),
+                            ..
+                        }) => format!("-{}", n),
+                        Some(other) => {
+                            println!("Expected number after '-', got {:?}", other.token_type);
+                            return None;
                         }
-                    }
-                    Some(Token { token_type: TokenType::AddressOf, .. }) => {
-                        match tokens.next() {
-                            Some(Token { token_type: TokenType::Identifier(s), .. }) => format!("&{}", s),
-                            Some(other) => {
-                                println!("Expected identifier after '&', got {:?}", other.token_type);
-                                return None;
-                            }
-                            None => {
-                                println!("Expected identifier after '&'");
-                                return None;
-                            }
+                        None => {
+                            println!("Expected number after '-'");
+                            return None;
                         }
                     },
-                    Some(Token { token_type: TokenType::Identifier(s), .. }) => s.clone(),
-                    Some(Token { token_type: TokenType::Number(n), .. }) => n.to_string(),
-                    Some(Token { token_type: TokenType::String(n), .. }) => n.to_string(),
+                    Some(Token {
+                        token_type: TokenType::AddressOf,
+                        ..
+                    }) => match tokens.next() {
+                        Some(Token {
+                            token_type: TokenType::Identifier(s),
+                            ..
+                        }) => format!("&{}", s),
+                        Some(other) => {
+                            println!("Expected identifier after '&', got {:?}", other.token_type);
+                            return None;
+                        }
+                        None => {
+                            println!("Expected identifier after '&'");
+                            return None;
+                        }
+                    },
+                    Some(Token {
+                        token_type: TokenType::Identifier(s),
+                        ..
+                    }) => s.clone(),
+                    Some(Token {
+                        token_type: TokenType::Number(n),
+                        ..
+                    }) => n.to_string(),
+                    Some(Token {
+                        token_type: TokenType::String(n),
+                        ..
+                    }) => n.to_string(),
                     Some(other) => {
-                        println!("Expected identifier or number after in/out(...), got {:?}", other.token_type);
+                        println!(
+                            "Expected identifier or number after in/out(...), got {:?}",
+                            other.token_type
+                        );
                         return None;
                     }
                     None => {
@@ -1286,7 +1491,10 @@ fn parse_assignment(tokens: &mut Peekable<Iter<Token>>, first_token: &Token) -> 
     let left_expr = match parse_expression_from_token(first_token, tokens) {
         Some(expr) => expr,
         None => {
-            println!("Error: Failed to parse left-hand side of assignment. Token: {:?}", first_token.token_type);
+            println!(
+                "Error: Failed to parse left-hand side of assignment. Token: {:?}",
+                first_token.token_type
+            );
             return None;
         }
     };
@@ -1321,16 +1529,22 @@ fn parse_assignment(tokens: &mut Peekable<Iter<Token>>, first_token: &Token) -> 
 
     let right_expr = parse_expression(tokens)?;
 
-    if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
+    if let Some(Token {
+        token_type: TokenType::SemiColon,
+        ..
+    }) = tokens.peek()
+    {
         tokens.next();
     }
 
     match (assign_op, &left_expr) {
-        (Some(op), Expression::Variable(name)) => Some(ASTNode::Expression(Expression::AssignOperation {
-            target: Box::new(Expression::Variable(name.clone())),
-            operator: op,
-            value: Box::new(right_expr),
-        })),
+        (Some(op), Expression::Variable(name)) => {
+            Some(ASTNode::Expression(Expression::AssignOperation {
+                target: Box::new(Expression::Variable(name.clone())),
+                operator: op,
+                value: Box::new(right_expr),
+            }))
+        }
         (None, Expression::Variable(name)) => Some(ASTNode::Statement(StatementNode::Assign {
             variable: name.clone(),
             value: right_expr,
@@ -1344,7 +1558,10 @@ fn parse_assignment(tokens: &mut Peekable<Iter<Token>>, first_token: &Token) -> 
             },
         })),
         (_, _) => {
-            println!("Error: Unsupported assignment left expression: {:?}", left_expr);
+            println!(
+                "Error: Unsupported assignment left expression: {:?}",
+                left_expr
+            );
             None
         }
     }
@@ -1368,7 +1585,10 @@ fn parse_block(tokens: &mut Peekable<Iter<Token>>) -> Option<Vec<ASTNode>> {
 
     if let Some(token) = tokens.next() {
         if token.token_type != TokenType::Rbrace {
-            println!("Error: Expected '}}' to close the block, but found {:?}", token.token_type);
+            println!(
+                "Error: Expected '}}' to close the block, but found {:?}",
+                token.token_type
+            );
             return None;
         }
     } else {
@@ -1412,28 +1632,44 @@ fn parse_statement(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
         }
         TokenType::Continue => {
             tokens.next();
-            if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
+            if let Some(Token {
+                token_type: TokenType::SemiColon,
+                ..
+            }) = tokens.peek()
+            {
                 tokens.next();
             }
             Some(ASTNode::Statement(StatementNode::Continue))
         }
         TokenType::Break => {
             tokens.next();
-            if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
+            if let Some(Token {
+                token_type: TokenType::SemiColon,
+                ..
+            }) = tokens.peek()
+            {
                 tokens.next();
             }
             Some(ASTNode::Statement(StatementNode::Break))
         }
         TokenType::Return => {
             tokens.next();
-            let expr = if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
+            let expr = if let Some(Token {
+                token_type: TokenType::SemiColon,
+                ..
+            }) = tokens.peek()
+            {
                 tokens.next();
                 None
             } else if tokens.peek().is_none() {
                 None
             } else {
                 let value = parse_expression(tokens)?;
-                if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
+                if let Some(Token {
+                    token_type: TokenType::SemiColon,
+                    ..
+                }) = tokens.peek()
+                {
                     tokens.next();
                 }
                 Some(value)
@@ -1445,7 +1681,11 @@ fn parse_statement(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
         _ => {
             if is_expression_start(&token.token_type) {
                 if let Some(expr) = parse_expression(tokens) {
-                    if let Some(Token { token_type: TokenType::SemiColon, .. }) = tokens.peek() {
+                    if let Some(Token {
+                        token_type: TokenType::SemiColon,
+                        ..
+                    }) = tokens.peek()
+                    {
                         tokens.next();
                     }
                     Some(ASTNode::Statement(StatementNode::Expression(expr)))
@@ -1454,7 +1694,10 @@ fn parse_statement(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
                     None
                 }
             } else {
-                println!("Error: Unexpected token, cannot start a statement with: {:?}", token.token_type);
+                println!(
+                    "Error: Unexpected token, cannot start a statement with: {:?}",
+                    token.token_type
+                );
                 tokens.next();
                 None
             }

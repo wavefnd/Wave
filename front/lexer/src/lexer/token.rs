@@ -87,23 +87,23 @@ pub enum TokenType {
     Module,
     Class,
     Match,
-    LogicalAnd,            // &&
-    AddressOf,            // &
-    LogicalOr,             // ||
-    BitwiseOr,             // |
-    NotEqual,              // !=
-    Xor,                    // ^
-    Xnor,                   // ~^
-    BitwiseNot,            // ~
-    Nand,                   // !&
-    Nor,                    // !|
-    Not,                    // !
-    Condition,              // ?
-    NullCoalesce,          // ??
-    Conditional,            // ?:
-    In,                     // in
-    Out,                    // out
-    Is,                     // is
+    LogicalAnd,   // &&
+    AddressOf,    // &
+    LogicalOr,    // ||
+    BitwiseOr,    // |
+    NotEqual,     // !=
+    Xor,          // ^
+    Xnor,         // ~^
+    BitwiseNot,   // ~
+    Nand,         // !&
+    Nor,          // !|
+    Not,          // !
+    Condition,    // ?
+    NullCoalesce, // ??
+    Conditional,  // ?:
+    In,           // in
+    Out,          // out
+    Is,           // is
     Asm,
     Rol,
     Ror,
@@ -126,39 +126,39 @@ pub enum TokenType {
     String(String),
     Number(i64),
     Float(f64),
-    Plus,                   // +
-    Increment,              // ++
-    PlusEq,                 // +=
-    Minus,                  // -
-    Decrement,              // --
-    MinusEq,                // -=
-    Star,                   // *
-    StarEq,                 // *=
-    Div,                    // /
-    DivEq,                  // /=
-    Remainder,              // %
-    RemainderEq,            // %=
-    Equal,                  // =
-    EqualTwo,              // ==
-    Comma,                  // ,
-    Dot,                    // .
-    SemiColon,              // ;
-    Colon,                  // :
-    Lchevr,                 // <
-    LchevrEq,              // <=
-    Rchevr,                 // >
-    RchevrEq,              // >=
-    Lparen,                 // (
-    Rparen,                 // )
-    Lbrace,                 // {
-    Rbrace,                 // }
-    Lbrack,                 // [
-    Rbrack,                 // ]
-    Eof,                    // End of file
+    Plus,        // +
+    Increment,   // ++
+    PlusEq,      // +=
+    Minus,       // -
+    Decrement,   // --
+    MinusEq,     // -=
+    Star,        // *
+    StarEq,      // *=
+    Div,         // /
+    DivEq,       // /=
+    Remainder,   // %
+    RemainderEq, // %=
+    Equal,       // =
+    EqualTwo,    // ==
+    Comma,       // ,
+    Dot,         // .
+    SemiColon,   // ;
+    Colon,       // :
+    Lchevr,      // <
+    LchevrEq,    // <=
+    Rchevr,      // >
+    RchevrEq,    // >=
+    Lparen,      // (
+    Rparen,      // )
+    Lbrace,      // {
+    Rbrace,      // }
+    Lbrack,      // [
+    Rbrack,      // ]
+    Eof,         // End of file
     Error,
     Whitespace,
     Break,
-    Arrow,                  // ->
+    Arrow, // ->
     Array,
     Newline,
     Proto,

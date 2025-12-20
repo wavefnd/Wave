@@ -1,5 +1,5 @@
-use std::str::FromStr;
 use crate::*;
+use std::str::FromStr;
 
 #[derive(Debug, Clone)]
 pub struct Token {
@@ -211,7 +211,7 @@ impl<'a> Lexer<'a> {
                         line: self.line,
                     }
                 }
-            },
+            }
             '-' => {
                 if self.match_next('-') {
                     Token {
@@ -238,7 +238,7 @@ impl<'a> Lexer<'a> {
                         line: self.line,
                     }
                 }
-            },
+            }
             '*' => {
                 if self.match_next('=') {
                     Token {
@@ -253,13 +253,11 @@ impl<'a> Lexer<'a> {
                         line: self.line,
                     }
                 }
-            } ,
-            '.' => {
-                Token {
-                    token_type: TokenType::Dot,
-                    lexeme: ".".to_string(),
-                    line: self.line,
-                }
+            }
+            '.' => Token {
+                token_type: TokenType::Dot,
+                lexeme: ".".to_string(),
+                line: self.line,
             },
             '/' => {
                 if self.match_next('/') {
@@ -281,7 +279,7 @@ impl<'a> Lexer<'a> {
                         line: self.line,
                     }
                 }
-            },
+            }
             '%' => {
                 if self.match_next('=') {
                     Token {
@@ -297,19 +295,15 @@ impl<'a> Lexer<'a> {
                     }
                 }
             }
-            ';' => {
-                Token {
-                    token_type: TokenType::SemiColon,
-                    lexeme: ";".to_string(),
-                    line: self.line,
-                }
+            ';' => Token {
+                token_type: TokenType::SemiColon,
+                lexeme: ";".to_string(),
+                line: self.line,
             },
-            ':' => {
-                Token {
-                    token_type: TokenType::Colon,
-                    lexeme: ":".to_string(),
-                    line: self.line,
-                }
+            ':' => Token {
+                token_type: TokenType::Colon,
+                lexeme: ":".to_string(),
+                line: self.line,
             },
             '<' => {
                 if self.match_next('=') {
@@ -325,8 +319,7 @@ impl<'a> Lexer<'a> {
                         line: self.line,
                     }
                 }
-
-            },
+            }
             '>' => {
                 if self.match_next('=') {
                     Token {
@@ -341,49 +334,36 @@ impl<'a> Lexer<'a> {
                         line: self.line,
                     }
                 }
-
+            }
+            '(' => Token {
+                token_type: TokenType::Lparen,
+                lexeme: "(".to_string(),
+                line: self.line,
             },
-            '(' => {
-                Token {
-                    token_type: TokenType::Lparen,
-                    lexeme: "(".to_string(),
-                    line: self.line,
-                }
+            ')' => Token {
+                token_type: TokenType::Rparen,
+                lexeme: ")".to_string(),
+                line: self.line,
             },
-            ')' => {
-                Token {
-                    token_type: TokenType::Rparen,
-                    lexeme: ")".to_string(),
-                    line: self.line,
-                }
+            '{' => Token {
+                token_type: TokenType::Lbrace,
+                lexeme: "{".to_string(),
+                line: self.line,
             },
-            '{' => {
-                Token {
-                    token_type: TokenType::Lbrace,
-                    lexeme: "{".to_string(),
-                    line: self.line,
-                }
+            '}' => Token {
+                token_type: TokenType::Rbrace,
+                lexeme: "}".to_string(),
+                line: self.line,
             },
-            '}' => {
-                Token {
-                    token_type: TokenType::Rbrace,
-                    lexeme: "}".to_string(),
-                    line: self.line,
-                }
+            '[' => Token {
+                token_type: TokenType::Lbrack,
+                lexeme: "[".to_string(),
+                line: self.line,
             },
-            '[' => {
-                Token {
-                    token_type: TokenType::Lbrack,
-                    lexeme: "[".to_string(),
-                    line: self.line,
-                }
-            },
-            ']' => {
-                Token {
-                    token_type: TokenType::Rbrack,
-                    lexeme: "]".to_string(),
-                    line: self.line,
-                }
+            ']' => Token {
+                token_type: TokenType::Rbrack,
+                lexeme: "]".to_string(),
+                line: self.line,
             },
             '=' => {
                 if self.match_next('=') {
@@ -399,7 +379,7 @@ impl<'a> Lexer<'a> {
                         line: self.line,
                     }
                 }
-            },
+            }
             '&' => {
                 if self.match_next('&') {
                     Token {
@@ -414,7 +394,7 @@ impl<'a> Lexer<'a> {
                         line: self.line,
                     }
                 }
-            },
+            }
             '|' => {
                 if self.match_next('|') {
                     Token {
@@ -429,7 +409,7 @@ impl<'a> Lexer<'a> {
                         line: self.line,
                     }
                 }
-            },
+            }
             '!' => {
                 if self.match_next('=') {
                     Token {
@@ -456,13 +436,11 @@ impl<'a> Lexer<'a> {
                         line: self.line,
                     }
                 }
-            },
-            '^' => {
-                Token {
-                    token_type: TokenType::Xor,
-                    lexeme: "^".to_string(),
-                    line: self.line,
-                }
+            }
+            '^' => Token {
+                token_type: TokenType::Xor,
+                lexeme: "^".to_string(),
+                line: self.line,
             },
             '~' => {
                 if self.match_next('^') {
@@ -478,7 +456,7 @@ impl<'a> Lexer<'a> {
                         line: self.line,
                     }
                 }
-            },
+            }
             '?' => {
                 if self.match_next('?') {
                     Token {
@@ -487,19 +465,17 @@ impl<'a> Lexer<'a> {
                         line: self.line,
                     }
                 } else {
-                     Token {
+                    Token {
                         token_type: TokenType::Condition,
                         lexeme: "?".to_string(),
                         line: self.line,
                     }
                 }
-            },
-            ',' => {
-                Token {
-                    token_type: TokenType::Comma,
-                    lexeme: ",".to_string(),
-                    line: self.line,
-                }
+            }
+            ',' => Token {
+                token_type: TokenType::Comma,
+                lexeme: ",".to_string(),
+                line: self.line,
             },
             '"' => {
                 let string_value = self.string();
@@ -508,296 +484,214 @@ impl<'a> Lexer<'a> {
                     lexeme: format!("\"{}\"", string_value),
                     line: self.line,
                 }
-            },
+            }
             'a'..='z' | 'A'..='Z' | '_' => {
                 let identifier = self.identifier();
                 match identifier.as_str() {
-                    "fun" => {
-                        Token {
-                            token_type: TokenType::Fun,
-                            lexeme: "fun".to_string(),
-                            line: self.line,
-                        }
+                    "fun" => Token {
+                        token_type: TokenType::Fun,
+                        lexeme: "fun".to_string(),
+                        line: self.line,
                     },
-                    "var" => {
-                        Token {
-                            token_type: TokenType::Var,
-                            lexeme: "var".to_string(),
-                            line: self.line,
-                        }
+                    "var" => Token {
+                        token_type: TokenType::Var,
+                        lexeme: "var".to_string(),
+                        line: self.line,
                     },
-                    "deref" => {
-                        Token {
-                            token_type: TokenType::Deref,
-                            lexeme: "deref".to_string(),
-                            line: self.line,
-                        }
+                    "deref" => Token {
+                        token_type: TokenType::Deref,
+                        lexeme: "deref".to_string(),
+                        line: self.line,
                     },
-                    "let" => {
-                        Token {
-                            token_type: TokenType::Let,
-                            lexeme: "let".to_string(),
-                            line: self.line,
-                        }
-                    }
-                    "mut" => {
-                        Token {
-                            token_type: TokenType::Mut,
-                            lexeme: "mut".to_string(),
-                            line: self.line,
-                        }
-                    }
-                    "const" => {
-                        Token {
-                            token_type: TokenType::Const,
-                            lexeme: "const".to_string(),
-                            line: self.line,
-                        }
+                    "let" => Token {
+                        token_type: TokenType::Let,
+                        lexeme: "let".to_string(),
+                        line: self.line,
                     },
-                    "if" => {
-                        Token {
-                            token_type: TokenType::If,
-                            lexeme: "if".to_string(),
-                            line: self.line,
-                        }
+                    "mut" => Token {
+                        token_type: TokenType::Mut,
+                        lexeme: "mut".to_string(),
+                        line: self.line,
                     },
-                    "else" => {
-                        Token {
-                            token_type: TokenType::Else,
-                            lexeme: "else".to_string(),
-                            line: self.line,
-                        }
+                    "const" => Token {
+                        token_type: TokenType::Const,
+                        lexeme: "const".to_string(),
+                        line: self.line,
                     },
-                    "proto" => {
-                        Token {
-                            token_type: TokenType::Proto,
-                            lexeme: "proto".to_string(),
-                            line: self.line,
-                        }
+                    "if" => Token {
+                        token_type: TokenType::If,
+                        lexeme: "if".to_string(),
+                        line: self.line,
                     },
-                    "struct" => {
-                        Token {
-                            token_type: TokenType::Struct,
-                            lexeme: "struct".to_string(),
-                            line: self.line,
-                        }
+                    "else" => Token {
+                        token_type: TokenType::Else,
+                        lexeme: "else".to_string(),
+                        line: self.line,
                     },
-                    "while" => {
-                        Token {
-                            token_type: TokenType::While,
-                            lexeme: "while".to_string(),
-                            line: self.line,
-                        }
+                    "proto" => Token {
+                        token_type: TokenType::Proto,
+                        lexeme: "proto".to_string(),
+                        line: self.line,
                     },
-                    "for" => {
-                        Token {
-                            token_type: TokenType::For,
-                            lexeme: "for".to_string(),
-                            line: self.line,
-                        }
+                    "struct" => Token {
+                        token_type: TokenType::Struct,
+                        lexeme: "struct".to_string(),
+                        line: self.line,
                     },
-                    "module" => {
-                        Token {
-                            token_type: TokenType::Module,
-                            lexeme: "module".to_string(),
-                            line: self.line,
-                        }
+                    "while" => Token {
+                        token_type: TokenType::While,
+                        lexeme: "while".to_string(),
+                        line: self.line,
                     },
-                    "class" => {
-                        Token {
-                            token_type: TokenType::Class,
-                            lexeme: "class".to_string(),
-                            line: self.line,
-                        }
+                    "for" => Token {
+                        token_type: TokenType::For,
+                        lexeme: "for".to_string(),
+                        line: self.line,
                     },
-                    "in" => {
-                        Token {
-                            token_type: TokenType::In,
-                            lexeme: "in".to_string(),
-                            line: self.line,
-                        }
+                    "module" => Token {
+                        token_type: TokenType::Module,
+                        lexeme: "module".to_string(),
+                        line: self.line,
                     },
-                    "out" => {
-                        Token {
-                            token_type: TokenType::Out,
-                            lexeme: "out".to_string(),
-                            line: self.line,
-                        }
+                    "class" => Token {
+                        token_type: TokenType::Class,
+                        lexeme: "class".to_string(),
+                        line: self.line,
                     },
-                    "is" => {
-                        Token {
-                            token_type: TokenType::Is,
-                            lexeme: "is".to_string(),
-                            line: self.line,
-                        }
+                    "in" => Token {
+                        token_type: TokenType::In,
+                        lexeme: "in".to_string(),
+                        line: self.line,
                     },
-                    "asm" => {
-                        Token {
-                            token_type: TokenType::Asm,
-                            lexeme: "asm".to_string(),
-                            line: self.line,
-                        }
+                    "out" => Token {
+                        token_type: TokenType::Out,
+                        lexeme: "out".to_string(),
+                        line: self.line,
                     },
-                    "<<" => {
-                        Token {
-                            token_type: TokenType::Rol,
-                            lexeme: "<<".to_string(),
-                            line: self.line,
-                        }
+                    "is" => Token {
+                        token_type: TokenType::Is,
+                        lexeme: "is".to_string(),
+                        line: self.line,
                     },
-                    ">>" => {
-                        Token {
-                            token_type: TokenType::Ror,
-                            lexeme: ">>".to_string(),
-                            line: self.line,
-                        }
+                    "asm" => Token {
+                        token_type: TokenType::Asm,
+                        lexeme: "asm".to_string(),
+                        line: self.line,
                     },
-                    "xnand" => {
-                        Token {
-                            token_type: TokenType::Xnand,
-                            lexeme: "xnand".to_string(),
-                            line: self.line,
-                        }
+                    "<<" => Token {
+                        token_type: TokenType::Rol,
+                        lexeme: "<<".to_string(),
+                        line: self.line,
                     },
-                    "import" => {
-                        Token {
-                            token_type: TokenType::Import,
-                            lexeme: "import".to_string(),
-                            line: self.line,
-                        }
+                    ">>" => Token {
+                        token_type: TokenType::Ror,
+                        lexeme: ">>".to_string(),
+                        line: self.line,
                     },
-                    "return" => {
-                        Token {
-                            token_type: TokenType::Return,
-                            lexeme: "return".to_string(),
-                            line: self.line,
-                        }
+                    "xnand" => Token {
+                        token_type: TokenType::Xnand,
+                        lexeme: "xnand".to_string(),
+                        line: self.line,
                     },
-                    "continue" => {
-                        Token {
-                            token_type: TokenType::Continue,
-                            lexeme: "continue".to_string(),
-                            line: self.line,
-                        }
+                    "import" => Token {
+                        token_type: TokenType::Import,
+                        lexeme: "import".to_string(),
+                        line: self.line,
                     },
-                    "print" => {
-                        Token {
-                            token_type: TokenType::Print,
-                            lexeme: "print".to_string(),
-                            line: self.line,
-                        }
+                    "return" => Token {
+                        token_type: TokenType::Return,
+                        lexeme: "return".to_string(),
+                        line: self.line,
                     },
-                    "input" => {
-                        Token {
-                            token_type: TokenType::Input,
-                            lexeme: "input".to_string(),
-                            line: self.line,
-                        }
+                    "continue" => Token {
+                        token_type: TokenType::Continue,
+                        lexeme: "continue".to_string(),
+                        line: self.line,
                     },
-                    "println" => {
-                        Token {
-                            token_type: TokenType::Println,
-                            lexeme: "println".to_string(),
-                            line: self.line,
-                        }
+                    "print" => Token {
+                        token_type: TokenType::Print,
+                        lexeme: "print".to_string(),
+                        line: self.line,
                     },
-                    "match" => {
-                        Token {
-                            token_type: TokenType::Match,
-                            lexeme: "match".to_string(),
-                            line: self.line,
-                        }
+                    "input" => Token {
+                        token_type: TokenType::Input,
+                        lexeme: "input".to_string(),
+                        line: self.line,
                     },
-                    "char" => {
-                        Token {
-                            token_type: TokenType::TypeChar,
-                            lexeme: "char".to_string(),
-                            line: self.line,
-                        }
+                    "println" => Token {
+                        token_type: TokenType::Println,
+                        lexeme: "println".to_string(),
+                        line: self.line,
                     },
-                    "byte" => {
-                        Token {
-                            token_type: TokenType::TypeByte,
-                            lexeme: "byte".to_string(),
-                            line: self.line,
-                        }
+                    "match" => Token {
+                        token_type: TokenType::Match,
+                        lexeme: "match".to_string(),
+                        line: self.line,
                     },
-                    "ptr" => {
-                        Token {
-                            token_type: TokenType::Identifier("ptr".to_string()),
-                            lexeme: "ptr".to_string(),
-                            line: self.line,
-                        }
+                    "char" => Token {
+                        token_type: TokenType::TypeChar,
+                        lexeme: "char".to_string(),
+                        line: self.line,
                     },
-                    "array" => {
-                        Token {
-                            token_type: TokenType::Identifier("array".to_string()),
-                            lexeme: "array".to_string(),
-                            line: self.line,
-                        }
+                    "byte" => Token {
+                        token_type: TokenType::TypeByte,
+                        lexeme: "byte".to_string(),
+                        line: self.line,
                     },
-                    "isz" => {
-                        Token {
-                            token_type: TokenType::TokenTypeInt(IntegerType::ISZ),
-                            lexeme: "isz".to_string(),
-                            line: self.line,
-                        }
+                    "ptr" => Token {
+                        token_type: TokenType::Identifier("ptr".to_string()),
+                        lexeme: "ptr".to_string(),
+                        line: self.line,
                     },
-                    "i8" => {
-                        Token {
-                            token_type: TokenType::TokenTypeInt(IntegerType::I8),
-                            lexeme: "i8".to_string(),
-                            line: self.line,
-                        }
+                    "array" => Token {
+                        token_type: TokenType::Identifier("array".to_string()),
+                        lexeme: "array".to_string(),
+                        line: self.line,
                     },
-                    "i16" => {
-                        Token {
-                            token_type: TokenType::TokenTypeInt(IntegerType::I16),
-                            lexeme: "i16".to_string(),
-                            line: self.line,
-                        }
+                    "isz" => Token {
+                        token_type: TokenType::TokenTypeInt(IntegerType::ISZ),
+                        lexeme: "isz".to_string(),
+                        line: self.line,
                     },
-                    "i32" => {
-                        Token {
-                            token_type: TokenType::TokenTypeInt(IntegerType::I32),
-                            lexeme: "i32".to_string(),
-                            line: self.line,
-                        }
+                    "i8" => Token {
+                        token_type: TokenType::TokenTypeInt(IntegerType::I8),
+                        lexeme: "i8".to_string(),
+                        line: self.line,
                     },
-                    "i64" => {
-                        Token {
-                            token_type: TokenType::TokenTypeInt(IntegerType::I64),
-                            lexeme: "i64".to_string(),
-                            line: self.line,
-                        }
+                    "i16" => Token {
+                        token_type: TokenType::TokenTypeInt(IntegerType::I16),
+                        lexeme: "i16".to_string(),
+                        line: self.line,
                     },
-                    "i128" => {
-                        Token {
-                            token_type: TokenType::TokenTypeInt(IntegerType::I128),
-                            lexeme: "i128".to_string(),
-                            line: self.line,
-                        }
+                    "i32" => Token {
+                        token_type: TokenType::TokenTypeInt(IntegerType::I32),
+                        lexeme: "i32".to_string(),
+                        line: self.line,
                     },
-                    "i256" => {
-                        Token {
-                            token_type: TokenType::TokenTypeInt(IntegerType::I256),
-                            lexeme: "i256".to_string(),
-                            line: self.line,
-                        }
+                    "i64" => Token {
+                        token_type: TokenType::TokenTypeInt(IntegerType::I64),
+                        lexeme: "i64".to_string(),
+                        line: self.line,
                     },
-                    "i512" => {
-                       Token {
-                            token_type: TokenType::TokenTypeInt(IntegerType::I512),
-                            lexeme: "i512".to_string(),
-                            line: self.line,
-                        }
+                    "i128" => Token {
+                        token_type: TokenType::TokenTypeInt(IntegerType::I128),
+                        lexeme: "i128".to_string(),
+                        line: self.line,
                     },
-                    "i1024" => {
-                        Token {
-                            token_type: TokenType::TokenTypeInt(IntegerType::I1024),
-                            lexeme: "i1024".to_string(),
-                            line: self.line,
-                        }
+                    "i256" => Token {
+                        token_type: TokenType::TokenTypeInt(IntegerType::I256),
+                        lexeme: "i256".to_string(),
+                        line: self.line,
+                    },
+                    "i512" => Token {
+                        token_type: TokenType::TokenTypeInt(IntegerType::I512),
+                        lexeme: "i512".to_string(),
+                        line: self.line,
+                    },
+                    "i1024" => Token {
+                        token_type: TokenType::TokenTypeInt(IntegerType::I1024),
+                        lexeme: "i1024".to_string(),
+                        line: self.line,
                     },
                     "usz" => Token {
                         token_type: TokenType::TokenTypeUint(UnsignedIntegerType::USZ),
@@ -854,29 +748,23 @@ impl<'a> Lexer<'a> {
                         lexeme: "f64".to_string(),
                         line: self.line,
                     },
-                    "str" => {
-                        Token {
-                            token_type: TokenType::TypeString,
-                            lexeme: "str".to_string(),
-                            line: self.line,
-                        }
+                    "str" => Token {
+                        token_type: TokenType::TypeString,
+                        lexeme: "str".to_string(),
+                        line: self.line,
                     },
-                    "break" => {
-                        Token {
-                            token_type: TokenType::Break,
-                            lexeme: "break".to_string(),
-                            line: self.line,
-                        }
+                    "break" => Token {
+                        token_type: TokenType::Break,
+                        lexeme: "break".to_string(),
+                        line: self.line,
                     },
-                    _ => {
-                        Token {
-                            token_type: TokenType::Identifier(identifier.clone()),
-                            lexeme: identifier,
-                            line: self.line,
-                        }
-                    }
+                    _ => Token {
+                        token_type: TokenType::Identifier(identifier.clone()),
+                        lexeme: identifier,
+                        line: self.line,
+                    },
                 }
-            },
+            }
             '0'..='9' => {
                 let mut num_str = self.number().to_string(); // 첫 숫자만 읽음
 
@@ -884,7 +772,7 @@ impl<'a> Lexer<'a> {
                 if num_str == "0" && (self.peek() == 'x' || self.peek() == 'X') {
                     num_str.push(self.advance()); // 'x' 붙이기
 
-                    while self.peek().is_digit(16) {
+                    while self.peek().is_ascii_hexdigit() {
                         num_str.push(self.advance());
                     }
 
@@ -901,7 +789,7 @@ impl<'a> Lexer<'a> {
                     num_str.push('.');
                     self.advance();
 
-                    while self.peek().is_digit(10) {
+                    while self.peek().is_ascii_digit() {
                         num_str.push(self.advance()); // 소수점 뒤 숫자
                     }
                     true
@@ -911,9 +799,15 @@ impl<'a> Lexer<'a> {
 
                 // 일반 숫자/실수 토큰 결정
                 let token_type = if is_float {
-                    num_str.parse::<f64>().map(TokenType::Float).unwrap_or(TokenType::Float(0.0))
+                    num_str
+                        .parse::<f64>()
+                        .map(TokenType::Float)
+                        .unwrap_or(TokenType::Float(0.0))
                 } else {
-                    num_str.parse::<i64>().map(TokenType::Number).unwrap_or(TokenType::Number(0))
+                    num_str
+                        .parse::<i64>()
+                        .map(TokenType::Number)
+                        .unwrap_or(TokenType::Number(0))
                 };
 
                 Token {
@@ -930,38 +824,16 @@ impl<'a> Lexer<'a> {
                     eprintln!("[eprintln] Unexpected backslash outside of string");
                     panic!("[panic] Unexpected character: '\\' outside of string");
                 } else {
-                    eprintln!("[eprintln] Unexpected character: {:?} (code: {})", c, c as u32);
+                    eprintln!(
+                        "[eprintln] Unexpected character: {:?} (code: {})",
+                        c, c as u32
+                    );
                     panic!("[panic] Unexpected character: {:?}", c);
                 }
             }
         }
     }
 
-    // Helper methods to create tokens
-    fn create_int_token(&self, int_type: IntegerType, lexeme: String) -> Token {
-        Token {
-            token_type: TokenType::TokenTypeInt(int_type),
-            lexeme,
-            line: self.line,
-        }
-    }
-
-    fn create_float_token(&self, float_type: FloatType, lexeme: String) -> Token {
-        Token {
-            token_type: TokenType::TokenTypeFloat(float_type),
-            lexeme,
-            line: self.line,
-        }
-    }
-
-    fn create_identifier_token(&self, identifier: String) -> Token {
-        Token {
-            token_type: TokenType::Identifier(identifier.clone()),
-            lexeme: identifier,
-            line: self.line,
-        }
-    }
-    
     // Add string literal processing function
     fn string(&mut self) -> String {
         if self.peek() == '"' {
@@ -1026,6 +898,6 @@ impl<'a> Lexer<'a> {
         }
 
         let number_str = &self.source[start..self.current];
-        i64::from_str(number_str).unwrap_or_else(|_| 0)
+        i64::from_str(number_str).unwrap_or(0)
     }
 }

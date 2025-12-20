@@ -1,8 +1,8 @@
+use crate::ast::Expression::Variable;
+use crate::ast::{AssignOperator, Expression, FormatPart, Literal, Operator};
+use lexer::{Token, TokenType};
 use std::iter::Peekable;
 use std::slice::Iter;
-use lexer::{Token, TokenType};
-use crate::ast::{Operator, Expression, FormatPart, Literal, AssignOperator};
-use crate::ast::Expression::Variable;
 
 pub fn parse_format_string(s: &str) -> Vec<FormatPart> {
     let mut parts = Vec::new();
@@ -37,7 +37,11 @@ pub fn parse_expression<'a, T>(tokens: &mut Peekable<T>) -> Option<Expression>
 where
     T: Iterator<Item = &'a Token>,
 {
-    if let Some(Token { token_type: TokenType::Not, .. }) = tokens.peek() {
+    if let Some(Token {
+        token_type: TokenType::Not,
+        ..
+    }) = tokens.peek()
+    {
         tokens.next();
         let inner = parse_expression(tokens)?;
         return Some(Expression::Unary {
@@ -45,8 +49,12 @@ where
             expr: Box::new(inner),
         });
     }
-    
-    if let Some(Token { token_type: TokenType::BitwiseNot, .. }) = tokens.peek() {
+
+    if let Some(Token {
+        token_type: TokenType::BitwiseNot,
+        ..
+    }) = tokens.peek()
+    {
         tokens.next();
         let inner = parse_expression(tokens)?;
         return Some(Expression::Unary {
@@ -55,13 +63,21 @@ where
         });
     }
 
-    if let Some(Token { token_type: TokenType::AddressOf, .. }) = tokens.peek() {
+    if let Some(Token {
+        token_type: TokenType::AddressOf,
+        ..
+    }) = tokens.peek()
+    {
         tokens.next(); // consume '&'
         let inner = parse_expression(tokens)?;
         return Some(Expression::AddressOf(Box::new(inner)));
     }
 
-    if let Some(Token { token_type: TokenType::Deref, .. }) = tokens.peek() {
+    if let Some(Token {
+        token_type: TokenType::Deref,
+        ..
+    }) = tokens.peek()
+    {
         tokens.next(); // consume 'deref'
         let inner = parse_expression(tokens)?;
         return Some(Expression::Deref(Box::new(inner)));
@@ -84,7 +100,7 @@ where
             TokenType::StarEq => AssignOperator::MulAssign,
             TokenType::DivEq => AssignOperator::DivAssign,
             TokenType::RemainderEq => AssignOperator::RemAssign,
-            _ => return Some(left)
+            _ => return Some(left),
         };
 
         tokens.next(); // consume +=, -=
@@ -137,12 +153,12 @@ where
 
     while let Some(token) = tokens.peek() {
         match token.token_type {
-            TokenType::EqualTwo |
-            TokenType::NotEqual |
-            TokenType::Rchevr |
-            TokenType::RchevrEq |
-            TokenType::Lchevr |
-            TokenType::LchevrEq => {
+            TokenType::EqualTwo
+            | TokenType::NotEqual
+            | TokenType::Rchevr
+            | TokenType::RchevrEq
+            | TokenType::Lchevr
+            | TokenType::LchevrEq => {
                 let op = match token.token_type {
                     TokenType::EqualTwo => Operator::Equal,
                     TokenType::NotEqual => Operator::NotEqual,
@@ -251,12 +267,19 @@ where
                         tokens.next();
 
                         let mut args = vec![];
-                        if tokens.peek().map_or(false, |t| t.token_type != TokenType::Rparen) {
+                        if tokens
+                            .peek()
+                            .map_or(false, |t| t.token_type != TokenType::Rparen)
+                        {
                             loop {
                                 let arg = parse_expression(tokens)?;
                                 args.push(arg);
 
-                                if let Some(Token { token_type: TokenType::Comma, .. }) = tokens.peek() {
+                                if let Some(Token {
+                                    token_type: TokenType::Comma,
+                                    ..
+                                }) = tokens.peek()
+                                {
                                     tokens.next();
                                 } else {
                                     break;
@@ -264,7 +287,10 @@ where
                             }
                         }
 
-                        if tokens.peek().map_or(true, |t| t.token_type != TokenType::Rparen) {
+                        if tokens
+                            .peek()
+                            .map_or(true, |t| t.token_type != TokenType::Rparen)
+                        {
                             println!("Error: Expected ')' after function call arguments");
                             return None;
                         }
@@ -276,15 +302,25 @@ where
                         tokens.next();
                         let mut fields = vec![];
 
-                        while tokens.peek().map_or(false, |t| t.token_type != TokenType::Rbrace) {
-                            let field_name = if let Some(Token { token_type: TokenType::Identifier(n), .. }) = tokens.next() {
+                        while tokens
+                            .peek()
+                            .map_or(false, |t| t.token_type != TokenType::Rbrace)
+                        {
+                            let field_name = if let Some(Token {
+                                token_type: TokenType::Identifier(n),
+                                ..
+                            }) = tokens.next()
+                            {
                                 n.clone()
                             } else {
                                 println!("Error: Expected field name in struct literal.");
                                 return None;
                             };
 
-                            if tokens.peek().map_or(true, |t| t.token_type != TokenType::Colon) {
+                            if tokens
+                                .peek()
+                                .map_or(true, |t| t.token_type != TokenType::Colon)
+                            {
                                 println!("Error: Expected ':' after field name '{}'", field_name);
                                 return None;
                             }
@@ -293,14 +329,21 @@ where
                             let value = parse_expression(tokens)?;
                             fields.push((field_name, value));
 
-                            if let Some(Token { token_type: TokenType::Comma, .. }) = tokens.peek() {
+                            if let Some(Token {
+                                token_type: TokenType::Comma,
+                                ..
+                            }) = tokens.peek()
+                            {
                                 tokens.next();
                             } else {
                                 break;
                             }
                         }
 
-                        if tokens.peek().map_or(true, |t| t.token_type != TokenType::Rbrace) {
+                        if tokens
+                            .peek()
+                            .map_or(true, |t| t.token_type != TokenType::Rbrace)
+                        {
                             println!("Error: Expected '}}' to close struct literal");
                             return None;
                         }
@@ -319,7 +362,10 @@ where
         TokenType::Lparen => {
             tokens.next();
             let inner_expr = parse_expression(tokens)?;
-            if tokens.peek().map_or(true, |t| t.token_type != TokenType::Rparen) {
+            if tokens
+                .peek()
+                .map_or(true, |t| t.token_type != TokenType::Rparen)
+            {
                 println!("Error: Expected ')' to close grouped expression");
                 return None;
             }
@@ -333,17 +379,27 @@ where
         TokenType::Lbrack => {
             tokens.next();
             let mut elements = vec![];
-            if tokens.peek().map_or(false, |t| t.token_type != TokenType::Rbrack) {
+            if tokens
+                .peek()
+                .map_or(false, |t| t.token_type != TokenType::Rbrack)
+            {
                 loop {
                     elements.push(parse_expression(tokens)?);
-                    if let Some(Token { token_type: TokenType::Comma, .. }) = tokens.peek() {
+                    if let Some(Token {
+                        token_type: TokenType::Comma,
+                        ..
+                    }) = tokens.peek()
+                    {
                         tokens.next();
                     } else {
                         break;
                     }
                 }
             }
-            if tokens.peek().map_or(true, |t| t.token_type != TokenType::Rbrack) {
+            if tokens
+                .peek()
+                .map_or(true, |t| t.token_type != TokenType::Rbrack)
+            {
                 println!("Error: Expected ']' to close array literal");
                 return None;
             }
@@ -381,10 +437,19 @@ where
 
                         let reg_token = tokens.next();
                         let reg = match reg_token {
-                            Some(Token { token_type: TokenType::String(s), .. }) => s.clone(),
-                            Some(Token { token_type: TokenType::Identifier(s), .. }) => s.clone(),
+                            Some(Token {
+                                token_type: TokenType::String(s),
+                                ..
+                            }) => s.clone(),
+                            Some(Token {
+                                token_type: TokenType::Identifier(s),
+                                ..
+                            }) => s.clone(),
                             Some(other) => {
-                                println!("Expected register string or identifier, got {:?}", other.token_type);
+                                println!(
+                                    "Expected register string or identifier, got {:?}",
+                                    other.token_type
+                                );
                                 return None;
                             }
                             None => {
@@ -409,7 +474,6 @@ where
                         }
                     }
 
-
                     TokenType::Identifier(s) if s == "in" || s == "out" => {
                         let is_input = s == "in";
                         tokens.next();
@@ -422,10 +486,19 @@ where
 
                         let reg_token = tokens.next();
                         let reg = match reg_token {
-                            Some(Token { token_type: TokenType::String(s), .. })    => s.clone(),
-                            Some(Token { token_type: TokenType::Identifier(s), .. })=> s.clone(),
+                            Some(Token {
+                                token_type: TokenType::String(s),
+                                ..
+                            }) => s.clone(),
+                            Some(Token {
+                                token_type: TokenType::Identifier(s),
+                                ..
+                            }) => s.clone(),
                             Some(other) => {
-                                println!("Expected register string or identifier, got {:?}", other.token_type);
+                                println!(
+                                    "Expected register string or identifier, got {:?}",
+                                    other.token_type
+                                );
                                 return None;
                             }
                             None => {
@@ -467,17 +540,23 @@ where
                 outputs,
             })
         }
-        _ => {
-            match token.token_type {
-                TokenType::Continue | TokenType::Break | TokenType::Return | TokenType::SemiColon => None,
-                _ => {
-                    println!("Error: Expected primary expression, found {:?}", token.token_type);
-                    println!("Error: Expected primary expression, found {:?}", token.lexeme);
-                    println!("Error: Expected primary expression, found {:?}", token.line);
-                    None
-                }
+        _ => match token.token_type {
+            TokenType::Continue | TokenType::Break | TokenType::Return | TokenType::SemiColon => {
+                None
             }
-        }
+            _ => {
+                println!(
+                    "Error: Expected primary expression, found {:?}",
+                    token.token_type
+                );
+                println!(
+                    "Error: Expected primary expression, found {:?}",
+                    token.lexeme
+                );
+                println!("Error: Expected primary expression, found {:?}", token.line);
+                None
+            }
+        },
     };
 
     if expr.is_none() {
@@ -489,7 +568,11 @@ where
             Some(TokenType::Dot) => {
                 tokens.next(); // consume '.'
 
-                let name = if let Some(Token { token_type: TokenType::Identifier(name), .. }) = tokens.next() {
+                let name = if let Some(Token {
+                    token_type: TokenType::Identifier(name),
+                    ..
+                }) = tokens.next()
+                {
                     name.clone()
                 } else {
                     println!("Error: Expected identifier after '.'");
@@ -506,17 +589,28 @@ where
                 };
 
                 // 다음 토큰이 '(' 이면 메서드 호출, 아니면 필드 접근
-                if let Some(Token { token_type: TokenType::Lparen, .. }) = tokens.peek() {
+                if let Some(Token {
+                    token_type: TokenType::Lparen,
+                    ..
+                }) = tokens.peek()
+                {
                     // ----- MethodCall -----
                     tokens.next(); // consume '('
 
                     let mut args = Vec::new();
-                    if tokens.peek().map_or(false, |t| t.token_type != TokenType::Rparen) {
+                    if tokens
+                        .peek()
+                        .map_or(false, |t| t.token_type != TokenType::Rparen)
+                    {
                         loop {
                             let arg = parse_expression(tokens)?;
                             args.push(arg);
 
-                            if let Some(Token { token_type: TokenType::Comma, .. }) = tokens.peek() {
+                            if let Some(Token {
+                                token_type: TokenType::Comma,
+                                ..
+                            }) = tokens.peek()
+                            {
                                 tokens.next(); // consume ','
                             } else {
                                 break;
@@ -524,7 +618,10 @@ where
                         }
                     }
 
-                    if tokens.peek().map_or(true, |t| t.token_type != TokenType::Rparen) {
+                    if tokens
+                        .peek()
+                        .map_or(true, |t| t.token_type != TokenType::Rparen)
+                    {
                         println!("Error: Expected ')' after method call arguments");
                         return None;
                     }
@@ -548,7 +645,10 @@ where
                 tokens.next(); // consume '['
 
                 let index_expr = parse_expression(tokens)?;
-                if tokens.peek().map_or(true, |t| t.token_type != TokenType::Rbrack) {
+                if tokens
+                    .peek()
+                    .map_or(true, |t| t.token_type != TokenType::Rbrack)
+                {
                     println!("Error: Expected ']' after index");
                     return None;
                 }
@@ -597,14 +697,19 @@ where
     Some(expr)
 }
 
-pub fn parse_expression_from_token(first_token: &Token, tokens: &mut Peekable<Iter<Token>>) -> Option<Expression> {
+pub fn parse_expression_from_token(
+    first_token: &Token,
+    tokens: &mut Peekable<Iter<Token>>,
+) -> Option<Expression> {
     match &first_token.token_type {
         TokenType::Identifier(name) => Some(Expression::Variable(name.clone())),
 
         TokenType::Deref => {
             if let Some(next_token) = tokens.next() {
                 if let TokenType::Identifier(name) = &next_token.token_type {
-                    return Some(Expression::Deref(Box::new(Expression::Variable(name.clone()))));
+                    return Some(Expression::Deref(Box::new(Expression::Variable(
+                        name.clone(),
+                    ))));
                 }
             }
             None
@@ -624,7 +729,11 @@ where
         TokenType::Number(n) => Some(n.to_string()),
         TokenType::String(s) => Some(s.clone()),
         TokenType::AddressOf => {
-            if let Some(Token { token_type: TokenType::Identifier(s), .. }) = tokens.next() {
+            if let Some(Token {
+                token_type: TokenType::Identifier(s),
+                ..
+            }) = tokens.next()
+            {
                 Some(format!("&{}", s))
             } else {
                 println!("Expected identifier after '&' in in/out(...)");
@@ -632,7 +741,10 @@ where
             }
         }
         other => {
-            println!("Expected identifier or number after in/out(...), got {:?}", other);
+            println!(
+                "Expected identifier or number after in/out(...), got {:?}",
+                other
+            );
             None
         }
     }

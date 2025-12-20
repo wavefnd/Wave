@@ -1,8 +1,8 @@
-use std::iter::Peekable;
-use std::slice::Iter;
-use lexer::{Token, TokenType};
 use crate::ast::WaveType;
 use crate::*;
+use lexer::{Token, TokenType};
+use std::iter::Peekable;
+use std::slice::Iter;
 
 pub fn is_expression_start(token_type: &TokenType) -> bool {
     matches!(
@@ -85,8 +85,12 @@ pub fn parse_type(type_str: &str) -> Option<TokenType> {
         return Some(TokenType::TypeString);
     }
 
-    if type_str.chars().next().map_or(false, |c| c.is_alphabetic() || c == '_') &&
-        type_str.chars().all(|c| c.is_alphanumeric() || c == '_') {
+    if type_str
+        .chars()
+        .next()
+        .map_or(false, |c| c.is_alphabetic() || c == '_')
+        && type_str.chars().all(|c| c.is_alphanumeric() || c == '_')
+    {
         return Some(TokenType::TypeCustom(type_str.to_string()));
     }
 
@@ -127,45 +131,45 @@ pub fn parse_type_from_token(token_opt: Option<&&Token>) -> Option<WaveType> {
         | ty @ TokenType::TypeArray(_, _)
         | ty @ TokenType::TokenTypeInt(_)
         | ty @ TokenType::TokenTypeUint(_)
-        | ty @ TokenType::TokenTypeFloat(_)
-        => token_type_to_wave_type(ty),
+        | ty @ TokenType::TokenTypeFloat(_) => token_type_to_wave_type(ty),
 
-        TokenType::Identifier(name) => {
-            match name.as_str() {
-                "i8" => Some(WaveType::Int(8)),
-                "i16" => Some(WaveType::Int(16)),
-                "i32" => Some(WaveType::Int(32)),
-                "i64" => Some(WaveType::Int(64)),
-                "u8" => Some(WaveType::Uint(8)),
-                "u16" => Some(WaveType::Uint(16)),
-                "u32" => Some(WaveType::Uint(32)),
-                "u64" => Some(WaveType::Uint(64)),
-                "f32" => Some(WaveType::Float(32)),
-                "f64" => Some(WaveType::Float(64)),
-                "bool" => Some(WaveType::Bool),
-                "char" => Some(WaveType::Char),
-                "byte" => Some(WaveType::Byte),
-                "str" => Some(WaveType::String),
-                _ => {
-                    if let Some(tt) = parse_type(name) {
-                        token_type_to_wave_type(&tt)
-                    } else {
-                        Some(WaveType::Struct(name.clone()))
-                    }
+        TokenType::Identifier(name) => match name.as_str() {
+            "i8" => Some(WaveType::Int(8)),
+            "i16" => Some(WaveType::Int(16)),
+            "i32" => Some(WaveType::Int(32)),
+            "i64" => Some(WaveType::Int(64)),
+            "u8" => Some(WaveType::Uint(8)),
+            "u16" => Some(WaveType::Uint(16)),
+            "u32" => Some(WaveType::Uint(32)),
+            "u64" => Some(WaveType::Uint(64)),
+            "f32" => Some(WaveType::Float(32)),
+            "f64" => Some(WaveType::Float(64)),
+            "bool" => Some(WaveType::Bool),
+            "char" => Some(WaveType::Char),
+            "byte" => Some(WaveType::Byte),
+            "str" => Some(WaveType::String),
+            _ => {
+                if let Some(tt) = parse_type(name) {
+                    token_type_to_wave_type(&tt)
+                } else {
+                    Some(WaveType::Struct(name.clone()))
                 }
             }
-        }
+        },
 
         _ => None,
     }
 }
 
-
 pub fn parse_type_from_stream(tokens: &mut Peekable<Iter<Token>>) -> Option<WaveType> {
     let type_token = tokens.next()?; // consume identifier
 
     if let TokenType::Identifier(name) = &type_token.token_type {
-        if let Some(Token { token_type: TokenType::Lchevr, .. }) = tokens.peek() {
+        if let Some(Token {
+            token_type: TokenType::Lchevr,
+            ..
+        }) = tokens.peek()
+        {
             tokens.next(); // consume '<'
 
             let inner_type = parse_type_from_stream(tokens)?;

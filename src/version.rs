@@ -33,10 +33,7 @@ pub fn get_os_pretty_name() -> String {
 
     #[cfg(target_os = "windows")]
     {
-        if let Ok(output) = Command::new("cmd")
-            .args(["/C", "ver"])
-            .output()
-        {
+        if let Ok(output) = Command::new("cmd").args(["/C", "ver"]).output() {
             let text = String::from_utf8_lossy(&output.stdout);
             return format!("Windows {}", text.trim());
         }
@@ -46,10 +43,7 @@ pub fn get_os_pretty_name() -> String {
 
     #[cfg(target_os = "macos")]
     {
-        if let Ok(output) = Command::new("sw_vers")
-            .arg("-productVersion")
-            .output()
-        {
+        if let Ok(output) = Command::new("sw_vers").arg("-productVersion").output() {
             let version = String::from_utf8_lossy(&output.stdout).trim().to_string();
             return format!("macOS {}", version);
         }

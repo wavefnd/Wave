@@ -39,8 +39,8 @@ fn linux_original() {
 
 fn try_macos_paths() {
     let candidates = [
-        "/opt/homebrew/opt/llvm@14",   // Apple Silicon
-        "/usr/local/opt/llvm@14",      // Intel
+        "/opt/homebrew/opt/llvm@14", // Apple Silicon
+        "/usr/local/opt/llvm@14",    // Intel
     ];
 
     for prefix in candidates {
@@ -69,10 +69,7 @@ fn link_macos(prefix: PathBuf) {
 }
 
 fn try_windows_paths() {
-    let candidates = [
-        r"C:\Program Files\LLVM",
-        r"C:\Program Files (x86)\LLVM",
-    ];
+    let candidates = [r"C:\Program Files\LLVM", r"C:\Program Files (x86)\LLVM"];
 
     for prefix in candidates {
         let path = PathBuf::from(prefix);

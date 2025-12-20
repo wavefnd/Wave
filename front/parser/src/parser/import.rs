@@ -1,10 +1,10 @@
-use std::collections::HashSet;
-use std::path::{Path, PathBuf};
-use error::error::{WaveError, WaveErrorKind};
 use crate::ast::ASTNode;
 use crate::parse;
 use crate::parser::stdlib::StdlibManager;
+use error::error::{WaveError, WaveErrorKind};
 use lexer::Lexer;
+use std::collections::HashSet;
+use std::path::{Path, PathBuf};
 
 pub fn local_import(
     path: &str,
@@ -58,15 +58,18 @@ pub fn local_import(
             0,
         )
     })?;
-    let abs_path_str = abs_path.to_str().ok_or_else(|| {
-        WaveError::new(
-            WaveErrorKind::UnexpectedChar('?'),
-            "Invalid path encoding",
-            target_file_name.clone(),
-            0,
-            0,
-        )
-    })?.to_string();
+    let abs_path_str = abs_path
+        .to_str()
+        .ok_or_else(|| {
+            WaveError::new(
+                WaveErrorKind::UnexpectedChar('?'),
+                "Invalid path encoding",
+                target_file_name.clone(),
+                0,
+                0,
+            )
+        })?
+        .to_string();
 
     if already_imported.contains(&abs_path_str) {
         return Ok(vec![]);
@@ -93,7 +96,8 @@ pub fn local_import(
             target_file_name.clone(),
             1,
             1,
-        ).with_source(content.lines().nth(0).unwrap_or("").to_string())
+        )
+            .with_source(content.lines().next().unwrap_or("").to_string())
             .with_label("here".to_string())
     })?;
 
@@ -107,9 +111,8 @@ fn handle_std_import(
 ) -> Result<Vec<ASTNode>, WaveError> {
     let module_name = path.strip_prefix("std::").unwrap_or(path);
 
-    let mgr = stdlib_manager.ok_or_else(|| {
-        WaveError::stdlib_requires_vex(module_name, path, 0, 0)
-    })?;
+    let mgr =
+        stdlib_manager.ok_or_else(|| WaveError::stdlib_requires_vex(module_name, path, 0, 0))?;
 
     mgr.ensure_enabled()?;
     mgr.ensure_declared_in_manifest(module_name)?;
@@ -124,13 +127,17 @@ pub fn external_import(
     already: &mut HashSet<String>,
     stdlib_manager: Option<&StdlibManager>,
 ) -> Result<Vec<ASTNode>, WaveError> {
-    if already.contains(path) { return Ok(vec![]); }
+    if already.contains(path) {
+        return Ok(vec![]);
+    }
 
     let mgr = stdlib_manager.ok_or_else(|| {
         WaveError::new(
             WaveErrorKind::SyntaxError("External library not available".to_string()),
             "External imports require Vex (--with-vex) and vex.ws dependencies.",
-            path, 0, 0,
+            path,
+            0,
+            0,
         )
     })?;
 

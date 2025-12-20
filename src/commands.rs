@@ -1,6 +1,6 @@
-use std::path::Path;
-use crate::{compile_and_img, compile_and_run};
 use crate::errors::CliError;
+use crate::{compile_and_img, compile_and_run};
+use std::path::Path;
 
 #[derive(Default)]
 pub struct DebugFlags {
@@ -30,22 +30,14 @@ impl DebugFlags {
     }
 }
 
-pub fn handle_run(
-    file_path: &Path,
-    opt_flag: &str,
-    debug: &DebugFlags,
-) -> Result<(), CliError> {
+pub fn handle_run(file_path: &Path, opt_flag: &str, debug: &DebugFlags) -> Result<(), CliError> {
     unsafe {
         compile_and_run(file_path, opt_flag, debug);
     }
     Ok(())
 }
 
-pub fn handle_build(
-    file_path: &Path,
-    opt_flag: &str,
-    debug: &DebugFlags,
-) -> Result<(), CliError> {
+pub fn handle_build(file_path: &Path, opt_flag: &str, debug: &DebugFlags) -> Result<(), CliError> {
     println!("Building with {}...", opt_flag);
 
     unsafe {

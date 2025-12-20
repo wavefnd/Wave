@@ -1,20 +1,16 @@
-use std::{fs, process, process::Command};
-use std::collections::HashSet;
-use std::path::Path;
+use crate::commands::DebugFlags;
+use ::error::*;
+use ::parser::ast::{ASTNode, StatementNode};
+use ::parser::import::local_import;
+use ::parser::*;
 use lexer::Lexer;
 use llvm_temporary::llvm_temporary::llvm_backend::*;
 use llvm_temporary::llvm_temporary::llvm_codegen::*;
-use ::parser::*;
-use ::parser::ast::{ASTNode, StatementNode};
-use ::parser::import::local_import;
-use ::error::*;
-use crate::commands::DebugFlags;
+use std::collections::HashSet;
+use std::path::Path;
+use std::{fs, process, process::Command};
 
-pub(crate) unsafe fn run_wave_file(
-    file_path: &Path,
-    opt_flag: &str,
-    debug: &DebugFlags,
-) {
+pub(crate) unsafe fn run_wave_file(file_path: &Path, opt_flag: &str, debug: &DebugFlags) {
     let code = match fs::read_to_string(file_path) {
         Ok(c) => c,
         Err(_) => {
@@ -25,8 +21,8 @@ pub(crate) unsafe fn run_wave_file(
                 0,
                 0,
             )
-                .with_help("check if the file exists and you have permission to read it")
-                .display();
+            .with_help("check if the file exists and you have permission to read it")
+            .display();
             process::exit(1);
         }
     };
@@ -44,7 +40,7 @@ pub(crate) unsafe fn run_wave_file(
                 0,
                 0,
             )
-                .display();
+            .display();
             process::exit(1);
         }
     };
@@ -67,8 +63,7 @@ pub(crate) unsafe fn run_wave_file(
     }
 
     let file_stem = file_path.file_stem().unwrap().to_str().unwrap();
-    let object_patch =
-        compile_ir_to_object(&ir, file_stem, opt_flag);
+    let object_patch = compile_ir_to_object(&ir, file_stem, opt_flag);
 
     if debug.mc {
         println!("\n===== MACHINE CODE PATH =====");
@@ -112,7 +107,8 @@ pub(crate) unsafe fn img_wave_file(file_path: &Path) {
     let mut ast = parse(&tokens).expect("Failed to parse Wave code");
 
     let file_path = Path::new(file_path);
-    let base_dir = file_path.canonicalize()
+    let base_dir = file_path
+        .canonicalize()
         .ok()
         .and_then(|p| p.parent().map(|p| p.to_path_buf()))
         .unwrap_or_else(|| Path::new(".").to_path_buf());

@@ -153,8 +153,8 @@ pub enum Operator {
     LogicalOr,
     BitwiseOr,
     Assign,
-    ShiftLeft,              // <<
-    ShiftRight,             // >>
+    ShiftLeft,  // <<
+    ShiftRight, // >>
     BitwiseXor,
     LogicalNot,
     BitwiseNot,
@@ -162,12 +162,12 @@ pub enum Operator {
 
 #[derive(Debug, Clone)]
 pub enum AssignOperator {
-    Assign,      // =
-    AddAssign,   // +=
-    SubAssign,   // -=
-    MulAssign,  // *=
-    DivAssign,  // /=
-    RemAssign,  // %=
+    Assign,    // =
+    AddAssign, // +=
+    SubAssign, // -=
+    MulAssign, // *=
+    DivAssign, // /=
+    RemAssign, // %=
 }
 
 #[derive(Debug, Clone)]
@@ -255,15 +255,17 @@ impl Expression {
 
     pub fn get_wave_type(&self, variables: &HashMap<String, VariableInfo>) -> WaveType {
         match self {
-            Expression::Variable(name) => {
-                variables.get(name)
-                    .unwrap_or_else(|| panic!("Variable '{}' not found", name))
-                    .ty.clone()
-            }
+            Expression::Variable(name) => variables
+                .get(name)
+                .unwrap_or_else(|| panic!("Variable '{}' not found", name))
+                .ty
+                .clone(),
             Expression::Literal(Literal::Number(_)) => WaveType::Int(32), // 기본 int
             Expression::Literal(Literal::Float(_)) => WaveType::Float(32),
             Expression::Literal(Literal::String(_)) => WaveType::String,
-            Expression::MethodCall { .. } => panic!("nested method call type inference not supported yet"),
+            Expression::MethodCall { .. } => {
+                panic!("nested method call type inference not supported yet")
+            }
             _ => panic!("get_wave_type not implemented for {:?}", self),
         }
     }

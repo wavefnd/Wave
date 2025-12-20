@@ -1,14 +1,14 @@
-use parser::ast::{ASTNode, FunctionNode, Expression, WaveType, Mutability, Literal, VariableNode};
 use inkwell::context::Context;
-use inkwell::values::{PointerValue, FunctionValue, BasicValue, BasicValueEnum};
-use inkwell::{AddressSpace, OptimizationLevel};
 use inkwell::passes::{PassManager, PassManagerBuilder};
+use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue, PointerValue};
+use inkwell::{AddressSpace, OptimizationLevel};
+use parser::ast::{ASTNode, Expression, FunctionNode, Literal, Mutability, VariableNode, WaveType};
 
-use std::collections::HashMap;
-use std::hash::Hash;
+use crate::llvm_temporary::statement::generate_statement_ir;
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum};
 use lexer::token::TokenType;
-use crate::llvm_temporary::statement::generate_statement_ir;
+use std::collections::HashMap;
+use std::hash::Hash;
 
 pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
     let context: &'static Context = Box::leak(Box::new(Context::create()));
@@ -20,15 +20,23 @@ pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
     let pass_manager: PassManager<inkwell::module::Module> = PassManager::create(());
     pass_manager_builder.populate_module_pass_manager(&pass_manager);
 
-    let mut struct_types: HashMap<String, inkwell::types::StructType> = HashMap::new();
+    let struct_types: HashMap<String, inkwell::types::StructType> = HashMap::new();
     let mut struct_field_indices: HashMap<String, HashMap<String, u32>> = HashMap::new();
 
     let mut global_consts: HashMap<String, BasicValueEnum> = HashMap::new();
 
     for ast in ast_nodes {
-        if let ASTNode::Variable(VariableNode { name, type_name, initial_value, mutability }) = ast {
+        if let ASTNode::Variable(VariableNode {
+            name,
+            type_name,
+            initial_value,
+            mutability,
+        }) = ast
+        {
             if *mutability == Mutability::Const {
-                let initial_value = initial_value.as_ref().expect("Constant must be initialized.");
+                let initial_value = initial_value
+                    .as_ref()
+                    .expect("Constant must be initialized.");
                 let const_val = create_llvm_const_value(context, type_name, initial_value);
                 global_consts.insert(name.clone(), const_val);
             }
@@ -38,7 +46,9 @@ pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
     let mut struct_types: HashMap<String, inkwell::types::StructType> = HashMap::new();
     for ast in ast_nodes {
         if let ASTNode::Struct(struct_node) = ast {
-            let field_types: Vec<BasicTypeEnum> = struct_node.fields.iter()
+            let field_types: Vec<BasicTypeEnum> = struct_node
+                .fields
+                .iter()
                 .map(|(_, ty)| wave_type_to_llvm_type(context, ty, &struct_types))
                 .collect();
             let struct_ty = context.struct_type(&field_types, false);
@@ -66,16 +76,27 @@ pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
 
     let mut functions: HashMap<String, FunctionValue> = HashMap::new();
 
-    let function_nodes: Vec<FunctionNode> = ast_nodes.iter().filter_map(|ast| {
-        if let ASTNode::Function(f) = ast {
-            Some(f.clone())
-        } else {
-            None
-        }
-    }).chain(proto_functions.iter().map(|(_, f)| f.clone())).collect();
+    let function_nodes: Vec<FunctionNode> = ast_nodes
+        .iter()
+        .filter_map(|ast| {
+            if let ASTNode::Function(f) = ast {
+                Some(f.clone())
+            } else {
+                None
+            }
+        })
+        .chain(proto_functions.iter().map(|(_, f)| f.clone()))
+        .collect();
 
-    for FunctionNode { name, parameters, return_type, .. } in &function_nodes {
-        let param_types: Vec<BasicMetadataTypeEnum> = parameters.iter()
+    for FunctionNode {
+        name,
+        parameters,
+        return_type,
+        ..
+    } in &function_nodes
+    {
+        let param_types: Vec<BasicMetadataTypeEnum> = parameters
+            .iter()
             .map(|p| wave_type_to_llvm_type(context, &p.param_type, &struct_types).into())
             .collect();
 
@@ -131,7 +152,7 @@ pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
                     function,
                     &global_consts,
                     &struct_types,
-                    &struct_field_indices
+                    &struct_field_indices,
                 );
             } else {
                 panic!("Unsupported node inside function '{}'", func_node.name);
@@ -149,7 +170,10 @@ pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
             if is_void_like {
                 builder.build_return(None).unwrap();
             } else {
-                panic!("Non-void function '{}' is missing a return statement", func_node.name);
+                panic!(
+                    "Non-void function '{}' is missing a return statement",
+                    func_node.name
+                );
                 // builder.build_unreachable().unwrap();
             }
         }
@@ -193,12 +217,14 @@ pub fn wave_format_to_c(format: &str, arg_types: &[BasicTypeEnum]) -> String {
                         BasicTypeEnum::FloatType(_) => "%f",
                         BasicTypeEnum::IntType(_) => "%d",
                         BasicTypeEnum::PointerType(ptr_ty) => {
-                            if ptr_ty.get_element_type().is_int_type() && ptr_ty.get_element_type().into_int_type().get_bit_width() == 8 {
+                            if ptr_ty.get_element_type().is_int_type()
+                                && ptr_ty.get_element_type().into_int_type().get_bit_width() == 8
+                            {
                                 "%s"
                             } else {
                                 "%p"
                             }
-                        },
+                        }
                         _ => "%d", // fallback
                     };
                     result.push_str(fmt);
@@ -219,8 +245,12 @@ pub fn wave_type_to_llvm_type<'ctx>(
     struct_types: &HashMap<String, inkwell::types::StructType<'ctx>>,
 ) -> BasicTypeEnum<'ctx> {
     match wave_type {
-        WaveType::Int(bits) => context.custom_width_int_type(*bits as u32).as_basic_type_enum(),
-        WaveType::Uint(bits) => context.custom_width_int_type(*bits as u32).as_basic_type_enum(),
+        WaveType::Int(bits) => context
+            .custom_width_int_type(*bits as u32)
+            .as_basic_type_enum(),
+        WaveType::Uint(bits) => context
+            .custom_width_int_type(*bits as u32)
+            .as_basic_type_enum(),
         WaveType::Float(bits) => match bits {
             32 => context.f32_type().as_basic_type_enum(),
             64 => context.f64_type().as_basic_type_enum(),
@@ -229,14 +259,20 @@ pub fn wave_type_to_llvm_type<'ctx>(
         WaveType::Bool => context.bool_type().as_basic_type_enum(),
         WaveType::Char => context.i8_type().as_basic_type_enum(), // assuming 1-byte char
         WaveType::Byte => context.i8_type().as_basic_type_enum(),
-        WaveType::String => context.i8_type().ptr_type(AddressSpace::default()).as_basic_type_enum(),
-        WaveType::Pointer(inner) => wave_type_to_llvm_type(context, inner, struct_types).ptr_type(AddressSpace::default()).as_basic_type_enum(),
+        WaveType::String => context
+            .i8_type()
+            .ptr_type(AddressSpace::default())
+            .as_basic_type_enum(),
+        WaveType::Pointer(inner) => wave_type_to_llvm_type(context, inner, struct_types)
+            .ptr_type(AddressSpace::default())
+            .as_basic_type_enum(),
         WaveType::Array(inner, size) => {
             let inner_type = wave_type_to_llvm_type(context, inner, struct_types);
             inner_type.array_type(*size).as_basic_type_enum()
         }
         WaveType::Struct(name) => {
-            let struct_ty = struct_types.get(name)
+            let struct_ty = struct_types
+                .get(name)
                 .unwrap_or_else(|| panic!("Struct type '{}' not found in struct_types", name));
             struct_ty.as_basic_type_enum()
         }
@@ -258,25 +294,25 @@ pub fn generate_address_ir<'ctx>(
 ) -> PointerValue<'ctx> {
     match expr {
         Expression::Variable(name) => {
-            let var_info = variables.get(name)
+            let var_info = variables
+                .get(name)
                 .unwrap_or_else(|| panic!("Variable {} not found", name));
 
             var_info.ptr
         }
 
-        Expression::Deref(inner_expr) => {
-            match &**inner_expr {
-                Expression::Variable(var_name) => {
-                    let ptr_to_ptr = variables.get(var_name)
-                        .unwrap_or_else(|| panic!("Variable {} not found", var_name))
-                        .ptr;
+        Expression::Deref(inner_expr) => match &**inner_expr {
+            Expression::Variable(var_name) => {
+                let ptr_to_ptr = variables
+                    .get(var_name)
+                    .unwrap_or_else(|| panic!("Variable {} not found", var_name))
+                    .ptr;
 
-                    let actual_ptr = builder.build_load(ptr_to_ptr, "deref_target").unwrap();
-                    actual_ptr.into_pointer_value()
-                }
-                _ => panic!("Nested deref not supported"),
+                let actual_ptr = builder.build_load(ptr_to_ptr, "deref_target").unwrap();
+                actual_ptr.into_pointer_value()
             }
-        }
+            _ => panic!("Nested deref not supported"),
+        },
 
         _ => panic!("Cannot take address of this expression"),
     }
@@ -291,8 +327,12 @@ pub struct VariableInfo<'ctx> {
 
 pub fn get_llvm_type<'a>(context: &'a Context, ty: &TokenType) -> BasicTypeEnum<'a> {
     match ty {
-        TokenType::TypeInt(bits) => context.custom_width_int_type(*bits as u32).as_basic_type_enum(),
-        TokenType::TypeUint(bits) => context.custom_width_int_type(*bits as u32).as_basic_type_enum(),
+        TokenType::TypeInt(bits) => context
+            .custom_width_int_type(*bits as u32)
+            .as_basic_type_enum(),
+        TokenType::TypeUint(bits) => context
+            .custom_width_int_type(*bits as u32)
+            .as_basic_type_enum(),
         TokenType::TypeFloat(bits) => match bits {
             32 => context.f32_type().as_basic_type_enum(),
             64 => context.f64_type().as_basic_type_enum(),
@@ -303,14 +343,21 @@ pub fn get_llvm_type<'a>(context: &'a Context, ty: &TokenType) -> BasicTypeEnum<
         TokenType::TypeChar => context.i8_type().as_basic_type_enum(),
         TokenType::TypeByte => context.i8_type().as_basic_type_enum(),
         TokenType::TypePointer(inner_type) => {
-            let inner_llvm_type = get_llvm_type(context, &*inner_type); // Box dereference
-            inner_llvm_type.ptr_type(AddressSpace::default()).as_basic_type_enum()
+            let inner_llvm_type = get_llvm_type(context, inner_type); // Box dereference
+            inner_llvm_type
+                .ptr_type(AddressSpace::default())
+                .as_basic_type_enum()
         }
         TokenType::TypeArray(inner_type, size) => {
-            let inner_llvm_type = get_llvm_type(context, &*inner_type); // Box dereference
-            inner_llvm_type.array_type(*size as u32).as_basic_type_enum()
+            let inner_llvm_type = get_llvm_type(context, inner_type); // Box dereference
+            inner_llvm_type
+                .array_type(*size as u32)
+                .as_basic_type_enum()
         }
-        TokenType::TypeString => context.i8_type().ptr_type(AddressSpace::default()).as_basic_type_enum(),
+        TokenType::TypeString => context
+            .i8_type()
+            .ptr_type(AddressSpace::default())
+            .as_basic_type_enum(),
         _ => panic!("Unsupported type: {:?}", ty),
     }
 }
