@@ -257,6 +257,14 @@ where
             tokens.next();
             Some(Expression::Literal(Literal::Float(*value)))
         }
+        TokenType::CharLiteral(c) => {
+            tokens.next();
+            Some(Expression::Literal(Literal::Char(*c)))
+        }
+        TokenType::BoolLiteral(b) => {
+            tokens.next();
+            Some(Expression::Literal(Literal::Bool(*b)))
+        }
         TokenType::Identifier(name) => {
             let name = name.clone();
             tokens.next();

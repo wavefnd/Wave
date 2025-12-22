@@ -1,0 +1,12 @@
+fun main() {
+    var a: i32 = 10;
+    var b: u32 = 20;
+    var c: f32 = 10.1;
+    var d: str = "Wave";
+    var e: bool = true;
+    var f: byte = 0xFF;
+    var g: char = 'A';
+    var h: ptr<i32> = &a;
+    var i: array<i32, 5> = [1, 2, 3, 4, 5];
+    println("{}\n {}\n {}\n {}\n {}\n {}\n {}\n {}\n {}", a, b, c, d, e, f, g, h, i);
+}

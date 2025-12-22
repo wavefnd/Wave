@@ -111,9 +111,31 @@ pub fn generate_statement_ir<'ctx>(
                     (
                         Expression::Literal(Literal::Float(value)),
                         BasicTypeEnum::FloatType(float_type),
-                    ) => {
+                    )
+                    => {
                         let init_value = float_type.const_float(*value);
                         builder.build_store(alloca, init_value).unwrap();
+                    }
+                    (
+                        Expression::Literal(Literal::Bool(v)),
+                        BasicTypeEnum::IntType(int_ty),
+                    ) => {
+                        let val = int_ty.const_int(if *v { 1 } else { 0 }, false);
+                        builder.build_store(alloca, val).unwrap();
+                    }
+                    (
+                        Expression::Literal(Literal::Char(c)),
+                        BasicTypeEnum::IntType(int_ty),
+                    ) => {
+                        let val = int_ty.const_int(*c as u64, false);
+                        builder.build_store(alloca, val).unwrap();
+                    }
+                    (
+                        Expression::Literal(Literal::Byte(b)),
+                        BasicTypeEnum::IntType(int_ty),
+                    ) => {
+                        let val = int_ty.const_int(*b as u64, false);
+                        builder.build_store(alloca, val).unwrap();
                     }
                     (Expression::Literal(Literal::Float(value)), _) => {
                         let float_value = context.f32_type().const_float(*value);

@@ -477,6 +477,14 @@ impl<'a> Lexer<'a> {
                 lexeme: ",".to_string(),
                 line: self.line,
             },
+            '\'' => {
+                let value = self.char_literal();
+                Token {
+                    token_type: TokenType::CharLiteral(value),
+                    lexeme: format!("'{}'", value),
+                    line: self.line,
+                }
+            },
             '"' => {
                 let string_value = self.string();
                 Token {
@@ -758,6 +766,16 @@ impl<'a> Lexer<'a> {
                         lexeme: "break".to_string(),
                         line: self.line,
                     },
+                    "true" => Token {
+                        token_type: TokenType::BoolLiteral(true),
+                        lexeme: "true".to_string(),
+                        line: self.line,
+                    },
+                    "false" => Token {
+                        token_type: TokenType::BoolLiteral(false),
+                        lexeme: "false".to_string(),
+                        line: self.line,
+                    },
                     _ => Token {
                         token_type: TokenType::Identifier(identifier.clone()),
                         lexeme: identifier,
@@ -766,48 +784,43 @@ impl<'a> Lexer<'a> {
                 }
             }
             '0'..='9' => {
-                let mut num_str = self.number().to_string(); // 첫 숫자만 읽음
+                if c == '0' && (self.peek() == 'x' || self.peek() == 'X') {
+                    self.advance(); // consume 'x' or 'X'
 
-                // 16진수 접두사 체크
-                if num_str == "0" && (self.peek() == 'x' || self.peek() == 'X') {
-                    num_str.push(self.advance()); // 'x' 붙이기
-
+                    let mut hex_str = String::new();
                     while self.peek().is_ascii_hexdigit() {
-                        num_str.push(self.advance());
+                        hex_str.push(self.advance());
                     }
 
-                    let value = i64::from_str_radix(&num_str[2..], 16).unwrap_or(0);
+                    let value = i64::from_str_radix(&hex_str, 16).unwrap_or(0);
+
                     return Token {
                         token_type: TokenType::Number(value),
-                        lexeme: num_str,
+                        lexeme: format!("0x{}", hex_str),
                         line: self.line,
                     };
                 }
 
-                // float 처리
+                let mut num_str = c.to_string();
+                while self.peek().is_ascii_digit() {
+                    num_str.push(self.advance());
+                }
+
                 let is_float = if self.peek() == '.' {
                     num_str.push('.');
                     self.advance();
-
                     while self.peek().is_ascii_digit() {
-                        num_str.push(self.advance()); // 소수점 뒤 숫자
+                        num_str.push(self.advance());
                     }
                     true
                 } else {
                     false
                 };
 
-                // 일반 숫자/실수 토큰 결정
                 let token_type = if is_float {
-                    num_str
-                        .parse::<f64>()
-                        .map(TokenType::Float)
-                        .unwrap_or(TokenType::Float(0.0))
+                    num_str.parse::<f64>().map(TokenType::Float).unwrap()
                 } else {
-                    num_str
-                        .parse::<i64>()
-                        .map(TokenType::Number)
-                        .unwrap_or(TokenType::Number(0))
+                    num_str.parse::<i64>().map(TokenType::Number).unwrap()
                 };
 
                 Token {
@@ -870,6 +883,32 @@ impl<'a> Lexer<'a> {
         self.advance(); // closing quote
 
         string_literal
+    }
+
+    fn char_literal(&mut self) -> char {
+        let c = if self.peek() == '\\' {
+            self.advance(); // consume '\'
+            let escaped = self.advance();
+            match escaped {
+                'n' => '\n',
+                't' => '\t',
+                'r' => '\r',
+                '\\' => '\\',
+                '\'' => '\'',
+                '"' => '"',
+                _ => panic!("Invalid escape sequence in char literal"),
+            }
+        } else {
+            self.advance()
+        };
+
+        if self.peek() != '\'' {
+            panic!("Unterminated or invalid char literal");
+        }
+
+        self.advance(); // closing '
+
+        c
     }
 
     fn identifier(&mut self) -> String {

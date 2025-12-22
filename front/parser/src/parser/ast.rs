@@ -133,6 +133,9 @@ pub enum Literal {
     Number(i64),
     Float(f64),
     String(String),
+    Bool(bool),
+    Char(char),
+    Byte(u8),
 }
 
 #[derive(Debug, Clone)]

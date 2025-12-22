@@ -72,6 +72,24 @@ pub fn generate_expression_ir<'ctx>(
 
                 gep.as_basic_value_enum()
             },
+            Literal::Bool(v) => {
+                context
+                    .bool_type()
+                    .const_int(if *v { 1 } else { 0 }, false)
+                    .as_basic_value_enum()
+            },
+            Literal::Char(c) => {
+                context
+                    .i8_type()
+                    .const_int(*c as u64, false)
+                    .as_basic_value_enum()
+            },
+            Literal::Byte(b) => {
+                context
+                    .i8_type()
+                    .const_int(*b as u64, false)
+                    .as_basic_value_enum()
+            }
             _ => unimplemented!("Unsupported literal type"),
         },
 

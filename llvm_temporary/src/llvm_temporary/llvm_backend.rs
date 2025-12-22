@@ -13,7 +13,7 @@ pub fn compile_ir_to_object(ir: &str, file_stem: &str, opt_flag: &str) -> String
         .arg("-")
         .arg("-o")
         .arg(&object_path)
-        .stdin(std::process::Stdio::piped())
+        .arg("-Wno-override-module")
         .stdin(std::process::Stdio::piped())
         .spawn()
         .expect("Failed to execute clang");

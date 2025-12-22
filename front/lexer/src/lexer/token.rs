@@ -164,4 +164,6 @@ pub enum TokenType {
     Proto,
     Struct,
     TypeVoid,
+    CharLiteral(char),
+    BoolLiteral(bool),
 }
