@@ -161,6 +161,7 @@ pub enum Operator {
     BitwiseXor,
     LogicalNot,
     BitwiseNot,
+    Not,
 }
 
 #[derive(Debug, Clone)]

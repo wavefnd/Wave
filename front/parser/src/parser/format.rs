@@ -33,64 +33,18 @@ pub fn parse_format_string(s: &str) -> Vec<FormatPart> {
     parts
 }
 
-pub fn parse_expression<'a, T>(tokens: &mut Peekable<T>) -> Option<Expression>
+pub fn parse_expression<'a, T>(tokens: &mut std::iter::Peekable<T>) -> Option<Expression>
 where
     T: Iterator<Item = &'a Token>,
 {
-    if let Some(Token {
-        token_type: TokenType::Not,
-        ..
-    }) = tokens.peek()
-    {
-        tokens.next();
-        let inner = parse_expression(tokens)?;
-        return Some(Expression::Unary {
-            operator: Operator::LogicalNot,
-            expr: Box::new(inner),
-        });
-    }
-
-    if let Some(Token {
-        token_type: TokenType::BitwiseNot,
-        ..
-    }) = tokens.peek()
-    {
-        tokens.next();
-        let inner = parse_expression(tokens)?;
-        return Some(Expression::Unary {
-            operator: Operator::BitwiseNot,
-            expr: Box::new(inner),
-        });
-    }
-
-    if let Some(Token {
-        token_type: TokenType::AddressOf,
-        ..
-    }) = tokens.peek()
-    {
-        tokens.next(); // consume '&'
-        let inner = parse_expression(tokens)?;
-        return Some(Expression::AddressOf(Box::new(inner)));
-    }
-
-    if let Some(Token {
-        token_type: TokenType::Deref,
-        ..
-    }) = tokens.peek()
-    {
-        tokens.next(); // consume 'deref'
-        let inner = parse_expression(tokens)?;
-        return Some(Expression::Deref(Box::new(inner)));
-    }
-    let expr = parse_assignment_expression(tokens)?;
-    Some(expr)
+    parse_assignment_expression(tokens)
 }
 
-pub fn parse_assignment_expression<'a, T>(tokens: &mut Peekable<T>) -> Option<Expression>
+pub fn parse_assignment_expression<'a, T>(tokens: &mut std::iter::Peekable<T>) -> Option<Expression>
 where
     T: Iterator<Item = &'a Token>,
 {
-    let left = parse_logical_expression(tokens)?;
+    let left = parse_logical_or_expression(tokens)?;
 
     if let Some(token) = tokens.peek() {
         let op = match token.token_type {
@@ -103,9 +57,9 @@ where
             _ => return Some(left),
         };
 
-        tokens.next(); // consume +=, -=
+        tokens.next(); // consume op
 
-        let right = parse_logical_expression(tokens)?;
+        let right = parse_assignment_expression(tokens)?;
         return Some(Expression::AssignOperation {
             target: Box::new(left),
             operator: op,
@@ -116,130 +70,262 @@ where
     Some(left)
 }
 
-pub fn parse_logical_expression<'a, T>(tokens: &mut Peekable<T>) -> Option<Expression>
+fn parse_logical_or_expression<'a, T>(tokens: &mut std::iter::Peekable<T>) -> Option<Expression>
 where
     T: Iterator<Item = &'a Token>,
 {
-    let mut left = parse_bitwise_expression(tokens)?;
+    let mut left = parse_logical_and_expression(tokens)?;
 
-    while let Some(token) = tokens.peek() {
-        match token.token_type {
-            TokenType::LogicalAnd | TokenType::LogicalOr => {
-                let op = match token.token_type {
-                    TokenType::LogicalAnd => Operator::LogicalAnd,
-                    TokenType::LogicalOr => Operator::LogicalOr,
-                    _ => unreachable!(),
-                };
-                tokens.next();
-
-                let right = parse_relational_expression(tokens)?;
-                left = Expression::BinaryExpression {
-                    left: Box::new(left),
-                    operator: op,
-                    right: Box::new(right),
-                };
-            }
-            _ => break,
-        }
+    while matches!(tokens.peek().map(|t| &t.token_type), Some(TokenType::LogicalOr)) {
+        tokens.next();
+        let right = parse_logical_and_expression(tokens)?;
+        left = Expression::BinaryExpression {
+            left: Box::new(left),
+            operator: Operator::LogicalOr,
+            right: Box::new(right),
+        };
     }
+
     Some(left)
 }
 
-pub fn parse_relational_expression<'a, T>(tokens: &mut Peekable<T>) -> Option<Expression>
+fn parse_logical_and_expression<'a, T>(tokens: &mut std::iter::Peekable<T>) -> Option<Expression>
+where
+    T: Iterator<Item = &'a Token>,
+{
+    let mut left = parse_bitwise_or_expression(tokens)?;
+
+    while matches!(tokens.peek().map(|t| &t.token_type), Some(TokenType::LogicalAnd)) {
+        tokens.next();
+        let right = parse_bitwise_or_expression(tokens)?;
+        left = Expression::BinaryExpression {
+            left: Box::new(left),
+            operator: Operator::LogicalAnd,
+            right: Box::new(right),
+        };
+    }
+
+    Some(left)
+}
+
+fn parse_bitwise_or_expression<'a, T>(tokens: &mut std::iter::Peekable<T>) -> Option<Expression>
+where
+    T: Iterator<Item = &'a Token>,
+{
+    let mut left = parse_bitwise_xor_expression(tokens)?;
+
+    while matches!(tokens.peek().map(|t| &t.token_type), Some(TokenType::BitwiseOr)) {
+        tokens.next();
+        let right = parse_bitwise_xor_expression(tokens)?;
+        left = Expression::BinaryExpression {
+            left: Box::new(left),
+            operator: Operator::BitwiseOr,
+            right: Box::new(right),
+        };
+    }
+
+    Some(left)
+}
+
+fn parse_bitwise_xor_expression<'a, T>(tokens: &mut std::iter::Peekable<T>) -> Option<Expression>
+where
+    T: Iterator<Item = &'a Token>,
+{
+    let mut left = parse_bitwise_and_expression(tokens)?;
+
+    while matches!(tokens.peek().map(|t| &t.token_type), Some(TokenType::Xor)) {
+        tokens.next();
+        let right = parse_bitwise_and_expression(tokens)?;
+        left = Expression::BinaryExpression {
+            left: Box::new(left),
+            operator: Operator::BitwiseXor,
+            right: Box::new(right),
+        };
+    }
+
+    Some(left)
+}
+
+fn parse_bitwise_and_expression<'a, T>(tokens: &mut std::iter::Peekable<T>) -> Option<Expression>
+where
+    T: Iterator<Item = &'a Token>,
+{
+    let mut left = parse_equality_expression(tokens)?;
+
+    while matches!(tokens.peek().map(|t| &t.token_type), Some(TokenType::AddressOf)) {
+        tokens.next();
+        let right = parse_equality_expression(tokens)?;
+        left = Expression::BinaryExpression {
+            left: Box::new(left),
+            operator: Operator::BitwiseAnd,
+            right: Box::new(right),
+        };
+    }
+
+    Some(left)
+}
+
+fn parse_equality_expression<'a, T>(tokens: &mut std::iter::Peekable<T>) -> Option<Expression>
+where
+    T: Iterator<Item = &'a Token>,
+{
+    let mut left = parse_relational_expression(tokens)?;
+
+    while let Some(token) = tokens.peek() {
+        let op = match token.token_type {
+            TokenType::EqualTwo => Operator::Equal,
+            TokenType::NotEqual => Operator::NotEqual,
+            _ => break,
+        };
+        tokens.next();
+        let right = parse_relational_expression(tokens)?;
+        left = Expression::BinaryExpression {
+            left: Box::new(left),
+            operator: op,
+            right: Box::new(right),
+        };
+    }
+
+    Some(left)
+}
+
+pub fn parse_relational_expression<'a, T>(tokens: &mut std::iter::Peekable<T>) -> Option<Expression>
+where
+    T: Iterator<Item = &'a Token>,
+{
+    let mut left = parse_shift_expression(tokens)?;
+
+    while let Some(token) = tokens.peek() {
+        let op = match token.token_type {
+            TokenType::Rchevr => Operator::Greater,
+            TokenType::RchevrEq => Operator::GreaterEqual,
+            TokenType::Lchevr => Operator::Less,
+            TokenType::LchevrEq => Operator::LessEqual,
+            _ => break,
+        };
+        tokens.next();
+        let right = parse_shift_expression(tokens)?;
+        left = Expression::BinaryExpression {
+            left: Box::new(left),
+            operator: op,
+            right: Box::new(right),
+        };
+    }
+
+    Some(left)
+}
+
+pub fn parse_shift_expression<'a, T>(tokens: &mut std::iter::Peekable<T>) -> Option<Expression>
 where
     T: Iterator<Item = &'a Token>,
 {
     let mut left = parse_additive_expression(tokens)?;
 
     while let Some(token) = tokens.peek() {
-        match token.token_type {
-            TokenType::EqualTwo
-            | TokenType::NotEqual
-            | TokenType::Rchevr
-            | TokenType::RchevrEq
-            | TokenType::Lchevr
-            | TokenType::LchevrEq => {
-                let op = match token.token_type {
-                    TokenType::EqualTwo => Operator::Equal,
-                    TokenType::NotEqual => Operator::NotEqual,
-                    TokenType::Rchevr => Operator::Greater,
-                    TokenType::RchevrEq => Operator::GreaterEqual,
-                    TokenType::Lchevr => Operator::Less,
-                    TokenType::LchevrEq => Operator::LessEqual,
-                    _ => unreachable!(),
-                };
-                tokens.next();
-
-                let right = parse_additive_expression(tokens)?;
-                left = Expression::BinaryExpression {
-                    left: Box::new(left),
-                    operator: op,
-                    right: Box::new(right),
-                };
-            }
+        let op = match token.token_type {
+            TokenType::Rol => Operator::ShiftLeft,
+            TokenType::Ror => Operator::ShiftRight,
             _ => break,
-        }
+        };
+
+        tokens.next();
+        let right = parse_additive_expression(tokens)?;
+        left = Expression::BinaryExpression {
+            left: Box::new(left),
+            operator: op,
+            right: Box::new(right),
+        };
     }
+
     Some(left)
 }
 
-pub fn parse_additive_expression<'a, T>(tokens: &mut Peekable<T>) -> Option<Expression>
+pub fn parse_additive_expression<'a, T>(tokens: &mut std::iter::Peekable<T>) -> Option<Expression>
 where
     T: Iterator<Item = &'a Token>,
 {
     let mut left = parse_multiplicative_expression(tokens)?;
 
     while let Some(token) = tokens.peek() {
-        match token.token_type {
-            TokenType::Plus | TokenType::Minus => {
-                let op = match token.token_type {
-                    TokenType::Plus => Operator::Add,
-                    TokenType::Minus => Operator::Subtract,
-                    _ => unreachable!(),
-                };
-                tokens.next();
-
-                let right = parse_multiplicative_expression(tokens)?;
-                left = Expression::BinaryExpression {
-                    left: Box::new(left),
-                    operator: op,
-                    right: Box::new(right),
-                };
-            }
+        let op = match token.token_type {
+            TokenType::Plus => Operator::Add,
+            TokenType::Minus => Operator::Subtract,
             _ => break,
-        }
+        };
+        tokens.next();
+        let right = parse_multiplicative_expression(tokens)?;
+        left = Expression::BinaryExpression {
+            left: Box::new(left),
+            operator: op,
+            right: Box::new(right),
+        };
     }
+
     Some(left)
 }
 
-pub fn parse_multiplicative_expression<'a, T>(tokens: &mut Peekable<T>) -> Option<Expression>
+pub fn parse_multiplicative_expression<'a, T>(tokens: &mut std::iter::Peekable<T>) -> Option<Expression>
 where
     T: Iterator<Item = &'a Token>,
 {
-    let mut left = parse_primary_expression(tokens)?;
+    let mut left = parse_unary_expression(tokens)?;
 
     while let Some(token) = tokens.peek() {
-        match token.token_type {
-            TokenType::Star | TokenType::Div | TokenType::Remainder => {
-                let op = match token.token_type {
-                    TokenType::Star => Operator::Multiply,
-                    TokenType::Div => Operator::Divide,
-                    TokenType::Remainder => Operator::Remainder,
-                    _ => unreachable!(),
-                };
-                tokens.next();
-
-                let right = parse_primary_expression(tokens)?;
-                left = Expression::BinaryExpression {
-                    left: Box::new(left),
-                    operator: op,
-                    right: Box::new(right),
-                };
-            }
+        let op = match token.token_type {
+            TokenType::Star => Operator::Multiply,
+            TokenType::Div => Operator::Divide,
+            TokenType::Remainder => Operator::Remainder,
             _ => break,
+        };
+        tokens.next();
+        let right = parse_unary_expression(tokens)?;
+        left = Expression::BinaryExpression {
+            left: Box::new(left),
+            operator: op,
+            right: Box::new(right),
+        };
+    }
+
+    Some(left)
+}
+
+fn parse_unary_expression<'a, T>(tokens: &mut std::iter::Peekable<T>) -> Option<Expression>
+where
+    T: Iterator<Item = &'a Token>,
+{
+    if let Some(token) = tokens.peek() {
+        match token.token_type {
+            TokenType::Not => {
+                tokens.next();
+                let inner = parse_unary_expression(tokens)?;
+                return Some(Expression::Unary {
+                    operator: Operator::Not,
+                    expr: Box::new(inner),
+                });
+            }
+            TokenType::BitwiseNot => {
+                tokens.next();
+                let inner = parse_unary_expression(tokens)?;
+                return Some(Expression::Unary {
+                    operator: Operator::BitwiseNot,
+                    expr: Box::new(inner),
+                });
+            }
+            TokenType::AddressOf => {
+                tokens.next();
+                let inner = parse_unary_expression(tokens)?;
+                return Some(Expression::AddressOf(Box::new(inner)));
+            }
+            TokenType::Deref => {
+                tokens.next();
+                let inner = parse_unary_expression(tokens)?;
+                return Some(Expression::Deref(Box::new(inner)));
+            }
+            _ => {}
         }
     }
-    Some(left)
+
+    parse_primary_expression(tokens)
 }
 
 pub fn parse_primary_expression<'a, T>(tokens: &mut Peekable<T>) -> Option<Expression>
@@ -756,52 +842,4 @@ where
             None
         }
     }
-}
-
-pub fn parse_shift_expression<'a, T>(tokens: &mut Peekable<T>) -> Option<Expression>
-where
-    T: Iterator<Item = &'a Token>,
-{
-    let mut left = parse_relational_expression(tokens)?;
-
-    while let Some(token) = tokens.peek() {
-        let op = match token.token_type {
-            TokenType::Rol => Operator::ShiftLeft,
-            TokenType::Ror => Operator::ShiftRight,
-            _ => break,
-        };
-
-        tokens.next();
-        let right = parse_relational_expression(tokens)?;
-        left = Expression::BinaryExpression {
-            left: Box::new(left),
-            operator: op,
-            right: Box::new(right),
-        };
-    }
-    Some(left)
-}
-
-pub fn parse_bitwise_expression<'a, T>(tokens: &mut Peekable<T>) -> Option<Expression>
-where
-    T: Iterator<Item = &'a Token>,
-{
-    let mut left = parse_shift_expression(tokens)?;
-
-    while let Some(token) = tokens.peek() {
-        let op = match token.token_type {
-            TokenType::BitwiseOr => Operator::BitwiseOr,
-            TokenType::Xor => Operator::BitwiseXor,
-            _ => break,
-        };
-
-        tokens.next();
-        let right = parse_shift_expression(tokens)?;
-        left = Expression::BinaryExpression {
-            left: Box::new(left),
-            operator: op,
-            right: Box::new(right),
-        };
-    }
-    Some(left)
 }

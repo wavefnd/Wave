@@ -1,16 +1,29 @@
 use crate::llvm_temporary::llvm_codegen::{generate_address_ir, VariableInfo};
 use inkwell::context::Context;
 use inkwell::types::{AnyTypeEnum, BasicType, BasicTypeEnum, StructType};
-use inkwell::values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum};
+use inkwell::values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum, IntValue};
 use inkwell::{FloatPredicate, IntPredicate};
 use parser::ast::{ASTNode, AssignOperator, Expression, Literal, Operator, WaveType};
 use std::collections::HashMap;
+use inkwell::builder::Builder;
 
 pub struct ProtoInfo<'ctx> {
     pub vtable_ty: StructType<'ctx>,
     pub fat_ty: StructType<'ctx>,
     pub methods: Vec<String>,
 }
+
+fn to_bool<'ctx>(builder: &Builder<'ctx>, v: IntValue<'ctx>) -> IntValue<'ctx> {
+    if v.get_type().get_bit_width() == 1 {
+        return v;
+    }
+
+    let zero = v.get_type().const_zero();
+    builder
+        .build_int_compare(IntPredicate::NE, v, zero, "tobool")
+        .unwrap()
+}
+
 
 pub fn generate_expression_ir<'ctx>(
     context: &'ctx Context,
@@ -556,16 +569,28 @@ pub fn generate_expression_ir<'ctx>(
                     let l_type = l.get_type();
                     let r_type = r.get_type();
 
-                    let (l_casted, r_casted) = if l_type != r_type {
-                        if l_type.get_bit_width() < r_type.get_bit_width() {
-                            let new_l = builder.build_int_z_extend(l, r_type, "zext_l").unwrap();
-                            (new_l, r)
-                        } else {
-                            let new_r = builder.build_int_z_extend(r, l_type, "zext_r").unwrap();
-                            (l, new_r)
+                    let (l_casted, r_casted) = match operator {
+                        Operator::ShiftLeft | Operator::ShiftRight => {
+                            let r2 = if r_type != l_type {
+                                builder.build_int_cast(r, l_type, "shamt").unwrap()
+                            } else {
+                                r
+                            };
+                            (l, r2)
                         }
-                    } else {
-                        (l, r)
+                        _ => {
+                            if l_type != r_type {
+                                if l_type.get_bit_width() < r_type.get_bit_width() {
+                                    let new_l = builder.build_int_z_extend(l, r_type, "zext_l").unwrap();
+                                    (new_l, r)
+                                } else {
+                                    let new_r = builder.build_int_z_extend(r, l_type, "zext_r").unwrap();
+                                    (l, new_r)
+                                }
+                            } else {
+                                (l, r)
+                            }
+                        }
                     };
 
                     let mut result = match operator {
@@ -582,6 +607,9 @@ pub fn generate_expression_ir<'ctx>(
                         Operator::ShiftRight => {
                             builder.build_right_shift(l_casted, r_casted, true, "shr")
                         }
+                        Operator::BitwiseAnd => builder.build_and(l_casted, r_casted, "andtmp"),
+                        Operator::BitwiseOr  => builder.build_or(l_casted, r_casted, "ortmp"),
+                        Operator::BitwiseXor => builder.build_xor(l_casted, r_casted, "xortmp"),
                         Operator::Greater => builder.build_int_compare(
                             IntPredicate::SGT,
                             l_casted,
@@ -618,17 +646,24 @@ pub fn generate_expression_ir<'ctx>(
                             r_casted,
                             "cmptmp",
                         ),
+                        Operator::LogicalAnd => {
+                            let lb = to_bool(builder, l_casted);
+                            let rb = to_bool(builder, r_casted);
+                            builder.build_and(lb, rb, "land")
+                        }
+                        Operator::LogicalOr => {
+                            let lb = to_bool(builder, l_casted);
+                            let rb = to_bool(builder, r_casted);
+                            builder.build_or(lb, rb, "lor")
+                        }
                         _ => panic!("Unsupported binary operator"),
                     }
                     .unwrap();
 
                     if let Some(BasicTypeEnum::IntType(target_ty)) = expected_type {
                         let result_ty = result.get_type();
-
                         if result_ty != target_ty {
-                            result = builder
-                                .build_int_cast(result, target_ty, "cast_result")
-                                .unwrap();
+                            result = builder.build_int_cast(result, target_ty, "cast_result").unwrap();
                         }
                     }
 
@@ -1042,18 +1077,24 @@ pub fn generate_expression_ir<'ctx>(
 
             match (operator, val) {
                 // ! (logical not)
-                (Operator::LogicalNot, BasicValueEnum::IntValue(v)) => {
-                    let one = v.get_type().const_int(1, false);
-                    builder
-                        .build_xor(v, one, "logical_not")
-                        .unwrap()
-                        .as_basic_value_enum()
+                (Operator::LogicalNot, BasicValueEnum::IntValue(iv))
+                | (Operator::Not,       BasicValueEnum::IntValue(iv)) => {
+                    let bw = iv.get_type().get_bit_width();
+                    if bw == 1 {
+                        builder.build_not(iv, "lnot").unwrap().as_basic_value_enum()
+                    } else {
+                        let zero = iv.get_type().const_zero();
+                        builder
+                            .build_int_compare(IntPredicate::EQ, iv, zero, "lnot")
+                            .unwrap()
+                            .as_basic_value_enum()
+                    }
                 }
 
-                (Operator::BitwiseNot, BasicValueEnum::IntValue(v)) => builder
-                    .build_not(v, "bitwise_not")
-                    .unwrap()
-                    .as_basic_value_enum(),
+                // ~ (bitwise not)
+                (Operator::BitwiseNot, BasicValueEnum::IntValue(iv)) => {
+                    builder.build_not(iv, "bnot").unwrap().as_basic_value_enum()
+                }
 
                 _ => panic!(
                     "Unsupported unary operator {:?} for value {:?}",
@@ -1062,6 +1103,20 @@ pub fn generate_expression_ir<'ctx>(
             }
         }
 
+        Expression::Grouped(inner) => {
+            generate_expression_ir(
+                context,
+                builder,
+                inner,
+                variables,
+                module,
+                expected_type,
+                global_consts,
+                struct_types,
+                struct_field_indices,
+            )
+        }
+        
         _ => unimplemented!("Unsupported expression type"),
     }
 }

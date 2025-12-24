@@ -306,7 +306,13 @@ impl<'a> Lexer<'a> {
                 line: self.line,
             },
             '<' => {
-                if self.match_next('=') {
+                if self.match_next('<') {
+                    Token {
+                        token_type: TokenType::Rol,
+                        lexeme: "<<".to_string(),
+                        line: self.line,
+                    }
+                } else if self.match_next('=') {
                     Token {
                         token_type: TokenType::LchevrEq,
                         lexeme: "<=".to_string(),
@@ -321,7 +327,13 @@ impl<'a> Lexer<'a> {
                 }
             }
             '>' => {
-                if self.match_next('=') {
+                if self.match_next('>') {
+                    Token {
+                        token_type: TokenType::Ror,
+                        lexeme: ">>".to_string(),
+                        line: self.line,
+                    }
+                } else if self.match_next('=') {
                     Token {
                         token_type: TokenType::RchevrEq,
                         lexeme: ">=".to_string(),
@@ -586,16 +598,6 @@ impl<'a> Lexer<'a> {
                         lexeme: "asm".to_string(),
                         line: self.line,
                     },
-                    "<<" => Token {
-                        token_type: TokenType::Rol,
-                        lexeme: "<<".to_string(),
-                        line: self.line,
-                    },
-                    ">>" => Token {
-                        token_type: TokenType::Ror,
-                        lexeme: ">>".to_string(),
-                        line: self.line,
-                    },
                     "xnand" => Token {
                         token_type: TokenType::Xnand,
                         lexeme: "xnand".to_string(),
@@ -784,6 +786,23 @@ impl<'a> Lexer<'a> {
                 }
             }
             '0'..='9' => {
+                if c == '0' && (self.peek() == 'b' || self.peek() == 'B') {
+                    self.advance(); // consume 'b' or 'B'
+
+                    let mut bin_str = String::new();
+                    while self.peek() == '0' || self.peek() == '1' {
+                        bin_str.push(self.advance());
+                    }
+
+                    let value = i64::from_str_radix(&bin_str, 2).unwrap_or(0);
+
+                    return Token {
+                        token_type: TokenType::Number(value),
+                        lexeme: format!("0b{}", bin_str),
+                        line: self.line,
+                    }
+                }
+
                 if c == '0' && (self.peek() == 'x' || self.peek() == 'X') {
                     self.advance(); // consume 'x' or 'X'
 
