@@ -7,6 +7,7 @@ use regex::Regex;
 use std::collections::HashSet;
 use std::iter::Peekable;
 use std::slice::Iter;
+use crate::parser::verification::validate_program;
 
 pub fn parse(tokens: &Vec<Token>) -> Option<Vec<ASTNode>> {
     let mut iter = tokens.iter().peekable();
@@ -66,6 +67,11 @@ pub fn parse(tokens: &Vec<Token>) -> Option<Vec<ASTNode>> {
                 return None;
             }
         }
+    }
+
+    if let Err(e) = validate_program(&nodes) {
+        println!("❌ {}", e);
+        return None;
     }
 
     Some(nodes)

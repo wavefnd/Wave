@@ -23,5 +23,6 @@ pub mod import;
 pub mod parser;
 pub mod stdlib;
 pub mod type_system;
+mod verification;
 
 pub use parser::*;

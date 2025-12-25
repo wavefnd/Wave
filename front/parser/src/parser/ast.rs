@@ -75,6 +75,14 @@ pub enum FormatPart {
 }
 
 #[derive(Debug, Clone)]
+pub enum IncDecKind {
+    PreInc,
+    PreDec,
+    PostInc,
+    PostDec,
+}
+
+#[derive(Debug, Clone)]
 pub enum Expression {
     StructLiteral {
         name: String,
@@ -125,6 +133,10 @@ pub enum Expression {
     Unary {
         operator: Operator,
         expr: Box<Expression>,
+    },
+    IncDec {
+        kind: IncDecKind,
+        target: Box<Expression>,
     },
 }
 
@@ -220,6 +232,7 @@ pub enum StatementNode {
 }
 
 #[derive(Debug, Clone, PartialEq)]
+#[derive(Copy)]
 pub enum Mutability {
     Var,
     Let,

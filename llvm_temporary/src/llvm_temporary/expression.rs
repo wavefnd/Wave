@@ -3,7 +3,7 @@ use inkwell::context::Context;
 use inkwell::types::{AnyTypeEnum, BasicType, BasicTypeEnum, StructType};
 use inkwell::values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum, IntValue};
 use inkwell::{FloatPredicate, IntPredicate};
-use parser::ast::{ASTNode, AssignOperator, Expression, Literal, Operator, WaveType};
+use parser::ast::{ASTNode, AssignOperator, Expression, IncDecKind, Literal, Operator, WaveType};
 use std::collections::HashMap;
 use inkwell::builder::Builder;
 
@@ -1100,6 +1100,57 @@ pub fn generate_expression_ir<'ctx>(
                     "Unsupported unary operator {:?} for value {:?}",
                     operator, val
                 ),
+            }
+        }
+
+        Expression::IncDec { kind, target } => {
+            let ptr = generate_address_ir(context, builder, target, variables, module);
+            let old_val = builder.build_load(ptr, "incdec_old").unwrap();
+
+            let new_val: BasicValueEnum<'ctx> = match old_val {
+                BasicValueEnum::IntValue(iv) => {
+                    if iv.get_type().get_bit_width() == 1 {
+                        panic!("++/-- not allowed on bool");
+                    }
+
+                    let one = iv.get_type().const_int(1, false);
+                    let nv = match kind {
+                        IncDecKind::PreInc | IncDecKind::PostInc => builder.build_int_add(iv, one, "inc").unwrap(),
+                        IncDecKind::PreDec | IncDecKind::PostDec => builder.build_int_sub(iv, one, "dec").unwrap(),
+                    };
+                    nv.as_basic_value_enum()
+                }
+
+                BasicValueEnum::FloatValue(fv) => {
+                    let one = fv.get_type().const_float(1.0);
+                    let nv = match kind {
+                        IncDecKind::PreInc | IncDecKind::PostInc => builder.build_float_add(fv, one, "finc").unwrap(),
+                        IncDecKind::PreDec | IncDecKind::PostDec => builder.build_float_sub(fv, one, "fdec").unwrap(),
+                    };
+                    nv.as_basic_value_enum()
+                }
+
+                BasicValueEnum::PointerValue(pv) => {
+                    let idx = match kind {
+                        IncDecKind::PreInc | IncDecKind::PostInc => context.i64_type().const_int(1, true),
+                        IncDecKind::PreDec | IncDecKind::PostDec => context.i64_type().const_int((-1i64) as u64, true),
+                    };
+                    let gep = unsafe {
+                        builder
+                            .build_in_bounds_gep(pv, &[idx], "pincdec")
+                            .unwrap()
+                    };
+                    gep.as_basic_value_enum()
+                }
+
+                _ => panic!("Unsupported type for ++/--: {:?}", old_val),
+            };
+
+            builder.build_store(ptr, new_val).unwrap();
+
+            match kind {
+                IncDecKind::PreInc | IncDecKind::PreDec => new_val,
+                IncDecKind::PostInc | IncDecKind::PostDec => old_val,
             }
         }
 

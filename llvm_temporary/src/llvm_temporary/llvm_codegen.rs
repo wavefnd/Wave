@@ -293,6 +293,10 @@ pub fn generate_address_ir<'ctx>(
     module: &'ctx inkwell::module::Module<'ctx>,
 ) -> PointerValue<'ctx> {
     match expr {
+        Expression::Grouped(inner) => {
+            generate_address_ir(context, builder, inner, variables, module)
+        }
+
         Expression::Variable(name) => {
             let var_info = variables
                 .get(name)
@@ -301,18 +305,25 @@ pub fn generate_address_ir<'ctx>(
             var_info.ptr
         }
 
-        Expression::Deref(inner_expr) => match &**inner_expr {
-            Expression::Variable(var_name) => {
-                let ptr_to_ptr = variables
-                    .get(var_name)
-                    .unwrap_or_else(|| panic!("Variable {} not found", var_name))
-                    .ptr;
-
-                let actual_ptr = builder.build_load(ptr_to_ptr, "deref_target").unwrap();
-                actual_ptr.into_pointer_value()
+        Expression::Deref(inner_expr) => {
+            let mut inner: &Expression = inner_expr.as_ref();
+            while let Expression::Grouped(g) = inner {
+                inner = g.as_ref();
             }
-            _ => panic!("Nested deref not supported"),
-        },
+
+            match inner {
+                Expression::Variable(var_name) => {
+                    let ptr_to_ptr = variables
+                        .get(var_name)
+                        .unwrap_or_else(|| panic!("Variable {} not found", var_name))
+                        .ptr;
+
+                    let actual_ptr = builder.build_load(ptr_to_ptr, "deref_target").unwrap();
+                    actual_ptr.into_pointer_value()
+                }
+                _ => panic!("Cannot take address: deref target is not a variable"),
+            }
+        }
 
         _ => panic!("Cannot take address of this expression"),
     }

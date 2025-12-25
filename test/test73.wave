@@ -1,0 +1,6 @@
+fun main() {
+    var x: i32 = 1;
+    let p: ptr<i32> = &x;
+    (deref p)++;
+    println("{}", p);
+}

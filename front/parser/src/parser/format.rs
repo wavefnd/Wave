@@ -1,5 +1,5 @@
 use crate::ast::Expression::Variable;
-use crate::ast::{AssignOperator, Expression, FormatPart, Literal, Operator};
+use crate::ast::{AssignOperator, Expression, FormatPart, IncDecKind, Literal, Operator};
 use lexer::{Token, TokenType};
 use std::iter::Peekable;
 use std::slice::Iter;
@@ -31,6 +31,36 @@ pub fn parse_format_string(s: &str) -> Vec<FormatPart> {
     }
 
     parts
+}
+
+fn is_assignable(expr: &Expression) -> bool {
+    match expr {
+        Expression::Variable(_) => true,
+        Expression::Deref(_) => true,
+        Expression::FieldAccess { .. } => true,
+        Expression::IndexAccess { .. } => true,
+
+        Expression::Grouped(inner) => is_assignable(inner),
+
+        _ => false,
+    }
+}
+
+fn desugar_incdec(line: usize, target: Expression, is_inc: bool) -> Option<Expression> {
+    if !is_assignable(&target) {
+        println!("Error: ++/-- target must bee assignable (line {})", line);
+        return None;
+    }
+
+    Some(Expression::AssignOperation {
+        target: Box::new(target),
+        operator: if is_inc {
+            AssignOperator::AddAssign
+        } else {
+            AssignOperator::SubAssign
+        },
+        value: Box::new(Expression::Literal(Literal::Number(1))),
+    })
 }
 
 pub fn parse_expression<'a, T>(tokens: &mut std::iter::Peekable<T>) -> Option<Expression>
@@ -320,6 +350,30 @@ where
                 tokens.next();
                 let inner = parse_unary_expression(tokens)?;
                 return Some(Expression::Deref(Box::new(inner)));
+            }
+            TokenType::Increment => {
+                let tok = tokens.next()?; // '++'
+                let inner = parse_unary_expression(tokens)?;
+                if !is_assignable(&inner) {
+                    println!("Error: ++ target must be assignable (line {})", tok.line);
+                    return None;
+                }
+                return Some(Expression::IncDec {
+                    kind: IncDecKind::PreInc,
+                    target: Box::new(inner),
+                });
+            }
+            TokenType::Decrement => {
+                let tok = tokens.next()?; // '--'
+                let inner = parse_unary_expression(tokens)?;
+                if !is_assignable(&inner) {
+                    println!("Error: -- target must be assignable (line {})", tok.line);
+                    return None;
+                }
+                return Some(Expression::IncDec {
+                    kind: IncDecKind::PreDec,
+                    target: Box::new(inner),
+                });
             }
             _ => {}
         }
@@ -760,6 +814,40 @@ where
                     target: Box::new(base_expr),
                     index: Box::new(index_expr),
                 });
+            }
+
+            Some(TokenType::Increment) => {
+                let line = tokens.peek().unwrap().line;
+                tokens.next(); // consume '++'
+
+                let base = expr.take()?;
+                if !is_assignable(&base) {
+                    println!("Error: postfix ++ target must be assignable (line {})", line);
+                    return None;
+                }
+
+                expr = Some(Expression::IncDec {
+                    kind: IncDecKind::PostInc,
+                    target: Box::new(base),
+                });
+                break;
+            }
+
+            Some(TokenType::Decrement) => {
+                let line = tokens.peek().unwrap().line;
+                tokens.next(); // consume '--'
+
+                let base = expr.take()?;
+                if !is_assignable(&base) {
+                    println!("Error: postfix -- target must be assignable (line {})", line);
+                    return None;
+                }
+
+                expr = Some(Expression::IncDec {
+                    kind: IncDecKind::PostDec,
+                    target: Box::new(base),
+                });
+                break;
             }
 
             _ => break,
