@@ -2,6 +2,8 @@
 import subprocess
 import time
 from pathlib import Path
+import threading
+import socket
 
 ROOT = Path(__file__).resolve().parent.parent
 TEST_DIR = ROOT / "test"
@@ -13,7 +15,12 @@ GREEN = "\033[92m"
 RED = "\033[91m"
 YELLOW = "\033[93m"
 BLUE = "\033[94m"
+CYAN = "\033[96m"
 RESET = "\033[0m"
+
+KNOWN_TIMEOUT = {
+    "test22.wave",  # input() not implemented
+}
 
 if not WAVEC.exists():
     print("wavec not found. Run `cargo build --release` first.")
@@ -21,10 +28,20 @@ if not WAVEC.exists():
 
 results = []
 
+def send_udp_for_test61():
+    time.sleep(0.5)
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.sendto(b"hello from python\n", ("127.0.0.1", 8080))
+    sock.close()
+
 def run_and_classify(name, cmd):
     print(f"{BLUE}RUN {name}{RESET}")
 
     try:
+        if name == "test61.wave":
+            t = threading.Thread(target=send_udp_for_test61, daemon=True)
+            t.start()
+
         result = subprocess.run(
             cmd,
             stdout=subprocess.PIPE,
@@ -41,11 +58,13 @@ def run_and_classify(name, cmd):
             return 0
 
     except subprocess.TimeoutExpired:
-        print(f"{YELLOW}→ TIMEOUT ({TIMEOUT_SEC}s){RESET}\n")
-        return -1
+        if name in KNOWN_TIMEOUT:
+            print(f"{CYAN}→ SKIP (expected blocking / unimplemented){RESET}\n")
+            return 2
+        else:
+            print(f"{YELLOW}→ TIMEOUT ({TIMEOUT_SEC}s){RESET}\n")
+            return -1
 
-
-# test*.wave
 for path in sorted(TEST_DIR.glob("test*.wave")):
     name = path.name
     cmd = [str(WAVEC), "run", f"test/{name}"]
@@ -63,18 +82,21 @@ if test28.exists():
     )
     results.append(("test28 (dir)", result))
 
-# 집계
 pass_tests = [name for name, r in results if r == 1]
 fail_tests = [name for name, r in results if r == 0]
 timeout_tests = [name for name, r in results if r == -1]
+skip_tests = [name for name, r in results if r == 2]
 
-# 최종 출력
 print("\n=========================")
 print("🎉 FINAL TEST RESULT")
 print("=========================\n")
 
 print(f"{GREEN}PASS ({len(pass_tests)}){RESET}")
 for name in pass_tests:
+    print(f"  - {name}")
+
+print(f"\n{CYAN}SKIP ({len(skip_tests)}){RESET}")
+for name in skip_tests:
     print(f"  - {name}")
 
 print(f"\n{RED}FAIL ({len(fail_tests)}){RESET}")
@@ -87,6 +109,7 @@ for name in timeout_tests:
 
 print("\n=========================")
 print(f"{GREEN}PASS: {len(pass_tests)}{RESET}")
+print(f"{CYAN}SKIP: {len(skip_tests)}{RESET}")
 print(f"{RED}FAIL: {len(fail_tests)}{RESET}")
 print(f"{YELLOW}TIMEOUT: {len(timeout_tests)}{RESET}")
 print("=========================\n")

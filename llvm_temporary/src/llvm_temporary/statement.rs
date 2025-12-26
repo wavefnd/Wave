@@ -575,7 +575,7 @@ pub fn generate_statement_ir<'ctx>(
         }) => {
             let current_fn = builder.get_insert_block().unwrap().get_parent().unwrap();
 
-            let cond_value = generate_expression_ir(
+            let cond_any = generate_expression_ir(
                 context,
                 builder,
                 condition,
@@ -587,15 +587,32 @@ pub fn generate_statement_ir<'ctx>(
                 struct_field_indices,
             );
 
+            let cond_i1 = match cond_any {
+                BasicValueEnum::IntValue(iv) => {
+                    if iv.get_type().get_bit_width() == 1 {
+                        iv
+                    } else {
+                        let zero = iv.get_type().const_zero();
+                        builder.build_int_compare(inkwell::IntPredicate::NE, iv, zero, "if_cond").unwrap()
+                    }
+                }
+                BasicValueEnum::FloatValue(fv) => {
+                    let zero = fv.get_type().const_float(0.0);
+                    builder.build_float_compare(inkwell::FloatPredicate::ONE, fv, zero, "if_cond").unwrap()
+                }
+                BasicValueEnum::PointerValue(pv) => builder.build_is_not_null(pv, "if_cond").unwrap(),
+                _ => panic!("Unsupported if condition type"),
+            };
+
             let then_block = context.append_basic_block(current_fn, "then");
             let else_block_bb = context.append_basic_block(current_fn, "else");
             let merge_block = context.append_basic_block(current_fn, "merge");
 
             let _ = builder.build_conditional_branch(
-                cond_value.try_into().unwrap(),
+                cond_i1,
                 then_block,
                 else_block_bb,
-            );
+            ).unwrap();
 
             // ---- then block ----
             builder.position_at_end(then_block);
@@ -615,19 +632,20 @@ pub fn generate_statement_ir<'ctx>(
                     struct_field_indices,
                 );
             }
-            let then_has_terminator = then_block.get_terminator().is_some();
-            if !then_has_terminator {
-                let _ = builder.build_unconditional_branch(merge_block);
+
+            let then_end = builder.get_insert_block().unwrap();
+            if then_end.get_terminator().is_none() {
+                builder.build_unconditional_branch(merge_block).unwrap();
             }
 
-            // ---- else block ----
-            builder.position_at_end(else_block_bb);
+            let _ = builder.position_at_end(else_block_bb);
+            let mut current_check_bb = else_block_bb;
 
-            let else_has_terminator = if let Some(else_ifs) = else_if_blocks {
-                let mut current_bb = else_block_bb;
+            if let Some(else_ifs) = else_if_blocks {
                 for (else_if_cond, else_if_body) in else_ifs.iter() {
-                    let current_fn = builder.get_insert_block().unwrap().get_parent().unwrap();
-                    let cond_value = generate_expression_ir(
+                    builder.position_at_end(current_check_bb);
+
+                    let c_any = generate_expression_ir(
                         context,
                         builder,
                         else_if_cond,
@@ -638,13 +656,30 @@ pub fn generate_statement_ir<'ctx>(
                         &struct_types,
                         struct_field_indices,
                     );
+                    let c_i1 = match c_any {
+                        BasicValueEnum::IntValue(iv) => {
+                            if iv.get_type().get_bit_width() == 1 { iv } else {
+                                let zero = iv.get_type().const_zero();
+                                builder.build_int_compare(inkwell::IntPredicate::NE, iv, zero, "elif_cond").unwrap()
+                            }
+                        }
+                        BasicValueEnum::FloatValue(fv) => {
+                            let zero = fv.get_type().const_float(0.0);
+                            builder.build_float_compare(inkwell::FloatPredicate::ONE, fv, zero, "elif_cond").unwrap()
+                        }
+                        BasicValueEnum::PointerValue(pv) => builder.build_is_not_null(pv, "elif_cond").unwrap(),
+                        _ => panic!("Unsupported else-if condition type"),
+                    };
+
                     let then_bb = context.append_basic_block(current_fn, "else_if_then");
                     let next_check_bb = context.append_basic_block(current_fn, "next_else_if");
+
                     let _ = builder.build_conditional_branch(
-                        cond_value.try_into().unwrap(),
+                        c_i1,
                         then_bb,
                         next_check_bb,
-                    );
+                    ).unwrap();
+
                     builder.position_at_end(then_bb);
                     for stmt in else_if_body {
                         generate_statement_ir(
@@ -662,12 +697,16 @@ pub fn generate_statement_ir<'ctx>(
                             struct_field_indices,
                         );
                     }
-                    if then_bb.get_terminator().is_none() {
+
+                    let end_bb = builder.get_insert_block().unwrap();
+                    if end_bb.get_terminator().is_none() {
                         let _ = builder.build_unconditional_branch(merge_block);
                     }
-                    builder.position_at_end(next_check_bb);
-                    current_bb = next_check_bb;
+
+                    current_check_bb = next_check_bb;
                 }
+
+                builder.position_at_end(current_check_bb);
 
                 // === FIX: Generate else_block after else_if blocks ===
                 if let Some(else_body) = else_block {
@@ -687,11 +726,18 @@ pub fn generate_statement_ir<'ctx>(
                             struct_field_indices,
                         );
                     }
-                    current_bb.get_terminator().is_some()
-                } else {
-                    current_bb.get_terminator().is_some()
                 }
-            } else if let Some(else_body) = else_block {
+                let else_end = builder.get_insert_block().unwrap();
+                if else_end.get_terminator().is_none() {
+                    builder.build_unconditional_branch(merge_block).unwrap();
+                }
+
+                builder.position_at_end(merge_block);
+            }
+
+            builder.position_at_end(current_check_bb);
+
+            if let Some(else_body) = else_block.as_deref() {
                 for stmt in else_body.iter() {
                     generate_statement_ir(
                         context,
@@ -708,18 +754,14 @@ pub fn generate_statement_ir<'ctx>(
                         struct_field_indices,
                     );
                 }
-                else_block_bb.get_terminator().is_some()
-            } else {
-                false
-            };
-
-            if !else_has_terminator {
-                let _ = builder.build_unconditional_branch(merge_block);
             }
 
-            if !then_has_terminator || !else_has_terminator {
-                builder.position_at_end(merge_block);
+            let else_end = builder.get_insert_block().unwrap();
+            if else_end.get_terminator().is_none() {
+                builder.build_unconditional_branch(merge_block).unwrap();
             }
+
+            builder.position_at_end(merge_block);
         }
         ASTNode::Statement(StatementNode::While { condition, body }) => {
             let current_fn = builder.get_insert_block().unwrap().get_parent().unwrap();
