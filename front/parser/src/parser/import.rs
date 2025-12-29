@@ -25,7 +25,6 @@ pub fn local_import_unit(
         ));
     }
 
-    // ✅ std::* : 지금은 조용히 스킵 (wavec는 std 구현 전)
     if path.starts_with("std::") {
         already_imported.insert(path.to_string());
         return Ok(ImportedUnit {
@@ -34,7 +33,6 @@ pub fn local_import_unit(
         });
     }
 
-    // ✅ foo::bar : wavec 단독모드에서 외부 import 금지 (Vex 언급 없음)
     if path.contains("::") {
         return Err(WaveError::new(
             WaveErrorKind::SyntaxError("External import is not supported".to_string()),
