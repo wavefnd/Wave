@@ -1,17 +1,20 @@
 use crate::ast::ASTNode;
 use crate::parse;
-use crate::parser::stdlib::StdlibManager;
 use error::error::{WaveError, WaveErrorKind};
 use lexer::Lexer;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
 
-pub fn local_import(
+pub struct ImportedUnit {
+    pub abs_path: PathBuf,
+    pub ast: Vec<ASTNode>,
+}
+
+pub fn local_import_unit(
     path: &str,
     already_imported: &mut HashSet<String>,
     base_dir: &Path,
-    stdlib_manager: Option<&StdlibManager>,
-) -> Result<Vec<ASTNode>, WaveError> {
+) -> Result<ImportedUnit, WaveError> {
     if path.trim().is_empty() {
         return Err(WaveError::new(
             WaveErrorKind::SyntaxError("Empty import path".to_string()),
@@ -22,14 +25,24 @@ pub fn local_import(
         ));
     }
 
-    // Handle standard library imports (std::*)
+    // ✅ std::* : 지금은 조용히 스킵 (wavec는 std 구현 전)
     if path.starts_with("std::") {
-        return handle_std_import(path, already_imported, stdlib_manager);
+        already_imported.insert(path.to_string());
+        return Ok(ImportedUnit {
+            abs_path: base_dir.to_path_buf(),
+            ast: vec![],
+        });
     }
 
-    // Handle external library imports (contain :: but not std::)
-    if path.contains("::") && !path.starts_with("std::") {
-        return external_import(path, already_imported, None);
+    // ✅ foo::bar : wavec 단독모드에서 외부 import 금지 (Vex 언급 없음)
+    if path.contains("::") {
+        return Err(WaveError::new(
+            WaveErrorKind::SyntaxError("External import is not supported".to_string()),
+            "External imports are not supported by the Wave compiler (standalone).",
+            path,
+            0,
+            0,
+        ));
     }
 
     let target_file_name = if path.ends_with(".wave") {
@@ -58,6 +71,7 @@ pub fn local_import(
             0,
         )
     })?;
+
     let abs_path_str = abs_path
         .to_str()
         .ok_or_else(|| {
@@ -72,7 +86,7 @@ pub fn local_import(
         .to_string();
 
     if already_imported.contains(&abs_path_str) {
-        return Ok(vec![]);
+        return Ok(ImportedUnit { abs_path, ast: vec![] });
     }
     already_imported.insert(abs_path_str);
 
@@ -101,68 +115,13 @@ pub fn local_import(
             .with_label("here".to_string())
     })?;
 
-    Ok(ast)
+    Ok(ImportedUnit { abs_path, ast })
 }
 
-fn handle_std_import(
+pub fn local_import(
     path: &str,
     already_imported: &mut HashSet<String>,
-    stdlib_manager: Option<&StdlibManager>,
+    base_dir: &Path,
 ) -> Result<Vec<ASTNode>, WaveError> {
-    let module_name = path.strip_prefix("std::").unwrap_or(path);
-
-    let mgr =
-        stdlib_manager.ok_or_else(|| WaveError::stdlib_requires_vex(module_name, path, 0, 0))?;
-
-    mgr.ensure_enabled()?;
-    mgr.ensure_declared_in_manifest(module_name)?;
-    mgr.validate_stdlib_import(module_name)?;
-
-    already_imported.insert(path.to_string());
-    Ok(vec![])
-}
-
-pub fn external_import(
-    path: &str,
-    already: &mut HashSet<String>,
-    stdlib_manager: Option<&StdlibManager>,
-) -> Result<Vec<ASTNode>, WaveError> {
-    if already.contains(path) {
-        return Ok(vec![]);
-    }
-
-    let mgr = stdlib_manager.ok_or_else(|| {
-        WaveError::new(
-            WaveErrorKind::SyntaxError("External library not available".to_string()),
-            "External imports require Vex (--with-vex) and vex.ws dependencies.",
-            path,
-            0,
-            0,
-        )
-    })?;
-
-    mgr.ensure_enabled()?;
-    mgr.ensure_declared_in_manifest(path)?;
-    mgr.ensure_resolved(path)?;
-
-    already.insert(path.to_string());
-    Ok(vec![])
-}
-
-fn find_wave_file_recursive(dir: &Path, target_file_name: &str) -> Option<PathBuf> {
-    for entry in std::fs::read_dir(dir).ok()? {
-        let entry = entry.ok()?;
-        let path = entry.path();
-
-        if path.is_dir() {
-            if let Some(found) = find_wave_file_recursive(&path, target_file_name) {
-                return Some(found);
-            }
-        } else if path.is_file() {
-            if path.file_name()?.to_str()? == target_file_name {
-                return Some(path);
-            }
-        }
-    }
-    None
+    Ok(local_import_unit(path, already_imported, base_dir)?.ast)
 }

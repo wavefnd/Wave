@@ -10,6 +10,62 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::{fs, process, process::Command};
 
+fn expand_imports_for_codegen(
+    entry_path: &Path,
+    ast: Vec<ASTNode>,
+) -> Result<Vec<ASTNode>, WaveError> {
+    fn expand_from_dir(
+        base_dir: &Path,
+        ast: Vec<ASTNode>,
+        already: &mut HashSet<String>,
+    ) -> Result<Vec<ASTNode>, WaveError> {
+        let mut out = Vec::new();
+
+        for node in ast {
+            match node {
+                ASTNode::Statement(StatementNode::Import(module)) => {
+                    let imported_ast = local_import(&module, already, base_dir)?;
+
+                    if imported_ast.is_empty() {
+                        continue;
+                    }
+
+                    let target_file_name = if module.ends_with(".wave") {
+                        module.clone()
+                    } else {
+                        format!("{}.wave", module)
+                    };
+
+                    let found_path = base_dir.join(&target_file_name);
+                    let next_dir = found_path
+                        .canonicalize()
+                        .ok()
+                        .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+                        .unwrap_or_else(|| base_dir.to_path_buf());
+
+                    let expanded = expand_from_dir(&next_dir, imported_ast, already)?;
+                    out.extend(expanded);
+                }
+
+                other => out.push(other),
+            }
+        }
+
+        Ok(out)
+    }
+
+    let mut already = HashSet::new();
+
+    if let Ok(abs) = entry_path.canonicalize() {
+        if let Some(s) = abs.to_str() {
+            already.insert(s.to_string());
+        }
+    }
+
+    let base_dir = entry_path.parent().unwrap_or(Path::new("."));
+    expand_from_dir(base_dir, ast, &mut already)
+}
+
 pub(crate) unsafe fn run_wave_file(file_path: &Path, opt_flag: &str, debug: &DebugFlags) {
     let code = match fs::read_to_string(file_path) {
         Ok(c) => c,
@@ -55,6 +111,14 @@ pub(crate) unsafe fn run_wave_file(file_path: &Path, opt_flag: &str, debug: &Deb
     if debug.ast {
         println!("\n===== AST =====\n{:#?}", ast);
     }
+
+    let ast = match expand_imports_for_codegen(file_path, ast) {
+        Ok(a) => a,
+        Err(e) => {
+            e.display();
+            process::exit(1);
+        }
+    };
 
     let ir = generate_ir(&ast);
 
@@ -118,7 +182,7 @@ pub(crate) unsafe fn img_wave_file(file_path: &Path) {
 
     for node in &ast {
         if let ASTNode::Statement(StatementNode::Import(path)) = node {
-            match local_import(&path, &mut already_imported, &base_dir, None) {
+            match local_import(&path, &mut already_imported, &base_dir) {
                 Ok(mut imported_nodes) => {
                     extended_ast.append(&mut imported_nodes);
                 }

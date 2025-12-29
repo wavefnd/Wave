@@ -357,11 +357,21 @@ pub fn generate_expression_ir<'ctx>(
 
             let fn_type = function.get_type();
             let param_types: Vec<BasicTypeEnum> = fn_type.get_param_types();
+            let ret_type: Option<BasicTypeEnum> = fn_type.get_return_type();
 
-            let mut call_args: Vec<inkwell::values::BasicMetadataValueEnum> = Vec::new();
+            if args.len() != param_types.len() {
+                panic!(
+                    "Function `{}` expects {} arguments, got {}",
+                    name,
+                    param_types.len(),
+                    args.len()
+                );
+            }
+
+            let mut call_args: Vec<inkwell::values::BasicMetadataValueEnum> = Vec::with_capacity(args.len());
 
             for (i, arg) in args.iter().enumerate() {
-                let expected = param_types.get(i).cloned();
+                let expected_param_ty = param_types[i];
 
                 let val = generate_expression_ir(
                     context,
@@ -369,22 +379,43 @@ pub fn generate_expression_ir<'ctx>(
                     arg,
                     variables,
                     module,
-                    expected,
+                    Some(expected_param_ty),
                     global_consts,
                     struct_types,
                     struct_field_indices,
                 );
+
+                if val.get_type() != expected_param_ty {
+                    panic!(
+                        "Type mismatch for arg {} of '{}': expected {:?}, got {:?}",
+                        i,
+                        name,
+                        expected_param_ty,
+                        val.get_type()
+                    );
+                }
+
                 call_args.push(val.into());
             }
 
+            let call_name = if ret_type.is_some() {
+                format!("call_{}", name)
+            } else {
+                String::new()
+            };
+
             let call_site = builder
-                .build_call(function, &call_args, &format!("call_{}", name))
+                .build_call(function, &call_args, &call_name)
                 .unwrap();
 
-            if function.get_type().get_return_type().is_some() {
-                call_site.try_as_basic_value().left().unwrap()
-            } else {
-                context.i32_type().const_zero().as_basic_value_enum()
+            match ret_type {
+                Some(_) => call_site.try_as_basic_value().left().unwrap(),
+                None => {
+                    if expected_type.is_some() {
+                        panic!("Function '{}' returns void and cannot be used as a value", name);
+                    }
+                    context.i32_type().const_zero().as_basic_value_enum()
+                }
             }
         }
 

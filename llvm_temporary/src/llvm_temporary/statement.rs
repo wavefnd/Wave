@@ -275,6 +275,15 @@ pub fn generate_statement_ir<'ctx>(
                             &struct_types,
                             struct_field_indices,
                         );
+
+                        if val.get_type() != llvm_type {
+                            panic!(
+                                "Initializer type mismatch: expected {:?}, got {:?}",
+                                llvm_type,
+                                val.get_type()
+                            );
+                        }
+
                         builder.build_store(alloca, val).unwrap();
                     }
                     (Expression::BinaryExpression { .. }, _) => {
