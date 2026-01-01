@@ -9,6 +9,7 @@ use llvm_temporary::llvm_temporary::llvm_codegen::*;
 use std::collections::HashSet;
 use std::path::Path;
 use std::{fs, process, process::Command};
+use std::process::Stdio;
 
 fn expand_imports_for_codegen(
     entry_path: &Path,
@@ -158,8 +159,19 @@ pub(crate) unsafe fn run_wave_file(file_path: &Path, opt_flag: &str, debug: &Deb
         &link_lib_paths,
     );
 
-    let output = Command::new(&exe_patch).output();
-    println!("{}", String::from_utf8_lossy(&output.unwrap().stdout));
+    let status = Command::new(&exe_patch)
+        .stdin(Stdio::inherit())
+        .stdout(Stdio::inherit())
+        .stderr(Stdio::inherit())
+        .status()
+        .unwrap_or_else(|e| {
+            eprintln!("Failed to run `{}`: {}", exe_patch, e);
+            process::exit(1);
+        });
+
+    if !status.success() {
+        process::exit(status.code().unwrap_or(1));
+    }
 }
 
 pub(crate) unsafe fn img_wave_file(file_path: &Path) {

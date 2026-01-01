@@ -281,6 +281,19 @@ pub fn extract_body(tokens: &mut Peekable<Iter<Token>>) -> Option<Vec<ASTNode>> 
                 }
                 body.push(node);
             }
+            TokenType::Input => {
+                tokens.next(); // consume 'input'
+                let node = parse_input(tokens)?;
+                // Added semicolon handling
+                if let Some(Token {
+                                token_type: TokenType::SemiColon,
+                                ..
+                            }) = tokens.peek()
+                {
+                    tokens.next();
+                }
+                body.push(node);
+            }
             TokenType::If => {
                 tokens.next();
                 body.push(parse_if(tokens)?);
@@ -951,6 +964,71 @@ fn parse_print(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
     }
 
     Some(ASTNode::Statement(StatementNode::PrintFormat {
+        format: content,
+        args,
+    }))
+}
+
+fn parse_input(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
+    if tokens.peek()?.token_type != TokenType::Lparen {
+        println!("Error: Expected '(' after 'println'");
+        return None;
+    }
+    tokens.next(); // Consume '('
+
+    let content = if let Some(Token {
+                                  token_type: TokenType::String(content),
+                                  ..
+                              }) = tokens.next()
+    {
+        content.clone() // Need clone() because it is String
+    } else {
+        println!("Error: Expected string literal in 'input'");
+        return None;
+    };
+
+    let placeholder_count = Regex::new(r"\{[^}]*\}")
+        .unwrap()
+        .find_iter(&content)
+        .count();
+
+    let mut args = Vec::new();
+    while let Some(Token {
+                       token_type: TokenType::Comma,
+                       ..
+                   }) = tokens.peek()
+    {
+        tokens.next(); // Consume ','
+        if let Some(expr) = parse_expression(tokens) {
+            args.push(expr);
+        } else {
+            println!("Error: Failed to parse expression in 'println'");
+            return None;
+        }
+    }
+
+    if tokens.peek()?.token_type != TokenType::Rparen {
+        println!("Error: Expected closing ')'");
+        return None;
+    }
+    tokens.next(); // Consume ')'
+
+    if tokens.peek().map(|t| &t.token_type) != Some(&TokenType::SemiColon) {
+        println!("Expected ';' after expression");
+        return None;
+    }
+    tokens.next();
+
+    if placeholder_count != args.len() {
+        println!(
+            "Error: Expected {} arguments, found {}",
+            placeholder_count,
+            args.len()
+        );
+        return None;
+    }
+
+    Some(ASTNode::Statement(StatementNode::Input {
         format: content,
         args,
     }))

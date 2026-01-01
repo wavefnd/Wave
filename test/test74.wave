@@ -1,0 +1,5 @@
+fun main() {
+    var x: i32;
+    input("{}", x);
+    println("{}", x);
+}

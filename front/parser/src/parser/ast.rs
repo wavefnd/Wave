@@ -198,6 +198,10 @@ pub enum StatementNode {
         format: String,
         args: Vec<Expression>,
     },
+    Input {
+        format: String,
+        args: Vec<Expression>,
+    },
     Variable(String),
     If {
         condition: Expression,

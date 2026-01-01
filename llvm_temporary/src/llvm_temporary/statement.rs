@@ -1,17 +1,16 @@
-use crate::llvm_temporary::expression::generate_expression_ir;
-use crate::llvm_temporary::llvm_codegen::{
-    generate_address_ir, wave_format_to_c, wave_type_to_llvm_type, VariableInfo,
-};
+use crate::llvm_temporary::llvm_codegen::{generate_address_ir, wave_format_to_c, wave_format_to_scanf, wave_type_to_llvm_type, VariableInfo};
 use inkwell::basic_block::BasicBlock;
 use inkwell::context::Context;
-use inkwell::module::Linkage;
+use inkwell::module::{Linkage, Module};
 use inkwell::types::{AnyTypeEnum, BasicType, BasicTypeEnum, StructType};
-use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue};
-use inkwell::{AddressSpace, FloatPredicate};
+use inkwell::values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum, FunctionValue};
+use inkwell::{AddressSpace, FloatPredicate, IntPredicate};
 use parser::ast::{
     ASTNode, Expression, Literal, Mutability, StatementNode, VariableNode, WaveType,
 };
 use std::collections::HashMap;
+use crate::llvm_temporary::expression::lvalue::generate_lvalue_ir;
+use crate::llvm_temporary::expression::rvalue::generate_expression_ir;
 
 pub fn generate_statement_ir<'ctx>(
     context: &'ctx Context,
@@ -575,6 +574,126 @@ pub fn generate_statement_ir<'ctx>(
             }
 
             let _ = builder.build_call(printf_func, &printf_args, "printf_call");
+        }
+        ASTNode::Statement(StatementNode::Input { format, args }) => {
+            let mut arg_types = Vec::new();
+            for arg in args.iter() {
+                let ptr = generate_lvalue_ir(
+                    context,
+                    builder,
+                    arg,
+                    variables,
+                    module,
+                    global_consts,
+                    &struct_types,
+                    struct_field_indices,
+                );
+                let elem_ty = ptr.get_type().get_element_type(); // AnyTypeEnum
+                arg_types.push(elem_ty);
+            }
+
+            let c_format_string = wave_format_to_scanf(format, &arg_types);
+
+            let global_name = format!("str_{}", *string_counter);
+            *string_counter += 1;
+
+            let mut bytes = c_format_string.as_bytes().to_vec();
+            bytes.push(0);
+            let const_str = context.const_string(&bytes, false);
+
+            let global = module.add_global(
+                context.i8_type().array_type(bytes.len() as u32),
+                None,
+                &global_name,
+            );
+            global.set_initializer(&const_str);
+            global.set_linkage(Linkage::Private);
+            global.set_constant(true);
+
+            let scanf_type = context.i32_type().fn_type(
+                &[context.i8_type().ptr_type(AddressSpace::default()).into()],
+                true,
+            );
+            let scanf_func = match module.get_function("scanf") {
+                Some(func) => func,
+                None => module.add_function("scanf", scanf_type, None),
+            };
+
+            let zero = context.i32_type().const_zero();
+            let indices = [zero, zero];
+            let gep = unsafe {
+                builder
+                    .build_gep(global.as_pointer_value(), &indices, "fmt_gep")
+                    .unwrap()
+            };
+
+            let mut scanf_args: Vec<BasicMetadataValueEnum> = Vec::new();
+            scanf_args.push(gep.into());
+
+            for arg in args.iter() {
+                let ptr = generate_lvalue_ir(
+                    context,
+                    builder,
+                    arg,
+                    variables,
+                    module,
+                    global_consts,
+                    &struct_types,
+                    struct_field_indices,
+                );
+                scanf_args.push(ptr.into());
+            }
+
+            let call = builder
+                .build_call(scanf_func, &scanf_args, "scanf_call")
+                .unwrap();
+
+            let ret = call
+                .try_as_basic_value()
+                .left()
+                .unwrap()
+                .into_int_value();
+
+            let expected = context.i32_type().const_int(args.len() as u64, false);
+            let ok = builder
+                .build_int_compare(IntPredicate::EQ, ret, expected, "scanf_ok")
+                .unwrap();
+
+            // 7) 실패하면 즉시 종료(exit(1)) 처리
+            let cur_bb = builder.get_insert_block().unwrap();
+            let cur_fn = cur_bb.get_parent().unwrap();
+
+            let ok_bb = context.append_basic_block(cur_fn, "input_ok");
+            let fail_bb = context.append_basic_block(cur_fn, "input_fail");
+            let cont_bb = context.append_basic_block(cur_fn, "input_cont");
+
+            builder
+                .build_conditional_branch(ok, ok_bb, fail_bb)
+                .unwrap();
+
+            builder.position_at_end(fail_bb);
+
+            let exit_ty = context
+                .void_type()
+                .fn_type(&[context.i32_type().into()], false);
+            let exit_fn = match module.get_function("exit") {
+                Some(f) => f,
+                None => module.add_function("exit", exit_ty, None),
+            };
+
+            builder
+                .build_call(
+                    exit_fn,
+                    &[context.i32_type().const_int(1, false).into()],
+                    "exit_call",
+                )
+                .unwrap();
+            builder.build_unreachable().unwrap();
+
+            builder.position_at_end(ok_bb);
+            builder.build_unconditional_branch(cont_bb).unwrap();
+
+            builder.position_at_end(cont_bb);
         }
         ASTNode::Statement(StatementNode::If {
             condition,

@@ -17,7 +17,7 @@
     clippy::new_without_default
 )]
 
-mod expression;
+pub mod expression;
 pub mod llvm_backend;
 pub mod llvm_codegen;
 mod statement;

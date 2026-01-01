@@ -5,7 +5,7 @@ use inkwell::{AddressSpace, OptimizationLevel};
 use parser::ast::{ASTNode, Expression, FunctionNode, Literal, Mutability, VariableNode, WaveType};
 
 use crate::llvm_temporary::statement::generate_statement_ir;
-use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum};
+use inkwell::types::{AnyTypeEnum, BasicMetadataTypeEnum, BasicType, BasicTypeEnum};
 use lexer::token::TokenType;
 use std::collections::HashMap;
 use std::hash::Hash;
@@ -233,6 +233,63 @@ pub fn wave_format_to_c(format: &str, arg_types: &[BasicTypeEnum]) -> String {
                 }
             }
         }
+        result.push(c);
+    }
+
+    result
+}
+
+pub fn wave_format_to_scanf(format: &str, arg_types: &[AnyTypeEnum]) -> String {
+    let mut result = String::new();
+    let mut chars = format.chars().peekable();
+    let mut arg_index = 0;
+
+    while let Some(c) = chars.next() {
+        if c == '{' {
+            if let Some('}') = chars.peek() {
+                chars.next(); // consume '}'
+
+                let ty = arg_types
+                    .get(arg_index)
+                    .unwrap_or_else(|| panic!("Missing argument for format"));
+
+                let fmt = match ty {
+                    AnyTypeEnum::IntType(_) => "%d",
+                    AnyTypeEnum::FloatType(_) => "%f",
+
+                    AnyTypeEnum::PointerType(ptr_ty) => {
+                        let elem = ptr_ty.get_element_type();
+                        match elem {
+                            AnyTypeEnum::IntType(it)
+                            if it.get_bit_width() == 8 =>
+                                {
+                                    "%s" // char*
+                                }
+                            _ => {
+                                panic!("Unsupported pointer type for input");
+                            }
+                        }
+                    }
+
+                    AnyTypeEnum::StructType(_) => {
+                        panic!("Cannot input into struct directly");
+                    }
+
+                    AnyTypeEnum::ArrayType(_) => {
+                        panic!("Cannot input into array directly");
+                    }
+
+                    _ => {
+                        panic!("Unsupported type for input");
+                    }
+                };
+
+                result.push_str(fmt);
+                arg_index += 1;
+                continue;
+            }
+        }
+
         result.push(c);
     }
 
