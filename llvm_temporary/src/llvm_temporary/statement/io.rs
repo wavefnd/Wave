@@ -107,7 +107,7 @@ pub(super) fn gen_print_format_ir<'ctx>(
         arg_vals.push(val);
     }
 
-    let c_format_string = wave_format_to_c(format, &arg_types);
+    let c_format_string = wave_format_to_c(context, format, &arg_types);
 
     let global_name = format!("str_{}", *string_counter);
     *string_counter += 1;
