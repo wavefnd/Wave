@@ -1,7 +1,5 @@
 use crate::commands::DebugFlags;
 use ::error::*;
-use ::parser::ast::{ASTNode, StatementNode};
-use ::parser::import::local_import;
 use ::parser::*;
 use lexer::Lexer;
 use llvm_temporary::llvm_temporary::llvm_backend::*;
@@ -10,6 +8,8 @@ use std::collections::HashSet;
 use std::path::Path;
 use std::{fs, process, process::Command};
 use std::process::Stdio;
+use ::parser::ast::*;
+use ::parser::import::*;
 
 fn expand_imports_for_codegen(
     entry_path: &Path,

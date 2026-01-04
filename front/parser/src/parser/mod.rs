@@ -1,28 +1,12 @@
-#![allow(
-    dead_code,
-    unused_variables,
-    clippy::module_inception,
-    clippy::type_complexity,
-    clippy::unnecessary_map_or,
-    clippy::question_mark,
-    clippy::result_large_err,
-    clippy::ptr_arg,
-    clippy::while_let_on_iterator,
-    clippy::needless_borrow,
-    clippy::useless_format,
-    clippy::manual_strip,
-    clippy::explicit_auto_deref,
-    clippy::collapsible_if,
-    clippy::collapsible_else_if,
-    clippy::new_without_default
-)]
+mod parse;
+mod asm;
+mod control;
+mod decl;
+mod expr;
+mod functions;
+mod io;
+mod items;
+mod stmt;
+mod types;
 
-pub mod ast;
-pub mod format;
-pub mod import;
-pub mod parser;
-pub mod stdlib;
-pub mod type_system;
-mod verification;
-
-pub use parser::*;
+pub use parse::parse;

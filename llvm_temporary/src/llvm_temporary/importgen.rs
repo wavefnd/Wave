@@ -3,7 +3,7 @@ use std::path::Path;
 
 use error::error::WaveError;
 use parser::ast::{ASTNode, StatementNode};
-use parser::parser::import::local_import_unit;
+use parser::import::local_import_unit;
 
 fn expand_imports_recursive(
     ast: Vec<ASTNode>,
