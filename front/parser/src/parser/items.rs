@@ -1,6 +1,7 @@
 use std::iter::Peekable;
 use std::slice::Iter;
-use lexer::{Token, TokenType};
+use lexer::Token;
+use lexer::token::TokenType;
 use crate::ast::{ASTNode, ProtoImplNode, StatementNode, StructNode, WaveType};
 use crate::parser::functions::parse_function;
 use crate::parser::types::parse_type_from_token;

@@ -17,8 +17,13 @@
     clippy::new_without_default
 )]
 
-pub mod lexer;
-pub mod token;
+mod common;
+mod core;
+mod cursor;
+mod trivia;
+mod literals;
+mod ident;
+mod scan;
 
-pub use lexer::*;
-pub use token::*;
+pub use core::{Lexer, Token};
+

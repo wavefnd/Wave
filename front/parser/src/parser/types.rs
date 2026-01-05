@@ -1,6 +1,7 @@
 use std::iter::Peekable;
 use std::slice::Iter;
-use lexer::{FloatType, IntegerType, Token, TokenType, UnsignedIntegerType};
+use lexer::Token;
+use lexer::token::*;
 use crate::ast::WaveType;
 
 pub fn token_type_to_wave_type(token_type: &TokenType) -> Option<WaveType> {

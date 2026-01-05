@@ -1,6 +1,7 @@
 use std::iter::Peekable;
 use std::slice::Iter;
-use lexer::{Token, TokenType};
+use lexer::Token;
+use lexer::token::TokenType;
 use crate::ast::{ASTNode, StatementNode};
 
 pub fn parse_asm_block(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {

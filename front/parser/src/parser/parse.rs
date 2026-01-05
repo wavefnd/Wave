@@ -1,4 +1,5 @@
-use lexer::{Token, TokenType};
+use lexer::Token;
+use lexer::token::TokenType;
 use crate::ast::ASTNode;
 use crate::parser::decl::*;
 use crate::parser::functions::parse_function;

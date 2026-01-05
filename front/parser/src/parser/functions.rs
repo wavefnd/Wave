@@ -1,7 +1,8 @@
 use std::collections::HashSet;
 use std::iter::Peekable;
 use std::slice::Iter;
-use lexer::{Token, TokenType};
+use lexer::Token;
+use lexer::token::TokenType;
 use crate::ast::{ASTNode, FunctionNode, ParameterNode, StatementNode, Value};
 use crate::format::parse_expression;
 use crate::parser::asm::*;

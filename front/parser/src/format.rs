@@ -1,6 +1,7 @@
 use crate::ast::Expression::Variable;
 use crate::ast::{AssignOperator, Expression, FormatPart, IncDecKind, Literal, Operator};
-use lexer::{Token, TokenType};
+use lexer::Token;
+use lexer::token::TokenType;
 use std::iter::Peekable;
 use std::slice::Iter;
 

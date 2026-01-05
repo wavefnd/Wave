@@ -1,7 +1,8 @@
 use std::iter::Peekable;
 use std::slice::Iter;
 use regex::Regex;
-use lexer::{Token, TokenType};
+use lexer::Token;
+use lexer::token::TokenType;
 use crate::ast::{ASTNode, StatementNode};
 use crate::format::parse_expression;
 
