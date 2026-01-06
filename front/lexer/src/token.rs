@@ -124,7 +124,7 @@ pub enum TokenType {
     TypeArray(Box<TokenType>, u32),
     Identifier(String),
     String(String),
-    Number(i64),
+    IntLiteral(String),
     Float(f64),
     Plus,        // +
     Increment,   // ++

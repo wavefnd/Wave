@@ -1,6 +1,8 @@
+use inkwell::types::BasicTypeEnum;
 use super::ExprGenEnv;
 use inkwell::values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum};
 use parser::ast::{Expression, WaveType};
+use crate::llvm_temporary::statement::variable::{coerce_basic_value, CoercionMode};
 
 pub(crate) fn gen_method_call<'ctx, 'a>(
     env: &mut ExprGenEnv<'ctx, 'a>,
@@ -30,7 +32,13 @@ pub(crate) fn gen_method_call<'ctx, 'a>(
 
                 for (i, arg_expr) in args.iter().enumerate() {
                     let expected_ty = param_types.get(i + 1).cloned();
-                    let arg_val = env.gen(arg_expr, expected_ty);
+                    let mut arg_val = env.gen(arg_expr, expected_ty);
+                    if let Some(et) = expected_ty {
+                        arg_val = coerce_basic_value(
+                            env.context, env.builder, arg_val, et, &format!("arg{}_cast", i),
+                            CoercionMode::Implicit
+                        );
+                    }
                     call_args.push(arg_val.into());
                 }
 
@@ -75,7 +83,13 @@ pub(crate) fn gen_method_call<'ctx, 'a>(
 
     for (i, arg_expr) in args.iter().enumerate() {
         let expected_ty = param_types.get(i + 1).cloned();
-        let arg_val = env.gen(arg_expr, expected_ty);
+        let mut arg_val = env.gen(arg_expr, expected_ty);
+        if let Some(et) = expected_ty {
+            arg_val = coerce_basic_value(
+                env.context, env.builder, arg_val, et, &format!("arg{}_cast", i),
+                CoercionMode::Implicit
+            );
+        }
         call_args.push(arg_val.into());
     }
 
@@ -119,17 +133,8 @@ pub(crate) fn gen_function_call<'ctx, 'a>(
 
     for (i, arg) in args.iter().enumerate() {
         let expected_param_ty = param_types[i];
-        let val = env.gen(arg, Some(expected_param_ty));
-
-        if val.get_type() != expected_param_ty {
-            panic!(
-                "Type mismatch for arg {} of '{}': expected {:?}, got {:?}",
-                i,
-                name,
-                expected_param_ty,
-                val.get_type()
-            );
-        }
+        let mut val = env.gen(arg, Some(expected_param_ty));
+        val = coerce_to_expected(env, val, expected_param_ty, name, i);
 
         call_args.push(val.into());
     }
@@ -148,6 +153,55 @@ pub(crate) fn gen_function_call<'ctx, 'a>(
                 panic!("Function '{}' returns void and cannot be used as a value", name);
             }
             env.context.i32_type().const_zero().as_basic_value_enum()
+        }
+    }
+}
+
+fn coerce_to_expected<'ctx, 'a>(
+    env: &ExprGenEnv<'ctx, 'a>,
+    val: BasicValueEnum<'ctx>,
+    expected: BasicTypeEnum<'ctx>,
+    name: &str,
+    arg_index: usize,
+) -> BasicValueEnum<'ctx> {
+    let got = val.get_type();
+    if got == expected {
+        return val;
+    }
+
+    match (got, expected) {
+        (BasicTypeEnum::IntType(src), BasicTypeEnum::IntType(dst)) => {
+            let src_bw = src.get_bit_width();
+            let dst_bw = dst.get_bit_width();
+            let iv = val.into_int_value();
+
+            if src_bw < dst_bw {
+                env.builder
+                    .build_int_s_extend(iv, dst, &format!("arg{}_sext", arg_index))
+                    .unwrap()
+                    .as_basic_value_enum()
+            } else if src_bw > dst_bw {
+                env.builder
+                    .build_int_truncate(iv, dst, &format!("arg{}_trunc", arg_index))
+                    .unwrap()
+                    .as_basic_value_enum()
+            } else {
+                iv.as_basic_value_enum()
+            }
+        }
+
+        (BasicTypeEnum::PointerType(_), BasicTypeEnum::PointerType(dst)) => {
+            env.builder
+                .build_bit_cast(val, dst, &format!("arg{}_ptrcast", arg_index))
+                .unwrap()
+                .as_basic_value_enum()
+        }
+
+        _ => {
+            panic!(
+                "Type mismatch for arg {} of '{}': expected {:?}, got {:?}",
+                arg_index, name, expected, got
+            );
         }
     }
 }

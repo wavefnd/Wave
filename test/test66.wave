@@ -50,7 +50,7 @@ fun test_nested_struct() {
 
 
 struct Inventory {
-    items: array<i32>;
+    items: array<i32, 5>;
 }
 
 proto Inventory {

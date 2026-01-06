@@ -7,20 +7,20 @@ use inkwell::values::{BasicValueEnum};
 use parser::ast::Expression;
 use std::collections::HashMap;
 
-mod dispatch;
-mod utils;
+pub mod dispatch;
+pub mod utils;
 
-mod literals;
-mod variables;
-mod pointers;
-mod calls;
-mod assign;
-mod binary;
-mod index;
-mod asm;
-mod structs;
-mod unary;
-mod incdec;
+pub mod literals;
+pub mod variables;
+pub mod pointers;
+pub mod calls;
+pub mod assign;
+pub mod binary;
+pub mod index;
+pub mod asm;
+pub mod structs;
+pub mod unary;
+pub mod incdec;
 
 pub struct ProtoInfo<'ctx> {
     pub vtable_ty: StructType<'ctx>,

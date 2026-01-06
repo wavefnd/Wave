@@ -6,6 +6,61 @@ use crate::ast::{ASTNode, Expression, Mutability, VariableNode, WaveType};
 use crate::format::parse_expression;
 use crate::parser::types::{parse_type, token_type_to_wave_type};
 
+fn collect_generic_inner(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<String> {
+    let mut inner = String::new();
+    let mut depth: i32 = 1;
+
+    while let Some(t) = tokens.next() {
+        // ✅ 1) 토큰 타입이 chevr면 lexeme가 비어있어도 확실히 처리
+        match &t.token_type {
+            TokenType::Lchevr => {
+                depth += 1;
+                inner.push('<');
+                continue;
+            }
+            TokenType::Rchevr => {
+                depth -= 1;
+                if depth == 0 {
+                    return Some(inner);
+                }
+                inner.push('>');
+                continue;
+            }
+            _ => {}
+        }
+
+        // ✅ 2) 그 외는 문자열(lexeme 또는 Identifier 이름)을 스캔해서 <, > 처리
+        let text: &str = if !t.lexeme.is_empty() {
+            t.lexeme.as_str()
+        } else if let TokenType::Identifier(name) = &t.token_type {
+            name.as_str()
+        } else {
+            ""
+        };
+
+        for ch in text.chars() {
+            match ch {
+                '<' => {
+                    depth += 1;
+                    inner.push('<');
+                }
+                '>' => {
+                    depth -= 1;
+                    if depth == 0 {
+                        return Some(inner);
+                    }
+                    inner.push('>');
+                }
+                _ => inner.push(ch),
+            }
+        }
+    }
+
+    println!("Unclosed generic type: missing '>'");
+    None
+}
+
+
 pub fn parse_variable_decl(tokens: &mut Peekable<Iter<'_, Token>>, is_const: bool) -> Option<ASTNode> {
     let mut mutability = if is_const {
         Mutability::Const
@@ -59,27 +114,7 @@ pub fn parse_variable_decl(tokens: &mut Peekable<Iter<'_, Token>>, is_const: boo
         {
             tokens.next(); // consume '<'
 
-            let mut inner = String::new();
-            let mut depth = 1;
-
-            while let Some(t) = tokens.next() {
-                match &t.token_type {
-                    TokenType::Lchevr => {
-                        depth += 1;
-                        inner.push('<');
-                    }
-                    TokenType::Rchevr => {
-                        depth -= 1;
-                        if depth == 0 {
-                            break;
-                        } else {
-                            inner.push('>');
-                        }
-                    }
-                    _ => inner.push_str(&t.lexeme),
-                }
-            }
-
+            let inner = collect_generic_inner(tokens)?;
             let full_type_str = format!("{}<{}>", name, inner);
             let parsed_type = parse_type(&full_type_str);
 
@@ -197,27 +232,7 @@ pub fn parse_var(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<ASTNode> {
         {
             tokens.next(); // consume '<'
 
-            let mut inner = String::new();
-            let mut depth = 1;
-
-            while let Some(t) = tokens.next() {
-                match &t.token_type {
-                    TokenType::Lchevr => {
-                        depth += 1;
-                        inner.push('<');
-                    }
-                    TokenType::Rchevr => {
-                        depth -= 1;
-                        if depth == 0 {
-                            break;
-                        } else {
-                            inner.push('>');
-                        }
-                    }
-                    _ => inner.push_str(&t.lexeme),
-                }
-            }
-
+            let inner = collect_generic_inner(tokens)?;
             let full_type_str = format!("{}<{}>", name, inner);
             let parsed_type = parse_type(&full_type_str);
 

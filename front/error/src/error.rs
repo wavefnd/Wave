@@ -178,13 +178,13 @@ impl WaveError {
 
     /// Display error in Rust-style format
     pub fn display(&self) {
-        use colored::*;
+        use colorex::Colorize;
 
         let severity_str = match self.severity {
-            ErrorSeverity::Error => "error".red().bold(),
-            ErrorSeverity::Warning => "warning".yellow().bold(),
-            ErrorSeverity::Note => "note".cyan().bold(),
-            ErrorSeverity::Help => "help".green().bold(),
+            ErrorSeverity::Error => "error".color("255,71,71").bold(),
+            ErrorSeverity::Warning => "warning".color("145,161,2").bold(),
+            ErrorSeverity::Note => "note".color("0,255,255").bold(),
+            ErrorSeverity::Help => "help".color("38,139,235").bold(),
         };
 
         // Main error message
@@ -193,52 +193,52 @@ impl WaveError {
         // Location
         eprintln!(
             "  {} {}:{}:{}",
-            "-->".blue().bold(),
+            "-->".color("38,139,235").bold(),
             self.file,
             self.line,
             self.column
         );
-        eprintln!("   {}", "|".blue().bold());
+        eprintln!("   {}", "|".color("38,139,235").bold());
 
         // Source code with highlighting
         if let Some(source_line) = &self.source {
             eprintln!(
                 "{:>3} {} {}",
-                self.line.to_string().blue().bold(),
-                "|".blue().bold(),
+                self.line.to_string().color("38,139,235").bold(),
+                "|".color("38,139,235").bold(),
                 source_line
             );
 
             // Arrow pointing to the error
             let spaces = " ".repeat(self.column.saturating_sub(1));
             let arrow = match self.severity {
-                ErrorSeverity::Error => "^".red().bold(),
-                ErrorSeverity::Warning => "^".yellow().bold(),
-                ErrorSeverity::Note => "^".cyan().bold(),
-                ErrorSeverity::Help => "^".green().bold(),
+                ErrorSeverity::Error => "^".color("255,71,71").bold(),
+                ErrorSeverity::Warning => "^".color("145,161,2").bold(),
+                ErrorSeverity::Note => "^".color("0,255,255").bold(),
+                ErrorSeverity::Help => "^".color("38,139,235").bold(),
             };
 
             if let Some(label) = &self.label {
                 eprintln!(
                     "   {} {}{} {}",
-                    "|".blue().bold(),
+                    "|".color("38,139,235").bold(),
                     spaces,
                     arrow,
-                    label.dimmed()
+                    label.dim()
                 );
             } else {
-                eprintln!("   {} {}{}", "|".blue().bold(), spaces, arrow);
+                eprintln!("   {} {}{}", "|".color("38,139,235").bold(), spaces, arrow);
             }
         }
 
-        eprintln!("   {}", "|".blue().bold());
+        eprintln!("   {}", "|".color("38,139,235").bold());
 
         // Additional information
         if let Some(note) = &self.note {
             eprintln!(
                 "   {} {}: {}",
-                "=".blue().bold(),
-                "note".cyan().bold(),
+                "=".color("38,139,235").bold(),
+                "note".color("0,255,255").bold(),
                 note
             );
         }
@@ -246,8 +246,8 @@ impl WaveError {
         if let Some(help) = &self.help {
             eprintln!(
                 "   {} {}: {}",
-                "=".blue().bold(),
-                "help".green().bold(),
+                "=".color("38,139,235").bold(),
+                "help".color("38,139,235").bold(),
                 help
             );
         }
@@ -256,8 +256,8 @@ impl WaveError {
         for suggestion in &self.suggestions {
             eprintln!(
                 "   {} {}: {}",
-                "=".blue().bold(),
-                "suggestion".green().bold(),
+                "=".color("38,139,235").bold(),
+                "suggestion".color("38,139,235").bold(),
                 suggestion
             );
         }

@@ -1,12 +1,12 @@
 mod parse;
-mod asm;
-mod control;
-mod decl;
-mod expr;
-mod functions;
-mod io;
-mod items;
-mod stmt;
-mod types;
+pub mod asm;
+pub mod control;
+pub mod decl;
+pub mod expr;
+pub mod functions;
+pub mod io;
+pub mod items;
+pub mod stmt;
+pub mod types;
 
 pub use parse::parse;

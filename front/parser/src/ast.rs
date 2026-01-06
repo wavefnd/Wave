@@ -142,7 +142,7 @@ pub enum Expression {
 
 #[derive(Debug, Clone)]
 pub enum Literal {
-    Number(i64),
+    Int(String),
     Float(f64),
     String(String),
     Bool(bool),
@@ -226,8 +226,8 @@ pub enum StatementNode {
     },
     AsmBlock {
         instructions: Vec<String>,
-        inputs: Vec<(String, String)>,
-        outputs: Vec<(String, String)>,
+        inputs: Vec<(String, Expression)>,
+        outputs: Vec<(String, Expression)>,
     },
     Break,
     Continue,
@@ -281,7 +281,7 @@ impl Expression {
                 .unwrap_or_else(|| panic!("Variable '{}' not found", name))
                 .ty
                 .clone(),
-            Expression::Literal(Literal::Number(_)) => WaveType::Int(32), // 기본 int
+            Expression::Literal(Literal::Int(_)) => WaveType::Int(32),
             Expression::Literal(Literal::Float(_)) => WaveType::Float(32),
             Expression::Literal(Literal::String(_)) => WaveType::String,
             Expression::MethodCall { .. } => {

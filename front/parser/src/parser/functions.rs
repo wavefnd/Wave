@@ -53,9 +53,9 @@ pub fn parse_parameters(tokens: &mut Peekable<Iter<Token>>) -> Vec<ParameterNode
             tokens.next(); // consume '='
             match tokens.next() {
                 Some(Token {
-                         token_type: TokenType::Number(n),
+                         token_type: TokenType::IntLiteral(n),
                          ..
-                     }) => Some(Value::Int(*n)),
+                     }) => Some(Value::Int((*n).parse().unwrap())),
                 Some(Token {
                          token_type: TokenType::Float(f),
                          ..

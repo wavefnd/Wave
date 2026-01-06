@@ -1,9 +1,9 @@
-mod assign;
-mod asm;
-mod control;
-mod expr_stmt;
-mod io;
-mod variable;
+pub mod assign;
+pub mod asm;
+pub mod control;
+pub mod expr_stmt;
+pub mod io;
+pub mod variable;
 
 use crate::llvm_temporary::llvm_codegen::VariableInfo;
 use inkwell::basic_block::BasicBlock;

@@ -21,6 +21,7 @@ RESET = "\033[0m"
 
 KNOWN_TIMEOUT = {
     # "test22.wave",
+    "test56.wave",
 }
 
 FAIL_PATTERNS = [

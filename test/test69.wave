@@ -9,6 +9,6 @@ fun main() {
 
     println("before overflow: {}", max);
 
-    var overflow = max + 1;
+    var overflow: i32 = max + 1;
     println("after overflow: {}", overflow);
 }

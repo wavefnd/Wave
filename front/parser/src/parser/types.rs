@@ -55,7 +55,7 @@ pub fn is_expression_start(token_type: &TokenType) -> bool {
     matches!(
         token_type,
         TokenType::Identifier(_)
-            | TokenType::Number(_)
+            | TokenType::IntLiteral(_)
             | TokenType::Float(_)
             | TokenType::Lparen
             | TokenType::String(_)
@@ -225,8 +225,8 @@ pub fn parse_type_from_stream(tokens: &mut Peekable<Iter<Token>>) -> Option<Wave
                 tokens.next(); // consume ','
 
                 let size_token = tokens.next()?;
-                let size = if let TokenType::Number(n) = size_token.token_type {
-                    n as u32
+                let size = if let TokenType::IntLiteral(n) = &size_token.token_type {
+                    n
                 } else {
                     println!("Error: Expected number for array size");
                     return None;
@@ -238,7 +238,7 @@ pub fn parse_type_from_stream(tokens: &mut Peekable<Iter<Token>>) -> Option<Wave
                 }
                 tokens.next(); // consume '>'
 
-                return Some(WaveType::Array(Box::new(inner_type), size));
+                return Some(WaveType::Array(Box::new(inner_type), size.parse().unwrap()));
             } else {
                 if tokens.peek()?.token_type == TokenType::Rchevr {
                     tokens.next(); // consume '>'

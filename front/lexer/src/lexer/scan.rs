@@ -345,10 +345,10 @@ impl<'a> Lexer<'a> {
                     let value = i64::from_str_radix(&bin_str, 2).unwrap_or(0);
 
                     return Token {
-                        token_type: TokenType::Number(value),
+                        token_type: TokenType::IntLiteral(format!("0b{}", bin_str)),
                         lexeme: format!("0b{}", bin_str),
                         line: self.line,
-                    }
+                    };
                 }
 
                 if c == '0' && (self.peek() == 'x' || self.peek() == 'X') {
@@ -362,7 +362,7 @@ impl<'a> Lexer<'a> {
                     let value = i64::from_str_radix(&hex_str, 16).unwrap_or(0);
 
                     return Token {
-                        token_type: TokenType::Number(value),
+                        token_type: TokenType::IntLiteral(format!("0x{}", hex_str)),
                         lexeme: format!("0x{}", hex_str),
                         line: self.line,
                     };
@@ -387,7 +387,7 @@ impl<'a> Lexer<'a> {
                 let token_type = if is_float {
                     num_str.parse::<f64>().map(TokenType::Float).unwrap()
                 } else {
-                    num_str.parse::<i64>().map(TokenType::Number).unwrap()
+                    TokenType::IntLiteral(num_str.clone())
                 };
 
                 Token {

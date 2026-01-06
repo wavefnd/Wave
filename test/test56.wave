@@ -31,24 +31,38 @@ fun syscall3(id: i64, arg1: i64, arg2: i64) -> i64 {
     return ret_val;
 }
 
-fun syscall4(id: i64, arg1: i64, arg2: i64, arg3: i64) -> i64 {
-    var ret_val: i64;
+fun syscall4i(id: i64, a1: i64, a2: i64, a3: i64) -> i64 {
+    var ret: i64;
     asm {
         "syscall"
         in("rax") id
-        in("rdi") arg1
-        in("rsi") arg2
-        in("rdx") arg3
-        out("rax") ret_val
+        in("rdi") a1
+        in("rsi") a2
+        in("rdx") a3
+        out("rax") ret
     }
-    return ret_val;
+    return ret;
+}
+
+fun syscall4p(id: i64, a1: i64, a2: ptr<i8>, a3: i64) -> i64 {
+    var ret: i64;
+    asm {
+        "syscall"
+        in("rax") id
+        in("rdi") a1
+        in("rsi") a2
+        in("rdx") a3
+        out("rax") ret
+    }
+    return ret;
 }
 
 fun _socket_create() -> i32 {
-    return syscall4(41, 2, 1, 0);
+    return syscall3(41, 2, 1);
 }
 
 fun _socket_bind(sockfd: i32, ip_addr: i32, port: i16) -> i32 {
+    var result: i64;
     asm {
         out("rax") result
         in("rdi") sockfd
@@ -64,17 +78,13 @@ fun _socket_close(sockfd: i32) {
     syscall2(3, sockfd);
 }
 
-fun new_server(ip_str: str, port: i16) -> ptr<i32> {
+fun new_server(ip_str: str, port: i16) -> i32 {
     var sockfd: i32 = _socket_create();
-    if (sockfd < 0) {
-        println("Error: Failed to create socket.");
-        return 0;
-    }
+    if (sockfd < 0) { return -1; }
 
     if (_socket_bind(sockfd, 0, port) < 0) {
-        println("Error: Failed to bind socket.");
         _socket_close(sockfd);
-        return 0;
+        return -1;
     }
 
     return sockfd;
@@ -104,7 +114,7 @@ fun start(server_fd: i32) {
 
         var response: str = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nWelcome to the Wave HTTP Server!";
 
-        syscall4(1, client_fd, response, 82);
+        syscall4p(1, client_fd, response, 82);
 
         _socket_close(client_fd);
         println("Client disconnected.");

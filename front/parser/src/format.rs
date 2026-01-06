@@ -4,6 +4,7 @@ use lexer::Token;
 use lexer::token::TokenType;
 use std::iter::Peekable;
 use std::slice::Iter;
+use crate::asm::{parse_asm_inout_clause, parse_asm_operand};
 
 pub fn parse_format_string(s: &str) -> Vec<FormatPart> {
     let mut parts = Vec::new();
@@ -34,7 +35,7 @@ pub fn parse_format_string(s: &str) -> Vec<FormatPart> {
     parts
 }
 
-fn is_assignable(expr: &Expression) -> bool {
+pub fn is_assignable(expr: &Expression) -> bool {
     match expr {
         Expression::Variable(_) => true,
         Expression::Deref(_) => true,
@@ -60,7 +61,7 @@ fn desugar_incdec(line: usize, target: Expression, is_inc: bool) -> Option<Expre
         } else {
             AssignOperator::SubAssign
         },
-        value: Box::new(Expression::Literal(Literal::Number(1))),
+        value: Box::new(Expression::Literal(Literal::Int("1".to_string()))),
     })
 }
 
@@ -376,6 +377,29 @@ where
                     target: Box::new(inner),
                 });
             }
+            TokenType::Minus => {
+                let tok = tokens.next()?; // '-'
+                let inner = parse_unary_expression(tokens)?;
+
+                match inner {
+                    Expression::Literal(Literal::Int(s)) => {
+                        return Some(Expression::Literal(Literal::Int(format!("-{}", s))));
+                    }
+                    Expression::Literal(Literal::Float(f)) => {
+                        return Some(Expression::Literal(Literal::Float(-f)));
+                    }
+                    _ => {
+                        println!("Error: unary '-' only supports numeric literals (line {})", tok.line);
+                        return None;
+                    }
+                }
+            }
+
+            TokenType::Plus => {
+                tokens.next(); // consume '+'
+                let inner = parse_unary_expression(tokens)?;
+                return Some(inner);
+            }
             _ => {}
         }
     }
@@ -390,9 +414,9 @@ where
     let token = (*tokens.peek()?).clone();
 
     let mut expr = match &token.token_type {
-        TokenType::Number(value) => {
+        TokenType::IntLiteral(s) => {
             tokens.next();
-            Some(Expression::Literal(Literal::Number(*value)))
+            Some(Expression::Literal(Literal::Int(s.clone())))
         }
         TokenType::Float(value) => {
             tokens.next();
@@ -574,101 +598,25 @@ where
                         break;
                     }
 
-                    TokenType::In | TokenType::Out => {
-                        let is_input = matches!(token.token_type, TokenType::In);
-                        tokens.next();
-
-                        if tokens.peek().map(|t| t.token_type.clone()) != Some(TokenType::Lparen) {
-                            println!("Expected '(' after in/out");
-                            return None;
-                        }
-                        tokens.next();
-
-                        let reg_token = tokens.next();
-                        let reg = match reg_token {
-                            Some(Token {
-                                token_type: TokenType::String(s),
-                                ..
-                            }) => s.clone(),
-                            Some(Token {
-                                token_type: TokenType::Identifier(s),
-                                ..
-                            }) => s.clone(),
-                            Some(other) => {
-                                println!(
-                                    "Expected register string or identifier, got {:?}",
-                                    other.token_type
-                                );
-                                return None;
-                            }
-                            None => {
-                                println!("Expected register in in/out(...)");
-                                return None;
-                            }
-                        };
-
-                        if tokens.peek().map(|t| t.token_type.clone()) != Some(TokenType::Rparen) {
-                            println!("Expected ')' after in/out");
-                            return None;
-                        }
-                        tokens.next();
-
-                        let value = parse_asm_value(tokens)?;
-
-                        let value_expr = parse_expression(tokens)?;
-                        if is_input {
-                            inputs.push((reg, value_expr));
-                        } else {
-                            outputs.push((reg, value_expr));
-                        }
+                    TokenType::In => {
+                        tokens.next(); // consume 'in'
+                        parse_asm_inout_clause(tokens, true, &mut inputs, &mut outputs)?;
                     }
 
-                    TokenType::Identifier(s) if s == "in" || s == "out" => {
-                        let is_input = s == "in";
-                        tokens.next();
+                    TokenType::Out => {
+                        tokens.next(); // consume 'out'
+                        parse_asm_inout_clause(tokens, false, &mut inputs, &mut outputs)?;
+                    }
 
-                        if tokens.peek().map(|t| t.token_type.clone()) != Some(TokenType::Lparen) {
-                            println!("Expected '(' after in/out");
-                            return None;
-                        }
-                        tokens.next();
 
-                        let reg_token = tokens.next();
-                        let reg = match reg_token {
-                            Some(Token {
-                                token_type: TokenType::String(s),
-                                ..
-                            }) => s.clone(),
-                            Some(Token {
-                                token_type: TokenType::Identifier(s),
-                                ..
-                            }) => s.clone(),
-                            Some(other) => {
-                                println!(
-                                    "Expected register string or identifier, got {:?}",
-                                    other.token_type
-                                );
-                                return None;
-                            }
-                            None => {
-                                println!("Expected register in in/out(...)");
-                                return None;
-                            }
-                        };
+                    TokenType::Identifier(s) if s == "in" => {
+                        tokens.next(); // consume identifier 'in'
+                        parse_asm_inout_clause(tokens, true, &mut inputs, &mut outputs)?;
+                    }
 
-                        if tokens.peek().map(|t| t.token_type.clone()) != Some(TokenType::Rparen) {
-                            println!("Expected ')' after in/out(...)");
-                            return None;
-                        }
-                        tokens.next();
-
-                        let value = parse_asm_value(tokens)?;
-
-                        if is_input {
-                            inputs.push((reg, Variable(value)));
-                        } else {
-                            outputs.push((reg, Variable(value)));
-                        }
+                    TokenType::Identifier(s) if s == "out" => {
+                        tokens.next(); // consume identifier 'out'
+                        parse_asm_inout_clause(tokens, false, &mut inputs, &mut outputs)?;
                     }
 
                     TokenType::String(s) => {
@@ -728,7 +676,6 @@ where
                     return None;
                 };
 
-                // 기존 expr(Option<Expression>)에서 실제 Expression 꺼내기
                 let base_expr = match expr.take() {
                     Some(e) => e,
                     None => {
@@ -737,7 +684,6 @@ where
                     }
                 };
 
-                // 다음 토큰이 '(' 이면 메서드 호출, 아니면 필드 접근
                 if let Some(Token {
                     token_type: TokenType::Lparen,
                     ..
@@ -899,36 +845,5 @@ pub fn parse_expression_from_token(
         }
 
         _ => None,
-    }
-}
-
-fn parse_asm_value<'a, T>(tokens: &mut Peekable<T>) -> Option<String>
-where
-    T: Iterator<Item = &'a Token>,
-{
-    let token = tokens.next()?;
-    match &token.token_type {
-        TokenType::Identifier(s) => Some(s.clone()),
-        TokenType::Number(n) => Some(n.to_string()),
-        TokenType::String(s) => Some(s.clone()),
-        TokenType::AddressOf => {
-            if let Some(Token {
-                token_type: TokenType::Identifier(s),
-                ..
-            }) = tokens.next()
-            {
-                Some(format!("&{}", s))
-            } else {
-                println!("Expected identifier after '&' in in/out(...)");
-                None
-            }
-        }
-        other => {
-            println!(
-                "Expected identifier or number after in/out(...), got {:?}",
-                other
-            );
-            None
-        }
     }
 }
