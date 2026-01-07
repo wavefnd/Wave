@@ -178,7 +178,7 @@ impl WaveError {
 
     /// Display error in Rust-style format
     pub fn display(&self) {
-        use colorex::Colorize;
+        use utils::colorex::*;
 
         let severity_str = match self.severity {
             ErrorSeverity::Error => "error".color("255,71,71").bold(),

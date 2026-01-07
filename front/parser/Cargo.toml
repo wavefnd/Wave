@@ -6,4 +6,4 @@ edition = "2021"
 [dependencies]
 lexer = { path = "../lexer" }
 error = { path = "../error" }
-regex = "1.11.1"
+utils = { path = "../../utils" }

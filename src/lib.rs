@@ -4,7 +4,7 @@ pub mod runner;
 pub mod version;
 
 use crate::version::get_os_pretty_name;
-use colorex::Colorize;
+use utils::colorex::*;
 use std::path::Path;
 
 use commands::DebugFlags;

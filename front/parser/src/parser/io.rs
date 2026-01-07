@@ -1,6 +1,6 @@
 use std::iter::Peekable;
 use std::slice::Iter;
-use regex::Regex;
+use utils::formatx::*;
 use lexer::Token;
 use lexer::token::TokenType;
 use crate::ast::{ASTNode, StatementNode};
@@ -25,10 +25,7 @@ pub fn parse_println(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
         return None;
     };
 
-    let placeholder_count = Regex::new(r"\{[^}]*\}")
-        .unwrap()
-        .find_iter(&content)
-        .count();
+    let placeholder_count = count_placeholders(&content);
 
     if placeholder_count == 0 {
         if tokens.peek()?.token_type != TokenType::Rparen {
@@ -110,10 +107,7 @@ pub fn parse_print(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
         return None;
     };
 
-    let placeholder_count = Regex::new(r"\{[^}]*\}")
-        .unwrap()
-        .find_iter(&content)
-        .count();
+    let placeholder_count = count_placeholders(&content);
 
     if placeholder_count == 0 {
         // No format → Print just a string
@@ -195,10 +189,7 @@ pub fn parse_input(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
         return None;
     };
 
-    let placeholder_count = Regex::new(r"\{[^}]*\}")
-        .unwrap()
-        .find_iter(&content)
-        .count();
+    let placeholder_count = count_placeholders(&content);
 
     let mut args = Vec::new();
     while let Some(Token {

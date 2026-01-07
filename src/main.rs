@@ -1,7 +1,7 @@
 use std::path::Path;
 use std::{env, process};
 
-use colorex::Colorize;
+use utils::colorex::*;
 use wavec::commands::{handle_build, handle_run, DebugFlags};
 use wavec::errors::CliError;
 use wavec::version_wave;

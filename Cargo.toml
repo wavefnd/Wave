@@ -13,7 +13,7 @@ path = "src/lib.rs"
 # linker = "clang"
 
 [dependencies]
-colorex = "0.1.0"
+utils = { path = "utils" }
 lexer = { path = "front/lexer" }
 parser = { path = "front/parser" }
 error = { path = "front/error" }
@@ -25,5 +25,6 @@ members = [
     "front/parser",
     "llvm_temporary",
     "front/error",
+    "utils",
     ".",
 ]
