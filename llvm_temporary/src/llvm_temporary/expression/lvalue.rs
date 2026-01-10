@@ -4,7 +4,6 @@ use inkwell::{
     module::Module,
     types::StructType,
     values::{BasicValueEnum, PointerValue},
-    AddressSpace,
 };
 use std::collections::HashMap;
 use parser::ast::Expression;

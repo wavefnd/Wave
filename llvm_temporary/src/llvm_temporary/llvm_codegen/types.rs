@@ -44,9 +44,6 @@ pub fn wave_type_to_llvm_type<'ctx>(
                 .unwrap_or_else(|| panic!("Struct type '{}' not found", name));
             struct_ty.as_basic_type_enum()
         }
-        _ => {
-            panic!("Unsupported wave type type");
-        }
     }
 }
 

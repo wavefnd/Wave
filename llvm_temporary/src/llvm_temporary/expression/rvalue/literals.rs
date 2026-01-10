@@ -1,5 +1,5 @@
 use super::ExprGenEnv;
-use inkwell::types::{BasicType, BasicTypeEnum, StringRadix};
+use inkwell::types::{BasicTypeEnum, StringRadix};
 use inkwell::values::{BasicValue, BasicValueEnum};
 use parser::ast::Literal;
 
@@ -138,7 +138,5 @@ pub(crate) fn gen<'ctx, 'a>(
 
         Literal::Char(c) => env.context.i8_type().const_int(*c as u64, false).as_basic_value_enum(),
         Literal::Byte(b) => env.context.i8_type().const_int(*b as u64, false).as_basic_value_enum(),
-
-        _ => unimplemented!("Unsupported literal type"),
     }
 }

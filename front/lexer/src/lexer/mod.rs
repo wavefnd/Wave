@@ -17,7 +17,6 @@
     clippy::new_without_default
 )]
 
-mod common;
 mod core;
 mod cursor;
 mod trivia;

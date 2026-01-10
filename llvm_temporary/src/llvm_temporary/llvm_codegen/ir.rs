@@ -1,7 +1,7 @@
 use inkwell::context::Context;
 use inkwell::passes::{PassManager, PassManagerBuilder};
 use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum};
-use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue};
+use inkwell::values::{BasicValueEnum, FunctionValue};
 use inkwell::OptimizationLevel;
 
 use parser::ast::{ASTNode, FunctionNode, Mutability, VariableNode, WaveType};

@@ -1,5 +1,4 @@
 use crate::token::*;
-use super::common::*;
 use super::{Lexer, Token};
 
 impl<'a> Lexer<'a> {

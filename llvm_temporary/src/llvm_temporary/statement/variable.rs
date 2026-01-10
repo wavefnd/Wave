@@ -1,10 +1,9 @@
 use crate::llvm_temporary::expression::rvalue::generate_expression_ir;
 use crate::llvm_temporary::llvm_codegen::{wave_type_to_llvm_type, VariableInfo};
-use inkwell::module::{Linkage, Module};
-use inkwell::types::{AnyTypeEnum, BasicType, BasicTypeEnum, StructType};
+use inkwell::module::{Module};
+use inkwell::types::{BasicTypeEnum, StructType};
 use inkwell::values::{BasicValue, BasicValueEnum};
-use inkwell::{AddressSpace};
-use parser::ast::{Expression, Literal, VariableNode, WaveType};
+use parser::ast::{Expression, VariableNode, WaveType};
 use std::collections::HashMap;
 
 #[derive(Copy, Clone, Debug)]

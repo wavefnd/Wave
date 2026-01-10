@@ -3,7 +3,7 @@ use std::slice::Iter;
 use lexer::Token;
 use lexer::token::TokenType;
 use crate::ast::{ASTNode, Expression, Mutability, VariableNode, WaveType};
-use crate::format::parse_expression;
+use crate::expr::parse_expression;
 use crate::parser::types::{parse_type, token_type_to_wave_type};
 
 fn collect_generic_inner(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<String> {
@@ -11,7 +11,6 @@ fn collect_generic_inner(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<Strin
     let mut depth: i32 = 1;
 
     while let Some(t) = tokens.next() {
-        // ✅ 1) 토큰 타입이 chevr면 lexeme가 비어있어도 확실히 처리
         match &t.token_type {
             TokenType::Lchevr => {
                 depth += 1;
@@ -29,7 +28,6 @@ fn collect_generic_inner(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<Strin
             _ => {}
         }
 
-        // ✅ 2) 그 외는 문자열(lexeme 또는 Identifier 이름)을 스캔해서 <, > 처리
         let text: &str = if !t.lexeme.is_empty() {
             t.lexeme.as_str()
         } else if let TokenType::Identifier(name) = &t.token_type {

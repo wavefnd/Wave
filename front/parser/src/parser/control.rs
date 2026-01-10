@@ -3,7 +3,7 @@ use std::slice::Iter;
 use lexer::Token;
 use lexer::token::TokenType;
 use crate::ast::{ASTNode, Expression, StatementNode};
-use crate::format::parse_expression;
+use crate::expr::parse_expression;
 use crate::parser::stmt::parse_block;
 
 pub fn parse_if(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {

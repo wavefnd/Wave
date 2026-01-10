@@ -1,5 +1,4 @@
 use crate::token::*;
-use super::common::*;
 use super::{Lexer, Token};
 
 impl<'a> Lexer<'a> {
@@ -19,9 +18,6 @@ impl<'a> Lexer<'a> {
     }
 
     pub(crate) fn keyword_or_ident_token(&self, ident: String) -> Token {
-        // 여기엔 기존 match identifier.as_str() { ... } 통째로 옮겨와
-        // 단, Token { token_type: ..., lexeme: ..., line: self.line } 형태 그대로 유지
-        // 마지막 default는 Identifier(ident.clone())
         match ident.as_str() {
             "fun" => Token {
                 token_type: TokenType::Fun,

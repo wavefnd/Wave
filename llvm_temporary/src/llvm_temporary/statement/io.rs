@@ -87,7 +87,7 @@ pub(super) fn gen_print_format_ir<'ctx>(
     struct_types: &HashMap<String, StructType<'ctx>>,
     struct_field_indices: &HashMap<String, HashMap<String, u32>>,
 ) {
-    // ⚠️ 원본은 args를 2번 평가했는데(부작용 가능), 여기선 1번만 평가하도록 고쳤어.
+    // NOTE: Avoid evaluating arguments twice to prevent side effects
     let mut arg_vals: Vec<BasicValueEnum<'ctx>> = Vec::with_capacity(args.len());
     let mut arg_types = Vec::with_capacity(args.len());
 
@@ -181,7 +181,6 @@ pub(super) fn gen_input_ir<'ctx>(
     struct_types: &HashMap<String, StructType<'ctx>>,
     struct_field_indices: &HashMap<String, HashMap<String, u32>>,
 ) {
-    // lvalue도 2번 만들 필요 없어서 1번만 만들도록 정리
     let mut ptrs = Vec::with_capacity(args.len());
     let mut arg_types = Vec::with_capacity(args.len());
 

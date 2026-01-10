@@ -3,7 +3,7 @@ use std::slice::Iter;
 use lexer::Token;
 use lexer::token::TokenType;
 use crate::ast::{ASTNode, AssignOperator, Expression, Operator, StatementNode};
-use crate::format::{parse_expression, parse_expression_from_token};
+use crate::expr::{parse_expression, parse_expression_from_token};
 use crate::parser::control::{parse_for, parse_if, parse_while};
 use crate::parser::decl::parse_var;
 use crate::parser::io::*;
@@ -227,14 +227,4 @@ pub fn parse_statement(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
     };
 
     node
-}
-
-fn skip_whitespace(tokens: &mut Peekable<Iter<Token>>) {
-    while let Some(token) = tokens.peek() {
-        if token.token_type == TokenType::Whitespace {
-            tokens.next();
-        } else {
-            break;
-        }
-    }
 }

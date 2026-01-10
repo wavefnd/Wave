@@ -3,7 +3,7 @@ use std::slice::Iter;
 use lexer::Token;
 use lexer::token::TokenType;
 use crate::ast::{ASTNode, Expression, Literal, StatementNode};
-use crate::format::is_assignable;
+use crate::expr::is_assignable;
 
 pub fn parse_asm_block(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<ASTNode> {
     if tokens.peek()?.token_type != TokenType::Lbrace {
@@ -27,7 +27,7 @@ pub fn parse_asm_block(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<ASTNode
             }
 
             TokenType::SemiColon | TokenType::Comma => {
-                tokens.next(); // 구분자 스킵
+                tokens.next();
             }
 
             TokenType::String(s) => {
@@ -45,7 +45,6 @@ pub fn parse_asm_block(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<ASTNode
                 parse_asm_inout_clause(tokens, false, &mut inputs, &mut outputs)?;
             }
 
-            // 렉서가 키워드로 안 뽑는 경우 대비
             TokenType::Identifier(s) if s == "in" => {
                 tokens.next();
                 parse_asm_inout_clause(tokens, true, &mut inputs, &mut outputs)?;
