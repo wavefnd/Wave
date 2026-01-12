@@ -6,7 +6,7 @@ use crate::ast::{ASTNode, Expression, Mutability, VariableNode, WaveType};
 use crate::expr::parse_expression;
 use crate::parser::types::{parse_type, token_type_to_wave_type};
 
-fn collect_generic_inner(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<String> {
+pub fn collect_generic_inner(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<String> {
     let mut inner = String::new();
     let mut depth: i32 = 1;
 

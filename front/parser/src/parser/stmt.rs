@@ -3,7 +3,7 @@ use std::slice::Iter;
 use lexer::Token;
 use lexer::token::TokenType;
 use crate::ast::{ASTNode, AssignOperator, Expression, Operator, StatementNode};
-use crate::expr::{parse_expression, parse_expression_from_token};
+use crate::expr::{is_assignable, parse_expression, parse_expression_from_token};
 use crate::parser::control::{parse_for, parse_if, parse_while};
 use crate::parser::decl::parse_var;
 use crate::parser::io::*;
@@ -59,33 +59,47 @@ pub fn parse_assignment(tokens: &mut Peekable<Iter<Token>>, first_token: &Token)
         tokens.next();
     }
 
-    match (assign_op, &left_expr) {
-        (Some(op), Expression::Variable(name)) => {
-            Some(ASTNode::Expression(Expression::AssignOperation {
-                target: Box::new(Expression::Variable(name.clone())),
-                operator: op,
-                value: Box::new(right_expr),
-            }))
+    match assign_op {
+        Some(op) => {
+            if !is_assignable(&left_expr) {
+                println!(
+                    "Error: Unsupported assignment target for '{:?}': {:?}",
+                    op, left_expr
+                );
+                return None;
+            }
+
+            Some(ASTNode::Statement(StatementNode::Expression(
+                Expression::AssignOperation {
+                    target: Box::new(left_expr),
+                    operator: op,
+                    value: Box::new(right_expr),
+                },
+            )))
         }
-        (None, Expression::Variable(name)) => Some(ASTNode::Statement(StatementNode::Assign {
-            variable: name.clone(),
-            value: right_expr,
-        })),
-        (None, Expression::Deref(_)) => Some(ASTNode::Statement(StatementNode::Assign {
-            variable: "deref".to_string(),
-            value: Expression::BinaryExpression {
-                left: Box::new(left_expr),
-                operator: Operator::Assign,
-                right: Box::new(right_expr),
-            },
-        })),
-        (_, _) => {
-            println!(
-                "Error: Unsupported assignment left expression: {:?}",
-                left_expr
-            );
-            None
-        }
+
+        None => match left_expr {
+            Expression::Variable(name) => Some(ASTNode::Statement(StatementNode::Assign {
+                variable: name,
+                value: right_expr,
+            })),
+
+            other => {
+                if !is_assignable(&other) {
+                    println!("Error: Unsupported assignment left expression: {:?}", other);
+                    return None;
+                }
+
+                Some(ASTNode::Statement(StatementNode::Assign {
+                    variable: "deref".to_string(),
+                    value: Expression::BinaryExpression {
+                        left: Box::new(other),
+                        operator: Operator::Assign,
+                        right: Box::new(right_expr),
+                    },
+                }))
+            }
+        },
     }
 }
 
@@ -126,6 +140,18 @@ pub fn parse_statement(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
         Some(t) => (*t).clone(),
         None => return None,
     };
+
+    if matches!(token.token_type, TokenType::Identifier(_) | TokenType::Deref) {
+        let first = token.clone();
+
+        let mut look = tokens.clone();
+        look.next();
+
+        if let Some(node) = parse_assignment(&mut look, &first) {
+            *tokens = look;
+            return Some(node);
+        }
+    }
 
     let node = match token.token_type {
         TokenType::Var => {

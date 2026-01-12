@@ -21,7 +21,6 @@ RESET = "\033[0m"
 
 KNOWN_TIMEOUT = {
     # "test22.wave",
-    "test56.wave",
 }
 
 FAIL_PATTERNS = [
@@ -74,10 +73,21 @@ def run_and_classify(name, cmd):
     if name == "test22.wave":
         stdin_data = "3\n"
 
+    if name == "test74.wave":
+        stdin_data = "10\n"
+
     try:
         if name == "test61.wave":
-            t = threading.Thread(target=send_udp_for_test61, daemon=True)
-            t.start()
+            threading.Thread(
+                target=send_udp_for_test61,
+                daemon=True
+            ).start()
+
+        if name == "test62.wave":
+            threading.Thread(
+                target=send_udp_for_test61,
+                daemon=True
+            ).start()
 
         result = subprocess.run(
             cmd,

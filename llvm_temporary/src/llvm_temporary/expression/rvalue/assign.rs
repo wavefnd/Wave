@@ -10,7 +10,9 @@ pub(crate) fn gen_assign_operation<'ctx, 'a>(
     operator: &AssignOperator,
     value: &Expression,
 ) -> BasicValueEnum<'ctx> {
-    let ptr = generate_address_ir(env.context, env.builder, target, env.variables, env.module);
+    let ptr = generate_address_ir(
+        env.context, env.builder, target, env.variables, env.module, env.struct_types, env.struct_field_indices
+    );
 
     let current_val = env.builder.build_load(ptr, "load_current").unwrap();
 
@@ -89,7 +91,9 @@ pub(crate) fn gen_assignment<'ctx, 'a>(
     target: &Expression,
     value: &Expression,
 ) -> BasicValueEnum<'ctx> {
-    let ptr = generate_address_ir(env.context, env.builder, target, env.variables, env.module);
+    let ptr = generate_address_ir(
+        env.context, env.builder, target, env.variables, env.module, env.struct_types, env.struct_field_indices
+    );
 
     let value = env.gen(
         value,

@@ -40,6 +40,7 @@ pub(crate) fn gen_expr<'ctx, 'a>(
         Expression::IncDec { kind, target } => incdec::gen(env, kind, target),
 
         Expression::Grouped(inner) => env.gen(inner, expected_type),
+        Expression::ArrayLiteral(elements) => arrays::gen_array_literal(env, elements, expected_type),
 
         _ => unimplemented!("Unsupported expression type"),
     }

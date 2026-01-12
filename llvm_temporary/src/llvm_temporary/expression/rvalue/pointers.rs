@@ -2,30 +2,70 @@ use super::ExprGenEnv;
 use inkwell::types::{BasicType, BasicTypeEnum};
 use inkwell::values::{BasicValue, BasicValueEnum};
 use parser::ast::Expression;
+use crate::llvm_temporary::llvm_codegen::generate_address_ir;
 
-pub(crate) fn gen_deref<'ctx, 'a>(env: &mut ExprGenEnv<'ctx, 'a>, inner_expr: &Expression) -> BasicValueEnum<'ctx> {
-    match inner_expr {
-        Expression::Variable(var_name) => {
-            let ptr_to_value = env.variables.get(var_name).unwrap().ptr;
-            let actual_ptr = env
-                .builder
-                .build_load(ptr_to_value, "deref_target")
-                .unwrap()
-                .into_pointer_value();
-            env.builder
-                .build_load(actual_ptr, "deref_load")
-                .unwrap()
-                .as_basic_value_enum()
+fn push_deref_into_base(expr: &Expression) -> Expression {
+    match expr {
+        Expression::Grouped(inner) => {
+            Expression::Grouped(Box::new(push_deref_into_base(inner)))
         }
-        _ => {
-            let ptr_val = env.gen(inner_expr, None);
-            let ptr = ptr_val.into_pointer_value();
-            env.builder
-                .build_load(ptr, "deref_load")
-                .unwrap()
-                .as_basic_value_enum()
+
+        Expression::IndexAccess { target, index } => {
+            Expression::IndexAccess {
+                target: Box::new(push_deref_into_base(target)),
+                index: index.clone(),
+            }
         }
+
+        Expression::FieldAccess { object, field } => {
+            Expression::FieldAccess {
+                object: Box::new(push_deref_into_base(object)),
+                field: field.clone(),
+            }
+        }
+
+        other => Expression::Deref(Box::new(other.clone())),
     }
+}
+
+pub(crate) fn gen_deref<'ctx, 'a>(
+    env: &mut ExprGenEnv<'ctx, 'a>,
+    inner_expr: &Expression,
+) -> BasicValueEnum<'ctx> {
+    match inner_expr {
+        Expression::Grouped(inner) => {
+            return gen_deref(env, inner);
+        }
+
+        Expression::IndexAccess { .. } | Expression::FieldAccess { .. } => {
+            let addr = generate_address_ir(
+                env.context,
+                env.builder,
+                inner_expr,
+                env.variables,
+                env.module,
+                env.struct_types,
+                env.struct_field_indices,
+            );
+
+            return env.builder
+                .build_load(addr, "deref_load")
+                .unwrap()
+                .as_basic_value_enum();
+        }
+
+        _ => {}
+    }
+
+    let v = env.gen(inner_expr, None);
+    if let BasicValueEnum::PointerValue(p) = v {
+        return env.builder
+            .build_load(p, "deref_load")
+            .unwrap()
+            .as_basic_value_enum();
+    }
+
+    panic!("deref expects pointer or lvalue (x[i], x.field), got: {:?}", inner_expr);
 }
 
 pub(crate) fn gen_addressof<'ctx, 'a>(

@@ -4,7 +4,18 @@ use lexer::Token;
 use lexer::token::TokenType;
 use crate::ast::{ASTNode, ProtoImplNode, StatementNode, StructNode, WaveType};
 use crate::parser::functions::parse_function;
-use crate::parser::types::parse_type_from_token;
+use crate::types::parse_type_from_stream;
+
+fn skip_ws(tokens: &mut Peekable<Iter<Token>>) {
+    while let Some(t) = tokens.peek() {
+        match t.token_type {
+            TokenType::Whitespace | TokenType::Newline => {
+                tokens.next();
+            }
+            _ => break,
+        }
+    }
+}
 
 pub fn parse_import(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
     if tokens.peek()?.token_type != TokenType::Lparen {
@@ -142,6 +153,8 @@ pub fn parse_struct(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
     let mut methods = Vec::new();
 
     loop {
+        skip_ws(tokens);
+
         let token_type = if let Some(t) = tokens.peek() {
             t.token_type.clone()
         } else {
@@ -157,6 +170,11 @@ pub fn parse_struct(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
                 tokens.next();
                 break;
             }
+
+            TokenType::Whitespace | TokenType::Newline => {
+                tokens.next();
+            }
+
             TokenType::Fun => {
                 if let Some(ASTNode::Function(func_node)) = parse_function(tokens) {
                     if func_node.return_type.is_none() {
@@ -174,69 +192,68 @@ pub fn parse_struct(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
             TokenType::Identifier(_) => {
                 let mut lookahead = tokens.clone();
                 lookahead.next();
+                while let Some(t) = lookahead.peek() {
+                    match t.token_type {
+                        TokenType::Whitespace | TokenType::Newline => { lookahead.next(); }
+                        _ => break,
+                    }
+                }
 
-                if let Some(Token {
-                                token_type: TokenType::Colon,
-                                ..
-                            }) = lookahead.peek()
-                {
-                    let field_name = if let Some(Token {
-                                                     token_type: TokenType::Identifier(n),
-                                                     ..
-                                                 }) = tokens.next()
-                    {
+                if matches!(lookahead.peek().map(|t| &t.token_type), Some(TokenType::Colon)) {
+                    let field_name = if let Some(Token { token_type: TokenType::Identifier(n), .. }) = tokens.next() {
                         n.clone()
                     } else {
                         unreachable!()
                     };
 
-                    tokens.next();
+                    skip_ws(tokens);
 
-                    let type_token = tokens.next();
-                    let wave_type = parse_type_from_token(type_token.as_ref()).or_else(|| {
-                        if let Some(Token {
-                                        token_type: TokenType::Identifier(id),
-                                        ..
-                                    }) = type_token
-                        {
-                            Some(WaveType::Struct(id.clone()))
-                        } else {
-                            None
-                        }
-                    });
-
-                    if wave_type.is_none() {
-                        println!(
-                            "Error: Invalid type for field '{}' in struct '{}'.",
-                            field_name, name
-                        );
+                    // ':'
+                    if tokens.peek().map_or(true, |t| t.token_type != TokenType::Colon) {
+                        println!("Error: Expected ':' after field '{}' in struct '{}'.", field_name, name);
                         return None;
                     }
+                    tokens.next(); // consume ':'
 
-                    if tokens
-                        .peek()
-                        .map_or(true, |t| t.token_type != TokenType::SemiColon)
-                    {
+                    skip_ws(tokens);
+
+                    let wave_type = match parse_type_from_stream(tokens) {
+                        Some(t) => t,
+                        None => {
+                            println!(
+                                "Error: Invalid type for field '{}' in struct '{}'.",
+                                field_name, name
+                            );
+                            return None;
+                        }
+                    };
+
+                    skip_ws(tokens);
+
+                    if tokens.peek().map_or(true, |t| t.token_type != TokenType::SemiColon) {
                         println!(
                             "Error: Expected ';' after field declaration in struct '{}'.",
                             name
                         );
                         return None;
                     }
-                    tokens.next();
+                    tokens.next(); // consume ';'
 
-                    fields.push((field_name, wave_type.unwrap()));
+                    fields.push((field_name, wave_type));
                 } else {
-                    let id_str =
-                        if let TokenType::Identifier(id) = &tokens.peek().unwrap().token_type {
-                            id.clone()
-                        } else {
-                            "".to_string()
-                        };
-                    println!("Error: Unexpected identifier '{}' in struct '{}' body. Expected field or method.", id_str, name);
+                    let id_str = if let TokenType::Identifier(id) = &tokens.peek().unwrap().token_type {
+                        id.clone()
+                    } else {
+                        "".to_string()
+                    };
+                    println!(
+                        "Error: Unexpected identifier '{}' in struct '{}' body. Expected field or method.",
+                        id_str, name
+                    );
                     return None;
                 }
             }
+
             other_token => {
                 println!(
                     "Error: Unexpected token inside struct body: {:?}",

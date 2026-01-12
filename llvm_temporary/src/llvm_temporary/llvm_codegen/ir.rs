@@ -12,6 +12,19 @@ use crate::llvm_temporary::statement::generate_statement_ir;
 use super::consts::create_llvm_const_value;
 use super::types::{wave_type_to_llvm_type, VariableInfo};
 
+fn build_struct_field_map(ast: &[ASTNode]) -> HashMap<String, Vec<String>> {
+    let mut m = HashMap::new();
+
+    for node in ast {
+        if let ASTNode::Struct(s) = node {
+            let fields = s.fields.iter().map(|(n, _)| n.clone()).collect::<Vec<_>>();
+            m.insert(s.name.clone(), fields);
+        }
+    }
+
+    m
+}
+
 pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
     let context: &'static Context = Box::leak(Box::new(Context::create()));
     let module: &'static _ = Box::leak(Box::new(context.create_module("main")));

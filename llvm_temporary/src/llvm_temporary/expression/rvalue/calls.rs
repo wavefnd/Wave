@@ -170,6 +170,7 @@ fn coerce_to_expected<'ctx, 'a>(
     }
 
     match (got, expected) {
+        // 1) int -> int
         (BasicTypeEnum::IntType(src), BasicTypeEnum::IntType(dst)) => {
             let src_bw = src.get_bit_width();
             let dst_bw = dst.get_bit_width();
@@ -190,6 +191,31 @@ fn coerce_to_expected<'ctx, 'a>(
             }
         }
 
+        // 2) ptr-to-array -> array value (load)
+        (BasicTypeEnum::PointerType(p), BasicTypeEnum::ArrayType(a))
+        if p.get_element_type().is_array_type()
+            && p.get_element_type().into_array_type() == a =>
+            {
+                let ptr = val.into_pointer_value();
+                env.builder
+                    .build_load(ptr, &format!("arg{}_arr_load", arg_index))
+                    .unwrap()
+                    .as_basic_value_enum()
+            }
+
+        // 3) ptr-to-struct -> struct value (load)
+        (BasicTypeEnum::PointerType(p), BasicTypeEnum::StructType(s))
+        if p.get_element_type().is_struct_type()
+            && p.get_element_type().into_struct_type() == s =>
+            {
+                let ptr = val.into_pointer_value();
+                env.builder
+                    .build_load(ptr, &format!("arg{}_st_load", arg_index))
+                    .unwrap()
+                    .as_basic_value_enum()
+            }
+
+        // 4) ptr -> ptr (bitcast)
         (BasicTypeEnum::PointerType(_), BasicTypeEnum::PointerType(dst)) => {
             env.builder
                 .build_bit_cast(val, dst, &format!("arg{}_ptrcast", arg_index))

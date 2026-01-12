@@ -82,8 +82,8 @@ proto Node {
         var cur: ptr<Node> = &self;
         var i: i32 = 0;
         while (cur != 0 && i < 10) {
-            println("Node {} = {}", i, (*cur).value);
-            cur = (*cur).next;
+            println("Node {} = {}", i, (deref cur).value);
+            cur = (deref cur).next;
             i += 1;
         }
     }

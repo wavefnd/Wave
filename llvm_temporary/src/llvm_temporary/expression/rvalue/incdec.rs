@@ -8,7 +8,9 @@ pub(crate) fn gen<'ctx, 'a>(
     kind: &IncDecKind,
     target: &Expression,
 ) -> BasicValueEnum<'ctx> {
-    let ptr = generate_address_ir(env.context, env.builder, target, env.variables, env.module);
+    let ptr = generate_address_ir(
+        env.context, env.builder, target, env.variables, env.module, env.struct_types, env.struct_field_indices
+    );
     let old_val = env.builder.build_load(ptr, "incdec_old").unwrap();
 
     let new_val: BasicValueEnum<'ctx> = match old_val {

@@ -3,6 +3,7 @@ use std::slice::Iter;
 use lexer::Token;
 use lexer::token::*;
 use crate::ast::WaveType;
+use crate::decl::collect_generic_inner;
 
 pub fn token_type_to_wave_type(token_type: &TokenType) -> Option<WaveType> {
     match token_type {
@@ -61,6 +62,7 @@ pub fn is_expression_start(token_type: &TokenType) -> bool {
             | TokenType::String(_)
             | TokenType::Lbrack
             | TokenType::Asm
+            | TokenType::Deref
     )
 }
 
@@ -209,53 +211,29 @@ pub fn parse_type_from_token(token_opt: Option<&&Token>) -> Option<WaveType> {
 }
 
 pub fn parse_type_from_stream(tokens: &mut Peekable<Iter<Token>>) -> Option<WaveType> {
-    let type_token = tokens.next()?; // consume identifier
+    while matches!(tokens.peek().map(|t| &t.token_type), Some(TokenType::Whitespace)) {
+        tokens.next();
+    }
+
+    let type_token = tokens.next()?;
 
     if let TokenType::Identifier(name) = &type_token.token_type {
-        if let Some(Token {
-                        token_type: TokenType::Lchevr,
-                        ..
-                    }) = tokens.peek()
-        {
-            tokens.next(); // consume '<'
-
-            let inner_type = parse_type_from_stream(tokens)?;
-
-            if tokens.peek()?.token_type == TokenType::Comma {
-                tokens.next(); // consume ','
-
-                let size_token = tokens.next()?;
-                let size = if let TokenType::IntLiteral(n) = &size_token.token_type {
-                    n
-                } else {
-                    println!("Error: Expected number for array size");
-                    return None;
-                };
-
-                if tokens.peek()?.token_type != TokenType::Rchevr {
-                    println!("Error: Expected '>' after array type");
-                    return None;
-                }
-                tokens.next(); // consume '>'
-
-                return Some(WaveType::Array(Box::new(inner_type), size.parse().unwrap()));
-            } else {
-                if tokens.peek()?.token_type == TokenType::Rchevr {
-                    tokens.next(); // consume '>'
-                    if name == "ptr" {
-                        return Some(WaveType::Pointer(Box::new(inner_type)));
-                    } else {
-                        println!("Error: Unsupported generic type '{}'", name);
-                        return None;
-                    }
-                } else {
-                    println!("Error: Expected ',' or '>' in generic type");
-                    return None;
-                }
-            }
+        while matches!(tokens.peek().map(|t| &t.token_type), Some(TokenType::Whitespace)) {
+            tokens.next();
         }
 
-        return parse_type(name).and_then(|t| token_type_to_wave_type(&t));
+        if matches!(tokens.peek().map(|t| &t.token_type), Some(TokenType::Lchevr)) {
+            tokens.next(); // consume '<'
+
+            let inner = collect_generic_inner(tokens)?;
+            let full_type_str = format!("{}<{}>", name, inner);
+
+            let parsed_tt = parse_type(&full_type_str)?;
+            return token_type_to_wave_type(&parsed_tt);
+        }
+
+        let parsed_tt = parse_type(name)?;
+        return token_type_to_wave_type(&parsed_tt);
     }
 
     token_type_to_wave_type(&type_token.token_type)

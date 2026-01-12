@@ -21,6 +21,7 @@ pub mod asm;
 pub mod structs;
 pub mod unary;
 pub mod incdec;
+pub mod arrays;
 
 pub struct ProtoInfo<'ctx> {
     pub vtable_ty: StructType<'ctx>,

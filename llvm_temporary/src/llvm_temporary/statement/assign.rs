@@ -21,7 +21,7 @@ pub(super) fn gen_assign_ir<'ctx>(
         if let Expression::BinaryExpression { left, right, .. } = value {
             if let Expression::Deref(inner_expr) = &**left {
                 let target_ptr =
-                    generate_address_ir(context, builder, inner_expr, variables, module);
+                    generate_address_ir(context, builder, inner_expr, variables, module, struct_types, struct_field_indices);
 
                 let val = generate_expression_ir(
                     context,

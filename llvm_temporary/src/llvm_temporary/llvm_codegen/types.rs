@@ -6,6 +6,28 @@ use inkwell::AddressSpace;
 use parser::ast::{Mutability, WaveType};
 use std::collections::HashMap;
 
+pub type StructFieldMap = HashMap<String, HashMap<String, u32>>;
+
+pub fn build_field_map(fields: &[(String, parser::ast::WaveType)]) -> HashMap<String, u32> {
+    let mut m = HashMap::new();
+    for (i, (name, _ty)) in fields.iter().enumerate() {
+        m.insert(name.clone(), i as u32);
+    }
+    m
+}
+
+pub fn get_field_index(
+    struct_fields: &StructFieldMap,
+    struct_name: &str,
+    field: &str,
+) -> u32 {
+    *struct_fields
+        .get(struct_name)
+        .unwrap_or_else(|| panic!("Struct '{}' field map not found", struct_name))
+        .get(field)
+        .unwrap_or_else(|| panic!("Field '{}' not found in struct '{}'", field, struct_name))
+}
+
 pub fn wave_type_to_llvm_type<'ctx>(
     context: &'ctx Context,
     wave_type: &WaveType,
