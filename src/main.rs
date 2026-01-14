@@ -2,7 +2,7 @@ use std::path::Path;
 use std::{env, process};
 
 use utils::colorex::*;
-use wavec::commands::{handle_build, handle_run, DebugFlags};
+use wavec::commands::{handle_build, handle_install_std, handle_run, handle_update_std, DebugFlags};
 use wavec::errors::CliError;
 use wavec::version_wave;
 
@@ -68,6 +68,32 @@ fn run() -> Result<(), CliError> {
             handle_build(Path::new(&file), &opt_flag, &debug_flags)?;
         }
 
+        "install" => {
+            let target = iter.next().ok_or(CliError::MissingArgument {
+                command: "install",
+                expected: "<target>",
+            })?;
+
+            match target.as_str() {
+                "std" => {
+                    handle_install_std()?;
+                }
+                _ => return Err(CliError::UnknownInstallTarget(target)),
+            }
+        }
+
+        "update" => {
+            let target = iter.next().ok_or(CliError::MissingArgument {
+                command: "update",
+                expected: "<target>",
+            })?;
+
+            match target.as_str() {
+                "std" => handle_update_std()?,
+                _ => return Err(CliError::UnknownUpdateTarget(target)),
+            }
+        }
+
         "--help" => print_help(),
 
         _ => return Err(CliError::UnknownCommand(command)),
@@ -99,6 +125,16 @@ fn print_help() {
         "  {:<18} {}",
         "build <file>".color("38,139,235"),
         "Compile Wave file"
+    );
+    println!(
+        "  {:<18} {}",
+        "install std".color("38,139,235"),
+        "Install Wave standard library (std)"
+    );
+    println!(
+        "  {:<18} {}",
+        "update std".color("38,139,235"),
+        "Update Wave standard library (std)"
     );
     println!(
         "  {:<18} {}",

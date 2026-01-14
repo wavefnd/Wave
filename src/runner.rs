@@ -25,26 +25,15 @@ fn expand_imports_for_codegen(
         for node in ast {
             match node {
                 ASTNode::Statement(StatementNode::Import(module)) => {
-                    let imported_ast = local_import(&module, already, base_dir)?;
+                    let unit = local_import_unit(&module, already, base_dir)?;
 
-                    if imported_ast.is_empty() {
+                    if unit.ast.is_empty() {
                         continue;
                     }
 
-                    let target_file_name = if module.ends_with(".wave") {
-                        module.clone()
-                    } else {
-                        format!("{}.wave", module)
-                    };
+                    let next_dir = unit.abs_path.parent().unwrap_or(base_dir);
 
-                    let found_path = base_dir.join(&target_file_name);
-                    let next_dir = found_path
-                        .canonicalize()
-                        .ok()
-                        .and_then(|p| p.parent().map(|d| d.to_path_buf()))
-                        .unwrap_or_else(|| base_dir.to_path_buf());
-
-                    let expanded = expand_from_dir(&next_dir, imported_ast, already)?;
+                    let expanded = expand_from_dir(next_dir, unit.ast, already)?;
                     out.extend(expanded);
                 }
 
