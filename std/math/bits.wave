@@ -1,0 +1,84 @@
+fun is_pow2(x: i32) -> bool {
+    if (x <= 0) {
+        return false;
+    }
+
+    if ((x & (x - 1)) == 0) {
+        return true;
+    }
+
+    return false;
+}
+
+fun align_down(x: i32, align: i32) -> i32 {
+    if (align <= 0) {
+        return x;
+    }
+
+    return x & ~(align - 1);
+}
+
+fun align_up(x: i32, align: i32) -> i32 {
+    if (align <= 0) {
+        return x;
+    }
+
+    return (x + (align - 1)) & ~(align - 1);
+}
+
+fun low_bit(x: i32) -> i32 {
+    return x & (-x);
+}
+
+fun popcount(x0: i32) -> i32 {
+    let mut x: i32 = x0;
+    let mut c: i32 = 0;
+
+    while (x != 0) {
+        x = x & (x - 1);
+        c += 1;
+    }
+
+    return c;
+}
+
+fun ctz32(x: i32) -> i32 {
+    if (x == 0) {
+        return 32;
+    }
+
+    let lb: i32 = low_bit(x);
+    return popcount(lb - 1);
+}
+
+fun bit_length(x0: i32) -> i32 {
+    if (x0 <= 0) {
+        return 0;
+    }
+
+    let mut x: i32 = x0;
+    let mut n: i32 = 0;
+
+    while (x > 0) {
+        x = x >> 1;
+        n += 1;
+    }
+
+    return n;
+}
+
+fun ilog2_floor(x: i32) -> i32 {
+    if (x <= 0) {
+        return -1;
+    }
+
+    return bit_length(x) - 1;
+}
+
+fun ilog2_ceil(x: i32) -> i32 {
+    if (x <= 1) {
+        return 0;
+    }
+
+    return ilog2_floor(x - 1) + 1;
+}

@@ -1,0 +1,53 @@
+fun gcd(a0: i32, b0: i32) -> i32 {
+    let mut a: i32 = a0;
+    let mut b: i32 = b0;
+
+    if (a < 0) {
+        a = -a;
+    }
+
+    if (b < 0) {
+        b = -b;
+    }
+
+    while (b != 0) {
+        let t: i32 = a % b;
+        a = b;
+        b = t;
+    }
+
+    return a;
+}
+
+fun lcm(a: i32, b: i32) -> i32 {
+    if (a == 0 || b == 0) {
+        return 0;
+    }
+
+    let g: i32 = gcd(a, b);
+    let x: i32 = a / g;
+    let mut r: i32 = x * b;
+
+    if (r < 0) {
+        r = -r;
+    }
+
+    return r;
+}
+
+fun pow_i32(base0: i32, exp0: i32) -> i32 {
+    let mut base: i32 = base0;
+    let mut exp: i32 = exp0;
+    let mut result: i32 = 1;
+
+    while (exp > 0) {
+        if ((exp & 1) == 1) {
+            result = result * base;
+        }
+
+        base = base * base;
+        exp = exp >> 1;
+    }
+
+    return result;
+}

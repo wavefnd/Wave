@@ -1,0 +1,14 @@
+fun len(s: str) -> i32 {
+    let mut i: i32 = 0;
+    while (s[i] != 0) {
+        i += 1;
+    }
+    return i;
+}
+
+fun is_empty(s: str) -> bool {
+    if (s[0] == 0) {
+        return true;
+    }
+    return false;
+}

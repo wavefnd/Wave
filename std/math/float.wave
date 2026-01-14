@@ -1,0 +1,35 @@
+fun abs_f32(x: f32) -> f32 {
+    if (x < 0.0) {
+        return -x;
+    }
+
+    return x;
+}
+
+fun min_f32(a: f32, b: f32) -> f32 {
+    if (a < b) {
+        return a;
+    }
+
+    return b;
+}
+
+fun max_f32(a: f32, b: f32) -> f32 {
+    if (a > b) {
+        return a;
+    }
+
+    return b;
+}
+
+fun clamp_f32(x: f32, lo: f32, hi: f32) -> f32 {
+    if (x < lo) {
+        return lo;
+    }
+
+    if (x > hi) {
+        return hi;
+    }
+
+    return x;
+}

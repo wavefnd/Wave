@@ -1,0 +1,94 @@
+fun abs(x: i32) -> i32 {
+    if (x < 0) {
+        return -x;
+    }
+
+    return x;
+}
+
+fun min(a: i32, b: i32) -> i32 {
+    if (a < b) {
+        return a;
+    }
+
+    return b;
+}
+
+fun max(a: i32, b: i32) -> i32 {
+    if (a > b) {
+        return a;
+    }
+
+    return b;
+}
+
+fun clamp(x: i32, lo: i32, hi: i32) -> i32 {
+    if (x < lo) {
+        return lo;
+    }
+
+    if (x > hi) {
+        return hi;
+    }
+
+    return x;
+}
+
+fun sign(x: i32) -> i32 {
+    if (x < 0) {
+        return -1;
+    }
+
+    if (x > 0) {
+        return 1;
+    }
+
+    return 0;
+}
+
+fun is_even(x: i32) -> bool {
+    if ((x % 2) == 0) {
+        return true;
+    }
+
+    return false;
+}
+
+fun is_odd(x: i32) -> bool {
+    if ((x % 2) != 0) {
+        return true;
+    }
+
+    return false;
+}
+
+fun div_ceil_pos(a: i32, b: i32) -> i32 {
+    if (b == 0) {
+        return 0;
+    }
+
+    if (a <= 0) {
+        return 0;
+    }
+
+    return (a + (b - 1)) / b;
+}
+
+fun div_floor_pos(a: i32, b: i32) -> i32 {
+    if (b == 0) {
+        return 0;
+    }
+
+    if (a <= 0) {
+        return 0;
+    }
+
+    return a / b;
+}
+
+fun swap_i32(a: ptr<i32>, b: ptr<i32>) {
+    let t: i32 = deref a;
+
+    deref a = deref b;
+    deref b = t;
+}

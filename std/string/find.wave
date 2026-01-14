@@ -1,0 +1,148 @@
+fun find_char(s: str, c: u8) -> i32 {
+    let mut i: i32 = 0;
+
+    while (s[i] != 0) {
+        if (s[i] == c) {
+            return i;
+        }
+
+        i += 1;
+    }
+
+    return -1;
+}
+
+fun rfind_char(s: str, c: u8) -> i32 {
+    let mut last: i32 = -1;
+    let mut i: i32 = 0;
+
+    while (s[i] != 0) {
+        if (s[i] == c) {
+            last = i;
+        }
+
+        i += 1;
+    }
+
+    return last;
+}
+
+fun contains_char(s: str, c: u8) -> bool {
+    if (find_char(s, c) != -1) {
+        return true;
+    }
+
+    return false;
+}
+
+fun count_char(s: str, c: u8) -> i32 {
+    let mut i: i32 = 0;
+    let mut count: i32 = 0;
+
+    while (s[i] != 0) {
+        if (s[i] == c) {
+            count += 1;
+        }
+
+        i += 1;
+    }
+
+    return count;
+}
+
+fun find(s: str, needle: str) -> i32 {
+    if (needle[0] == 0) {
+        return 0;
+    }
+
+    let mut nl: i32 = 0;
+    while (needle[nl] != 0) {
+        nl += 1;
+    }
+
+    let mut sl: i32 = 0;
+    while (s[sl] != 0) {
+        sl += 1;
+    }
+
+    if (nl > sl) {
+        return -1;
+    }
+
+    let mut i: i32 = 0;
+    while (i <= (sl - nl)) {
+        let mut j: i32 = 0;
+        let mut ok: bool = true;
+
+        while (j < nl) {
+            if (s[i + j] != needle[j]) {
+                ok = false;
+                j = nl;
+            } else {
+                j += 1;
+            }
+        }
+
+        if (ok) {
+            return i;
+        }
+
+        i += 1;
+    }
+
+    return -1;
+}
+
+fun contains(s: str, needle: str) -> bool {
+    if (find(s, needle) != -1) {
+        return true;
+    }
+
+    return false;
+}
+
+fun count(s: str, needle: str) -> i32 {
+    if (needle[0] == 0) {
+        return 0;
+    }
+
+    let mut nl: i32 = 0;
+    while (needle[nl] != 0) {
+        nl += 1;
+    }
+
+    let mut sl: i32 = 0;
+    while (s[sl] != 0) {
+        sl += 1;
+    }
+
+    if (nl > sl) {
+        return 0;
+    }
+
+    let mut i: i32 = 0;
+    let mut total: i32 = 0;
+
+    while (i <= (sl - nl)) {
+        let mut j: i32 = 0;
+        let mut ok: bool = true;
+
+        while (j < nl) {
+            if (s[i + j] != needle[j]) {
+                ok = false;
+                j = nl;
+            } else {
+                j += 1;
+            }
+        }
+
+        if (ok) {
+            total += 1;
+            i += nl;
+        } else {
+            i += 1;
+        }
+    }
+
+    return total;
+}

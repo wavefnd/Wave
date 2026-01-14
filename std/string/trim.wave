@@ -1,0 +1,49 @@
+fun trim_left_index(s: str) -> i32 {
+    let mut i: i32 = 0;
+
+    while (s[i] != 0) {
+        let c: u8 = s[i];
+
+        if (c == 32 || c == 9 || c == 10 || c == 13) {
+            i += 1;
+        } else {
+            return i;
+        }
+    }
+
+    return i;
+}
+
+fun trim_right_index(s: str) -> i32 {
+    let mut sl: i32 = 0;
+
+    while (s[sl] != 0) {
+        sl += 1;
+    }
+
+    if (sl == 0) {
+        return 0;
+    }
+
+    let mut i: i32 = sl - 1;
+
+    while (i >= 0) {
+        let c: u8 = s[i];
+
+        if (c == 32 || c == 9 || c == 10 || c == 13) {
+            i -= 1;
+        } else {
+            return i + 1;
+        }
+    }
+
+    return 0;
+}
+
+fun trim_range(s: str, out_start: ptr<i32>, out_end: ptr<i32>) {
+    let start: i32 = trim_left_index(s);
+    let end: i32 = trim_right_index(s);
+
+    deref out_start = start;
+    deref out_end = end;
+}

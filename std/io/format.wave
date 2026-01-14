@@ -1,3 +1,0 @@
-fun std_format_dummy() {
-    println("std::io::format loaded");
-}

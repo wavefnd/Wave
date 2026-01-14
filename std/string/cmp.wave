@@ -1,0 +1,86 @@
+fun eq(a: str, b: str) -> bool {
+    let mut i: i32 = 0;
+
+    while (true) {
+        let ca: u8 = a[i];
+        let cb: u8 = b[i];
+
+        if (ca != cb) {
+            return false;
+        }
+
+        if (ca == 0) {
+            return true;
+        }
+
+        i += 1;
+    }
+
+    return true;
+}
+
+fun cmp(a: str, b: str) -> i32 {
+    let mut i: i32 = 0;
+
+    while (true) {
+        let ca: u8 = a[i];
+        let cb: u8 = b[i];
+
+        if (ca < cb) {
+            return -1;
+        }
+
+        if (ca > cb) {
+            return 1;
+        }
+
+        if (ca == 0) {
+            return 0;
+        }
+
+        i += 1;
+    }
+
+    return 0;
+}
+
+fun starts_with(s: str, prefix: str) -> bool {
+    let mut i: i32 = 0;
+
+    while (prefix[i] != 0) {
+        if (s[i] != prefix[i]) {
+            return false;
+        }
+
+        i += 1;
+    }
+
+    return true;
+}
+
+fun ends_with(s: str, suffix: str) -> bool {
+    let mut sl: i32 = 0;
+    while (s[sl] != 0) {
+        sl += 1;
+    }
+
+    let mut tl: i32 = 0;
+    while (suffix[tl] != 0) {
+        tl += 1;
+    }
+
+    if (tl > sl) {
+        return false;
+    }
+
+    let mut i: i32 = 0;
+    while (i < tl) {
+        if (s[sl - tl + i] != suffix[i]) {
+            return false;
+        }
+
+        i += 1;
+    }
+
+    return true;
+}

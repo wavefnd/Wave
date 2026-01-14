@@ -1,0 +1,83 @@
+fun is_digit(c: u8) -> bool {
+    if (c >= 48 && c <= 57) {
+        return true;
+    }
+
+    return false;
+}
+
+fun is_lower(c: u8) -> bool {
+    if (c >= 97 && c <= 122) {
+        return true;
+    }
+
+    return false;
+}
+
+fun is_upper(c: u8) -> bool {
+    if (c >= 65 && c <= 90) {
+        return true;
+    }
+
+    return false;
+}
+
+fun is_alpha(c: u8) -> bool {
+    if (is_lower(c)) {
+        return true;
+    }
+
+    if (is_upper(c)) {
+        return true;
+    }
+
+    return false;
+}
+
+fun is_alnum(c: u8) -> bool {
+    if (is_alpha(c)) {
+        return true;
+    }
+
+    if (is_digit(c)) {
+        return true;
+    }
+
+    return false;
+}
+
+fun is_space(c: u8) -> bool {
+    if (c == 32) {
+        return true;
+    }
+
+    if (c == 9) {
+        return true;
+    }
+
+    if (c == 10) {
+        return true;
+    }
+
+    if (c == 13) {
+        return true;
+    }
+
+    return false;
+}
+
+fun to_lower(c: u8) -> u8 {
+    if (is_upper(c)) {
+        return c + 32;
+    }
+
+    return c;
+}
+
+fun to_upper(c: u8) -> u8 {
+    if (is_lower(c)) {
+        return c - 32;
+    }
+
+    return c;
+}
