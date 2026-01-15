@@ -71,9 +71,12 @@ where
                     Expression::Literal(Literal::Float(f)) => {
                         return Some(Expression::Literal(Literal::Float(-f)));
                     }
-                    _ => {
-                        println!("Error: unary '-' only supports numeric literals (line {})", tok.line);
-                        return None;
+
+                    other => {
+                        return Some(Expression::Unary {
+                            operator: Operator::Neg,
+                            expr: Box::new(other),
+                        })
                     }
                 }
             }

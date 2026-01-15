@@ -1,0 +1,14 @@
+const SYS_SOCKET: i64 = 41;
+
+fun sys_socket(domain: i64, ty: i64, proto: i64) -> i64 {
+    let fd: i64;
+    asm {
+        "syscall"
+        in("rax") SYS_SOCKET
+        in("rdi") domain
+        in("rsi") ty
+        in("rdx") proto
+        out("rax") fd
+    }
+    return fd;
+}

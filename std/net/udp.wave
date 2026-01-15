@@ -1,0 +1,8 @@
+import("../sys/linux/syscall");
+
+const AF_INET: i64 = 2;
+const SOCK_DGRAM: i64 = 2;
+
+fun udp_socket() -> i64 {
+    return sys_socket(AF_INET, SOCK_DGRAM, 0);
+}
