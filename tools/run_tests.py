@@ -48,6 +48,49 @@ def send_udp_for_test61():
     sock.sendto(b"hello from python\n", ("127.0.0.1", 8080))
     sock.close()
 
+def run_test56_server(cmd):
+    print(f"{BLUE}RUN test56.wave (server test){RESET}")
+
+    proc = subprocess.Popen(
+        cmd,
+        cwd=str(ROOT),
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True
+    )
+
+    try:
+        time.sleep(1.0)  # server boot wait
+
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(2)
+        s.connect(("127.0.0.1", 8080))
+        s.sendall(b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n")
+
+        data = s.recv(4096)
+        s.close()
+
+        if b"Welcome to the Wave HTTP Server!" in data:
+            print(f"{GREEN}→ PASS (server responded){RESET}\n")
+            return 1
+        else:
+            print(f"{RED}→ FAIL (unexpected response){RESET}")
+            print(data)
+            return 0
+
+    except Exception as e:
+        print(f"{RED}→ FAIL (server not responding){RESET}")
+        print(e)
+        return 0
+
+    finally:
+        proc.terminate()
+        try:
+            proc.wait(timeout=1)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+
+
 def looks_like_fail(stderr: str) -> bool:
     if not stderr:
         return False
@@ -75,6 +118,9 @@ def run_and_classify(name, cmd):
 
     if name == "test74.wave":
         stdin_data = "10\n"
+
+    if name == "test56.wave":
+        return run_test56_server(cmd)
 
     try:
         if name == "test61.wave":

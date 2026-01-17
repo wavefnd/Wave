@@ -1,0 +1,5 @@
+fun main() {
+    println("");
+    println("a");
+    println("a\nb");
+}

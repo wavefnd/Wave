@@ -17,8 +17,8 @@ fun string_bytes(s: str) -> Bytes {
     return b;
 }
 
-fun count_placeholders(input: str) -> i32 {
-    var bytes: Bytes = string_bytes(input);
+fun count_placeholders(text: str) -> i32 {
+    var bytes: Bytes = string_bytes(text);
     var i: i32 = 0;
     var count: i32 = 0;
 

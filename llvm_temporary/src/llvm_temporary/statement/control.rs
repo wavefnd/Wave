@@ -7,6 +7,7 @@ use inkwell::values::{BasicValue, BasicValueEnum, FunctionValue};
 use inkwell::{FloatPredicate, IntPredicate};
 use parser::ast::{ASTNode, Expression};
 use std::collections::HashMap;
+use crate::llvm_temporary::statement::variable::{coerce_basic_value, CoercionMode};
 
 fn truthy_to_i1<'ctx>(
     context: &'ctx inkwell::context::Context,
@@ -318,62 +319,46 @@ pub(super) fn gen_return_ir<'ctx>(
     struct_types: &HashMap<String, StructType<'ctx>>,
     struct_field_indices: &HashMap<String, HashMap<String, u32>>,
 ) {
-    if let Some(expr) = expr_opt {
-        let ret_type = current_function
-            .get_type()
-            .get_return_type()
-            .expect("Function should have a return type");
-        let expected_type: BasicTypeEnum<'ctx> = ret_type
-            .try_into()
-            .expect("Failed to convert return type to BasicTypeEnum");
+    let expected_ret = current_function.get_type().get_return_type(); // Option<BasicTypeEnum>
 
-        let value = generate_expression_ir(
-            context,
-            builder,
-            expr,
-            variables,
-            module,
-            Some(expected_type),
-            global_consts,
-            struct_types,
-            struct_field_indices,
-        );
+    match (expected_ret, expr_opt) {
+        (None, None) => {
+            builder.build_return(None).unwrap();
+        }
 
-        let value = match value {
-            BasicValueEnum::PointerValue(ptr) => {
-                let ty = ptr.get_type().get_element_type();
-                match ty {
-                    AnyTypeEnum::PointerType(_) => builder
-                        .build_load(ptr, "load_ret")
-                        .unwrap()
-                        .as_basic_value_enum(),
-                    _ => ptr.as_basic_value_enum(),
-                }
+        (None, Some(_)) => {
+            panic!("Void function cannot return a value");
+        }
+
+        (Some(_), None) => {
+            panic!("Non-void function must return a value");
+        }
+
+        (Some(ret_ty), Some(expr)) => {
+            let mut v = generate_expression_ir(
+                context,
+                builder,
+                expr,
+                variables,
+                module,
+                Some(ret_ty),
+                global_consts,
+                struct_types,
+                struct_field_indices,
+            );
+
+            if v.get_type() != ret_ty {
+                v = coerce_basic_value(
+                    context,
+                    builder,
+                    v,
+                    ret_ty,
+                    "ret_cast",
+                    CoercionMode::Implicit,
+                );
             }
-            other => other,
-        };
 
-        let casted_value = match (value, expected_type) {
-            (BasicValueEnum::PointerValue(ptr), BasicTypeEnum::IntType(_)) => builder
-                .build_ptr_to_int(ptr, expected_type.into_int_type(), "ptr_to_int")
-                .unwrap()
-                .as_basic_value_enum(),
-            (BasicValueEnum::PointerValue(ptr), BasicTypeEnum::PointerType(_)) => {
-                ptr.as_basic_value_enum()
-            }
-            (BasicValueEnum::FloatValue(v), BasicTypeEnum::IntType(t)) => builder
-                .build_float_to_signed_int(v, t, "float_to_int")
-                .unwrap()
-                .as_basic_value_enum(),
-            (BasicValueEnum::IntValue(v), BasicTypeEnum::FloatType(t)) => builder
-                .build_signed_int_to_float(v, t, "int_to_float")
-                .unwrap()
-                .as_basic_value_enum(),
-            _ => value,
-        };
-
-        builder.build_return(Some(&casted_value)).unwrap();
-    } else {
-        builder.build_return(None).unwrap();
+            builder.build_return(Some(&v)).unwrap();
+        }
     }
 }

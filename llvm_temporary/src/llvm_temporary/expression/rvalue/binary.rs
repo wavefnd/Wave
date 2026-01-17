@@ -144,6 +144,75 @@ pub(crate) fn gen<'ctx, 'a>(
                 _ => panic!("Unsupported mixed-type operator (float + int)"),
             }
         }
+        (BasicValueEnum::PointerValue(lp), BasicValueEnum::PointerValue(rp)) => {
+            let i64_ty = env.context.i64_type();
+            let li = env.builder.build_ptr_to_int(lp, i64_ty, "l_ptr2int").unwrap();
+            let ri = env.builder.build_ptr_to_int(rp, i64_ty, "r_ptr2int").unwrap();
+
+            let mut result = match operator {
+                Operator::Equal => env.builder.build_int_compare(IntPredicate::EQ, li, ri, "ptreq").unwrap(),
+                Operator::NotEqual => env.builder.build_int_compare(IntPredicate::NE, li, ri, "ptrne").unwrap(),
+                _ => panic!("Unsupported pointer operator: {:?}", operator),
+            };
+
+            if let Some(inkwell::types::BasicTypeEnum::IntType(target_ty)) = expected_type {
+                if result.get_type() != target_ty {
+                    result = env.builder.build_int_cast(result, target_ty, "cast_result").unwrap();
+                }
+            }
+
+            return result.as_basic_value_enum();
+        }
+
+        (BasicValueEnum::PointerValue(lp), BasicValueEnum::IntValue(ri)) => {
+            let i64_ty = env.context.i64_type();
+            let li = env.builder.build_ptr_to_int(lp, i64_ty, "l_ptr2int").unwrap();
+
+            let ri = if ri.get_type().get_bit_width() == 64 {
+                ri
+            } else {
+                env.builder.build_int_cast(ri, i64_ty, "r_i64").unwrap()
+            };
+
+            let mut result = match operator {
+                Operator::Equal => env.builder.build_int_compare(IntPredicate::EQ, li, ri, "ptreq0").unwrap(),
+                Operator::NotEqual => env.builder.build_int_compare(IntPredicate::NE, li, ri, "ptrne0").unwrap(),
+                _ => panic!("Unsupported ptr/int operator: {:?}", operator),
+            };
+
+            if let Some(inkwell::types::BasicTypeEnum::IntType(target_ty)) = expected_type {
+                if result.get_type() != target_ty {
+                    result = env.builder.build_int_cast(result, target_ty, "cast_result").unwrap();
+                }
+            }
+
+            return result.as_basic_value_enum();
+        }
+
+        (BasicValueEnum::IntValue(li), BasicValueEnum::PointerValue(rp)) => {
+            let i64_ty = env.context.i64_type();
+            let li = if li.get_type().get_bit_width() == 64 {
+                li
+            } else {
+                env.builder.build_int_cast(li, i64_ty, "l_i64").unwrap()
+            };
+
+            let ri = env.builder.build_ptr_to_int(rp, i64_ty, "r_ptr2int").unwrap();
+
+            let mut result = match operator {
+                Operator::Equal => env.builder.build_int_compare(IntPredicate::EQ, li, ri, "ptreq0").unwrap(),
+                Operator::NotEqual => env.builder.build_int_compare(IntPredicate::NE, li, ri, "ptrne0").unwrap(),
+                _ => panic!("Unsupported int/ptr operator: {:?}", operator),
+            };
+
+            if let Some(inkwell::types::BasicTypeEnum::IntType(target_ty)) = expected_type {
+                if result.get_type() != target_ty {
+                    result = env.builder.build_int_cast(result, target_ty, "cast_result").unwrap();
+                }
+            }
+
+            return result.as_basic_value_enum();
+        }
 
         _ => panic!("Type mismatch in binary expression"),
     }

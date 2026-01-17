@@ -1,6 +1,7 @@
 use super::ExprGenEnv;
 use inkwell::values::{BasicValue, BasicValueEnum};
 use parser::ast::{Expression, WaveType};
+use crate::llvm_temporary::llvm_codegen::generate_address_ir;
 
 pub(crate) fn gen_struct_literal<'ctx, 'a>(
     env: &mut ExprGenEnv<'ctx, 'a>,
@@ -27,7 +28,11 @@ pub(crate) fn gen_struct_literal<'ctx, 'a>(
             .get(field_name)
             .unwrap_or_else(|| panic!("Field '{}' not found in struct '{}'", field_name, name));
 
-        let field_val = env.gen(field_expr, None);
+        let expected_field_ty = struct_ty
+            .get_field_type_at_index(*idx)
+            .unwrap_or_else(|| panic!("No field type at index {} for struct '{}'", idx, name));
+
+        let field_val = env.gen(field_expr, Some(expected_field_ty));
 
         let field_ptr = env
             .builder
@@ -48,40 +53,24 @@ pub(crate) fn gen_field_access<'ctx, 'a>(
     object: &Expression,
     field: &str,
 ) -> BasicValueEnum<'ctx> {
-    let var_name = match object {
-        Expression::Variable(name) => name,
-        other => panic!("FieldAccess on non-variable object not supported yet: {:?}", other),
+    let full = Expression::FieldAccess {
+        object: Box::new(object.clone()),
+        field: field.to_string(),
     };
 
-    let var_info = env
-        .variables
-        .get(var_name)
-        .unwrap_or_else(|| panic!("Variable '{}' not found for field access", var_name));
-
-    let struct_name = match &var_info.ty {
-        WaveType::Struct(name) => name,
-        other_ty => panic!(
-            "Field access on non-struct type {:?} for variable '{}'",
-            other_ty, var_name
-        ),
-    };
-
-    let field_indices = env
-        .struct_field_indices
-        .get(struct_name)
-        .unwrap_or_else(|| panic!("Field index map for struct '{}' not found", struct_name));
-
-    let idx = field_indices
-        .get(field)
-        .unwrap_or_else(|| panic!("Field '{}' not found in struct '{}'", field, struct_name));
-
-    let field_ptr = env
-        .builder
-        .build_struct_gep(var_info.ptr, *idx, &format!("{}.{}", var_name, field))
-        .unwrap();
+    let ptr = generate_address_ir(
+        env.context,
+        env.builder,
+        &full,
+        env.variables,
+        env.module,
+        env.struct_types,
+        env.struct_field_indices,
+    );
 
     env.builder
-        .build_load(field_ptr, &format!("load_{}_{}", var_name, field))
+        .build_load(ptr, &format!("load_field_{}", field))
         .unwrap()
         .as_basic_value_enum()
 }
+

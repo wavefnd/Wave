@@ -142,6 +142,17 @@ pub(super) fn gen_print_format_ir<'ctx>(
 
     for value in arg_vals {
         let casted_value = match value {
+            BasicValueEnum::IntValue(iv) => {
+                let bw = iv.get_type().get_bit_width();
+                if bw < 32 {
+                    builder
+                        .build_int_z_extend(iv, context.i32_type(), "int_promote")
+                        .unwrap()
+                        .as_basic_value_enum()
+                } else {
+                    value
+                }
+            }
             BasicValueEnum::PointerValue(ptr_val) => {
                 let element_ty = ptr_val.get_type().get_element_type();
                 if element_ty.is_int_type() && element_ty.into_int_type().get_bit_width() == 8 {

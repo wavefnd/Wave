@@ -3,6 +3,7 @@ use crate::llvm_temporary::llvm_codegen::generate_address_ir;
 use inkwell::types::{AnyTypeEnum, BasicTypeEnum};
 use inkwell::values::{BasicValue, BasicValueEnum};
 use parser::ast::{AssignOperator, Expression};
+use crate::llvm_temporary::statement::variable::{coerce_basic_value, CoercionMode};
 
 pub(crate) fn gen_assign_operation<'ctx, 'a>(
     env: &mut ExprGenEnv<'ctx, 'a>,
@@ -13,6 +14,34 @@ pub(crate) fn gen_assign_operation<'ctx, 'a>(
     let ptr = generate_address_ir(
         env.context, env.builder, target, env.variables, env.module, env.struct_types, env.struct_field_indices
     );
+
+    let element_type = match ptr.get_type().get_element_type() {
+        AnyTypeEnum::IntType(t) => BasicTypeEnum::IntType(t),
+        AnyTypeEnum::FloatType(t) => BasicTypeEnum::FloatType(t),
+        AnyTypeEnum::PointerType(t) => BasicTypeEnum::PointerType(t),
+        AnyTypeEnum::ArrayType(t) => BasicTypeEnum::ArrayType(t),
+        AnyTypeEnum::StructType(t) => BasicTypeEnum::StructType(t),
+        AnyTypeEnum::VectorType(t) => BasicTypeEnum::VectorType(t),
+        _ => panic!("Unsupported LLVM element type"),
+    };
+
+    if matches!(operator, AssignOperator::Assign) {
+        let mut rhs = env.gen(value, Some(element_type));
+
+        if rhs.get_type() != element_type {
+            rhs = coerce_basic_value(
+                env.context,
+                env.builder,
+                rhs,
+                element_type,
+                "assign_cast",
+                CoercionMode::Implicit,
+            );
+        }
+
+        env.builder.build_store(ptr, rhs).unwrap();
+        return rhs;
+    }
 
     let current_val = env.builder.build_load(ptr, "load_current").unwrap();
 
@@ -55,17 +84,7 @@ pub(crate) fn gen_assign_operation<'ctx, 'a>(
             AssignOperator::RemAssign => env.builder.build_float_rem(lhs, rhs, "rem_assign").unwrap().as_basic_value_enum(),
         },
 
-        _ => panic!("Type mismatch or unsupported type in AssignOperation"),
-    };
-
-    let element_type = match ptr.get_type().get_element_type() {
-        AnyTypeEnum::IntType(t) => BasicTypeEnum::IntType(t),
-        AnyTypeEnum::FloatType(t) => BasicTypeEnum::FloatType(t),
-        AnyTypeEnum::PointerType(t) => BasicTypeEnum::PointerType(t),
-        AnyTypeEnum::ArrayType(t) => BasicTypeEnum::ArrayType(t),
-        AnyTypeEnum::StructType(t) => BasicTypeEnum::StructType(t),
-        AnyTypeEnum::VectorType(t) => BasicTypeEnum::VectorType(t),
-        _ => panic!("Unsupported LLVM element type"),
+        _ => panic!("AssignOperation (+=, -=, ...) only supports numeric types"),
     };
 
     let result_casted = match (result, element_type) {

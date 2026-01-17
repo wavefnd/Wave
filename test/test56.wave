@@ -1,37 +1,50 @@
-fun syscall1(id: i64) -> i64 {
-    var ret_val: i64;
+// =========================
+// Linux x86_64 syscalls
+// args: rax, rdi, rsi, rdx, r10, r8, r9
+// =========================
+
+fun len(s: str) -> i32 {
+    let mut i: i32 = 0;
+    while (s[i] != 0) {
+        i += 1;
+    }
+    return i;
+}
+
+fun syscall0(id: i64) -> i64 {
+    var ret: i64;
     asm {
         "syscall"
         in("rax") id
-        out("rax") ret_val
+        out("rax") ret
     }
-    return ret_val;
+    return ret;
 }
 
-fun syscall2(id: i64, arg1: i64) -> i64 {
-    var ret_val: i64;
+fun syscall1(id: i64, a1: i64) -> i64 {
+    var ret: i64;
     asm {
         "syscall"
         in("rax") id
-        in("rdi") arg1
-        out("rax") ret_val
+        in("rdi") a1
+        out("rax") ret
     }
-    return ret_val;
+    return ret;
 }
 
-fun syscall3(id: i64, arg1: i64, arg2: i64) -> i64 {
-    var ret_val: i64;
+fun syscall2(id: i64, a1: i64, a2: i64) -> i64 {
+    var ret: i64;
     asm {
         "syscall"
         in("rax") id
-        in("rdi") arg1
-        in("rsi") arg2
-        out("rax") ret_val
+        in("rdi") a1
+        in("rsi") a2
+        out("rax") ret
     }
-    return ret_val;
+    return ret;
 }
 
-fun syscall4i(id: i64, a1: i64, a2: i64, a3: i64) -> i64 {
+fun syscall3(id: i64, a1: i64, a2: i64, a3: i64) -> i64 {
     var ret: i64;
     asm {
         "syscall"
@@ -44,7 +57,20 @@ fun syscall4i(id: i64, a1: i64, a2: i64, a3: i64) -> i64 {
     return ret;
 }
 
-fun syscall4p(id: i64, a1: i64, a2: ptr<i8>, a3: i64) -> i64 {
+fun syscall3pi(id: i64, a1: i64, p2: ptr<i8>, a3: i64) -> i64 {
+    var ret: i64;
+    asm {
+        "syscall"
+        in("rax") id
+        in("rdi") a1
+        in("rsi") p2
+        in("rdx") a3
+        out("rax") ret
+    }
+    return ret;
+}
+
+fun syscall4(id: i64, a1: i64, a2: i64, a3: i64, a4: i64) -> i64 {
     var ret: i64;
     asm {
         "syscall"
@@ -52,37 +78,112 @@ fun syscall4p(id: i64, a1: i64, a2: ptr<i8>, a3: i64) -> i64 {
         in("rdi") a1
         in("rsi") a2
         in("rdx") a3
+        in("r10") a4
         out("rax") ret
     }
     return ret;
 }
 
-fun _socket_create() -> i32 {
-    return syscall3(41, 2, 1);
-}
-
-fun _socket_bind(sockfd: i32, ip_addr: i32, port: i16) -> i32 {
-    var result: i64;
+fun syscall5(id: i64, a1: i64, a2: i64, a3: i64, p4: ptr<i8>, a5: i64) -> i64 {
+    var ret: i64;
     asm {
-        out("rax") result
-        in("rdi") sockfd
+        "syscall"
+        in("rax") id
+        in("rdi") a1
+        in("rsi") a2
+        in("rdx") a3
+        in("r10") p4
+        in("r8")  a5
+        out("rax") ret
     }
-    return result;
+    return ret;
 }
 
-fun _socket_listen(sockfd: i32, backlog: i32) -> i32 {
-    return syscall3(50, sockfd, backlog);
+
+// =========================
+// socket helpers
+// =========================
+
+fun htons(x: i16) -> i16 {
+    var a: i32 = x;
+    var y: i32 = ((a & 255) << 8) | ((a >> 8) & 255);
+    return y;
 }
 
-fun _socket_close(sockfd: i32) {
-    syscall2(3, sockfd);
+fun _setsockopt_reuseaddr(sockfd: i64) {
+    // SOL_SOCKET = 1, SO_REUSEADDR = 2
+    var one: i32 = 1;
+    syscall5(54, sockfd, 1, 2, &one, 4);
 }
 
-fun new_server(ip_str: str, port: i16) -> i32 {
-    var sockfd: i32 = _socket_create();
+struct SockAddrIn {
+    sin_family: i16;        // AF_INET = 2
+    sin_port: i16;          // network byte order
+    sin_addr: i32;          // INADDR_ANY = 0
+    sin_zero: array<u8, 8>;
+}
+
+// bind needs sockaddr* typed pointer.
+// If your compiler cannot pass ptr<SockAddrIn> into ptr<i8>,
+// keep this specialized syscall for sockaddr.
+fun syscall3p_sockaddr(id: i64, a1: i64, p2: ptr<SockAddrIn>, a3: i64) -> i64 {
+    var ret: i64;
+    asm {
+        "syscall"
+        in("rax") id
+        in("rdi") a1
+        in("rsi") p2
+        in("rdx") a3
+        out("rax") ret
+    }
+    return ret;
+}
+
+fun _socket_create_tcp() -> i64 {
+    return syscall3(41, 2, 1, 0);
+}
+
+fun _socket_bind_any(sockfd: i64, port: i16) -> i64 {
+    let mut addr: SockAddrIn = SockAddrIn {
+        sin_family: 2,
+        sin_port: htons(port),
+        sin_addr: 0,
+        sin_zero: [0,0,0,0,0,0,0,0]
+    };
+
+    return syscall3p_sockaddr(49, sockfd, &addr, 16);
+}
+
+fun _socket_listen(sockfd: i64, backlog: i64) -> i64 {
+    return syscall2(50, sockfd, backlog);
+}
+
+fun _socket_accept(sockfd: i64) -> i64 {
+    return syscall3(43, sockfd, 0, 0);
+}
+
+fun _socket_close(fd: i64) {
+    syscall1(3, fd);
+}
+
+fun _write(fd: i64, buf: str, len: i64) -> i64 {
+    // If your compiler represents `str` as i8*, this will work with syscall3pi.
+    return syscall3pi(1, fd, buf, len);
+}
+
+// =========================
+// server logic
+// =========================
+
+fun new_server(port: i16) -> i64 {
+    var sockfd: i64 = _socket_create_tcp();
+    _setsockopt_reuseaddr(sockfd);
     if (sockfd < 0) { return -1; }
 
-    if (_socket_bind(sockfd, 0, port) < 0) {
+    var b: i64 = _socket_bind_any(sockfd, port);
+    println("bind ret = {}", b);
+
+    if (b < 0) {
         _socket_close(sockfd);
         return -1;
     }
@@ -90,7 +191,7 @@ fun new_server(ip_str: str, port: i16) -> i32 {
     return sockfd;
 }
 
-fun listen(server_fd: i32, backlog: i32) -> i32 {
+fun listen(server_fd: i64, backlog: i64) -> i64 {
     if (_socket_listen(server_fd, backlog) < 0) {
         println("Error: Failed to listen on socket.");
         return -1;
@@ -99,34 +200,33 @@ fun listen(server_fd: i32, backlog: i32) -> i32 {
     return server_fd;
 }
 
-fun start(server_fd: i32) {
+fun start(server_fd: i64) {
     println("Server accepting connections...");
 
     while (true) {
-        var client_fd: i32 = syscall3(43, server_fd, 0);
+        var client_fd: i64 = _socket_accept(server_fd);
 
         if (client_fd < 0) {
-            println("Error: Failed to accept connection.");
+            println("accept failed: {}", client_fd);
             continue;
         }
 
         println("Client connected! fd: {}", client_fd);
 
-        var response: str = "HTTP/1.1 200 OK\r\nContent-Type: text/plain\r\n\r\nWelcome to the Wave HTTP Server!";
+        var response: str = "HTTP/1.1 200 OK\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Length: 33\r\nConnection: close\r\n\r\nWelcome to the Wave HTTP Server!";
 
-        syscall4p(1, client_fd, response, 82);
+
+        _write(client_fd, response, len(response));
 
         _socket_close(client_fd);
         println("Client disconnected.");
     }
 }
 
-
 fun main() {
     println("--- Wave HTTP Server Application ---");
 
-    var server_instance: i32 = new_server("0.0.0.0", 8080)
-                                 .listen(10);
+    var server_instance: i64 = new_server(8080).listen(10);
 
     if (server_instance >= 0) {
         server_instance.start();

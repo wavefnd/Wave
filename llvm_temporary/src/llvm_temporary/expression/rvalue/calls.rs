@@ -1,8 +1,31 @@
-use inkwell::types::BasicTypeEnum;
+use inkwell::types::{AsTypeRef, BasicTypeEnum};
 use super::ExprGenEnv;
 use inkwell::values::{BasicMetadataValueEnum, BasicValue, BasicValueEnum};
 use parser::ast::{Expression, WaveType};
 use crate::llvm_temporary::statement::variable::{coerce_basic_value, CoercionMode};
+
+fn normalize_struct_name(raw: &str) -> &str {
+    raw.strip_prefix("struct.").unwrap_or(raw).trim_start_matches('%')
+}
+
+fn resolve_struct_key<'ctx>(
+    st: inkwell::types::StructType<'ctx>,
+    struct_types: &std::collections::HashMap<String, inkwell::types::StructType<'ctx>>,
+) -> String {
+    if let Some(raw) = st.get_name().and_then(|n| n.to_str().ok()) {
+        return normalize_struct_name(raw).to_string();
+    }
+
+    let st_ref = st.as_type_ref();
+    for (name, ty) in struct_types {
+        if ty.as_type_ref() == st_ref {
+            return name.clone();
+        }
+    }
+
+    panic!("LLVM struct type has no name and cannot be matched to struct_types");
+}
+
 
 pub(crate) fn gen_method_call<'ctx, 'a>(
     env: &mut ExprGenEnv<'ctx, 'a>,
@@ -52,6 +75,67 @@ pub(crate) fn gen_method_call<'ctx, 'a>(
                         .try_as_basic_value()
                         .left()
                         .expect("Expected a return value from struct method");
+                } else {
+                    return env.context.i32_type().const_zero().as_basic_value_enum();
+                }
+            }
+        }
+    }
+
+    {
+        let obj_preview = env.gen(object, None);
+        let obj_ty = obj_preview.get_type();
+
+        let struct_name_opt: Option<String> = match obj_ty {
+            BasicTypeEnum::StructType(st) => Some(resolve_struct_key(st, env.struct_types)),
+            BasicTypeEnum::PointerType(p) if p.get_element_type().is_struct_type() => {
+                Some(resolve_struct_key(p.get_element_type().into_struct_type(), env.struct_types))
+            }
+            _ => None,
+        };
+
+        if let Some(struct_name) = struct_name_opt {
+            let fn_name = format!("{}_{}", struct_name, name);
+
+            if let Some(function) = env.module.get_function(&fn_name) {
+                let fn_type = function.get_type();
+                let param_types = fn_type.get_param_types();
+                let expected_self = param_types.get(0).cloned();
+
+                let mut obj_val = obj_preview;
+                if let Some(et) = expected_self {
+                    obj_val = coerce_basic_value(
+                        env.context,
+                        env.builder,
+                        obj_val,
+                        et,
+                        "self_cast",
+                        CoercionMode::Implicit,
+                    );
+                }
+
+                let mut call_args: Vec<BasicMetadataValueEnum> = Vec::new();
+                call_args.push(obj_val.into());
+
+                for (i, arg_expr) in args.iter().enumerate() {
+                    let expected_ty = param_types.get(i + 1).cloned();
+                    let mut arg_val = env.gen(arg_expr, expected_ty);
+                    if let Some(et) = expected_ty {
+                        arg_val = coerce_basic_value(
+                            env.context, env.builder, arg_val, et, &format!("arg{}_cast", i),
+                            CoercionMode::Implicit
+                        );
+                    }
+                    call_args.push(arg_val.into());
+                }
+
+                let call_site = env
+                    .builder
+                    .build_call(function, &call_args, &format!("call_{}", fn_name))
+                    .unwrap();
+
+                if function.get_type().get_return_type().is_some() {
+                    return call_site.try_as_basic_value().left().unwrap();
                 } else {
                     return env.context.i32_type().const_zero().as_basic_value_enum();
                 }

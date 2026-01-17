@@ -63,6 +63,7 @@ pub fn is_expression_start(token_type: &TokenType) -> bool {
             | TokenType::Lbrack
             | TokenType::Asm
             | TokenType::Deref
+            | TokenType::CharLiteral(_)
     )
 }
 
@@ -218,7 +219,9 @@ pub fn parse_type_from_stream(tokens: &mut Peekable<Iter<Token>>) -> Option<Wave
     let type_token = tokens.next()?;
 
     if let TokenType::Identifier(name) = &type_token.token_type {
-        while matches!(tokens.peek().map(|t| &t.token_type), Some(TokenType::Whitespace)) {
+        while matches!(tokens.peek().map(|t| &t.token_type),
+            Some(TokenType::Whitespace | TokenType::Newline)
+        ) {
             tokens.next();
         }
 

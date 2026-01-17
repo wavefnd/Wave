@@ -35,7 +35,6 @@ pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
     let pass_manager: PassManager<inkwell::module::Module> = PassManager::create(());
     pass_manager_builder.populate_module_pass_manager(&pass_manager);
 
-    let struct_types: HashMap<String, inkwell::types::StructType> = HashMap::new();
     let mut struct_field_indices: HashMap<String, HashMap<String, u32>> = HashMap::new();
 
     let mut global_consts: HashMap<String, BasicValueEnum> = HashMap::new();
@@ -59,21 +58,33 @@ pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
     }
 
     let mut struct_types: HashMap<String, inkwell::types::StructType> = HashMap::new();
+
     for ast in ast_nodes {
         if let ASTNode::Struct(struct_node) = ast {
-            let field_types: Vec<BasicTypeEnum> = struct_node
-                .fields
-                .iter()
-                .map(|(_, ty)| wave_type_to_llvm_type(context, ty, &struct_types))
-                .collect();
-            let struct_ty = context.struct_type(&field_types, false);
-            struct_types.insert(struct_node.name.clone(), struct_ty);
+            let st = context.opaque_struct_type(&struct_node.name);
+            struct_types.insert(struct_node.name.clone(), st);
 
             let mut index_map = HashMap::new();
             for (i, (field_name, _)) in struct_node.fields.iter().enumerate() {
                 index_map.insert(field_name.clone(), i as u32);
             }
             struct_field_indices.insert(struct_node.name.clone(), index_map);
+        }
+    }
+
+    for ast in ast_nodes {
+        if let ASTNode::Struct(struct_node) = ast {
+            let st = *struct_types
+                .get(&struct_node.name)
+                .unwrap_or_else(|| panic!("Opaque struct missing: {}", struct_node.name));
+
+            let field_types: Vec<BasicTypeEnum> = struct_node
+                .fields
+                .iter()
+                .map(|(_, ty)| wave_type_to_llvm_type(context, ty, &struct_types))
+                .collect();
+
+            st.set_body(&field_types, false);
         }
     }
 

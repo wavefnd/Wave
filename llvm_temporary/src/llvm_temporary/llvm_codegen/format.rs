@@ -12,14 +12,21 @@ pub fn wave_format_to_c<'ctx>(
 
     while let Some(c) = chars.next() {
         if c == '{' {
-            if let Some('}') = chars.peek() {
+            let mut spec = String::new();
+            while let Some(&p) = chars.peek() {
                 chars.next(); // consume '}'
+                if p == '}' { break; }
+                spec.push(p);
+            }
 
-                let ty = arg_types
-                    .get(arg_index)
-                    .unwrap_or_else(|| panic!("Missing argument for format"));
+            let spec = spec.trim();
 
-                let fmt = match ty {
+            let ty = arg_types
+                .get(arg_index)
+                .unwrap_or_else(|| panic!("Missing argument for format"));
+
+            let fmt = if spec.is_empty() {
+                match ty {
                     BasicTypeEnum::IntType(int_ty) => {
                         let bits = int_ty.get_bit_width();
                         match bits {
@@ -38,14 +45,29 @@ pub fn wave_format_to_c<'ctx>(
                             "%lf"
                         }
                     }
-                    BasicTypeEnum::PointerType(_) => "%p",
+                    BasicTypeEnum::PointerType(ptr_ty) => {
+                        let elem = ptr_ty.get_element_type();
+                        if elem.is_int_type() && elem.into_int_type().get_bit_width() == 8 {
+                            "%s"   // i8* => C string
+                        } else {
+                            "%p"
+                        }
+                    }
                     _ => panic!("Unsupported type in format"),
-                };
-
-                result.push_str(fmt);
-                arg_index += 1;
-                continue;
-            }
+                }
+            } else {
+                match spec {
+                    "c" => "%c",
+                    "x" => "%x",
+                    "p" => "%p",
+                    "s" => "%s",
+                    "d" => "%d",
+                    _ => panic!("Unknown format spec: {{{}}}", spec),
+                }
+            };
+            result.push_str(fmt);
+            arg_index += 1;
+            continue;
         }
 
         result.push(c);

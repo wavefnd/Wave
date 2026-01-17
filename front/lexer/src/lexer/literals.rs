@@ -2,10 +2,12 @@ use super::Lexer;
 
 impl<'a> Lexer<'a> {
     pub(crate) fn string(&mut self) -> String {
-        if self.peek() == '"' { self.advance(); }
-
         let mut string_literal = String::new();
         while !self.is_at_end() && self.peek() != '"' {
+            if self.peek() == '\n' {
+                panic!("Unterminated string (newline in string literal).");
+            }
+
             let c = self.advance();
 
             if c == '\\' {
