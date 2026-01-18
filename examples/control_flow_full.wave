@@ -1,0 +1,77 @@
+fun transform(x: i32, y: i32, scale: f32) -> f32 {
+    println("inside transform");
+    var base: i32 = x * 2;
+    base += y;
+    var result: f32 = base;
+    result *= scale;
+    return result;
+}
+
+fun display_pattern(levels: i32) -> i32 {
+    var i: i32 = 1;
+    while (i <= levels) {
+        var j: i32 = 1;
+        while (j <= i) {
+            print("#");
+            j += 1;
+        }
+        println(" ");
+        i += 1;
+    }
+    return 0;
+}
+
+fun process(a: i32, b: i32, note: str) -> i32 {
+    var v: i32 = a;
+    v += b;
+    println("Initial v: {}", v);
+
+    v *= 2;
+    v /= 3;
+    println("After scaling: {}", v);
+
+    if (v % 2 == 0) {
+        println("{} is even", v);
+    } else {
+        println("{} is odd", v);
+    }
+
+    var acc: i32 = 0;
+    var i: i32 = 0;
+    while (i < v) {
+        if (i == 5) {
+            i += 1;
+            continue;
+        }
+        acc += i;
+        println("Looping i: {}, acc: {}", i, acc);
+        i += 1;
+    }
+
+    display_pattern(4);
+    println("Note: {}", note);
+    return 0;
+}
+
+fun main() {
+
+    var a: i32 = 8;
+    var b: i32 = 4;
+    var f: f32 = 3.0;
+    var g: f32 = 1.5;
+
+    a += b;
+    b *= 2;
+    f += g;
+
+    println("a: {}, b: {}, f: {}", a, b, f);
+
+    if (a != b) {
+        println("{} != {}", a, b);
+    }
+
+    var result: f32 = transform(a, b, f);
+    println("Final result: {}", result);
+
+    process(a, b, "Wave language engaged!");
+}

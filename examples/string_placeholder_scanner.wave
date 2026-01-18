@@ -1,0 +1,64 @@
+struct Bytes {
+    data: ptr<u8>;
+    len: i32;
+}
+
+fun string_bytes(s: str) -> Bytes {
+    var p: ptr<u8> = s;
+    var len: i32 = 0;
+
+    while (p[len] != 0) {
+        len = len + 1;
+    }
+
+    var b: Bytes;
+    b.data = p;
+    b.len = len;
+    return b;
+}
+
+fun count_placeholders(text: str) -> i32 {
+    var bytes: Bytes = string_bytes(text);
+    var i: i32 = 0;
+    var count: i32 = 0;
+
+    while (i < bytes.len) {
+        if (bytes.data[i] == '{') {
+            var start: i32 = i;
+            i = i + 1;
+
+            while (i < bytes.len) {
+                if (bytes.data[i] == '}') {
+                    count = count + 1;
+                    i = i + 1;
+                    break;
+                }
+                i = i + 1;
+            }
+
+            if (i >= bytes.len && bytes.data[start] == '{') {
+                break;
+            }
+        } else {
+            i = i + 1;
+        }
+    }
+
+    return count;
+}
+
+fun main() {
+    var s1: str = "hello {} world";
+    var s2: str = "{} {} {}";
+    var s3: str = "{ hello } { world }";
+    var s4: str = "{ { }";
+    var s5: str = "no placeholders here";
+    var s6: str = "{}{}}{";
+
+    println("s1 = {}", count_placeholders(s1));
+    println("s2 = {}", count_placeholders(s2));
+    println("s3 = {}", count_placeholders(s3));
+    println("s4 = {}", count_placeholders(s4));
+    println("s5 = {}", count_placeholders(s5));
+    println("s6 = {}", count_placeholders(s6));
+}

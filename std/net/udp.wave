@@ -1,4 +1,4 @@
-import("../sys/linux/syscall");
+import("std::sys::linux::syscall");
 
 const AF_INET: i64 = 2;
 const SOCK_DGRAM: i64 = 2;

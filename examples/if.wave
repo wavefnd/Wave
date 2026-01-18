@@ -1,0 +1,19 @@
+fun main() {
+    var a :i32 = 20;
+    var b :i32 = 20;
+
+    if (a > 30) {
+        println("a is greater than 30");
+    } else {
+        println("a is less than or equal to 30");
+    }
+
+    if (b < a) {
+        println("b is less than a");
+    } else if (b == a) {
+        println("b is equal to a");
+    } else {
+        println("b is greater than a");
+    }
+
+}
