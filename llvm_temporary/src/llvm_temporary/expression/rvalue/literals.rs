@@ -55,11 +55,24 @@ pub(crate) fn gen<'ctx, 'a>(
             }
 
             Some(BasicTypeEnum::PointerType(ptr_ty)) => {
-                if is_zero_decimal(v.as_str()) {
-                    ptr_ty.const_null().as_basic_value_enum()
-                } else {
-                    panic!("Only 0 can be used as null pointer literal");
+                let s = v.as_str();
+                let (neg, raw) = parse_signed_decimal(s);
+                let (radix, digits) = parse_int_radix(raw);
+
+                if neg {
+                    panic!("negative pointer literal not allowed: {}", s);
                 }
+
+                let int_val = env
+                    .context
+                    .i64_type()
+                    .const_int_from_string(digits, radix)
+                    .unwrap_or_else(|| panic!("invalid pointer literal: {}", s));
+
+                env.builder
+                    .build_int_to_ptr(int_val, ptr_ty, "int_to_ptr")
+                    .unwrap()
+                    .as_basic_value_enum()
             }
 
             Some(BasicTypeEnum::FloatType(ft)) => {

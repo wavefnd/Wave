@@ -14,6 +14,14 @@ pub unsafe fn compile_and_run(path: &Path, opt_flag: &str, debug: &DebugFlags) {
     runner::run_wave_file(path, opt_flag, debug);
 }
 
+pub unsafe fn compile_and_build(path: &Path, opt_flag: &str, debug: &DebugFlags) {
+    runner::build_wave_file(path, opt_flag, debug);
+}
+
+pub unsafe fn compile_and_build_obj(path: &Path, opt_flag: &str, debug: &DebugFlags) {
+    runner::object_build_wave_file(path, opt_flag, debug);
+}
+
 pub unsafe fn compile_and_img(path: &Path) {
     runner::img_wave_file(path);
 }

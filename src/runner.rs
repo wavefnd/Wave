@@ -163,6 +163,109 @@ pub(crate) unsafe fn run_wave_file(file_path: &Path, opt_flag: &str, debug: &Deb
     }
 }
 
+pub(crate) unsafe fn object_build_wave_file(
+    file_path: &Path,
+    opt_flag: &str,
+    debug: &DebugFlags,
+) -> String {
+    let code = fs::read_to_string(file_path).unwrap_or_else(|_| {
+        WaveError::new(
+            WaveErrorKind::FileReadError(file_path.display().to_string()),
+            format!("failed to read file `{}`", file_path.display()),
+            file_path.display().to_string(),
+            0,
+            0,
+        )
+            .display();
+        process::exit(1);
+    });
+
+    let mut lexer = Lexer::new(&code);
+    let tokens = lexer.tokenize();
+
+    let ast = parse(&tokens).unwrap_or_else(|| {
+        WaveError::new(
+            WaveErrorKind::SyntaxError("failed to parse Wave code".to_string()),
+            "failed to parse Wave code",
+            file_path.display().to_string(),
+            0,
+            0,
+        )
+            .display();
+        process::exit(1);
+    });
+
+    if debug.tokens {
+        println!("\n===== Tokens =====");
+        for token in &tokens {
+            println!("{:?}", token);
+        }
+    }
+
+    if debug.ast {
+        println!("\n===== AST =====\n{:#?}", ast);
+    }
+
+    let ast = expand_imports_for_codegen(file_path, ast).unwrap_or_else(|e| {
+        e.display();
+        process::exit(1);
+    });
+
+    let ir = generate_ir(&ast);
+
+    if debug.ir {
+        println!("\n===== LLVM IR =====\n{}", ir);
+    }
+
+    let file_stem = file_path.file_stem().unwrap().to_str().unwrap();
+    let object_path = compile_ir_to_object(&ir, file_stem, opt_flag);
+
+    if debug.mc {
+        println!("\n===== MACHINE CODE PATH =====");
+        println!("{}", object_path);
+    }
+
+    if debug.hex {
+        println!("\n===== HEX DUMP =====");
+        let data = fs::read(&object_path).unwrap();
+        for (i, b) in data.iter().enumerate() {
+            if i % 16 == 0 {
+                print!("\n{:04x}: ", i);
+            }
+            print!("{:02x} ", b);
+        }
+        println!();
+    }
+
+    object_path
+}
+
+pub(crate) unsafe fn build_wave_file(
+    file_path: &Path,
+    opt_flag: &str,
+    debug: &DebugFlags,
+) {
+    let object_path = object_build_wave_file(file_path, opt_flag, debug);
+
+    let file_stem = file_path.file_stem().unwrap().to_str().unwrap();
+    let exe_path = format!("target/{}", file_stem);
+
+    let link_libs: Vec<String> = Vec::new();
+    let link_lib_paths: Vec<String> = Vec::new();
+
+    link_objects(
+        &[object_path],
+        &exe_path,
+        &link_libs,
+        &link_lib_paths,
+    );
+
+    if debug.mc {
+        println!("\n===== OUTPUT BINARY =====");
+        println!("{}", exe_path);
+    }
+}
+
 pub(crate) unsafe fn img_wave_file(file_path: &Path) {
     let code = fs::read_to_string(file_path).expect("Failed to read file");
 

@@ -4,7 +4,7 @@ use std::{env, process};
 use utils::colorex::*;
 use wavec::commands::{handle_build, handle_install_std, handle_run, handle_update_std, DebugFlags};
 use wavec::errors::CliError;
-use wavec::version_wave;
+use wavec::{compile_and_build, compile_and_build_obj, version_wave};
 
 fn main() {
     if let Err(e) = run() {
@@ -51,22 +51,43 @@ fn run() -> Result<(), CliError> {
         }
 
         "run" => {
-            let file = iter.next().ok_or(CliError::MissingArgument {
+            let next = iter.next().ok_or(CliError::MissingArgument {
                 command: "run",
-                expected: "<file>",
+                expected: "<file | --img>",
             })?;
 
-            handle_run(Path::new(&file), &opt_flag, &debug_flags)?;
+            if next == "--img" {
+                let file = iter.next().ok_or(CliError::MissingArgument {
+                    command: "run --img",
+                    expected: "<file>",
+                })?;
+
+                handle_build(Path::new(&file), &opt_flag, &debug_flags)?;
+            } else {
+                handle_run(Path::new(&next), &opt_flag, &debug_flags)?;
+            }
         }
 
         "build" => {
-            let file = iter.next().ok_or(CliError::MissingArgument {
+            let next = iter.next().ok_or(CliError::MissingArgument {
                 command: "build",
-                expected: "<file>",
+                expected: "<file | -o>",
             })?;
 
-            handle_build(Path::new(&file), &opt_flag, &debug_flags)?;
+            unsafe {
+                if next == "-o" {
+                    let file = iter.next().ok_or(CliError::MissingArgument {
+                        command: "build -o",
+                        expected: "<file>",
+                    })?;
+
+                    compile_and_build_obj(Path::new(&file), &opt_flag, &debug_flags);
+                } else {
+                    compile_and_build(Path::new(&next), &opt_flag, &debug_flags);
+                }
+            }
         }
+
 
         "install" => {
             let target = iter.next().ok_or(CliError::MissingArgument {
