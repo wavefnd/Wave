@@ -18,12 +18,22 @@ impl<'a> Lexer<'a> {
                     'r' => string_literal.push('\r'),
                     '\\' => string_literal.push('\\'),
                     '"' => string_literal.push('"'),
+                    'x' => {
+                        let h1 = self.advance();
+                        let h2 = self.advance();
+
+                        let hex = format!("{}{}", h1, h2);
+                        let value = u8::from_str_radix(&hex, 16)
+                            .unwrap_or_else(|_| panic!("Invalid hex escape: \\x{}", hex));
+
+                        string_literal.push(value as char);
+                    }
                     _ => {
-                        string_literal.push('\\');
-                        string_literal.push(next);
+                        panic!("Unknown escape sequence: \\{}", next);
                     }
                 }
-            } else {
+            }
+            else {
                 string_literal.push(c);
             }
         }

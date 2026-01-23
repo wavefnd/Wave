@@ -1,13 +1,11 @@
 // =======================================================
-// UDP networking for Wave
+// TCP networking for Wave
 // =======================================================
 //
-// Datagram-based UDP API built on top of
+// Stream-based TCP API built on top of
 // std::sys::linux::socket
 //
-// No connection abstraction.
-// No async.
-// No buffering.
+// Blocking, minimal, synchronous TCP abstraction.
 // =======================================================
 
 import("std::sys::linux::socket");
@@ -17,13 +15,13 @@ import("std::sys::linux::socket");
 // IPv4 address
 // -----------------------
 
-struct UdpAddr {
+struct TcpAddr {
     ip: i32;     // network byte order
     port: i16;   // network byte order
 }
 
 
-// sockaddr_in (internal use)
+// sockaddr_in (internal)
 struct SockAddrIn {
     family: i16;        // AF_INET
     port: i16;
@@ -33,10 +31,14 @@ struct SockAddrIn {
 
 
 // -----------------------
-// UDP socket
+// TCP types
 // -----------------------
 
-struct UdpSocket {
+struct TcpListener {
+    fd: i64;
+}
+
+struct TcpStream {
     fd: i64;
 }
 
@@ -57,7 +59,7 @@ fun htonl(x: i32) -> i32 {
          | ((x & 0xFF000000) >> 24);
 }
 
-fun _to_sockaddr(addr: UdpAddr) -> SockAddrIn {
+fun _to_sockaddr(addr: TcpAddr) -> SockAddrIn {
     return SockAddrIn {
         family: socket.AF_INET,
         port: addr.port,
@@ -68,17 +70,17 @@ fun _to_sockaddr(addr: UdpAddr) -> SockAddrIn {
 
 
 // -----------------------
-// socket lifecycle
+// listener
 // -----------------------
 
-fun udp_bind(port: i16) -> UdpSocket {
-    let fd = socket.socket(
+fun tcp_bind(port: i16) -> TcpListener {
+    let fd: i64 = socket.socket(
         socket.AF_INET,
-        socket.SOCK_DGRAM,
-        socket.IPPROTO_UDP
+        socket.SOCK_STREAM,
+        socket.IPPROTO_TCP
     );
 
-    let addr = SockAddrIn {
+    let addr: SockAddrIn = SockAddrIn {
         family: socket.AF_INET,
         port: htons(port),
         addr: 0,
@@ -86,53 +88,46 @@ fun udp_bind(port: i16) -> UdpSocket {
     };
 
     socket.bind(fd, &addr, 16);
+    socket.listen(fd, 128);
 
-    return UdpSocket { fd: fd };
+    return TcpListener { fd: fd };
 }
 
-fun udp_close(sock: UdpSocket) {
-    socket.shutdown(sock.fd, 2);
+fun tcp_accept(listener: TcpListener) -> TcpStream {
+    let fd: i64 = socket.accept(listener.fd, 0, 0);
+    return TcpStream { fd: fd };
+}
+
+fun tcp_close_listener(listener: TcpListener) {
+    socket.shutdown(listener.fd, 2);
 }
 
 
 // -----------------------
-// send / recv
+// stream (server + client common)
 // -----------------------
 
-fun udp_send_to(
-    sock: UdpSocket,
-    addr: UdpAddr,
-    buf: ptr<u8>,
-    len: i64
-) -> i64 {
-    let sa = _to_sockaddr(addr);
-    return socket.send(
-        sock.fd,
-        buf,
-        len,
-        0
+fun tcp_connect(addr: TcpAddr) -> TcpStream {
+    let fd: i64 = socket.socket(
+        socket.AF_INET,
+        socket.SOCK_STREAM,
+        socket.IPPROTO_TCP
     );
+
+    let sa: i64 = _to_sockaddr(addr);
+    socket.connect(fd, &sa, 16);
+
+    return TcpStream { fd: fd };
 }
 
-fun udp_recv_from(
-    sock: UdpSocket,
-    buf: ptr<u8>,
-    len: i64,
-    src: ptr<UdpAddr>
-) -> i64 {
-    var sa: SockAddrIn;
-    var salen: i32 = 16;
+fun tcp_read(stream: TcpStream, buf: ptr<u8>, len: i64) -> i64 {
+    return socket.recv(stream.fd, buf, len, 0);
+}
 
-    let n = socket.recv(
-        sock.fd,
-        buf,
-        len,
-        0
-    );
+fun tcp_write(stream: TcpStream, buf: ptr<u8>, len: i64) -> i64 {
+    return socket.send(stream.fd, buf, len, 0);
+}
 
-    // NOTE:
-    // recvfrom source address extraction
-    // will be added later when needed
-
-    return n;
+fun tcp_close(stream: TcpStream) {
+    socket.shutdown(stream.fd, 2);
 }

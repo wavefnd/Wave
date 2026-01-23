@@ -254,6 +254,28 @@ fn coerce_to_expected<'ctx, 'a>(
     }
 
     match (got, expected) {
+        // 0) ptr -> int (ptrtoint)  (needed for syscall wrappers that take i64 registers)
+        (BasicTypeEnum::PointerType(_), BasicTypeEnum::IntType(dst))
+        if dst.get_bit_width() == 64 && name.starts_with("syscall") =>
+            {
+                let pv = val.into_pointer_value();
+                env.builder
+                    .build_ptr_to_int(pv, dst, &format!("arg{}_p2i", arg_index))
+                    .unwrap()
+                    .as_basic_value_enum()
+            }
+
+        // 0.1) int -> ptr (inttoptr) (useful when passing raw addresses)
+        (BasicTypeEnum::IntType(src), BasicTypeEnum::PointerType(dst))
+        if src.get_bit_width() == 64 && name.starts_with("syscall") =>
+            {
+                let iv = val.into_int_value();
+                env.builder
+                    .build_int_to_ptr(iv, dst, &format!("arg{}_i2p", arg_index))
+                    .unwrap()
+                    .as_basic_value_enum()
+            }
+
         // 1) int -> int
         (BasicTypeEnum::IntType(src), BasicTypeEnum::IntType(dst)) => {
             let src_bw = src.get_bit_width();

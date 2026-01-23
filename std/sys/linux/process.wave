@@ -1,0 +1,71 @@
+// =======================================================
+// Linux x86_64 process syscalls
+// =======================================================
+//
+// Minimal process-related system calls.
+// All return raw syscall values.
+// Negative values indicate -errno.
+// =======================================================
+
+import("std::sys::linux::syscall");
+
+
+// -----------------------
+// process lifecycle
+// -----------------------
+
+fun exit(code: i32) -> ! {
+    // syscall: exit (60)
+    syscall1(60, code);
+    while (true) { }
+}
+
+fun getpid() -> i64 {
+    // syscall: getpid (39)
+    return syscall0(39);
+}
+
+fun getppid() -> i64 {
+    // syscall: getppid (110)
+    return syscall0(110);
+}
+
+
+// -----------------------
+// process creation
+// -----------------------
+
+fun fork() -> i64 {
+    // syscall: fork (57)
+    return syscall0(57);
+}
+
+fun execve(
+    path: str,
+    argv: ptr<ptr<i8>>,
+    envp: ptr<ptr<i8>>
+) -> i64 {
+    // syscall: execve (59)
+    return syscall3(59, path, argv, envp);
+}
+
+
+// -----------------------
+// waiting
+// -----------------------
+
+fun waitpid(pid: i64, status: ptr<i32>, options: i32) -> i64 {
+    // syscall: wait4 (61)
+    // waitpid is implemented via wait4
+    return syscall4(61, pid, status, options, 0);
+}
+
+
+// -----------------------
+// signals
+// -----------------------
+
+fun kill(pid: i64, sig: i32) -> i64 {
+    // syscall: kill (62)
+    return syscall2(62, pid, sig);
+}

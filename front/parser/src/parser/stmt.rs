@@ -174,6 +174,10 @@ pub fn parse_statement(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
             tokens.next();
             parse_print(tokens)
         }
+        TokenType::Input => {
+            tokens.next();
+            parse_input(tokens)
+        }
         TokenType::If => {
             tokens.next();
             parse_if(tokens)

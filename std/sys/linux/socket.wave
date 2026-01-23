@@ -1,0 +1,93 @@
+// =======================================================
+// Linux x86_64 socket syscalls
+// =======================================================
+//
+// Raw socket interface built on top of syscall.wave.
+// This layer exposes OS-level socket APIs only.
+// No protocol abstraction (TCP/UDP) here.
+// =======================================================
+
+import("std::sys::linux::syscall");
+
+
+// -----------------------
+// constants (minimal)
+// -----------------------
+
+// address families
+const AF_INET: i32 = 2;
+const AF_INET6: i32 = 10;
+
+// socket types
+const SOCK_STREAM: i32 = 1;
+const SOCK_DGRAM: i32 = 2;
+
+// protocol
+const IPPROTO_IP: i32 = 0;
+const IPPROTO_TCP: i32 = 6;
+const IPPROTO_UDP: i32 = 17;
+
+// socket options
+const SOL_SOCKET: i32 = 1;
+const SO_REUSEADDR: i32 = 2;
+
+
+// -----------------------
+// basic socket syscalls
+// -----------------------
+
+fun socket(domain: i32, ty: i32, protocol: i32) -> i64 {
+    // syscall: socket (41)
+    return syscall3(41, domain, ty, protocol);
+}
+
+fun bind(fd: i64, addr: ptr<i8>, len: i32) -> i64 {
+    // syscall: bind (49)
+    return syscall3(49, fd, addr, len);
+}
+
+fun listen(fd: i64, backlog: i32) -> i64 {
+    // syscall: listen (50)
+    return syscall2(50, fd, backlog);
+}
+
+fun accept(fd: i64, addr: ptr<i8>, len: ptr<i32>) -> i64 {
+    // syscall: accept (43)
+    return syscall3(43, fd, addr, len);
+}
+
+fun connect(fd: i64, addr: ptr<i8>, len: i32) -> i64 {
+    // syscall: connect (42)
+    return syscall3(42, fd, addr, len);
+}
+
+fun shutdown(fd: i64, how: i32) -> i64 {
+    // syscall: shutdown (48)
+    return syscall2(48, fd, how);
+}
+
+fun setsockopt(
+    fd: i64,
+    level: i32,
+    optname: i32,
+    optval: ptr<i8>,
+    optlen: i32
+) -> i64 {
+    // syscall: setsockopt (54)
+    return syscall5(54, fd, level, optname, optval, optlen);
+}
+
+
+// -----------------------
+// send / recv
+// -----------------------
+
+fun send(fd: i64, buf: ptr<u8>, len: i64, flags: i32) -> i64 {
+    // syscall: sendto (44)
+    return syscall6(44, fd, buf, len, flags, 0, 0);
+}
+
+fun recv(fd: i64, buf: ptr<u8>, len: i64, flags: i32) -> i64 {
+    // syscall: recvfrom (45)
+    return syscall6(45, fd, buf, len, flags, 0, 0);
+}

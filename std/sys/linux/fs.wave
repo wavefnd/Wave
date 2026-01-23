@@ -1,0 +1,104 @@
+// =======================================================
+// Linux x86_64 filesystem syscalls
+// =======================================================
+//
+// This layer provides minimal filesystem operations
+// built directly on top of syscall.wave.
+//
+// All functions return raw syscall results.
+// Negative values indicate -errno.
+// =======================================================
+
+import("std::sys::linux::syscall");
+
+
+// -----------------------
+// open / close
+// -----------------------
+
+fun open(path: str, flags: i32, mode: i32) -> i64 {
+    // syscall: open (2)
+    return syscall3(2, path, flags, mode);
+}
+
+fun close(fd: i64) -> i64 {
+    // syscall: close (3)
+    return syscall1(3, fd);
+}
+
+
+// -----------------------
+// read / write
+// -----------------------
+
+fun read(fd: i64, buf: ptr<u8>, len: i64) -> i64 {
+    // syscall: read (0)
+    return syscall3(0, fd, buf, len);
+}
+
+fun write(fd: i64, buf: ptr<u8>, len: i64) -> i64 {
+    // syscall: write (1)
+    return syscall3(1, fd, buf, len);
+}
+
+
+// -----------------------
+// seek
+// -----------------------
+
+fun lseek(fd: i64, offset: i64, whence: i32) -> i64 {
+    // syscall: lseek (8)
+    return syscall3(8, fd, offset, whence);
+}
+
+
+// -----------------------
+// file operations
+// -----------------------
+
+fun unlink(path: str) -> i64 {
+    // syscall: unlink (87)
+    return syscall1(87, path);
+}
+
+fun mkdir(path: str, mode: i32) -> i64 {
+    // syscall: mkdir (83)
+    return syscall2(83, path, mode);
+}
+
+fun rmdir(path: str) -> i64 {
+    // syscall: rmdir (84)
+    return syscall1(84, path);
+}
+
+
+// -----------------------
+// metadata
+// -----------------------
+
+struct Stat {
+    dev: i64;
+    ino: i64;
+    nlink: i64;
+    mode: i32;
+    uid: i32;
+    gid: i32;
+    pad0: i32;
+    rdev: i64;
+    size: i64;
+    blksize: i64;
+    blocks: i64;
+    atime: i64;
+    mtime: i64;
+    ctime: i64;
+}
+
+fun stat(path: str, st: ptr<Stat>) -> i64 {
+    // syscall: stat (4)
+    return syscall2(4, path, st);
+}
+
+fun fstat(fd: i64, st: ptr<Stat>) -> i64 {
+    // syscall: fstat (5)
+    return syscall2(5, fd, st);
+}

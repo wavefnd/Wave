@@ -1,14 +1,138 @@
-const SYS_SOCKET: i64 = 41;
+// =======================================================
+// Linux x86_64 syscall interface for Wave
+// =======================================================
+// Calling convention:
+//   rax = syscall number
+//   rdi, rsi, rdx, r10, r8, r9 = arguments
+//   return value in rax
+//
+// Error handling:
+//   negative return value = -errno
+// =======================================================
 
-fun sys_socket(domain: i64, ty: i64, proto: i64) -> i64 {
-    let fd: i64;
+
+// -----------------------
+// syscall with 0 args
+// -----------------------
+fun syscall0(id: i64) -> i64 {
+    var ret: i64;
     asm {
         "syscall"
-        in("rax") SYS_SOCKET
-        in("rdi") domain
-        in("rsi") ty
-        in("rdx") proto
-        out("rax") fd
+        in("rax") id
+        out("rax") ret
     }
-    return fd;
+    return ret;
+}
+
+
+// -----------------------
+// syscall with 1 arg
+// -----------------------
+fun syscall1(id: i64, a1: i64) -> i64 {
+    var ret: i64;
+    asm {
+        "syscall"
+        in("rax") id
+        in("rdi") a1
+        out("rax") ret
+    }
+    return ret;
+}
+
+
+// -----------------------
+// syscall with 2 args
+// -----------------------
+fun syscall2(id: i64, a1: i64, a2: i64) -> i64 {
+    var ret: i64;
+    asm {
+        "syscall"
+        in("rax") id
+        in("rdi") a1
+        in("rsi") a2
+        out("rax") ret
+    }
+    return ret;
+}
+
+
+// -----------------------
+// syscall with 3 args
+// -----------------------
+fun syscall3(id: i64, a1: i64, a2: i64, a3: i64) -> i64 {
+    var ret: i64;
+    asm {
+        "syscall"
+        in("rax") id
+        in("rdi") a1
+        in("rsi") a2
+        in("rdx") a3
+        out("rax") ret
+    }
+    return ret;
+}
+
+
+// -----------------------
+// syscall with 4 args
+// -----------------------
+fun syscall4(id: i64, a1: i64, a2: i64, a3: i64, a4: i64) -> i64 {
+    var ret: i64;
+    asm {
+        "syscall"
+        in("rax") id
+        in("rdi") a1
+        in("rsi") a2
+        in("rdx") a3
+        in("r10") a4
+        out("rax") ret
+    }
+    return ret;
+}
+
+
+// -----------------------
+// syscall with 5 args
+// -----------------------
+fun syscall5(id: i64, a1: i64, a2: i64, a3: i64, a4: i64, a5: i64) -> i64 {
+    var ret: i64;
+    asm {
+        "syscall"
+        in("rax") id
+        in("rdi") a1
+        in("rsi") a2
+        in("rdx") a3
+        in("r10") a4
+        in("r8")  a5
+        out("rax") ret
+    }
+    return ret;
+}
+
+
+// -----------------------
+// syscall with 6 args
+// -----------------------
+fun syscall6(
+    id: i64,
+    a1: i64,
+    a2: i64,
+    a3: i64,
+    a4: i64,
+    a5: i64,
+    a6: i64
+) -> i64 {
+    var ret: i64;
+    asm {
+        "syscall"
+        in("rax") id
+        in("rdi") a1
+        in("rsi") a2
+        in("rdx") a3
+        in("r10") a4
+        in("r8")  a5
+        in("r9")  a6
+        out("rax") ret
+    }
+    return ret;
 }

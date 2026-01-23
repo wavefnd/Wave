@@ -91,7 +91,13 @@ pub fn wave_format_to_scanf(format: &str, arg_types: &[AnyTypeEnum]) -> String {
                     .unwrap_or_else(|| panic!("Missing argument for format"));
 
                 let fmt = match ty {
-                    AnyTypeEnum::IntType(_) => "%d",
+                    AnyTypeEnum::IntType(int_ty) => {
+                        if int_ty.get_bit_width() == 8 {
+                            "%c"
+                        } else {
+                            "%d"
+                        }
+                    }
                     AnyTypeEnum::FloatType(_) => "%f",
                     AnyTypeEnum::PointerType(_) => {
                         panic!("Cannot input into a pointer type directly")

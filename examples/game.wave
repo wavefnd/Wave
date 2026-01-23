@@ -1,0 +1,59 @@
+struct Player {
+    x: i32;
+    y: i32;
+}
+
+struct Game {
+    p: Player;
+    running: bool;
+}
+
+fun render(g: Game) {
+    var y: i32 = 0;
+    while (y < 5) {
+        var x: i32 = 0;
+        while (x < 5) {
+            if (x == g.p.x && y == g.p.y) {
+                print("@");
+            } else {
+                print(".");
+            }
+            x += 1;
+        }
+        println("");
+        y += 1;
+    }
+}
+
+fun update(g: ptr<Game>, key: i8) {
+    if (key == 'w' && deref g.p.y > 0) { deref g.p.y -= 1; }
+    if (key == 's' && deref g.p.y < 4) { deref g.p.y += 1; }
+    if (key == 'a' && deref g.p.x > 0) { deref g.p.x -= 1; }
+    if (key == 'd' && deref g.p.x < 4) { deref g.p.x += 1; }
+    if (key == 'q') { deref g.running = false; }
+}
+
+fun clear_screen() {
+    print("\x1b[2J\x1b[H");
+}
+
+
+fun main() {
+    var game: Game = Game {
+        p: Player { x: 2, y: 2 },
+        running: true
+    };
+
+    var key: i8;
+
+    println("WASD to move, q to quit");
+
+    while (game.running) {
+        clear_screen();
+        render(game);
+        input("{}", key);
+        update(&game, key);
+    }
+
+    println("Game Over");
+}

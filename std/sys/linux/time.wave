@@ -1,0 +1,40 @@
+// =======================================================
+// Linux x86_64 time-related syscalls
+// =======================================================
+//
+// Raw time and sleep syscalls.
+// All functions return raw syscall values.
+// Negative values indicate -errno.
+// =======================================================
+
+import("std::sys::linux::syscall");
+
+
+// -----------------------
+// timespec
+// -----------------------
+
+struct TimeSpec {
+    sec: i64;
+    nsec: i64;
+}
+
+
+// -----------------------
+// nanosleep
+// -----------------------
+
+fun nanosleep(req: ptr<TimeSpec>, rem: ptr<TimeSpec>) -> i64 {
+    // syscall: nanosleep (35)
+    return syscall2(35, req, rem);
+}
+
+
+// -----------------------
+// clock_gettime
+// -----------------------
+
+fun clock_gettime(clock_id: i32, tp: ptr<TimeSpec>) -> i64 {
+    // syscall: clock_gettime (228)
+    return syscall2(228, clock_id, tp);
+}

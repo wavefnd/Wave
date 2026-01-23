@@ -1,0 +1,42 @@
+// =======================================================
+// Linux x86_64 memory syscalls
+// =======================================================
+//
+// Low-level virtual memory management.
+// All functions return raw syscall values.
+// Negative values indicate -errno.
+// =======================================================
+
+import("std::sys::linux::syscall");
+
+
+// -----------------------
+// mmap / munmap
+// -----------------------
+
+fun mmap(
+    addr: ptr<i8>,
+    length: i64,
+    prot: i32,
+    flags: i32,
+    fd: i64,
+    offset: i64
+) -> ptr<i8> {
+    // syscall: mmap (9)
+    return syscall6(9, addr, length, prot, flags, fd, offset);
+}
+
+fun munmap(addr: ptr<i8>, length: i64) -> i64 {
+    // syscall: munmap (11)
+    return syscall2(11, addr, length);
+}
+
+
+// -----------------------
+// brk
+// -----------------------
+
+fun brk(addr: ptr<i8>) -> ptr<i8> {
+    // syscall: brk (12)
+    return syscall1(12, addr);
+}
