@@ -4,6 +4,7 @@ pub mod format;
 pub mod types;
 pub mod address;
 pub mod legacy;
+pub mod plan;
 
 pub use address::generate_address_ir;
 pub use format::{wave_format_to_c, wave_format_to_scanf};

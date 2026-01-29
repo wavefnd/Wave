@@ -166,4 +166,5 @@ pub enum TokenType {
     TypeVoid,
     CharLiteral(char),
     BoolLiteral(bool),
+    Clobber,
 }

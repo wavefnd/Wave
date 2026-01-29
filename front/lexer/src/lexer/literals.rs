@@ -57,6 +57,14 @@ impl<'a> Lexer<'a> {
                 '\\' => '\\',
                 '\'' => '\'',
                 '"' => '"',
+                'x' => {
+                    let h1 = self.advance();
+                    let h2 = self.advance();
+                    let hex = format!("{}{}", h1, h2);
+                    let value = u8::from_str_radix(&hex, 16)
+                        .unwrap_or_else(|_| panic!("Invalid hex escape: \\x{}", hex));
+                    value as char
+                }
                 _ => panic!("Invalid escape sequence in char literal"),
             }
         } else {

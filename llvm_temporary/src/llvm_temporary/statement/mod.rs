@@ -124,6 +124,7 @@ pub fn generate_statement_ir<'ctx>(
                                instructions,
                                inputs,
                                outputs,
+                               clobbers,
                            }) => {
             asm::gen_asm_stmt_ir(
                 context,
@@ -132,6 +133,7 @@ pub fn generate_statement_ir<'ctx>(
                 instructions,
                 inputs,
                 outputs,
+                clobbers,
                 variables,
                 global_consts,
             );

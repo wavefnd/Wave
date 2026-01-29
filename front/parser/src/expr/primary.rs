@@ -3,7 +3,7 @@ use std::iter::Peekable;
 use lexer::token::TokenType;
 use lexer::Token;
 
-use crate::asm::parse_asm_inout_clause;
+use crate::asm::{parse_asm_clobber_clause, parse_asm_inout_clause};
 use crate::ast::{Expression, Literal};
 use crate::expr::parse_expression;
 use crate::expr::postfix::parse_postfix_expression;
@@ -188,9 +188,10 @@ where
             }
             tokens.next();
 
-            let mut instructions = vec![];
-            let mut inputs = vec![];
-            let mut outputs = vec![];
+            let mut instructions: Vec<String> = vec![];
+            let mut inputs: Vec<(String, Expression)> = vec![];
+            let mut outputs: Vec<(String, Expression)> = vec![];
+            let mut clobbers: Vec<String> = vec![];
 
             while let Some(token) = tokens.peek() {
                 match &token.token_type {
@@ -209,6 +210,11 @@ where
                         parse_asm_inout_clause(tokens, false, &mut inputs, &mut outputs)?;
                     }
 
+                    TokenType::Clobber => {
+                        tokens.next();
+                        parse_asm_clobber_clause(tokens, &mut clobbers)?;
+                    }
+
                     TokenType::Identifier(s) if s == "in" => {
                         tokens.next();
                         parse_asm_inout_clause(tokens, true, &mut inputs, &mut outputs)?;
@@ -217,6 +223,11 @@ where
                     TokenType::Identifier(s) if s == "out" => {
                         tokens.next();
                         parse_asm_inout_clause(tokens, false, &mut inputs, &mut outputs)?;
+                    }
+
+                    TokenType::Identifier(s) if s == "clobber" => {
+                        tokens.next();
+                        parse_asm_clobber_clause(tokens, &mut clobbers)?;
                     }
 
                     TokenType::String(s) => {
@@ -235,6 +246,7 @@ where
                 instructions,
                 inputs,
                 outputs,
+                clobbers,
             })
         }
         _ => match token.token_type {

@@ -1,0 +1,66 @@
+fun main() {
+    println("=== test77: clobber test start ===");
+
+    test_clobber_rax();
+    test_clobber_multiple();
+    test_clobber_memory();
+
+    println("=== test77: done ===");
+}
+
+fun test_clobber_rax() {
+    var x: i64 = 10;
+    var y: i64 = 32;
+
+    var before: i64 = x + y;
+
+    asm {
+        "mov rax, 999"
+        // rax를 의도적으로 오염
+        clobber("rax")
+    }
+
+    var after: i64 = x + y;
+
+    println("[clobber rax]");
+    println("before = {}", before);
+    println("after  = {}", after);
+}
+
+fun test_clobber_multiple() {
+    var a: i64 = 1;
+    var b: i64 = 2;
+    var c: i64 = 3;
+
+    var sum1: i64 = a + b + c;
+
+    asm {
+        "xor rax, rax"
+        "xor rcx, rcx"
+        "xor rdx, rdx"
+        clobber("rax")
+        clobber("rcx")
+        clobber("rdx")
+    }
+
+    var sum2: i64 = a + b + c;
+
+    println("[clobber rax rcx rdx]");
+    println("sum before = {}", sum1);
+    println("sum after  = {}", sum2);
+}
+
+fun test_clobber_memory() {
+    var buf: i64 = 123;
+
+    println("[clobber memory]");
+    println("before = {}", buf);
+
+    asm {
+        "mov QWORD PTR [$0], 777"
+        in("r") &buf
+        clobber("memory")
+    }
+
+    println("after  = {}", buf);
+}

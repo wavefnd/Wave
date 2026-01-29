@@ -29,8 +29,8 @@ pub(crate) fn gen_expr<'ctx, 'a>(
 
         Expression::IndexAccess { target, index } => index::gen(env, target, index),
 
-        Expression::AsmBlock { instructions, inputs, outputs } => {
-            asm::gen(env, instructions, inputs, outputs)
+        Expression::AsmBlock { instructions, inputs, outputs, clobbers } => {
+            asm::gen(env, instructions, inputs, outputs, clobbers)
         }
 
         Expression::StructLiteral { name, fields } => structs::gen_struct_literal(env, name, fields),

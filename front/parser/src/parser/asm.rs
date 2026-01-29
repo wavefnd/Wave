@@ -15,6 +15,7 @@ pub fn parse_asm_block(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<ASTNode
     let mut instructions = vec![];
     let mut inputs: Vec<(String, Expression)> = vec![];
     let mut outputs: Vec<(String, Expression)> = vec![];
+    let mut clobbers: Vec<String> = vec![];
 
     let mut closed = false;
 
@@ -45,6 +46,11 @@ pub fn parse_asm_block(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<ASTNode
                 parse_asm_inout_clause(tokens, false, &mut inputs, &mut outputs)?;
             }
 
+            TokenType::Clobber => {
+                tokens.next();
+                parse_asm_clobber_clause(tokens, &mut clobbers)?;
+            }
+
             TokenType::Identifier(s) if s == "in" => {
                 tokens.next();
                 parse_asm_inout_clause(tokens, true, &mut inputs, &mut outputs)?;
@@ -52,6 +58,10 @@ pub fn parse_asm_block(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<ASTNode
             TokenType::Identifier(s) if s == "out" => {
                 tokens.next();
                 parse_asm_inout_clause(tokens, false, &mut inputs, &mut outputs)?;
+            }
+            TokenType::Identifier(s) if s == "clobber" => {
+                tokens.next();
+                parse_asm_clobber_clause(tokens, &mut clobbers)?;
             }
 
             other => {
@@ -70,7 +80,70 @@ pub fn parse_asm_block(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<ASTNode
         instructions,
         inputs,
         outputs,
+        clobbers,
     }))
+}
+
+/// clobber("rax, "rcx, "memory")
+pub fn parse_asm_clobber_clause<'a, T>(
+    tokens: &mut Peekable<T>,
+    clobbers: &mut Vec<String>,
+) -> Option<()>
+where
+    T: Iterator<Item = &'a Token>,
+{
+    // expect '('
+    if tokens.peek().map(|t| &t.token_type) != Some(&TokenType::Lparen) {
+        println!("Expected '(' after 'clobber'");
+        return None;
+    }
+    tokens.next(); // '('
+
+    // empty: clobber()
+    if tokens.peek().map(|t| &t.token_type) == Some(&TokenType::Rparen) {
+        tokens.next(); // ')'
+        return Some(());
+    }
+
+    loop {
+        let item = match tokens.next() {
+            Some(Token { token_type: TokenType::String(s), .. }) => s.clone(),
+            Some(Token { token_type: TokenType::Identifier(s), .. }) => s.clone(),
+            Some(other) => {
+                println!(
+                    "Expected clobber item (string/identifier), got {:?}",
+                    other.token_type
+                );
+                return None;
+            }
+            None => {
+                println!("Unexpected EOF while parsing clobber(...)");
+                return None;
+            }
+        };
+
+        clobbers.push(item);
+
+        match tokens.peek().map(|t| &t.token_type) {
+            Some(TokenType::Comma) => {
+                tokens.next(); // ','
+                continue;
+            }
+            Some(TokenType::Rparen) => {
+                tokens.next(); // ')'
+                break;
+            }
+            other => {
+                println!(
+                    "Expected ',' or ')' in clobber(...), got {:?}",
+                    other
+                );
+                return None;
+            }
+        }
+    }
+
+    Some(())
 }
 
 pub fn parse_asm_inout_clause<'a, T>(

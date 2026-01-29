@@ -125,6 +125,7 @@ pub enum Expression {
         instructions: Vec<String>,
         inputs: Vec<(String, Expression)>,
         outputs: Vec<(String, Expression)>,
+        clobbers: Vec<String>,
     },
     FieldAccess {
         object: Box<Expression>,
@@ -229,6 +230,7 @@ pub enum StatementNode {
         instructions: Vec<String>,
         inputs: Vec<(String, Expression)>,
         outputs: Vec<(String, Expression)>,
+        clobbers: Vec<String>,
     },
     Break,
     Continue,

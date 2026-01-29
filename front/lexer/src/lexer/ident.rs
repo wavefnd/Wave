@@ -99,6 +99,11 @@ impl<'a> Lexer<'a> {
                 lexeme: "out".to_string(),
                 line: self.line,
             },
+            "clobber" => Token {
+                token_type: TokenType::Clobber,
+                lexeme: "clobber".to_string(),
+                line: self.line,
+            },
             "is" => Token {
                 token_type: TokenType::Is,
                 lexeme: "is".to_string(),
