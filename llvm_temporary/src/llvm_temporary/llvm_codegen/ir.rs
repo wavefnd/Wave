@@ -4,7 +4,7 @@ use inkwell::types::{BasicMetadataTypeEnum, BasicType, BasicTypeEnum};
 use inkwell::values::{BasicValueEnum, FunctionValue};
 use inkwell::OptimizationLevel;
 
-use parser::ast::{ASTNode, FunctionNode, Mutability, VariableNode, WaveType};
+use parser::ast::{ASTNode, ExternFunctionNode, FunctionNode, Mutability, VariableNode, WaveType};
 use std::collections::HashMap;
 
 use crate::llvm_temporary::statement::generate_statement_ir;
@@ -114,6 +114,17 @@ pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
         .chain(proto_functions.iter().map(|(_, f)| f.clone()))
         .collect();
 
+    let extern_functions: Vec<&ExternFunctionNode> = ast_nodes
+        .iter()
+        .filter_map(|ast| {
+            if let ASTNode::ExternFunction(ext) = ast {
+                Some(ext)
+            } else {
+                None
+            }
+        })
+        .collect();
+
     for FunctionNode {
         name,
         parameters,
@@ -133,6 +144,30 @@ pub unsafe fn generate_ir(ast_nodes: &[ASTNode]) -> String {
                 llvm_ret_type.fn_type(&param_types, false)
             }
         };
+
+        for ext in &extern_functions {
+            let param_types: Vec<BasicMetadataTypeEnum> = ext
+                .params
+                .iter()
+                .map(|(_, ty)| wave_type_to_llvm_type(context, ty, &struct_types).into())
+                .collect();
+
+            let fn_type = match &ext.return_type {
+                WaveType::Void => context.void_type().fn_type(&param_types, false),
+                ret_ty => {
+                    let llvm_ret = wave_type_to_llvm_type(context, ret_ty, &struct_types);
+                    llvm_ret.fn_type(&param_types, false)
+                }
+            };
+
+            let llvm_name = ext
+                .symbol
+                .as_deref().unwrap_or(ext.name.as_str());
+
+            let function = module.add_function(llvm_name, fn_type, None);
+
+            functions.insert(ext.name.clone(), function);
+        }
 
         let function = module.add_function(name, fn_type, None);
         functions.insert(name.clone(), function);

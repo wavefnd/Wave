@@ -2,9 +2,10 @@ use std::iter::Peekable;
 use std::slice::Iter;
 use lexer::Token;
 use lexer::token::TokenType;
-use crate::ast::{ASTNode, Expression, Mutability, VariableNode, WaveType};
+use crate::ast::{ASTNode, Expression, ExternFunctionNode, Mutability, VariableNode, WaveType};
 use crate::expr::parse_expression;
 use crate::parser::types::{parse_type, token_type_to_wave_type};
+use crate::types::parse_type_from_stream;
 
 pub fn collect_generic_inner(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<String> {
     let mut inner = String::new();
@@ -302,4 +303,303 @@ pub fn parse_var(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<ASTNode> {
         initial_value,
         mutability,
     }))
+}
+
+fn skip_ws(tokens: &mut Peekable<Iter<'_, Token>>) {
+    while let Some(t) = tokens.peek() {
+        match t.token_type {
+            TokenType::Whitespace | TokenType::Newline => {
+                tokens.next();
+            }
+            _ => break,
+        }
+    }
+}
+
+fn expect(tokens: &mut Peekable<Iter<'_, Token>>, ty: TokenType, msg: &str) -> bool {
+    if tokens.peek().map(|t| t.token_type.clone()) == Some(ty) {
+        tokens.next();
+        true
+    } else {
+        println!("Error: {}", msg);
+        false
+    }
+}
+
+/// extern(abi) ... / extern(abi, "sym") ...
+fn parse_extern_header(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<(String, Option<String>)> {
+    skip_ws(tokens);
+
+    if !expect(tokens, TokenType::Lparen, "Expected '(' after 'extern'") {
+        return None;
+    }
+
+    skip_ws(tokens);
+
+    let abi = match tokens.next() {
+        Some(Token { token_type: TokenType::Identifier(name), .. }) => name.clone(),
+        other => {
+            println!("Error: Expected ABI identifier in extern(...), found {:?}", other);
+            return None;
+        }
+    };
+
+    skip_ws(tokens);
+
+    // optional: , "symbol"
+    let mut global_symbol: Option<String> = None;
+    if tokens.peek().map(|t| t.token_type.clone()) == Some(TokenType::Comma) {
+        tokens.next(); // consume ','
+        skip_ws(tokens);
+
+        global_symbol = match tokens.next() {
+            Some(Token { token_type: TokenType::String(s), .. }) => Some(s.clone()),
+            other => {
+                println!("Error: Expected string literal after ',' in extern(...), found {:?}", other);
+                return None;
+            }
+        };
+
+        skip_ws(tokens);
+    }
+
+    if !expect(tokens, TokenType::Rparen, "Expected ')' to close extern(...)") {
+        return None;
+    }
+
+    Some((abi, global_symbol))
+}
+
+fn peek_non_ws_token_type(tokens: &Peekable<Iter<'_, Token>>) -> Option<TokenType> {
+    let mut it = tokens.clone();
+    while let Some(t) = it.peek() {
+        match t.token_type {
+            TokenType::Whitespace | TokenType::Newline => {
+                it.next();
+            }
+            _ => return Some(t.token_type.clone()),
+        }
+    }
+    None
+}
+
+fn parse_extern_fun_decl(
+    tokens: &mut Peekable<Iter<'_, Token>>,
+    abi: String,
+    global_symbol: Option<&String>,
+) -> Option<ExternFunctionNode> {
+    skip_ws(tokens);
+
+    // 'fun'
+    match tokens.peek() {
+        Some(Token { token_type: TokenType::Fun, .. }) => { tokens.next(); }
+        other => {
+            println!("Error: Expected 'fun' in extern block, found {:?}", other);
+            return None;
+        }
+    }
+
+    skip_ws(tokens);
+
+    // name
+    let name = match tokens.next() {
+        Some(Token { token_type: TokenType::Identifier(n), .. }) => n.clone(),
+        other => {
+            println!("Error: Expected function name after 'fun', found {:?}", other);
+            return None;
+        }
+    };
+
+    skip_ws(tokens);
+
+    if !expect(tokens, TokenType::Lparen, "Expected '(' after extern function name") {
+        return None;
+    }
+
+    // params
+    let mut params: Vec<(String, WaveType)> = Vec::new();
+    let mut idx: usize = 0;
+
+    loop {
+        skip_ws(tokens);
+
+        if tokens.peek().map(|t| t.token_type.clone()) == Some(TokenType::Rparen) {
+            tokens.next(); // consume ')'
+            break;
+        }
+
+        // named param? (Identifier ... :)
+        let is_named = match tokens.peek() {
+            Some(Token { token_type: TokenType::Identifier(_), .. }) => {
+                let next_ty = peek_non_ws_token_type(tokens);
+                if let Some(TokenType::Identifier(_)) = tokens.peek().map(|t| t.token_type.clone()) {
+                    let mut la = tokens.clone();
+                    la.next(); // consume identifier
+                    while let Some(t) = la.peek() {
+                        match t.token_type {
+                            TokenType::Whitespace | TokenType::Newline => { la.next(); }
+                            _ => break,
+                        }
+                    }
+                    la.peek().map(|t| t.token_type.clone()) == Some(TokenType::Colon)
+                } else {
+                    false
+                }
+            }
+            _ => false,
+        };
+
+        if is_named {
+            // name :
+            let param_name = if let Some(Token { token_type: TokenType::Identifier(n), .. }) = tokens.next() {
+                n.clone()
+            } else {
+                unreachable!();
+            };
+
+            skip_ws(tokens);
+
+            if !expect(tokens, TokenType::Colon, "Expected ':' after parameter name in extern function") {
+                return None;
+            }
+
+            skip_ws(tokens);
+
+            let ty = match parse_type_from_stream(tokens) {
+                Some(t) => t,
+                None => {
+                    println!("Error: Invalid type in extern parameter '{}'", param_name);
+                    return None;
+                }
+            };
+
+            params.push((param_name, ty));
+        } else {
+            // type-only param
+            let ty = match parse_type_from_stream(tokens) {
+                Some(t) => t,
+                None => {
+                    println!("Error: Invalid type in extern parameter list");
+                    return None;
+                }
+            };
+            let param_name = format!("arg{}", idx);
+            idx += 1;
+            params.push((param_name, ty));
+        }
+
+        skip_ws(tokens);
+
+        // ',' or ')'
+        match tokens.peek().map(|t| t.token_type.clone()) {
+            Some(TokenType::Comma) => {
+                tokens.next();
+                continue;
+            }
+            Some(TokenType::Rparen) => {
+                tokens.next();
+                break;
+            }
+            other => {
+                println!("Error: Expected ',' or ')' in extern parameter list, found {:?}", other);
+                return None;
+            }
+        }
+    }
+
+    skip_ws(tokens);
+
+    // return type: optional -> ty
+    let return_type = match tokens.peek().map(|t| t.token_type.clone()) {
+        Some(TokenType::Arrow) => {
+            tokens.next(); // consume '->'
+            skip_ws(tokens);
+
+            match parse_type_from_stream(tokens) {
+                Some(t) => t,
+                None => {
+                    println!("Error: Invalid return type in extern function '{}'", name);
+                    return None;
+                }
+            }
+        }
+        _ => WaveType::Void,
+    };
+
+    skip_ws(tokens);
+
+    // per-function symbol: optional string literal
+    let mut symbol: Option<String> = None;
+    if let Some(Token { token_type: TokenType::String(s), .. }) = tokens.peek() {
+        let s = s.clone();
+        tokens.next();
+        symbol = Some(s);
+    }
+
+    // apply global symbol if per-fn missing
+    if symbol.is_none() {
+        symbol = global_symbol.cloned();
+    }
+
+    skip_ws(tokens);
+
+    if !expect(tokens, TokenType::SemiColon, "Expected ';' after extern function declaration") {
+        return None;
+    }
+
+    Some(ExternFunctionNode {
+        name,
+        abi,
+        symbol,
+        params,
+        return_type,
+    })
+}
+
+pub fn parse_extern(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<Vec<ASTNode>> {
+    let (abi, global_symbol) = parse_extern_header(tokens)?;
+
+    skip_ws(tokens);
+
+    // block or single
+    if tokens.peek().map(|t| t.token_type.clone()) == Some(TokenType::Lbrace) {
+        tokens.next(); // consume '{'
+
+        let mut nodes: Vec<ASTNode> = Vec::new();
+
+        loop {
+            skip_ws(tokens);
+
+            match tokens.peek().map(|t| t.token_type.clone()) {
+                Some(TokenType::Rbrace) => {
+                    tokens.next(); // consume '}'
+                    break;
+                }
+                Some(TokenType::Fun) => {
+                    let ef = parse_extern_fun_decl(tokens, abi.clone(), global_symbol.as_ref())?;
+                    nodes.push(ASTNode::ExternFunction(ef));
+                }
+                Some(TokenType::Whitespace) | Some(TokenType::Newline) => {
+                    tokens.next();
+                }
+                other => {
+                    println!("Error: Unexpected token in extern block: {:?}", other);
+                    return None;
+                }
+            }
+        }
+
+        skip_ws(tokens);
+        if tokens.peek().map(|t| t.token_type.clone()) == Some(TokenType::SemiColon) {
+            tokens.next();
+        }
+
+        Some(nodes)
+    } else if tokens.peek().map(|t| t.token_type.clone()) == Some(TokenType::Fun) {
+        let ef = parse_extern_fun_decl(tokens, abi, global_symbol.as_ref())?;
+        Some(vec![ASTNode::ExternFunction(ef)])
+    } else {
+        println!("Error: Expected 'fun' or '{{' after extern(...)");
+        None
+    }
 }

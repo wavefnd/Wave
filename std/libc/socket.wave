@@ -1,0 +1,49 @@
+// ======================
+// constants
+// ======================
+
+// address families
+const AF_INET: i32 = 2;
+const AF_INET6: i32 = 10;
+
+// socket types
+const SOCK_STREAM: i32 = 1;
+const SOCK_DGRAM: i32 = 2;
+
+// protocols
+const IPPROTO_IP: i32 = 0;
+const IPPROTO_TCP: i32 = 6;
+const IPPROTO_UDP: i32 = 17;
+
+// shutdown how
+const SHUT_RD: i32 = 0;
+const SHUT_WR: i32 = 1;
+const SHUT_RDWR: i32 = 2;
+
+// socket options
+const SOL_SOCKET: i32 = 1;
+const SO_REUSEADDR: i32 = 2;
+
+
+// ======================
+// functions (C ABI)
+// ======================
+extern(c) {
+    fun socket(domain: i32, ty: i32, protocol: i32) -> i32;
+    fun bind(fd: i32, addr: ptr<i8>, len: i32) -> i32;
+    fun listen(fd: i32, backlog: i32) -> i32;
+    fun accept(fd: i32, addr: ptr<i8>, len: ptr<i32>) -> i32;
+    fun connect(fd: i32, addr: ptr<i8>, len: i32) -> i32;
+    fun shutdown(fd: i32, how: i32) -> i32;
+
+    fun send(fd: i32, buf: ptr<u8>, len: i64, flags: i32) -> i64;
+    fun recv(fd: i32, buf: ptr<u8>, len: i64, flags: i32) -> i64;
+
+    fun setsockopt(
+        fd: i32,
+        level: i32,
+        optname: i32,
+        optval: ptr<i8>,
+        optlen: i32
+    ) -> i32;
+}

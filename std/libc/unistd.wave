@@ -1,0 +1,11 @@
+extern(c) fun read(fd: i32, buf: ptr<u8>, count: i64) -> i64;
+extern(c) fun write(fd: i32, buf: ptr<u8>, count: i64) -> i64;
+extern(c) fun close(fd: i32) -> i32;
+
+extern(c) fun fork() -> i32;
+
+extern(c) fun execve(
+    path: ptr<i8>,
+    argv: ptr<ptr<i8>>,
+    envp: ptr<ptr<i8>>
+) -> i32;

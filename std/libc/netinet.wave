@@ -1,0 +1,16 @@
+// sockaddr_in (IPv4)
+struct SockAddrIn {
+    family: i16;        // AF_INET
+    port: i16;          // network byte order
+    addr: i32;          // in_addr
+    zero: array<u8, 8>;
+}
+
+
+// byte order helpers
+extern(c) {
+    fun htons(x: i16) -> i16;
+    fun ntohs(x: i16) -> i16;
+    fun htonl(x: i32) -> i32;
+    fun ntohl(x: i32) -> i32;
+}

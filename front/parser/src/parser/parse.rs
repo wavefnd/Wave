@@ -24,6 +24,14 @@ pub fn parse(tokens: &Vec<Token>) -> Option<Vec<ASTNode>> {
                     return None;
                 }
             }
+            TokenType::Extern => {
+                iter.next();
+                if let Some(extern_nodes) = parse_extern(&mut iter) {
+                    nodes.extend(extern_nodes);
+                } else {
+                    return None;
+                }
+            }
             TokenType::Const => {
                 iter.next();
                 if let Some(var) = parse_const(&mut iter) {

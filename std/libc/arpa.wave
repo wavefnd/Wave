@@ -1,0 +1,4 @@
+extern(c) {
+    fun inet_addr(cp: ptr<i8>) -> i32;
+    fun inet_ntoa(addr: i32) -> ptr<i8>;
+}

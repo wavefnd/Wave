@@ -1,0 +1,18 @@
+// poll events
+const POLLIN: i16  = 0x001;
+const POLLOUT: i16 = 0x004;
+
+// pollfd
+struct PollFd {
+    fd: i32;
+    events: i16;
+    revents: i16;
+}
+
+extern(c) {
+    fun poll(
+        fds: ptr<PollFd>,
+        nfds: i64,
+        timeout: i32
+    ) -> i32;
+}

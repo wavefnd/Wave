@@ -1,0 +1,6 @@
+extern(c) fun strlen(s: ptr<i8>) -> i64;
+extern(c) fun strcmp(a: ptr<i8>, b: ptr<i8>) -> i32;
+extern(c) fun strcpy(dst: ptr<i8>, src: ptr<i8>) -> ptr<i8>;
+
+extern(c) fun memcpy(dst: ptr<i8>, src: ptr<i8>, n: i64) -> ptr<i8>;
+extern(c) fun memset(dst: ptr<i8>, c: i32, n: i64) -> ptr<i8>;

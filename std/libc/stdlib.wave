@@ -1,0 +1,8 @@
+extern(c) fun malloc(size: i64) -> ptr<i8>;
+extern(c) fun free(ptr: ptr<i8>);
+
+extern(c) fun exit(code: i32) -> void;
+extern(c) fun abort() -> void;
+
+extern(c) fun atoi(s: ptr<i8>) -> i32;
+extern(c) fun atol(s: ptr<i8>) -> i64;

@@ -1,0 +1,1 @@
+extern(c) var errno: i32;

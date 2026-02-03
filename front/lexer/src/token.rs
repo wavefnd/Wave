@@ -69,6 +69,7 @@ impl fmt::Display for UnsignedIntegerType {
 #[derive(Debug, PartialEq, Clone)]
 pub enum TokenType {
     Fun,
+    Extern,
     Var,
     Let,
     Mut,

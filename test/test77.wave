@@ -1,0 +1,6 @@
+extern(c) fun puts(s: ptr<i8>) -> i32;
+
+fun main() -> i32 {
+    puts("hello\n");
+    return 0;
+}

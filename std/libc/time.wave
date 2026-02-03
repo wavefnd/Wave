@@ -1,0 +1,9 @@
+struct TimeSpec {
+    sec: i64;
+    nsec: i64;
+}
+
+extern(c) fun nanosleep(
+    req: ptr<TimeSpec>,
+    rem: ptr<TimeSpec>
+) -> i32;

@@ -1,0 +1,5 @@
+extern(c) {
+    fun puts(s: ptr<i8>) -> i32;
+    fun getchar() -> i32;
+    fun putchar(c: i32) -> i32;
+}

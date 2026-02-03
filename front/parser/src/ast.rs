@@ -25,6 +25,7 @@ pub enum WaveType {
 #[derive(Debug, Clone)]
 pub enum ASTNode {
     Function(FunctionNode),
+    ExternFunction(ExternFunctionNode),
     Program(ParameterNode),
     Statement(StatementNode),
     Variable(VariableNode),
@@ -66,6 +67,15 @@ pub struct ParameterNode {
     pub name: String,
     pub param_type: WaveType,
     pub initial_value: Option<Value>,
+}
+
+#[derive(Debug, Clone)]
+pub struct ExternFunctionNode {
+    pub name: String,
+    pub abi: String,
+    pub symbol: Option<String>,
+    pub params: Vec<(String, WaveType)>,
+    pub return_type: WaveType,
 }
 
 #[derive(Debug, Clone)]

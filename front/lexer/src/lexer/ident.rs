@@ -24,6 +24,11 @@ impl<'a> Lexer<'a> {
                 lexeme: "fun".to_string(),
                 line: self.line,
             },
+            "extern" => Token {
+                token_type: TokenType::Extern,
+                lexeme: "extern".to_string(),
+                line: self.line,
+            },
             "var" => Token {
                 token_type: TokenType::Var,
                 lexeme: "var".to_string(),
