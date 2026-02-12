@@ -64,20 +64,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install LLVM 14
-        run: |
-          choco install llvm --version=14.0.6 -y
-
-      - name: Set LLVM environment variables
+      - name: Use preinstalled LLVM
         shell: powershell
         run: |
           echo "LLVM_SYS_140_PREFIX=C:\Program Files\LLVM" >> $env:GITHUB_ENV
           echo "PATH=C:\Program Files\LLVM\bin;$env:PATH" >> $env:GITHUB_ENV
-          echo "CC=clang" >> $env:GITHUB_ENV
-          echo "CXX=clang++" >> $env:GITHUB_ENV
-
-      - name: Verify clang
-        run: clang --version
+          clang --version
 
       - name: Build
         run: cargo build --verbose
