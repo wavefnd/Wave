@@ -64,15 +64,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Use preinstalled LLVM
+      - name: Install GNU target
+        run: rustup target add x86_64-pc-windows-gnu
+
+      - name: Install LLVM (preinstalled 사용)
         shell: powershell
         run: |
-          echo "LLVM_SYS_140_PREFIX=C:\Program Files\LLVM" >> $env:GITHUB_ENV
           echo "PATH=C:\Program Files\LLVM\bin;$env:PATH" >> $env:GITHUB_ENV
-          clang --version
 
       - name: Build
-        run: cargo build --verbose
+        run: cargo build --target x86_64-pc-windows-gnu --verbose
 
       - name: Run tests
-        run: cargo test --verbose
+        run: cargo test --target x86_64-pc-windows-gnu --verbose
