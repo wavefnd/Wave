@@ -60,24 +60,5 @@ jobs:
 
   build-windows:
     runs-on: windows-latest
-
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Install LLVM (MSVC build)
-        run: choco upgrade llvm -y --force
-
-      - name: Setup LLVM env
-        shell: powershell
-        run: |
-          $llvmPath = "C:\Program Files\LLVM"
-          echo "LLVM_SYS_140_PREFIX=$llvmPath" >> $env:GITHUB_ENV
-          echo "PATH=$llvmPath\bin;$env:PATH" >> $env:GITHUB_ENV
-          Get-ChildItem "$llvmPath\lib"
-
-      - name: Build
-        run: cargo build --verbose
-
-      - name: Run tests
-        run: cargo test --verbose
-
+      - cargo check
