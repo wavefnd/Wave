@@ -10,3 +10,6 @@ lexer = { path = "../front/lexer" }
 error = { path = "../front/error" }
 inkwell = { version = "0.5.0", features = ["llvm14-0"] }
 llvm-sys = { version = "140.1.3", features = ["no-llvm-linking"] }
+
+[target.'cfg(windows)'.dependencies]
+inkwell = { version = "0.5.0", default-features = false, features = ["llvm14-0"] }
