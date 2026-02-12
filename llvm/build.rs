@@ -95,14 +95,44 @@ fn try_windows_paths() {
 
 fn link_windows(prefix: PathBuf) {
     println!("cargo:rustc-env=WAVE_LLVM_MAJOR=14");
-    let lib = prefix.join("lib");
 
-    println!("cargo:rustc-link-search=native={}", lib.display());
-    println!("cargo:rustc-link-lib=dylib=LLVM");
-    println!("cargo:rustc-link-lib=stdc++");
-    println!("cargo:rustc-link-lib=ffi");
-    println!("cargo:rustc-link-lib=z");
-    println!("cargo:rustc-link-lib=xml2");
+    let lib_dir = prefix.join("lib");
+    println!("cargo:rustc-link-search=native={}", lib_dir.display());
+
+    let candidates = [
+        "LLVM.lib",
+        "libLLVM.lib",
+    ];
+
+    let mut found = false;
+
+    for name in candidates {
+        if lib_dir.join(name).exists() {
+            let libname = name.trim_end_matches(".lib");
+            println!("cargo:rustc-link-lib={}", libname);
+            found = true;
+            break;
+        }
+    }
+
+    if !found {
+        if let Ok(entries) = std::fs::read_dir(&lib_dir) {
+            for entry in entries.flatten() {
+                let file = entry.file_name();
+                let file_str = file.to_string_lossy();
+                if file_str.starts_with("LLVM-") && file_str.ends_with(".lib") {
+                    let libname = file_str.trim_end_matches(".lib");
+                    println!("cargo:rustc-link-lib={}", libname);
+                    found = true;
+                    break;
+                }
+            }
+        }
+    }
+
+    if !found {
+        panic!("Could not find LLVM import library in {}", lib_dir.display());
+    }
 
     println!("Using Windows LLVM: {}", prefix.display());
 }
