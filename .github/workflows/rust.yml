@@ -64,14 +64,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Use preinstalled LLVM (MSVC)
+      - name: Setup LLVM env
         shell: powershell
         run: |
-          echo "LLVM_SYS_140_PREFIX=C:\Program Files\LLVM" >> $env:GITHUB_ENV
-          echo "PATH=C:\Program Files\LLVM\bin;$env:PATH" >> $env:GITHUB_ENV
-          clang --version
+          $llvmPath = "C:\Program Files\LLVM"
+          echo "LLVM_SYS_140_PREFIX=$llvmPath" >> $env:GITHUB_ENV
+          echo "PATH=$llvmPath\bin;$env:PATH" >> $env:GITHUB_ENV
 
-      - name: Build (MSVC target)
+          if (!(Test-Path "$llvmPath\lib\LLVM.lib")) {
+              Copy-Item "$llvmPath\lib\libLLVM.lib" "$llvmPath\lib\LLVM.lib"
+          }
+
+      - name: Build
         run: cargo build --verbose
 
       - name: Run tests
