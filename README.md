@@ -149,7 +149,7 @@ Contributions are welcome! Please read the [contributing guidelines](CONTRIBUTIN
 
 ### [Doom Domo](https://github.com/wavefnd/Wave/tree/master/examples/doom.wave)
 
-[doom-demo](.github/doom-demo.gif)
+![doom-demo-gif](.github/doom-demo.gif)
 
 ---
 
