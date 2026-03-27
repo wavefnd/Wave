@@ -12,7 +12,7 @@ Wave uses a dedicated setup repository for tools and environment preparation.
 
 Before contributing, please follow:
 
--> https://github.com/wavfnd/setup
+-> https://github.com/wavefnd/setup
 
 This includes installation instructions for Rust, LLVM, Clang tools, and other dependencies required to build Wave
 
@@ -167,6 +167,8 @@ A PR should include:
 - Tests if applicable
 - Documentation updates if necessary
 - Signed-off commits (`-s`)
+
+All pull request descriptions and comments must be written in English.
 
 Small, focused PRs are preferred.
 
