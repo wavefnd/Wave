@@ -34,6 +34,7 @@ env:
   NO_COLOR: "1"
   PYTHONUNBUFFERED: "1"
   LLVM_VERSION: "21"
+  LLVM_PREFIX_LINUX: "/usr/lib/llvm-21"
   RELEASE_VERSION: ${{ inputs.version }}
 
 jobs:
@@ -88,19 +89,58 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           sudo apt-get update
-          sudo apt-get install -y wget software-properties-common lld-21 libffi-dev libzstd-dev zlib1g-dev
+          sudo apt-get install -y \
+            wget \
+            software-properties-common \
+            ca-certificates \
+            gnupg \
+            libffi-dev \
+            libzstd-dev \
+            zlib1g-dev
+
           wget -q https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh "$LLVM_VERSION"
 
-          echo "LLVM_SYS_211_PREFIX=/usr/lib/llvm-21" >> "$GITHUB_ENV"
-          echo "LLVM_CONFIG_PATH=/usr/lib/llvm-21/bin/llvm-config" >> "$GITHUB_ENV"
-          echo "/usr/lib/llvm-21/bin" >> "$GITHUB_PATH"
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang-"$LLVM_VERSION" \
+            lld-"$LLVM_VERSION" \
+            llvm-"$LLVM_VERSION" \
+            llvm-"$LLVM_VERSION"-dev
 
-          if [[ -x /usr/lib/llvm-21/bin/ld64.lld ]]; then
-            echo "WAVE_LD64_LLD=/usr/lib/llvm-21/bin/ld64.lld" >> "$GITHUB_ENV"
+          echo "LLVM_SYS_211_PREFIX=$LLVM_PREFIX_LINUX" >> "$GITHUB_ENV"
+          echo "LLVM_CONFIG_PATH=$LLVM_PREFIX_LINUX/bin/llvm-config" >> "$GITHUB_ENV"
+          echo "$LLVM_PREFIX_LINUX/bin" >> "$GITHUB_PATH"
+
+          mkdir -p "$RUNNER_TEMP/wave-llvm-bin"
+
+          if [[ -x "$LLVM_PREFIX_LINUX/bin/ld64.lld" ]]; then
+            ln -sf "$LLVM_PREFIX_LINUX/bin/ld64.lld" "$RUNNER_TEMP/wave-llvm-bin/ld64.lld"
+          elif [[ -x "$LLVM_PREFIX_LINUX/bin/ld.lld" ]]; then
+            ln -sf "$LLVM_PREFIX_LINUX/bin/ld.lld" "$RUNNER_TEMP/wave-llvm-bin/ld64.lld"
+          elif command -v ld64.lld >/dev/null 2>&1; then
+            ln -sf "$(command -v ld64.lld)" "$RUNNER_TEMP/wave-llvm-bin/ld64.lld"
+          elif command -v ld.lld >/dev/null 2>&1; then
+            ln -sf "$(command -v ld.lld)" "$RUNNER_TEMP/wave-llvm-bin/ld64.lld"
+          elif command -v lld >/dev/null 2>&1; then
+            ln -sf "$(command -v lld)" "$RUNNER_TEMP/wave-llvm-bin/ld64.lld"
           fi
+
+          echo "$RUNNER_TEMP/wave-llvm-bin" >> "$GITHUB_PATH"
+          echo "WAVE_LD64_LLD=$RUNNER_TEMP/wave-llvm-bin/ld64.lld" >> "$GITHUB_ENV"
+
+      - name: Verify LLVM tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          llvm-config --version
+          clang --version
+          command -v ld.lld || true
+          command -v ld64.lld || true
+          test -x "$WAVE_LD64_LLD"
 
       - name: Check formatting
         run: cargo fmt --all --check
@@ -167,30 +207,61 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           sudo apt-get update
-          sudo apt-get install -y file patchelf wget software-properties-common lld-21 libffi-dev libzstd-dev zlib1g-dev
+          sudo apt-get install -y \
+            file \
+            patchelf \
+            wget \
+            software-properties-common \
+            ca-certificates \
+            gnupg \
+            libffi-dev \
+            libzstd-dev \
+            zlib1g-dev
+
           wget -q https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh "$LLVM_VERSION"
 
-          echo "LLVM_SYS_211_PREFIX=/usr/lib/llvm-21" >> "$GITHUB_ENV"
-          echo "LLVM_CONFIG_PATH=/usr/lib/llvm-21/bin/llvm-config" >> "$GITHUB_ENV"
-          echo "/usr/lib/llvm-21/bin" >> "$GITHUB_PATH"
+          sudo apt-get update
+          sudo apt-get install -y \
+            clang-"$LLVM_VERSION" \
+            lld-"$LLVM_VERSION" \
+            llvm-"$LLVM_VERSION" \
+            llvm-"$LLVM_VERSION"-dev
 
-          if [[ -x /usr/lib/llvm-21/bin/ld64.lld ]]; then
-            echo "WAVE_LD64_LLD=/usr/lib/llvm-21/bin/ld64.lld" >> "$GITHUB_ENV"
+          echo "LLVM_SYS_211_PREFIX=$LLVM_PREFIX_LINUX" >> "$GITHUB_ENV"
+          echo "LLVM_CONFIG_PATH=$LLVM_PREFIX_LINUX/bin/llvm-config" >> "$GITHUB_ENV"
+          echo "$LLVM_PREFIX_LINUX/bin" >> "$GITHUB_PATH"
+
+          mkdir -p "$RUNNER_TEMP/wave-llvm-bin"
+
+          if [[ -x "$LLVM_PREFIX_LINUX/bin/ld64.lld" ]]; then
+            ln -sf "$LLVM_PREFIX_LINUX/bin/ld64.lld" "$RUNNER_TEMP/wave-llvm-bin/ld64.lld"
+          elif [[ -x "$LLVM_PREFIX_LINUX/bin/ld.lld" ]]; then
+            ln -sf "$LLVM_PREFIX_LINUX/bin/ld.lld" "$RUNNER_TEMP/wave-llvm-bin/ld64.lld"
+          elif command -v ld64.lld >/dev/null 2>&1; then
+            ln -sf "$(command -v ld64.lld)" "$RUNNER_TEMP/wave-llvm-bin/ld64.lld"
+          elif command -v ld.lld >/dev/null 2>&1; then
+            ln -sf "$(command -v ld.lld)" "$RUNNER_TEMP/wave-llvm-bin/ld64.lld"
+          elif command -v lld >/dev/null 2>&1; then
+            ln -sf "$(command -v lld)" "$RUNNER_TEMP/wave-llvm-bin/ld64.lld"
           fi
+
+          echo "$RUNNER_TEMP/wave-llvm-bin" >> "$GITHUB_PATH"
+          echo "WAVE_LD64_LLD=$RUNNER_TEMP/wave-llvm-bin/ld64.lld" >> "$GITHUB_ENV"
 
       - name: Verify release tools
         shell: bash
         run: |
           set -euo pipefail
           llvm-config --version
-          command -v clang
-          command -v lld || true
+          clang --version
           command -v ld.lld || true
           command -v ld64.lld || true
-          ls -la /usr/lib/llvm-21/bin | grep -E 'lld|ld64|clang' || true
+          test -x "$WAVE_LD64_LLD"
+          ls -la "$LLVM_PREFIX_LINUX/bin" | grep -E 'lld|ld64|clang' || true
 
       - name: Build and package
         run: python3 x.py release x86_64-unknown-linux-gnu
@@ -199,9 +270,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           archive="wave-v${RELEASE_VERSION}-x86_64-linux-gnu.tar.gz"
           temp_dir="$(mktemp -d)"
           trap 'rm -rf "$temp_dir"' EXIT
+
           tar -xzf "$archive" -C "$temp_dir"
           package="$temp_dir/wave-v${RELEASE_VERSION}-x86_64-linux-gnu"
 
@@ -253,6 +326,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
+          brew update
           brew install llvm@21 lld
 
           llvm_prefix="$(brew --prefix llvm@21)"
@@ -263,30 +338,48 @@ jobs:
           echo "$llvm_prefix/bin" >> "$GITHUB_PATH"
           echo "$lld_prefix/bin" >> "$GITHUB_PATH"
 
+          mkdir -p "$RUNNER_TEMP/wave-llvm-bin"
+
           if [[ -x "$lld_prefix/bin/ld64.lld" ]]; then
-            echo "WAVE_LD64_LLD=$lld_prefix/bin/ld64.lld" >> "$GITHUB_ENV"
+            ln -sf "$lld_prefix/bin/ld64.lld" "$RUNNER_TEMP/wave-llvm-bin/ld64.lld"
           elif [[ -x "$llvm_prefix/bin/ld64.lld" ]]; then
-            echo "WAVE_LD64_LLD=$llvm_prefix/bin/ld64.lld" >> "$GITHUB_ENV"
+            ln -sf "$llvm_prefix/bin/ld64.lld" "$RUNNER_TEMP/wave-llvm-bin/ld64.lld"
+          elif [[ -x "$lld_prefix/bin/ld.lld" ]]; then
+            ln -sf "$lld_prefix/bin/ld.lld" "$RUNNER_TEMP/wave-llvm-bin/ld64.lld"
+          elif [[ -x "$llvm_prefix/bin/ld.lld" ]]; then
+            ln -sf "$llvm_prefix/bin/ld.lld" "$RUNNER_TEMP/wave-llvm-bin/ld64.lld"
+          elif command -v ld64.lld >/dev/null 2>&1; then
+            ln -sf "$(command -v ld64.lld)" "$RUNNER_TEMP/wave-llvm-bin/ld64.lld"
+          elif command -v ld.lld >/dev/null 2>&1; then
+            ln -sf "$(command -v ld.lld)" "$RUNNER_TEMP/wave-llvm-bin/ld64.lld"
+          elif command -v lld >/dev/null 2>&1; then
+            ln -sf "$(command -v lld)" "$RUNNER_TEMP/wave-llvm-bin/ld64.lld"
           fi
+
+          echo "$RUNNER_TEMP/wave-llvm-bin" >> "$GITHUB_PATH"
+          echo "WAVE_LD64_LLD=$RUNNER_TEMP/wave-llvm-bin/ld64.lld" >> "$GITHUB_ENV"
 
       - name: Verify release tools
         shell: bash
         run: |
           set -euo pipefail
           llvm-config --version
-          command -v clang
-          command -v ld64.lld
-          ld64.lld --version || true
+          clang --version
+          command -v ld64.lld || true
+          test -x "$WAVE_LD64_LLD"
+          "$WAVE_LD64_LLD" --version || true
 
       - name: Select native target
         shell: bash
         run: |
           set -euo pipefail
+
           case "$(uname -m)" in
             arm64) target="aarch64-apple-darwin" ;;
             x86_64) target="x86_64-apple-darwin" ;;
             *) echo "Unsupported macOS architecture: $(uname -m)" >&2; exit 1 ;;
           esac
+
           echo "MACOS_TARGET=$target" >> "$GITHUB_ENV"
 
       - name: Build and package
@@ -296,9 +389,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           archive="wave-v${RELEASE_VERSION}-${MACOS_TARGET}.tar.gz"
           temp_dir="$(mktemp -d)"
           trap 'rm -rf "$temp_dir"' EXIT
+
           tar -xzf "$archive" -C "$temp_dir"
           package="$temp_dir/wave-v${RELEASE_VERSION}-${MACOS_TARGET}"
 
@@ -360,8 +455,10 @@ jobs:
         shell: msys2 {0}
         run: |
           set -euo pipefail
-          rustup toolchain install stable-x86_64-pc-windows-gnu --profile minimal
-          rustup target add x86_64-pc-windows-gnu
+
+          rustup toolchain install 1.89.0-x86_64-pc-windows-gnu --profile minimal
+          rustup target add x86_64-pc-windows-gnu --toolchain 1.89.0-x86_64-pc-windows-gnu
+          rustup default 1.89.0-x86_64-pc-windows-gnu
 
       - name: Configure native Windows LLVM
         shell: msys2 {0}
@@ -371,6 +468,7 @@ jobs:
           llvm_root="$(cygpath -w /mingw64/opt/llvm-21)"
           llvm_bin="$(cygpath -w /mingw64/opt/llvm-21/bin)"
           llvm_config="$(cygpath -w /mingw64/opt/llvm-21/bin/llvm-config.exe)"
+
           mingw_bin="$(cygpath -w /mingw64/bin)"
           mingw_lib="$(cygpath -w /mingw64/lib)"
           mingw_pkgconfig="$(cygpath -w /mingw64/lib/pkgconfig)"
@@ -386,16 +484,22 @@ jobs:
 
           echo "LIBRARY_PATH=$mingw_lib" >> "$GITHUB_ENV"
           echo "PKG_CONFIG_PATH=$mingw_pkgconfig" >> "$GITHUB_ENV"
-          echo "RUSTFLAGS=-Lnative=$mingw_lib -lffi -lzstd" >> "$GITHUB_ENV"
+
+          echo "RUSTFLAGS=-Lnative=$mingw_lib -lffi -lzstd -lz" >> "$GITHUB_ENV"
 
       - name: Verify Windows release tools
         shell: msys2 {0}
         run: |
           set -euo pipefail
+
+          rustc --version
+          cargo --version
           llvm-config --version
           which gcc
+          which clang || true
           which lld || true
-          ls -la /mingw64/lib | grep -E 'libffi|libzstd' || true
+
+          ls -la /mingw64/lib | grep -E 'libffi|libzstd|libz\.' || true
 
       - name: Build and package
         shell: msys2 {0}
@@ -405,9 +509,11 @@ jobs:
         shell: msys2 {0}
         run: |
           set -euo pipefail
+
           archive="wave-v${RELEASE_VERSION}-x86_64-pc-windows-gnu.zip"
           temp_dir="$(mktemp -d)"
           trap 'rm -rf "$temp_dir"' EXIT
+
           unzip -q "$archive" -d "$temp_dir"
           package="$temp_dir/wave-v${RELEASE_VERSION}-x86_64-pc-windows-gnu"
 
@@ -458,6 +564,7 @@ jobs:
         working-directory: release-assets
         run: |
           set -euo pipefail
+
           test -f "wave-v${RELEASE_VERSION}-x86_64-linux-gnu.tar.gz"
           test -f "wave-v${RELEASE_VERSION}-x86_64-pc-windows-gnu.zip"
 
@@ -472,12 +579,7 @@ jobs:
           done
 
           cat ./*.sha256 > SHA256SUMS
-
-          if command -v sha256sum >/dev/null 2>&1; then
-            sha256sum --check SHA256SUMS
-          else
-            shasum -a 256 --check SHA256SUMS
-          fi
+          sha256sum --check SHA256SUMS
 
       - name: Create GitHub release
         shell: bash
@@ -485,6 +587,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
+
           tag="v$RELEASE_VERSION"
 
           args=(
