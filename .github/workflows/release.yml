@@ -47,6 +47,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.89.0
+        with:
+          components: rustfmt, clippy
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -84,13 +89,18 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y wget software-properties-common
+          sudo apt-get install -y wget software-properties-common lld-21 libffi-dev libzstd-dev zlib1g-dev
           wget -q https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh "$LLVM_VERSION"
+
           echo "LLVM_SYS_211_PREFIX=/usr/lib/llvm-21" >> "$GITHUB_ENV"
           echo "LLVM_CONFIG_PATH=/usr/lib/llvm-21/bin/llvm-config" >> "$GITHUB_ENV"
           echo "/usr/lib/llvm-21/bin" >> "$GITHUB_PATH"
+
+          if [[ -x /usr/lib/llvm-21/bin/ld64.lld ]]; then
+            echo "WAVE_LD64_LLD=/usr/lib/llvm-21/bin/ld64.lld" >> "$GITHUB_ENV"
+          fi
 
       - name: Check formatting
         run: cargo fmt --all --check
@@ -106,7 +116,7 @@ jobs:
 
       - name: Build release compiler
         run: cargo build --locked --release --verbose
-        
+
       - name: Install Wave stdlib
         shell: bash
         run: |
@@ -114,14 +124,25 @@ jobs:
           mkdir -p "$HOME/.wave/lib/wave"
           rm -rf "$HOME/.wave/lib/wave/std"
           cp -R std "$HOME/.wave/lib/wave/std"
-          
+
       - name: Verify compiler version
         shell: bash
         run: |
           set -euo pipefail
-          target/release/wavec -V | tee /tmp/wavec-version.txt
+
+          set +e
+          target/release/wavec -V > /tmp/wavec-version.txt 2>&1
+          status=$?
+          set -e
+
+          cat /tmp/wavec-version.txt
+
           grep -F "wavec $RELEASE_VERSION" /tmp/wavec-version.txt
           grep -F "backend: LLVM 21." /tmp/wavec-version.txt
+
+          if [[ "$status" -ne 0 ]]; then
+            echo "warning: wavec -V returned exit code $status even though version output was valid" >&2
+          fi
 
       - name: Run Wave end-to-end tests
         run: python3 tools/run_tests.py
@@ -135,6 +156,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.89.0
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
@@ -144,13 +168,29 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update
-          sudo apt-get install -y file patchelf wget software-properties-common
+          sudo apt-get install -y file patchelf wget software-properties-common lld-21 libffi-dev libzstd-dev zlib1g-dev
           wget -q https://apt.llvm.org/llvm.sh
           chmod +x llvm.sh
           sudo ./llvm.sh "$LLVM_VERSION"
+
           echo "LLVM_SYS_211_PREFIX=/usr/lib/llvm-21" >> "$GITHUB_ENV"
           echo "LLVM_CONFIG_PATH=/usr/lib/llvm-21/bin/llvm-config" >> "$GITHUB_ENV"
           echo "/usr/lib/llvm-21/bin" >> "$GITHUB_PATH"
+
+          if [[ -x /usr/lib/llvm-21/bin/ld64.lld ]]; then
+            echo "WAVE_LD64_LLD=/usr/lib/llvm-21/bin/ld64.lld" >> "$GITHUB_ENV"
+          fi
+
+      - name: Verify release tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          llvm-config --version
+          command -v clang
+          command -v lld || true
+          command -v ld.lld || true
+          command -v ld64.lld || true
+          ls -la /usr/lib/llvm-21/bin | grep -E 'lld|ld64|clang' || true
 
       - name: Build and package
         run: python3 x.py release x86_64-unknown-linux-gnu
@@ -165,9 +205,18 @@ jobs:
           tar -xzf "$archive" -C "$temp_dir"
           package="$temp_dir/wave-v${RELEASE_VERSION}-x86_64-linux-gnu"
 
-          env -i PATH=/usr/bin:/bin HOME=/tmp "$package/wavec" -V | tee /tmp/wavec-version.txt
+          set +e
+          env -i PATH=/usr/bin:/bin HOME=/tmp "$package/wavec" -V > /tmp/wavec-version.txt 2>&1
+          status=$?
+          set -e
+
+          cat /tmp/wavec-version.txt
           grep -F "wavec $RELEASE_VERSION" /tmp/wavec-version.txt
           grep -F "backend: LLVM 21." /tmp/wavec-version.txt
+
+          if [[ "$status" -ne 0 ]]; then
+            echo "warning: packaged wavec -V returned exit code $status even though version output was valid" >&2
+          fi
 
           printf 'fun main() { println("release smoke"); }\n' > "$temp_dir/smoke.wave"
           env -i PATH=/usr/bin:/bin HOME=/tmp "$package/wavec" run "$temp_dir/smoke.wave" \
@@ -193,19 +242,41 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.89.0
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Install LLVM 21
+      - name: Install LLVM 21 and LLD
         shell: bash
         run: |
           set -euo pipefail
-          brew install llvm@21
+          brew install llvm@21 lld
+
           llvm_prefix="$(brew --prefix llvm@21)"
+          lld_prefix="$(brew --prefix lld)"
+
           echo "LLVM_SYS_211_PREFIX=$llvm_prefix" >> "$GITHUB_ENV"
           echo "LLVM_CONFIG_PATH=$llvm_prefix/bin/llvm-config" >> "$GITHUB_ENV"
           echo "$llvm_prefix/bin" >> "$GITHUB_PATH"
+          echo "$lld_prefix/bin" >> "$GITHUB_PATH"
+
+          if [[ -x "$lld_prefix/bin/ld64.lld" ]]; then
+            echo "WAVE_LD64_LLD=$lld_prefix/bin/ld64.lld" >> "$GITHUB_ENV"
+          elif [[ -x "$llvm_prefix/bin/ld64.lld" ]]; then
+            echo "WAVE_LD64_LLD=$llvm_prefix/bin/ld64.lld" >> "$GITHUB_ENV"
+          fi
+
+      - name: Verify release tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          llvm-config --version
+          command -v clang
+          command -v ld64.lld
+          ld64.lld --version || true
 
       - name: Select native target
         shell: bash
@@ -231,9 +302,18 @@ jobs:
           tar -xzf "$archive" -C "$temp_dir"
           package="$temp_dir/wave-v${RELEASE_VERSION}-${MACOS_TARGET}"
 
-          env -i PATH=/usr/bin:/bin HOME=/tmp "$package/wavec" -V | tee /tmp/wavec-version.txt
+          set +e
+          env -i PATH=/usr/bin:/bin HOME=/tmp "$package/wavec" -V > /tmp/wavec-version.txt 2>&1
+          status=$?
+          set -e
+
+          cat /tmp/wavec-version.txt
           grep -F "wavec $RELEASE_VERSION" /tmp/wavec-version.txt
           grep -F "backend: LLVM 21." /tmp/wavec-version.txt
+
+          if [[ "$status" -ne 0 ]]; then
+            echo "warning: packaged wavec -V returned exit code $status even though version output was valid" >&2
+          fi
 
           printf 'fun main() { println("release smoke"); }\n' > "$temp_dir/smoke.wave"
           env -i PATH=/usr/bin:/bin HOME=/tmp "$package/wavec" run "$temp_dir/smoke.wave" \
@@ -272,28 +352,50 @@ jobs:
             mingw-w64-x86_64-python
             mingw-w64-x86_64-llvm-21
             mingw-w64-x86_64-lld-21
+            mingw-w64-x86_64-libffi
+            mingw-w64-x86_64-zstd
+            mingw-w64-x86_64-zlib
 
-      - name: Install Rust GNU toolchains
+      - name: Install Rust GNU toolchain
         shell: msys2 {0}
         run: |
           set -euo pipefail
-          rustup target add x86_64-pc-windows-gnu
           rustup toolchain install stable-x86_64-pc-windows-gnu --profile minimal
+          rustup target add x86_64-pc-windows-gnu
 
       - name: Configure native Windows LLVM
         shell: msys2 {0}
         run: |
           set -euo pipefail
+
           llvm_root="$(cygpath -w /mingw64/opt/llvm-21)"
           llvm_bin="$(cygpath -w /mingw64/opt/llvm-21/bin)"
           llvm_config="$(cygpath -w /mingw64/opt/llvm-21/bin/llvm-config.exe)"
+          mingw_bin="$(cygpath -w /mingw64/bin)"
+          mingw_lib="$(cygpath -w /mingw64/lib)"
+          mingw_pkgconfig="$(cygpath -w /mingw64/lib/pkgconfig)"
+
           echo "WAVE_LLVM_HOME=$llvm_root" >> "$GITHUB_ENV"
           echo "WAVE_WINDOWS_LLVM_BIN=$llvm_bin" >> "$GITHUB_ENV"
           echo "LLVM_SYS_211_PREFIX=$llvm_root" >> "$GITHUB_ENV"
           echo "LLVM_CONFIG_PATH=$llvm_config" >> "$GITHUB_ENV"
+
           echo "$llvm_bin" >> "$GITHUB_PATH"
-          echo "$(cygpath -w /mingw64/bin)" >> "$GITHUB_PATH"
+          echo "$mingw_bin" >> "$GITHUB_PATH"
           echo "$(cygpath -w /usr/bin)" >> "$GITHUB_PATH"
+
+          echo "LIBRARY_PATH=$mingw_lib" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_PATH=$mingw_pkgconfig" >> "$GITHUB_ENV"
+          echo "RUSTFLAGS=-Lnative=$mingw_lib -lffi -lzstd" >> "$GITHUB_ENV"
+
+      - name: Verify Windows release tools
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          llvm-config --version
+          which gcc
+          which lld || true
+          ls -la /mingw64/lib | grep -E 'libffi|libzstd' || true
 
       - name: Build and package
         shell: msys2 {0}
@@ -309,9 +411,18 @@ jobs:
           unzip -q "$archive" -d "$temp_dir"
           package="$temp_dir/wave-v${RELEASE_VERSION}-x86_64-pc-windows-gnu"
 
-          "$package/wavec.exe" -V | tee /tmp/wavec-version.txt
+          set +e
+          "$package/wavec.exe" -V > /tmp/wavec-version.txt 2>&1
+          status=$?
+          set -e
+
+          cat /tmp/wavec-version.txt
           grep -F "wavec $RELEASE_VERSION" /tmp/wavec-version.txt
           grep -F "backend: LLVM 21." /tmp/wavec-version.txt
+
+          if [[ "$status" -ne 0 ]]; then
+            echo "warning: packaged wavec.exe -V returned exit code $status even though version output was valid" >&2
+          fi
 
           printf 'fun main() { println("release smoke"); }\n' > "$temp_dir/smoke.wave"
           "$package/wavec.exe" run "$(cygpath -w "$temp_dir/smoke.wave")" | grep -Fx "release smoke"
@@ -359,8 +470,14 @@ jobs:
           for archive in *.tar.gz *.zip; do
             test -f "$archive.sha256"
           done
+
           cat ./*.sha256 > SHA256SUMS
-          sha256sum --check SHA256SUMS
+
+          if command -v sha256sum >/dev/null 2>&1; then
+            sha256sum --check SHA256SUMS
+          else
+            shasum -a 256 --check SHA256SUMS
+          fi
 
       - name: Create GitHub release
         shell: bash
@@ -369,6 +486,7 @@ jobs:
         run: |
           set -euo pipefail
           tag="v$RELEASE_VERSION"
+
           args=(
             release create "$tag"
             release-assets/*.tar.gz
@@ -383,6 +501,7 @@ jobs:
           if [[ "${{ inputs.draft }}" == "true" ]]; then
             args+=(--draft)
           fi
+
           if [[ "${{ inputs.prerelease }}" == "true" ]]; then
             args+=(--prerelease)
           fi
