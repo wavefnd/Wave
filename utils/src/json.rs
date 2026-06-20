@@ -292,7 +292,7 @@ impl Json {
             Json::Arr(arr) => {
                 write!(w, "[")?;
                 if pretty && !arr.is_empty() {
-                    write!(w, "\n")?;
+                    writeln!(w)?;
                 }
 
                 for (i, v) in arr.iter().enumerate() {
@@ -305,7 +305,7 @@ impl Json {
                         write!(w, ",")?;
                     }
                     if pretty {
-                        write!(w, "\n")?;
+                        writeln!(w)?;
                     }
                 }
 
@@ -318,7 +318,7 @@ impl Json {
             Json::Obj(kv) => {
                 write!(w, "{{")?;
                 if pretty && !kv.is_empty() {
-                    write!(w, "\n")?;
+                    writeln!(w)?;
                 }
 
                 for (i, (k, v)) in kv.iter().enumerate() {
@@ -337,7 +337,7 @@ impl Json {
                         write!(w, ",")?;
                     }
                     if pretty {
-                        write!(w, "\n")?;
+                        writeln!(w)?;
                     }
                 }
 

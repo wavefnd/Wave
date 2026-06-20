@@ -1,4 +1,4 @@
-name: Rust
+name: Wave CI
 
 on:
   push:
@@ -8,13 +8,32 @@ on:
 
 env:
   CARGO_TERM_COLOR: always
+  PYTHONUNBUFFERED: "1"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: wave-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   build-ubuntu:
     runs-on: ubuntu-latest
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.89.0
+        with:
+          components: rustfmt, clippy
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Install LLVM 21
         run: |
           sudo apt-get update
@@ -26,30 +45,90 @@ jobs:
           echo "LLVM_CONFIG_PATH=/usr/lib/llvm-21/bin/llvm-config" >> "$GITHUB_ENV"
           echo "/usr/lib/llvm-21/bin" >> "$GITHUB_PATH"
 
-      - name: Build
-        run: cargo build --verbose
-      - name: Run tests
-        run: cargo test --verbose
+      - name: Install Wave stdlib
+        run: |
+          mkdir -p "$HOME/.wave/lib/wave"
+          rm -rf "$HOME/.wave/lib/wave/std"
+          cp -R std "$HOME/.wave/lib/wave/std"
+
+      - name: Check Rust formatting
+        run: cargo fmt --all --check
+
+      - name: Run Clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Validate Python tooling
+        run: python3 -m py_compile x.py tools/run_tests.py
+
+      - name: Build release compiler
+        run: cargo build --locked --release --verbose
+
+      - name: Run Rust tests
+        run: cargo test --locked --all-targets --verbose
+
+      - name: Run Wave end-to-end tests
+        run: python3 tools/run_tests.py
 
   build-macos:
     runs-on: macos-latest
+    timeout-minutes: 45
 
     steps:
       - uses: actions/checkout@v4
 
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@1.89.0
+        with:
+          components: rustfmt, clippy
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
       - name: Install LLVM 21
         run: |
-          brew update
           brew install llvm@21
+
+      - name: Install LLVM 21 and LLD
+        run: |
+          brew install llvm@21 lld
 
       - name: Set LLVM env
         run: |
-          echo "LLVM_SYS_211_PREFIX=$(brew --prefix llvm@21)" >> $GITHUB_ENV
-          echo "LLVM_CONFIG_PATH=$(brew --prefix llvm@21)/bin/llvm-config" >> $GITHUB_ENV
-          echo "$(brew --prefix llvm@21)/bin" >> $GITHUB_PATH
+          LLVM_PREFIX="$(brew --prefix llvm@21)"
+          LLD_PREFIX="$(brew --prefix lld)"
+          echo "LLVM_SYS_211_PREFIX=$LLVM_PREFIX" >> "$GITHUB_ENV"
+          echo "LLVM_CONFIG_PATH=$LLVM_PREFIX/bin/llvm-config" >> "$GITHUB_ENV"
+          echo "$LLVM_PREFIX/bin" >> "$GITHUB_PATH"
+          echo "$LLD_PREFIX/bin" >> "$GITHUB_PATH"
+          echo "WAVE_LD64_LLD=$LLD_PREFIX/bin/ld64.lld" >> "$GITHUB_ENV"
 
-      - name: Build
-        run: cargo build --verbose
+      - name: Verify LLVM tools
+        run: |
+          llvm-config --version
+          command -v ld64.lld
+          ld64.lld --version || true
 
-      - name: Run tests
-        run: cargo test --verbose
+      - name: Install Wave stdlib
+        run: |
+          mkdir -p "$HOME/.wave/lib/wave"
+          rm -rf "$HOME/.wave/lib/wave/std"
+          cp -R std "$HOME/.wave/lib/wave/std"
+
+      - name: Check Rust formatting
+        run: cargo fmt --all --check
+
+      - name: Run Clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Validate Python tooling
+        run: python3 -m py_compile x.py tools/run_tests.py
+
+      - name: Build release compiler
+        run: cargo build --locked --release --verbose
+
+      - name: Run Rust tests
+        run: cargo test --locked --all-targets --verbose
+
+      - name: Run Wave end-to-end tests
+        run: python3 tools/run_tests.py

@@ -1,3 +1,5 @@
+// wave-test: host-arch=x86_64
+
 import("std::string::len");
 import("std::fs::consts");
 import("std::fs::file");

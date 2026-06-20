@@ -102,6 +102,12 @@ fn infer_wave_type_of_expr<'ctx, 'a>(
 
         Expression::Deref(inner) => {
             let inner_ty = infer_wave_type_of_expr(env, inner)?;
+            if matches!(
+                inner.as_ref(),
+                Expression::IndexAccess { .. } | Expression::FieldAccess { .. }
+            ) {
+                return Some(inner_ty);
+            }
             match inner_ty {
                 WaveType::Pointer(t) => Some(*t),
                 WaveType::String => Some(WaveType::Byte),

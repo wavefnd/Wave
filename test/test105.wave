@@ -1,3 +1,5 @@
+// wave-test: host-arch=x86_64
+
 import("std::bytes::endian");
 import("std::math::bits");
 import("std::mem::alloc");

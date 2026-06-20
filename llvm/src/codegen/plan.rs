@@ -524,11 +524,7 @@ fn strip_inline_asm_comment(line: &str) -> &str {
 fn asm_instruction_text(line: &str) -> String {
     let mut code = strip_inline_asm_comment(line).trim().to_ascii_lowercase();
 
-    loop {
-        let Some((label, rest)) = code.split_once(':') else {
-            break;
-        };
-
+    while let Some((label, rest)) = code.split_once(':') {
         let label = label.trim();
         if label.is_empty()
             || !label
@@ -862,9 +858,10 @@ impl<'a> AsmPlan<'a> {
             }
             // class constraints (r/rm/m/...) -> allow duplicates
 
+            let reg_norm = t.phys_group.clone().unwrap_or_else(|| t.raw_norm.clone());
             outputs.push(AsmOut {
                 reg_raw: reg.clone(),
-                reg_norm: t.raw_norm,
+                reg_norm,
                 phys_group: t.phys_group,
                 target: out_target,
             });
@@ -904,7 +901,7 @@ impl<'a> AsmPlan<'a> {
                 }
 
                 inputs.push(AsmIn {
-                    constraint: format!("{{{}}}", t.raw_norm), // "{rax}", "{dl}", "{r8d}", ...
+                    constraint: format!("{{{}}}", pg), // "{rax}", "{dl}", "{r8d}", ...
                     phys_group: Some(pg.clone()),
                     value: expr,
                 });

@@ -80,6 +80,12 @@ fn wave_type_of_lvalue<'ctx, 'a>(env: &ExprGenEnv<'ctx, 'a>, e: &Expression) -> 
         }
         Expression::Deref(inner) => {
             let inner_ty = wave_type_of_lvalue(env, inner)?;
+            if matches!(
+                inner.as_ref(),
+                Expression::IndexAccess { .. } | Expression::FieldAccess { .. }
+            ) {
+                return Some(inner_ty);
+            }
             match inner_ty {
                 WaveType::Pointer(t) => Some(*t),
                 WaveType::String => Some(WaveType::Byte),
@@ -90,7 +96,10 @@ fn wave_type_of_lvalue<'ctx, 'a>(env: &ExprGenEnv<'ctx, 'a>, e: &Expression) -> 
             let t = wave_type_of_lvalue(env, target)?;
             match t {
                 WaveType::Array(inner, _) => Some(*inner),
-                WaveType::Pointer(inner) => Some(*inner),
+                WaveType::Pointer(inner) => match *inner {
+                    WaveType::Array(element, _) => Some(*element),
+                    other => Some(other),
+                },
                 WaveType::String => Some(WaveType::Byte),
                 _ => None,
             }
@@ -315,12 +324,13 @@ pub(crate) fn gen_assign_operation<'ctx, 'a>(
         rhs = materialize_for_store(env, rhs, element_type, "assign_agg_load");
 
         if rhs.get_type() != element_type {
+            let tag = format!("assignment to {:?}", target);
             rhs = coerce_basic_value(
                 env.context,
                 env.builder,
                 rhs,
                 element_type,
-                "assign_cast",
+                &tag,
                 CoercionMode::Implicit,
             );
         }
@@ -469,12 +479,13 @@ pub(crate) fn gen_assignment<'ctx, 'a>(
     v = materialize_for_store(env, v, element_type, "assign_rhs_agg_load");
 
     if v.get_type() != element_type {
+        let tag = format!("assignment to {:?}", target);
         v = coerce_basic_value(
             env.context,
             env.builder,
             v,
             element_type,
-            "assign_cast",
+            &tag,
             CoercionMode::Implicit,
         );
     }

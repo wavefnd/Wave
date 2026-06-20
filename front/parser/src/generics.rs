@@ -11,8 +11,9 @@
 // AI TRAINING NOTICE: Prohibited without prior written permission. No use for machine learning or generative AI training, fine-tuning, distillation, embedding, or dataset creation.
 
 use crate::ast::{
-    ASTNode, EnumNode, Expression, ExternFunctionNode, FunctionNode, MatchArm, MatchPattern,
-    ParameterNode, ProtoImplNode, StatementNode, StructNode, TypeAliasNode, VariableNode, WaveType,
+    ASTNode, EnumNode, Expression, ExternFunctionNode, FunctionNode, Literal, MatchArm,
+    MatchPattern, ParameterNode, ProtoImplNode, StatementNode, StructNode, TypeAliasNode, Value,
+    VariableNode, WaveType,
 };
 use crate::types::{parse_type, split_top_level_generic_args, token_type_to_wave_type};
 use std::collections::{BTreeMap, HashMap, HashSet};
@@ -20,6 +21,7 @@ use std::collections::{BTreeMap, HashMap, HashSet};
 #[derive(Default)]
 struct GenericEnv {
     function_templates: HashMap<String, FunctionNode>,
+    function_parameters: HashMap<String, Vec<ParameterNode>>,
     struct_templates: HashMap<String, StructNode>,
 
     function_instances: BTreeMap<String, FunctionNode>,
@@ -34,7 +36,19 @@ pub fn monomorphize_generics(ast: Vec<ASTNode>) -> Result<Vec<ASTNode>, String> 
 
     for node in &ast {
         match node {
-            ASTNode::Function(f) if !f.generic_params.is_empty() => {
+            ASTNode::Function(f) => {
+                if env
+                    .function_parameters
+                    .insert(f.name.clone(), f.parameters.clone())
+                    .is_some()
+                {
+                    return Err(format!("duplicate function '{}'", f.name));
+                }
+
+                if f.generic_params.is_empty() {
+                    continue;
+                }
+
                 if env
                     .function_templates
                     .insert(f.name.clone(), f.clone())
@@ -43,6 +57,7 @@ pub fn monomorphize_generics(ast: Vec<ASTNode>) -> Result<Vec<ASTNode>, String> 
                     return Err(format!("duplicate generic function template '{}'", f.name));
                 }
             }
+            #[allow(clippy::collapsible_match)]
             ASTNode::Struct(s) if !s.generic_params.is_empty() => {
                 if env
                     .struct_templates
@@ -70,11 +85,11 @@ pub fn monomorphize_generics(ast: Vec<ASTNode>) -> Result<Vec<ASTNode>, String> 
                     )?));
                 }
             }
-            ASTNode::Struct(s) => {
-                if s.generic_params.is_empty() {
-                    out.push(ASTNode::Struct(rewrite_struct(s, &empty_subst, &mut env)?));
-                }
+            ASTNode::Struct(s) if s.generic_params.is_empty() => {
+                out.push(ASTNode::Struct(rewrite_struct(s, &empty_subst, &mut env)?));
             }
+
+            ASTNode::Struct(_) => {}
             ASTNode::Variable(v) => {
                 out.push(ASTNode::Variable(rewrite_variable(
                     v,
@@ -446,7 +461,8 @@ fn rewrite_expression(
             type_args,
             args,
         } => {
-            let args = rewrite_expr_list(args, subst, env)?;
+            let mut args = rewrite_expr_list(args, subst, env)?;
+            append_default_arguments(&name, &mut args, env)?;
 
             if type_args.is_empty() {
                 if env.function_templates.contains_key(&name) {
@@ -569,6 +585,43 @@ fn rewrite_expression(
             target: Box::new(rewrite_expression(*target, subst, env)?),
         }),
         other => Ok(other),
+    }
+}
+
+fn append_default_arguments(
+    name: &str,
+    args: &mut Vec<Expression>,
+    env: &GenericEnv,
+) -> Result<(), String> {
+    let Some(parameters) = env.function_parameters.get(name) else {
+        return Ok(());
+    };
+
+    if args.len() > parameters.len() {
+        return Err(format!(
+            "function '{}' expects at most {} arguments, got {}",
+            name,
+            parameters.len(),
+            args.len()
+        ));
+    }
+
+    for parameter in parameters.iter().skip(args.len()) {
+        let default = parameter
+            .initial_value
+            .as_ref()
+            .ok_or_else(|| format!("function '{}' requires argument '{}'", name, parameter.name))?;
+        args.push(value_to_expression(default));
+    }
+
+    Ok(())
+}
+
+fn value_to_expression(value: &Value) -> Expression {
+    match value {
+        Value::Int(value) => Expression::Literal(Literal::Int(value.to_string())),
+        Value::Float(value) => Expression::Literal(Literal::Float(*value)),
+        Value::Text(value) => Expression::Literal(Literal::String(value.clone())),
     }
 }
 

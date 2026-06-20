@@ -1,0 +1,382 @@
+# This file is part of the Wave language project.
+# SPDX-License-Identifier: MPL-2.0
+# AI TRAINING NOTICE: Prohibited without prior written permission.
+
+name: Manual Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Cargo version without the v prefix (for example: 0.1.9-pre-beta)"
+        required: true
+        type: string
+      draft:
+        description: "Create the GitHub release as a draft"
+        required: true
+        default: true
+        type: boolean
+      prerelease:
+        description: "Mark the GitHub release as a prerelease"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  contents: read
+
+concurrency:
+  group: manual-release-${{ inputs.version }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  NO_COLOR: "1"
+  PYTHONUNBUFFERED: "1"
+  LLVM_VERSION: "21"
+  RELEASE_VERSION: ${{ inputs.version }}
+
+jobs:
+  validate:
+    name: Validate release candidate
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Validate branch, version, and tag
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$GITHUB_REF" != "refs/heads/master" ]]; then
+            echo "Release workflow must run from master, got: $GITHUB_REF" >&2
+            exit 1
+          fi
+
+          if [[ ! "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "Invalid release version: $RELEASE_VERSION" >&2
+            exit 1
+          fi
+
+          cargo_version="$(python3 -c 'import tomllib; print(tomllib.load(open("Cargo.toml", "rb"))["package"]["version"])')"
+          if [[ "$cargo_version" != "$RELEASE_VERSION" ]]; then
+            echo "Cargo.toml version is $cargo_version, input is $RELEASE_VERSION" >&2
+            exit 1
+          fi
+
+          tag="v$RELEASE_VERSION"
+          remote_tag="$(git ls-remote --tags origin "refs/tags/$tag")"
+          if [[ -n "$remote_tag" ]]; then
+            echo "Tag already exists: $tag" >&2
+            exit 1
+          fi
+
+      - name: Install LLVM 21
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y wget software-properties-common
+          wget -q https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh "$LLVM_VERSION"
+          echo "LLVM_SYS_211_PREFIX=/usr/lib/llvm-21" >> "$GITHUB_ENV"
+          echo "LLVM_CONFIG_PATH=/usr/lib/llvm-21/bin/llvm-config" >> "$GITHUB_ENV"
+          echo "/usr/lib/llvm-21/bin" >> "$GITHUB_PATH"
+
+      - name: Check formatting
+        run: cargo fmt --all --check
+
+      - name: Run Clippy
+        run: cargo clippy --locked --all-targets -- -D warnings
+
+      - name: Validate Python tooling
+        run: python3 -m py_compile x.py tools/run_tests.py
+
+      - name: Run Rust tests
+        run: cargo test --locked --all-targets --verbose
+
+      - name: Build release compiler
+        run: cargo build --locked --release --verbose
+
+      - name: Verify compiler version
+        shell: bash
+        run: |
+          set -euo pipefail
+          target/release/wavec -V | tee /tmp/wavec-version.txt
+          grep -F "wavec $RELEASE_VERSION" /tmp/wavec-version.txt
+          grep -F "backend: LLVM 21." /tmp/wavec-version.txt
+
+      - name: Run Wave end-to-end tests
+        run: python3 tools/run_tests.py
+
+  package-linux:
+    name: Package Linux x86_64
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install packaging dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y file patchelf wget software-properties-common
+          wget -q https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh "$LLVM_VERSION"
+          echo "LLVM_SYS_211_PREFIX=/usr/lib/llvm-21" >> "$GITHUB_ENV"
+          echo "LLVM_CONFIG_PATH=/usr/lib/llvm-21/bin/llvm-config" >> "$GITHUB_ENV"
+          echo "/usr/lib/llvm-21/bin" >> "$GITHUB_PATH"
+
+      - name: Build and package
+        run: python3 x.py release x86_64-unknown-linux-gnu
+
+      - name: Smoke test packaged compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="wave-v${RELEASE_VERSION}-x86_64-linux-gnu.tar.gz"
+          temp_dir="$(mktemp -d)"
+          trap 'rm -rf "$temp_dir"' EXIT
+          tar -xzf "$archive" -C "$temp_dir"
+          package="$temp_dir/wave-v${RELEASE_VERSION}-x86_64-linux-gnu"
+
+          env -i PATH=/usr/bin:/bin HOME=/tmp "$package/wavec" -V | tee /tmp/wavec-version.txt
+          grep -F "wavec $RELEASE_VERSION" /tmp/wavec-version.txt
+          grep -F "backend: LLVM 21." /tmp/wavec-version.txt
+
+          printf 'fun main() { println("release smoke"); }\n' > "$temp_dir/smoke.wave"
+          env -i PATH=/usr/bin:/bin HOME=/tmp "$package/wavec" run "$temp_dir/smoke.wave" \
+            | grep -Fx "release smoke"
+
+          sha256sum "$archive" > "$archive.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-linux-x86_64
+          path: |
+            wave-v${{ inputs.version }}-x86_64-linux-gnu.tar.gz
+            wave-v${{ inputs.version }}-x86_64-linux-gnu.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  package-macos:
+    name: Package macOS
+    needs: validate
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install LLVM 21
+        shell: bash
+        run: |
+          set -euo pipefail
+          brew install llvm@21
+          llvm_prefix="$(brew --prefix llvm@21)"
+          echo "LLVM_SYS_211_PREFIX=$llvm_prefix" >> "$GITHUB_ENV"
+          echo "LLVM_CONFIG_PATH=$llvm_prefix/bin/llvm-config" >> "$GITHUB_ENV"
+          echo "$llvm_prefix/bin" >> "$GITHUB_PATH"
+
+      - name: Select native target
+        shell: bash
+        run: |
+          set -euo pipefail
+          case "$(uname -m)" in
+            arm64) target="aarch64-apple-darwin" ;;
+            x86_64) target="x86_64-apple-darwin" ;;
+            *) echo "Unsupported macOS architecture: $(uname -m)" >&2; exit 1 ;;
+          esac
+          echo "MACOS_TARGET=$target" >> "$GITHUB_ENV"
+
+      - name: Build and package
+        run: python3 x.py release "$MACOS_TARGET"
+
+      - name: Smoke test packaged compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="wave-v${RELEASE_VERSION}-${MACOS_TARGET}.tar.gz"
+          temp_dir="$(mktemp -d)"
+          trap 'rm -rf "$temp_dir"' EXIT
+          tar -xzf "$archive" -C "$temp_dir"
+          package="$temp_dir/wave-v${RELEASE_VERSION}-${MACOS_TARGET}"
+
+          env -i PATH=/usr/bin:/bin HOME=/tmp "$package/wavec" -V | tee /tmp/wavec-version.txt
+          grep -F "wavec $RELEASE_VERSION" /tmp/wavec-version.txt
+          grep -F "backend: LLVM 21." /tmp/wavec-version.txt
+
+          printf 'fun main() { println("release smoke"); }\n' > "$temp_dir/smoke.wave"
+          env -i PATH=/usr/bin:/bin HOME=/tmp "$package/wavec" run "$temp_dir/smoke.wave" \
+            | grep -Fx "release smoke"
+
+          shasum -a 256 "$archive" > "$archive.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-macos
+          path: |
+            wave-v${{ inputs.version }}-*-apple-darwin.tar.gz
+            wave-v${{ inputs.version }}-*-apple-darwin.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  package-windows:
+    name: Package Windows x86_64
+    needs: validate
+    runs-on: windows-latest
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          path-type: inherit
+          install: >-
+            file
+            unzip
+            zip
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-python
+            mingw-w64-x86_64-llvm-21
+            mingw-w64-x86_64-lld-21
+
+      - name: Install Rust GNU toolchains
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          rustup target add x86_64-pc-windows-gnu
+          rustup toolchain install stable-x86_64-pc-windows-gnu --profile minimal
+
+      - name: Configure native Windows LLVM
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          llvm_root="$(cygpath -w /mingw64/opt/llvm-21)"
+          llvm_bin="$(cygpath -w /mingw64/opt/llvm-21/bin)"
+          llvm_config="$(cygpath -w /mingw64/opt/llvm-21/bin/llvm-config.exe)"
+          echo "WAVE_LLVM_HOME=$llvm_root" >> "$GITHUB_ENV"
+          echo "WAVE_WINDOWS_LLVM_BIN=$llvm_bin" >> "$GITHUB_ENV"
+          echo "LLVM_SYS_211_PREFIX=$llvm_root" >> "$GITHUB_ENV"
+          echo "LLVM_CONFIG_PATH=$llvm_config" >> "$GITHUB_ENV"
+          echo "$llvm_bin" >> "$GITHUB_PATH"
+          echo "$(cygpath -w /mingw64/bin)" >> "$GITHUB_PATH"
+          echo "$(cygpath -w /usr/bin)" >> "$GITHUB_PATH"
+
+      - name: Build and package
+        shell: msys2 {0}
+        run: python x.py release x86_64-pc-windows-gnu
+
+      - name: Smoke test packaged compiler
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+          archive="wave-v${RELEASE_VERSION}-x86_64-pc-windows-gnu.zip"
+          temp_dir="$(mktemp -d)"
+          trap 'rm -rf "$temp_dir"' EXIT
+          unzip -q "$archive" -d "$temp_dir"
+          package="$temp_dir/wave-v${RELEASE_VERSION}-x86_64-pc-windows-gnu"
+
+          "$package/wavec.exe" -V | tee /tmp/wavec-version.txt
+          grep -F "wavec $RELEASE_VERSION" /tmp/wavec-version.txt
+          grep -F "backend: LLVM 21." /tmp/wavec-version.txt
+
+          printf 'fun main() { println("release smoke"); }\n' > "$temp_dir/smoke.wave"
+          "$package/wavec.exe" run "$(cygpath -w "$temp_dir/smoke.wave")" | grep -Fx "release smoke"
+
+          sha256sum "$archive" > "$archive.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: release-windows-x86_64
+          path: |
+            wave-v${{ inputs.version }}-x86_64-pc-windows-gnu.zip
+            wave-v${{ inputs.version }}-x86_64-pc-windows-gnu.zip.sha256
+          if-no-files-found: error
+          retention-days: 7
+
+  publish:
+    name: Create GitHub release
+    needs: [validate, package-linux, package-macos, package-windows]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: release-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Verify release assets
+        shell: bash
+        working-directory: release-assets
+        run: |
+          set -euo pipefail
+          test -f "wave-v${RELEASE_VERSION}-x86_64-linux-gnu.tar.gz"
+          test -f "wave-v${RELEASE_VERSION}-x86_64-pc-windows-gnu.zip"
+
+          mapfile -t macos_archives < <(find . -maxdepth 1 -name "wave-v${RELEASE_VERSION}-*-apple-darwin.tar.gz" -print)
+          if [[ "${#macos_archives[@]}" -ne 1 ]]; then
+            echo "Expected exactly one macOS archive, found ${#macos_archives[@]}" >&2
+            exit 1
+          fi
+
+          for archive in *.tar.gz *.zip; do
+            test -f "$archive.sha256"
+          done
+          cat ./*.sha256 > SHA256SUMS
+          sha256sum --check SHA256SUMS
+
+      - name: Create GitHub release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          tag="v$RELEASE_VERSION"
+          args=(
+            release create "$tag"
+            release-assets/*.tar.gz
+            release-assets/*.zip
+            release-assets/SHA256SUMS
+            --repo "$GITHUB_REPOSITORY"
+            --target "$GITHUB_SHA"
+            --title "Wave $tag"
+            --generate-notes
+          )
+
+          if [[ "${{ inputs.draft }}" == "true" ]]; then
+            args+=(--draft)
+          fi
+          if [[ "${{ inputs.prerelease }}" == "true" ]]; then
+            args+=(--prerelease)
+          fi
+
+          gh "${args[@]}"

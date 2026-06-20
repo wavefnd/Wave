@@ -3115,7 +3115,7 @@ fn is_windows_gnu_target_global(global: &Global) -> bool {
 }
 
 fn ensure_supported_target(target: &str) -> Result<(), CliError> {
-    if target == host_target_triple() || supported_targets().iter().any(|t| *t == target) {
+    if target == host_target_triple() || supported_targets().contains(&target) {
         return Ok(());
     }
 

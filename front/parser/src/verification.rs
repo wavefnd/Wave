@@ -150,6 +150,7 @@ fn validate_expr(
 
         Expression::Literal(_) => {}
 
+        #[allow(clippy::collapsible_match)]
         Expression::Variable(name) => {
             if lookup_mutability(name, scopes, globals).is_none() {
                 return Err(format!("use of undeclared identifier `{}`", name));
@@ -297,6 +298,7 @@ fn validate_node(
             scopes.pop();
         }
 
+        #[allow(clippy::collapsible_match)]
         ASTNode::ExternFunction(ext) => {
             if !ext.abi.eq_ignore_ascii_case("c") {
                 return Err(format!(

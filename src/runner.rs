@@ -759,8 +759,10 @@ fn emit_codegen_panic_and_exit(
 }
 
 fn build_import_config(dep: &DepFlags, target_os: Option<String>) -> ImportConfig {
-    let mut config = ImportConfig::default();
-    config.target_os = target_os;
+    let mut config = ImportConfig {
+        target_os,
+        ..ImportConfig::default()
+    };
 
     for root in &dep.roots {
         config.dep_roots.push(PathBuf::from(root));
@@ -1232,7 +1234,7 @@ pub(crate) unsafe fn run_wave_file(
 
     if let Err((msg, loc)) = run_panic_guarded(|| {
         link_objects(
-            &[object_patch.clone()],
+            std::slice::from_ref(&object_patch),
             &exe_patch,
             &link.libs,
             &link.paths,

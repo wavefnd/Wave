@@ -1,3 +1,5 @@
+// wave-test: host-arch=x86_64
+
 import("std::time::clock");
 import("std::time::diff");
 import("std::time::sleep");

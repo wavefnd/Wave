@@ -15,6 +15,7 @@ use crate::{Lexer, Token};
 use error::{WaveError, WaveErrorKind};
 
 impl<'a> Lexer<'a> {
+    #[allow(clippy::never_loop)]
     pub fn next_token(&mut self) -> Result<Token, WaveError> {
         loop {
             self.skip_trivia()?;

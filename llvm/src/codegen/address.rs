@@ -213,6 +213,13 @@ fn addr_and_ty<'ctx>(
                 struct_field_indices,
             );
 
+            if matches!(
+                inner.as_ref(),
+                Expression::IndexAccess { .. } | Expression::FieldAccess { .. }
+            ) {
+                return (slot_ptr, slot_ty);
+            }
+
             if !slot_ty.is_pointer_type() {
                 // Legacy compatibility:
                 // allow redundant `deref` on already-addressable lvalues

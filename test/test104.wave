@@ -1,3 +1,5 @@
+// wave-test: host-arch=x86_64
+
 import("std::io::fd");
 import("std::net::poll");
 import("std::net::socket_base");

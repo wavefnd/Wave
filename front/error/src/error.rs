@@ -252,14 +252,14 @@ impl WaveError {
                 let end = (idx + 1).min(lines.len().saturating_sub(1));
                 let width = (end + 1).to_string().len().max(2);
 
-                for i in start..=end {
+                for (i, source_line) in lines.iter().enumerate().take(end + 1).skip(start) {
                     let ln = i + 1;
                     let ln_str = format!("{:>width$}", ln, width = width);
                     eprintln!(
                         " {} {} {}",
                         ln_str.color("38,139,235").bold(),
                         pipe,
-                        lines[i]
+                        source_line
                     );
                 }
 

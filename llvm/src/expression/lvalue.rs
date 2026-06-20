@@ -119,6 +119,24 @@ fn generate_lvalue_ir_typed<'ctx>(
         ),
 
         Expression::Deref(inner) => {
+            if matches!(
+                inner.as_ref(),
+                Expression::IndexAccess { .. } | Expression::FieldAccess { .. }
+            ) {
+                return generate_lvalue_ir_typed(
+                    context,
+                    builder,
+                    inner,
+                    variables,
+                    module,
+                    global_consts,
+                    struct_types,
+                    struct_field_indices,
+                    target_data,
+                    extern_c_info,
+                );
+            }
+
             let v = generate_expression_ir(
                 context,
                 builder,
@@ -298,15 +316,41 @@ fn generate_lvalue_ir_typed<'ctx>(
                 WaveType::Pointer(inner) => {
                     let base_ptr = load_ptr_value(context, builder, base_addr, "load_index_base");
 
-                    let elem_llvm =
-                        wave_type_to_llvm_type(context, &inner, struct_types, TypeFlavor::Value);
-
-                    let gep = unsafe {
-                        builder
-                            .build_gep(elem_llvm, base_ptr, &[idx], "ptr_elem_ptr")
-                            .unwrap()
-                    };
-                    (gep, *inner)
+                    match *inner {
+                        WaveType::Array(element, size) => {
+                            let array_ty = wave_type_to_llvm_type(
+                                context,
+                                &WaveType::Array(element.clone(), size),
+                                struct_types,
+                                TypeFlavor::Value,
+                            );
+                            let gep = unsafe {
+                                builder
+                                    .build_gep(
+                                        array_ty,
+                                        base_ptr,
+                                        &[zero, idx],
+                                        "ptr_array_elem_ptr",
+                                    )
+                                    .unwrap()
+                            };
+                            (gep, *element)
+                        }
+                        element => {
+                            let elem_llvm = wave_type_to_llvm_type(
+                                context,
+                                &element,
+                                struct_types,
+                                TypeFlavor::Value,
+                            );
+                            let gep = unsafe {
+                                builder
+                                    .build_gep(elem_llvm, base_ptr, &[idx], "ptr_elem_ptr")
+                                    .unwrap()
+                            };
+                            (gep, element)
+                        }
+                    }
                 }
 
                 WaveType::String => {

@@ -108,7 +108,10 @@ pub fn coerce_basic_value<'ctx>(
         // ptr -> int
         (BasicValueEnum::PointerValue(pv), BasicTypeEnum::IntType(dst)) => match mode {
             CoercionMode::Implicit => {
-                panic!("Implicit ptr->int is not allowed (use explicit cast).");
+                panic!(
+                    "Implicit ptr->int is not allowed during '{}' (use explicit cast).",
+                    tag
+                );
             }
             CoercionMode::Asm | CoercionMode::Explicit => builder
                 .build_ptr_to_int(pv, dst, tag)
@@ -264,7 +267,7 @@ pub(super) fn gen_variable_ir<'ctx>(
             builder,
             raw,
             llvm_type,
-            "init_cast",
+            &format!("variable '{}' initializer", name),
             CoercionMode::Implicit,
         );
 

@@ -93,6 +93,10 @@ struct Pair {
     b: i32;
 }
 
+struct PointerBox {
+    data: ptr<i32>;
+}
+
 fun write_deref(p: ptr<i32>, v: i32) {
     deref p = v;
 }
@@ -103,6 +107,14 @@ fun write_index(p: ptr<i32>, v: i32) {
 
 fun write_field(p: ptr<Pair>, v: i32) {
     p.b = v;
+}
+
+fun write_array_pointer(p: ptr<array<i32, 3>>, v: i32) {
+    deref p[1] = v;
+}
+
+fun write_pointer_field(p: ptr<PointerBox>, value: ptr<i32>) {
+    deref p.data = value;
 }
 
 fun id_ptr(p: ptr<i32>) -> ptr<i32> {
@@ -136,6 +148,19 @@ fun main() -> i32 {
     deref id_ptr(&x) = 77;
     if (x != 77) {
         return 5;
+    }
+
+    let mut array_ptr_target: array<i32, 3> = [4, 5, 6];
+    write_array_pointer(&array_ptr_target, 23);
+    if (array_ptr_target[1] != 23) {
+        return 6;
+    }
+
+    let mut y: i32 = 88;
+    let mut pointer_box: PointerBox = PointerBox { data: &x };
+    write_pointer_field(&pointer_box, &y);
+    if (pointer_box.data != &y) {
+        return 7;
     }
 
     return 0;

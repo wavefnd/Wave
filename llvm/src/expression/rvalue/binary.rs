@@ -321,6 +321,7 @@ pub(crate) fn gen<'ctx, 'a>(
                 _ => panic!("Unsupported float operator"),
             };
 
+            #[allow(clippy::collapsible_match)]
             if let Some(exp) = expected_type {
                 match (result, exp) {
                     (

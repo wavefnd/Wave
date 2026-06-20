@@ -44,8 +44,14 @@ WINDOWS_RUST_TOOLCHAIN = os.environ.get(
     "WAVE_WINDOWS_RUST_TOOLCHAIN",
     "stable-x86_64-pc-windows-gnu",
 )
-MINGW_CC = "x86_64-w64-mingw32-gcc"
-MINGW_CXX = "x86_64-w64-mingw32-g++"
+MINGW_CC = os.environ.get(
+    "WAVE_MINGW_CC",
+    "gcc" if platform.system() == "Windows" else "x86_64-w64-mingw32-gcc",
+)
+MINGW_CXX = os.environ.get(
+    "WAVE_MINGW_CXX",
+    "g++" if platform.system() == "Windows" else "x86_64-w64-mingw32-g++",
+)
 
 TARGET_MATRIX = {
     "x86_64-unknown-linux-gnu":     ["Linux"],
@@ -183,6 +189,25 @@ def require_tool(tool):
         sys.exit(1)
 
 def configure_windows_gnu_env(env):
+    if platform.system() == "Windows":
+        prefix = early_llvm_prefix()
+        llvm_config = env.get("LLVM_CONFIG_PATH") or shutil.which("llvm-config")
+
+        if prefix is None or llvm_config is None:
+            print("[!] Native Windows release builds require LLVM 21 and llvm-config.exe.")
+            print("    Set WAVE_LLVM_HOME and LLVM_CONFIG_PATH to the LLVM 21 prefix.")
+            sys.exit(1)
+
+        require_tool(MINGW_CC)
+        require_tool(MINGW_CXX)
+
+        env["LLVM_SYS_211_PREFIX"] = str(prefix)
+        env["LLVM_CONFIG_PATH"] = str(llvm_config)
+        env["CARGO_TARGET_X86_64_PC_WINDOWS_GNU_LINKER"] = MINGW_CC
+        env["CC_x86_64_pc_windows_gnu"] = MINGW_CC
+        env["CXX_x86_64_pc_windows_gnu"] = MINGW_CXX
+        return
+
     if not WINDOWS_LLVM_PREFIX.exists():
         print(f"[!] Missing Windows LLVM prefix wrapper: {WINDOWS_LLVM_PREFIX}")
         print("    Expected tools/llvm-win-prefix/bin/llvm-config to exist.")
@@ -218,7 +243,7 @@ def configure_linux_release_env(env):
     ])
 
 def cargo_build_args(target):
-    args = ["cargo", "build", "--target", target, "--release"]
+    args = ["cargo", "build", "--locked", "--target", target, "--release"]
     if is_windows_gnu_target(target):
         args.extend(["--no-default-features", "--features", "llvm-target-x86"])
     return args

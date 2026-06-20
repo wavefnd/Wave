@@ -14,11 +14,14 @@
 
 import subprocess
 import time
+import argparse
 from pathlib import Path
 import threading
 import socket
 import sys
 import platform
+import shutil
+import tempfile
 
 ROOT = Path(__file__).resolve().parent.parent
 TEST_DIR = ROOT / "test"
@@ -83,15 +86,40 @@ def normalize_arch(arch: str) -> str:
 
 
 HOST_ARCH = normalize_arch(HOST_ARCH)
+TEST_OUTPUT_DIR = Path(tempfile.mkdtemp(prefix="wave-test-output-"))
+
+
+def parse_args():
+    parser = argparse.ArgumentParser(description="Run Wave end-to-end tests")
+    parser.add_argument(
+        "--only",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="run only the named test; may be repeated",
+    )
+    parser.add_argument(
+        "--skip",
+        action="append",
+        default=[],
+        metavar="NAME",
+        help="skip the named test; may be repeated",
+    )
+    return parser.parse_args()
+
+
+ARGS = parse_args()
 
 
 def iter_test_entries():
     for path in sorted(TEST_DIR.glob("test*.wave")):
-        yield path.name, path.relative_to(ROOT).as_posix()
+        if (not ARGS.only or path.name in ARGS.only) and path.name not in ARGS.skip:
+            yield path.name, path.relative_to(ROOT).as_posix()
 
     for main_wave in sorted(TEST_DIR.glob("test*/main.wave")):
         name = f"{main_wave.parent.name} (dir)"
-        yield name, main_wave.relative_to(ROOT).as_posix()
+        if (not ARGS.only or name in ARGS.only) and name not in ARGS.skip:
+            yield name, main_wave.relative_to(ROOT).as_posix()
 
 
 def parse_test_metadata(rel_path: str):
@@ -99,6 +127,11 @@ def parse_test_metadata(rel_path: str):
     meta = {
         "host_os": None,
         "host_arch": None,
+        "mode": "run",
+        "target": None,
+        "emit": "obj",
+        "freestanding": False,
+        "expected_exit": 0,
     }
 
     try:
@@ -125,6 +158,16 @@ def parse_test_metadata(rel_path: str):
                     meta["host_os"] = value.lower()
                 elif key == "host-arch":
                     meta["host_arch"] = normalize_arch(value)
+                elif key == "mode":
+                    meta["mode"] = value.lower()
+                elif key == "target":
+                    meta["target"] = value
+                elif key == "emit":
+                    meta["emit"] = value.lower()
+                elif key == "freestanding":
+                    meta["freestanding"] = value.lower() in {"1", "true", "yes"}
+                elif key == "expected-exit":
+                    meta["expected_exit"] = int(value)
     except OSError:
         pass
 
@@ -143,6 +186,38 @@ def skip_reason_for_metadata(name: str, rel_path: str):
         return f"{name} requires host arch {host_arch}, current host is {HOST_ARCH}"
 
     return None
+
+
+def command_for_test(name: str, rel_path: str):
+    meta = parse_test_metadata(rel_path)
+    mode = meta["mode"]
+
+    if mode == "run":
+        return [str(WAVEC), "run", rel_path]
+
+    if mode == "check":
+        return [str(WAVEC), "check", rel_path]
+
+    if mode == "build":
+        output_dir = TEST_OUTPUT_DIR / name.replace(" ", "-")
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        cmd = [
+            str(WAVEC),
+            "build",
+            rel_path,
+            f"--emit={meta['emit']}",
+            "--out-dir",
+            str(output_dir),
+        ]
+        if meta["target"]:
+            cmd.extend(["--target", meta["target"]])
+        if meta["freestanding"]:
+            cmd.append("--freestanding")
+        return cmd
+
+    raise ValueError(f"unsupported wave-test mode '{mode}' in {rel_path}")
+
 
 def send_udp_for_test61():
     time.sleep(0.5)
@@ -211,7 +286,7 @@ def looks_like_fail(stderr: str) -> bool:
 
 # Return Type:
 # 1 = PASS (exit 0)
-# 3 = PASS (exit nonzero)
+# 3 = PASS (explicit expected nonzero exit)
 # 0 = FAIL
 # 2 = SKIP
 # -1 = TIMEOUT
@@ -222,6 +297,8 @@ def run_and_classify(name, rel_path, cmd):
     if skip_reason is not None:
         print(f"{CYAN}→ SKIP ({skip_reason}){RESET}\n")
         return 2
+
+    expected_exit = parse_test_metadata(rel_path)["expected_exit"]
 
     stdin_data = None
     if name == "test22.wave":
@@ -267,12 +344,24 @@ def run_and_classify(name, rel_path, cmd):
             print()
             return 0
 
-        if result.returncode == 0:
+        if result.returncode == expected_exit:
+            if expected_exit != 0:
+                print(f"{MAGENTA}→ PASS (expected exit={expected_exit}){RESET}\n")
+                return 3
             print(f"{GREEN}→ PASS{RESET}\n")
             return 1
 
-        print(f"{MAGENTA}→ PASS (non-zero exit={result.returncode}){RESET}\n")
-        return 3
+        print(
+            f"{RED}→ FAIL (exit={result.returncode}, expected={expected_exit}){RESET}"
+        )
+        if result.stdout.strip():
+            print(f"{BLUE}--- STDOUT ---{RESET}")
+            print(result.stdout.rstrip())
+        if result.stderr.strip():
+            print(f"{YELLOW}--- STDERR ---{RESET}")
+            print(result.stderr.rstrip())
+        print()
+        return 0
 
     except subprocess.TimeoutExpired:
         if name in KNOWN_TIMEOUT:
@@ -282,12 +371,26 @@ def run_and_classify(name, rel_path, cmd):
             print(f"{YELLOW}→ TIMEOUT ({TIMEOUT_SEC}s){RESET}\n")
             return -1
 
+entries = list(iter_test_entries())
+selected_names = {name for name, _ in entries}
+missing_names = sorted(set(ARGS.only) - selected_names)
+
+if missing_names:
+    shutil.rmtree(TEST_OUTPUT_DIR, ignore_errors=True)
+    print(f"unknown test name(s): {', '.join(missing_names)}", file=sys.stderr)
+    sys.exit(2)
+
+if not entries:
+    shutil.rmtree(TEST_OUTPUT_DIR, ignore_errors=True)
+    print("no tests selected", file=sys.stderr)
+    sys.exit(2)
+
 try:
-    for name, rel_path in iter_test_entries():
+    for name, rel_path in entries:
         result = run_and_classify(
             name,
             rel_path,
-            [str(WAVEC), "run", rel_path]
+            command_for_test(name, rel_path)
         )
         results.append((name, result))
 
@@ -295,6 +398,8 @@ try:
 except KeyboardInterrupt:
     print(f"\n{YELLOW}Interrupted by user.{RESET}")
     sys.exit(130)
+finally:
+    shutil.rmtree(TEST_OUTPUT_DIR, ignore_errors=True)
 
 pass_zero = [name for name, r in results if r == 1]
 pass_nonzero = [name for name, r in results if r == 3]
@@ -310,7 +415,7 @@ print(f"{GREEN}PASS (exit=0) ({len(pass_zero)}){RESET}")
 for name in pass_zero:
     print(f"  - {name}")
 
-print(f"\n{MAGENTA}PASS (non-zero exit) ({len(pass_nonzero)}){RESET}")
+print(f"\n{MAGENTA}PASS (expected non-zero exit) ({len(pass_nonzero)}){RESET}")
 for name in pass_nonzero:
     print(f"  - {name}")
 
@@ -328,7 +433,7 @@ for name in timeout_tests:
 
 print("\n=========================")
 print(f"{GREEN}PASS(0): {len(pass_zero)}{RESET}")
-print(f"{MAGENTA}PASS(!0): {len(pass_nonzero)}{RESET}")
+print(f"{MAGENTA}PASS(expected !0): {len(pass_nonzero)}{RESET}")
 print(f"{CYAN}SKIP: {len(skip_tests)}{RESET}")
 print(f"{RED}FAIL: {len(fail_tests)}{RESET}")
 print(f"{YELLOW}TIMEOUT: {len(timeout_tests)}{RESET}")
