@@ -170,19 +170,12 @@ jobs:
         run: |
           set -euo pipefail
 
-          set +e
-          target/release/wavec -V > /tmp/wavec-version.txt 2>&1
-          status=$?
-          set -e
-
-          cat /tmp/wavec-version.txt
+          {
+            target/release/wavec -V 2>&1 || true
+          } | tee /tmp/wavec-version.txt
 
           grep -F "wavec $RELEASE_VERSION" /tmp/wavec-version.txt
           grep -F "backend: LLVM 21." /tmp/wavec-version.txt
-
-          if [[ "$status" -ne 0 ]]; then
-            echo "warning: wavec -V returned exit code $status even though version output was valid" >&2
-          fi
 
       - name: Run Wave end-to-end tests
         run: python3 tools/run_tests.py
@@ -278,18 +271,12 @@ jobs:
           tar -xzf "$archive" -C "$temp_dir"
           package="$temp_dir/wave-v${RELEASE_VERSION}-x86_64-linux-gnu"
 
-          set +e
-          env -i PATH=/usr/bin:/bin HOME=/tmp "$package/wavec" -V > /tmp/wavec-version.txt 2>&1
-          status=$?
-          set -e
+          {
+            env -i PATH=/usr/bin:/bin HOME=/tmp "$package/wavec" -V 2>&1 || true
+          } | tee /tmp/wavec-version.txt
 
-          cat /tmp/wavec-version.txt
           grep -F "wavec $RELEASE_VERSION" /tmp/wavec-version.txt
           grep -F "backend: LLVM 21." /tmp/wavec-version.txt
-
-          if [[ "$status" -ne 0 ]]; then
-            echo "warning: packaged wavec -V returned exit code $status even though version output was valid" >&2
-          fi
 
           printf 'fun main() { println("release smoke"); }\n' > "$temp_dir/smoke.wave"
           env -i PATH=/usr/bin:/bin HOME=/tmp "$package/wavec" run "$temp_dir/smoke.wave" \
@@ -397,18 +384,12 @@ jobs:
           tar -xzf "$archive" -C "$temp_dir"
           package="$temp_dir/wave-v${RELEASE_VERSION}-${MACOS_TARGET}"
 
-          set +e
-          env -i PATH=/usr/bin:/bin HOME=/tmp "$package/wavec" -V > /tmp/wavec-version.txt 2>&1
-          status=$?
-          set -e
+          {
+            env -i PATH=/usr/bin:/bin HOME=/tmp "$package/wavec" -V 2>&1 || true
+          } | tee /tmp/wavec-version.txt
 
-          cat /tmp/wavec-version.txt
           grep -F "wavec $RELEASE_VERSION" /tmp/wavec-version.txt
           grep -F "backend: LLVM 21." /tmp/wavec-version.txt
-
-          if [[ "$status" -ne 0 ]]; then
-            echo "warning: packaged wavec -V returned exit code $status even though version output was valid" >&2
-          fi
 
           printf 'fun main() { println("release smoke"); }\n' > "$temp_dir/smoke.wave"
           env -i PATH=/usr/bin:/bin HOME=/tmp "$package/wavec" run "$temp_dir/smoke.wave" \
@@ -484,7 +465,6 @@ jobs:
 
           echo "LIBRARY_PATH=$mingw_lib" >> "$GITHUB_ENV"
           echo "PKG_CONFIG_PATH=$mingw_pkgconfig" >> "$GITHUB_ENV"
-
           echo "RUSTFLAGS=-Lnative=$mingw_lib -lffi -lzstd -lz" >> "$GITHUB_ENV"
 
       - name: Verify Windows release tools
@@ -499,7 +479,36 @@ jobs:
           which clang || true
           which lld || true
 
+          ls -la /mingw64/bin | grep -E 'libffi|libzstd|zlib|libgcc|libstdc|winpthread' || true
           ls -la /mingw64/lib | grep -E 'libffi|libzstd|libz\.' || true
+
+      - name: Stage Windows runtime DLLs
+        shell: msys2 {0}
+        run: |
+          set -euo pipefail
+
+          llvm_bin="/mingw64/opt/llvm-21/bin"
+          mingw_bin="/mingw64/bin"
+
+          mkdir -p "$llvm_bin"
+
+          for dll in \
+            libffi-8.dll \
+            libzstd.dll \
+            zlib1.dll \
+            libgcc_s_seh-1.dll \
+            libstdc++-6.dll \
+            libwinpthread-1.dll
+          do
+            if [[ -f "$mingw_bin/$dll" ]]; then
+              cp -f "$mingw_bin/$dll" "$llvm_bin/$dll"
+              echo "staged $dll"
+            else
+              echo "warning: $dll not found in $mingw_bin"
+            fi
+          done
+
+          ls -la "$llvm_bin" | grep -E 'libffi|libzstd|zlib|libgcc|libstdc|winpthread' || true
 
       - name: Build and package
         shell: msys2 {0}
@@ -517,18 +526,12 @@ jobs:
           unzip -q "$archive" -d "$temp_dir"
           package="$temp_dir/wave-v${RELEASE_VERSION}-x86_64-pc-windows-gnu"
 
-          set +e
-          "$package/wavec.exe" -V > /tmp/wavec-version.txt 2>&1
-          status=$?
-          set -e
+          {
+            "$package/wavec.exe" -V 2>&1 || true
+          } | tee /tmp/wavec-version.txt
 
-          cat /tmp/wavec-version.txt
           grep -F "wavec $RELEASE_VERSION" /tmp/wavec-version.txt
           grep -F "backend: LLVM 21." /tmp/wavec-version.txt
-
-          if [[ "$status" -ne 0 ]]; then
-            echo "warning: packaged wavec.exe -V returned exit code $status even though version output was valid" >&2
-          fi
 
           printf 'fun main() { println("release smoke"); }\n' > "$temp_dir/smoke.wave"
           "$package/wavec.exe" run "$(cygpath -w "$temp_dir/smoke.wave")" | grep -Fx "release smoke"
