@@ -170,12 +170,23 @@ jobs:
         run: |
           set -euo pipefail
 
-          {
-            target/release/wavec -V 2>&1 || true
-          } | tee /tmp/wavec-version.txt
+          target/release/wavec -V > /tmp/wavec-version.txt 2>&1 || true
+          cat /tmp/wavec-version.txt
 
-          grep -F "wavec $RELEASE_VERSION" /tmp/wavec-version.txt
-          grep -F "backend: LLVM 21." /tmp/wavec-version.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          import sys
+
+          text = Path("/tmp/wavec-version.txt").read_text(errors="replace")
+
+          if "wavec " not in text:
+              print("missing wavec version output", file=sys.stderr)
+              sys.exit(1)
+
+          if "backend: LLVM 21." not in text:
+              print("missing LLVM 21 backend output", file=sys.stderr)
+              sys.exit(1)
+          PY
 
       - name: Run Wave end-to-end tests
         run: python3 tools/run_tests.py
@@ -271,12 +282,23 @@ jobs:
           tar -xzf "$archive" -C "$temp_dir"
           package="$temp_dir/wave-v${RELEASE_VERSION}-x86_64-linux-gnu"
 
-          {
-            env -i PATH=/usr/bin:/bin HOME=/tmp "$package/wavec" -V 2>&1 || true
-          } | tee /tmp/wavec-version.txt
+          env -i PATH=/usr/bin:/bin HOME=/tmp "$package/wavec" -V > /tmp/wavec-version.txt 2>&1 || true
+          cat /tmp/wavec-version.txt
 
-          grep -F "wavec $RELEASE_VERSION" /tmp/wavec-version.txt
-          grep -F "backend: LLVM 21." /tmp/wavec-version.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          import sys
+
+          text = Path("/tmp/wavec-version.txt").read_text(errors="replace")
+
+          if "wavec " not in text:
+              print("missing packaged wavec version output", file=sys.stderr)
+              sys.exit(1)
+
+          if "backend: LLVM 21." not in text:
+              print("missing packaged LLVM 21 backend output", file=sys.stderr)
+              sys.exit(1)
+          PY
 
           printf 'fun main() { println("release smoke"); }\n' > "$temp_dir/smoke.wave"
           env -i PATH=/usr/bin:/bin HOME=/tmp "$package/wavec" run "$temp_dir/smoke.wave" \
@@ -384,12 +406,23 @@ jobs:
           tar -xzf "$archive" -C "$temp_dir"
           package="$temp_dir/wave-v${RELEASE_VERSION}-${MACOS_TARGET}"
 
-          {
-            env -i PATH=/usr/bin:/bin HOME=/tmp "$package/wavec" -V 2>&1 || true
-          } | tee /tmp/wavec-version.txt
+          env -i PATH=/usr/bin:/bin HOME=/tmp "$package/wavec" -V > /tmp/wavec-version.txt 2>&1 || true
+          cat /tmp/wavec-version.txt
 
-          grep -F "wavec $RELEASE_VERSION" /tmp/wavec-version.txt
-          grep -F "backend: LLVM 21." /tmp/wavec-version.txt
+          python3 - <<'PY'
+          from pathlib import Path
+          import sys
+
+          text = Path("/tmp/wavec-version.txt").read_text(errors="replace")
+
+          if "wavec " not in text:
+              print("missing packaged wavec version output", file=sys.stderr)
+              sys.exit(1)
+
+          if "backend: LLVM 21." not in text:
+              print("missing packaged LLVM 21 backend output", file=sys.stderr)
+              sys.exit(1)
+          PY
 
           printf 'fun main() { println("release smoke"); }\n' > "$temp_dir/smoke.wave"
           env -i PATH=/usr/bin:/bin HOME=/tmp "$package/wavec" run "$temp_dir/smoke.wave" \
@@ -437,11 +470,11 @@ jobs:
         run: |
           set -euo pipefail
 
-          rustup toolchain install 1.89.0-x86_64-pc-windows-gnu --profile minimal
+          rustup toolchain install 1.89.0-x86_64-pc-windows-gnu --profile minimal --force-non-host
           rustup target add x86_64-pc-windows-gnu --toolchain 1.89.0-x86_64-pc-windows-gnu
           rustup default 1.89.0-x86_64-pc-windows-gnu
 
-      - name: Configure native Windows LLVM
+      - name: Configure native Windows LLVM and MinGW runtime
         shell: msys2 {0}
         run: |
           set -euo pipefail
@@ -454,10 +487,24 @@ jobs:
           mingw_lib="$(cygpath -w /mingw64/lib)"
           mingw_pkgconfig="$(cygpath -w /mingw64/lib/pkgconfig)"
 
+          rust_sysroot="$(rustc --print sysroot)"
+          rust_target_lib="$rust_sysroot/lib/rustlib/x86_64-pc-windows-gnu/lib"
+
+          crt2_path="$(find "$rust_target_lib" -name crt2.o -print -quit || true)"
+          if [[ -z "$crt2_path" ]]; then
+            echo "Could not find crt2.o under Rust target lib: $rust_target_lib" >&2
+            find "$rust_target_lib" -maxdepth 4 -type f | sort | head -200 >&2 || true
+            exit 1
+          fi
+
+          rust_mingw_self="$(dirname "$crt2_path")"
+
           echo "WAVE_LLVM_HOME=$llvm_root" >> "$GITHUB_ENV"
           echo "WAVE_WINDOWS_LLVM_BIN=$llvm_bin" >> "$GITHUB_ENV"
           echo "LLVM_SYS_211_PREFIX=$llvm_root" >> "$GITHUB_ENV"
           echo "LLVM_CONFIG_PATH=$llvm_config" >> "$GITHUB_ENV"
+
+          echo "WAVE_WINDOWS_MINGW_LIB=$(cygpath -w "$rust_mingw_self")" >> "$GITHUB_ENV"
 
           echo "$llvm_bin" >> "$GITHUB_PATH"
           echo "$mingw_bin" >> "$GITHUB_PATH"
@@ -466,6 +513,11 @@ jobs:
           echo "LIBRARY_PATH=$mingw_lib" >> "$GITHUB_ENV"
           echo "PKG_CONFIG_PATH=$mingw_pkgconfig" >> "$GITHUB_ENV"
           echo "RUSTFLAGS=-Lnative=$mingw_lib -lffi -lzstd -lz" >> "$GITHUB_ENV"
+
+          echo "Rust sysroot: $rust_sysroot"
+          echo "Rust target lib: $rust_target_lib"
+          echo "Rust MinGW self-contained lib: $rust_mingw_self"
+          ls -la "$rust_mingw_self" | head -100
 
       - name: Verify Windows release tools
         shell: msys2 {0}
@@ -478,6 +530,11 @@ jobs:
           which gcc
           which clang || true
           which lld || true
+
+          echo "WAVE_WINDOWS_MINGW_LIB=$WAVE_WINDOWS_MINGW_LIB"
+          mingw_lib_posix="$(cygpath -u "$WAVE_WINDOWS_MINGW_LIB")"
+          test -f "$mingw_lib_posix/crt2.o"
+          ls -la "$mingw_lib_posix" | grep -E 'crt2|lib.*\.a' | head -100
 
           ls -la /mingw64/bin | grep -E 'libffi|libzstd|zlib|libgcc|libstdc|winpthread' || true
           ls -la /mingw64/lib | grep -E 'libffi|libzstd|libz\.' || true
@@ -526,12 +583,23 @@ jobs:
           unzip -q "$archive" -d "$temp_dir"
           package="$temp_dir/wave-v${RELEASE_VERSION}-x86_64-pc-windows-gnu"
 
-          {
-            "$package/wavec.exe" -V 2>&1 || true
-          } | tee /tmp/wavec-version.txt
+          "$package/wavec.exe" -V > /tmp/wavec-version.txt 2>&1 || true
+          cat /tmp/wavec-version.txt
 
-          grep -F "wavec $RELEASE_VERSION" /tmp/wavec-version.txt
-          grep -F "backend: LLVM 21." /tmp/wavec-version.txt
+          python - <<'PY'
+          from pathlib import Path
+          import sys
+
+          text = Path("/tmp/wavec-version.txt").read_text(errors="replace")
+
+          if "wavec " not in text:
+              print("missing packaged wavec.exe version output", file=sys.stderr)
+              sys.exit(1)
+
+          if "backend: LLVM 21." not in text:
+              print("missing packaged LLVM 21 backend output", file=sys.stderr)
+              sys.exit(1)
+          PY
 
           printf 'fun main() { println("release smoke"); }\n' > "$temp_dir/smoke.wave"
           "$package/wavec.exe" run "$(cygpath -w "$temp_dir/smoke.wave")" | grep -Fx "release smoke"
