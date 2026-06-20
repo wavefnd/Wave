@@ -106,7 +106,15 @@ jobs:
 
       - name: Build release compiler
         run: cargo build --locked --release --verbose
-
+        
+      - name: Install Wave stdlib
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.wave/lib/wave"
+          rm -rf "$HOME/.wave/lib/wave/std"
+          cp -R std "$HOME/.wave/lib/wave/std"
+          
       - name: Verify compiler version
         shell: bash
         run: |
