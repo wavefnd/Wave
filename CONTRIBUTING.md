@@ -49,7 +49,7 @@ Wave also accepts patches through email, similar to the Linux kernel and LLVM wo
 git checkout -b fix-issue
 git commit -s
 git format-patch -1
-git send-email --to wave-patches@lunastev.org *.patch
+git send-email --to patchs@wave-lang.dev *.patch
 ```
 
 #### Requirements:
