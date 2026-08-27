@@ -1,0 +1,98 @@
+import("std::fs::consts")::{
+    FS_MODE_FILE_DEFAULT,
+};
+
+import("std::fs::file")::{
+    fs_remove,
+    fs_open_read,
+    fs_open_write,
+    fs_close,
+    fs_read_all,
+    fs_write_all,
+};
+
+import("std::io::fd")::{
+    io_read,
+};
+
+fun main() {
+    var path: str = "/tmp/wave-file-io-example.txt";
+    var payload: str = "wave-file-io";
+
+    fs_remove(path);
+
+    // Open a file using the path-based std::fs::file API.
+    var write_fd: i64 = fs_open_write(
+        path,
+        FS_MODE_FILE_DEFAULT
+    );
+
+    if (write_fd < 0) {
+        println("fs_open_write failed: {}", write_fd);
+        return;
+    }
+
+    fs_close(write_fd);
+
+    var write_n: i64 = fs_write_all(
+        path,
+        payload as ptr<u8>,
+        12,
+        FS_MODE_FILE_DEFAULT
+    );
+
+    if (write_n < 0) {
+        println("fs_write_all failed: {}", write_n);
+        fs_remove(path);
+        return;
+    }
+
+    println("bytes written = {}", write_n);
+
+    // fs_read_all reads from a path into caller-owned storage.
+    // It does not allocate or return a str.
+    var read_buf: array<u8, 64>;
+
+    var read_n: i64 = fs_read_all(
+        path,
+        &read_buf[0],
+        64
+    );
+
+    if (read_n < 0) {
+        println("fs_read_all failed: {}", read_n);
+        fs_remove(path);
+        return;
+    }
+
+    println("fs_read_all bytes = {}", read_n);
+
+    // io_read works with an already-open file descriptor.
+    var read_fd: i64 = fs_open_read(path);
+
+    if (read_fd < 0) {
+        println("fs_open_read failed: {}", read_fd);
+        fs_remove(path);
+        return;
+    }
+
+    var fd_buf: array<u8, 64>;
+
+    var fd_n: i64 = io_read(
+        read_fd,
+        &fd_buf[0],
+        64
+    );
+
+    if (fd_n < 0) {
+        println("io_read failed: {}", fd_n);
+        fs_close(read_fd);
+        fs_remove(path);
+        return;
+    }
+
+    println("io_read bytes = {}", fd_n);
+
+    fs_close(read_fd);
+    fs_remove(path);
+}

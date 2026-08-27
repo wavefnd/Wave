@@ -1,0 +1,138 @@
+// wave-test: host-os=linux, host-arch=x86_64
+
+import("std::fs::consts")::{
+    FS_MODE_FILE_DEFAULT,
+};
+
+import("std::fs::file")::{
+    fs_remove,
+    fs_open_read,
+    fs_open_write,
+    fs_close,
+    fs_read_all,
+    fs_write_all,
+};
+
+import("std::io::fd")::{
+    io_read,
+};
+
+fun check_i64(label: str, got: i64, expected: i64) -> i64 {
+    if (got == expected) {
+        println("[OK] {} => {}", label, got);
+        return 1;
+    }
+
+    println("[FAIL] {} => got {}, expected {}", label, got, expected);
+    return 0;
+}
+
+fun main() {
+    var path: str = "/tmp/wave-std-test109.txt";
+    var payload: str = "wave-file-io";
+
+    fs_remove(path);
+
+    var passed: i64 = 0;
+
+    // Open and close a file using std::fs::file.
+    var write_fd: i64 = fs_open_write(
+        path,
+        FS_MODE_FILE_DEFAULT
+    );
+
+    if (write_fd < 0) {
+        println("[FAIL] fs_open_write => {}", write_fd);
+        return;
+    }
+
+    passed += check_i64("fs_open_write", 1, 1);
+
+    var close_n: i64 = fs_close(write_fd);
+    passed += check_i64("fs_close", close_n, 0);
+
+    // Write known bytes so that the returned byte count is measurable.
+    var write_n: i64 = fs_write_all(
+        path,
+        payload as ptr<u8>,
+        12,
+        FS_MODE_FILE_DEFAULT
+    );
+
+    passed += check_i64("fs_write_all byte count", write_n, 12);
+
+    // fs_read_all reads a path into caller-owned storage.
+    var read_buf: array<u8, 64>;
+
+    var read_n: i64 = fs_read_all(
+        path,
+        &read_buf[0],
+        64
+    );
+
+    passed += check_i64(
+        "fs_read_all byte count",
+        read_n,
+        12
+    );
+
+    // Verify that the destination buffer contains the expected bytes.
+    var prefix_ok: i64 = 0;
+
+    if (
+        read_buf[0] == 119 &&
+        read_buf[1] == 97 &&
+        read_buf[2] == 118
+    ) {
+        prefix_ok = 1;
+    }
+
+    passed += check_i64(
+        "fs_read_all buffer contents",
+        prefix_ok,
+        1
+    );
+
+    // io_read works with an already-open descriptor.
+    var read_fd: i64 = fs_open_read(path);
+
+    if (read_fd < 0) {
+        println("[FAIL] fs_open_read => {}", read_fd);
+        fs_remove(path);
+        return;
+    }
+
+    var fd_buf: array<u8, 64>;
+
+    var fd_n: i64 = io_read(
+        read_fd,
+        &fd_buf[0],
+        64
+    );
+
+    passed += check_i64(
+        "io_read byte count",
+        fd_n,
+        13
+    );
+
+    // Negative lengths must produce a negative error result.
+    var invalid_n: i64 = io_read(
+        read_fd,
+        &fd_buf[0],
+        -1
+    );
+
+    if (invalid_n < 0) {
+        println("[OK] io_read negative length => {}", invalid_n);
+        passed += 1;
+    } else {
+        println("[FAIL] io_read negative length => {}", invalid_n);
+    }
+
+    fs_close(read_fd);
+    fs_remove(path);
+
+    println("passed checks = {}", passed);
+    println("expected checks = 7");
+}

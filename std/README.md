@@ -5,10 +5,13 @@ This is Wave's standard library. This standard library operates independently of
 ## License
 
 The Wave standard library in this directory is licensed under the
+
 [Apache License 2.0](LICENSE). It may be modified, redistributed, and embedded
+
 in other products under the terms of that license.
 
 The Wave compiler and other repository components outside `std/` remain
+
 licensed under the repository's [Mozilla Public License 2.0](../LICENSE).
 
 ## Dependency Policy
@@ -26,6 +29,7 @@ licensed under the repository's [Mozilla Public License 2.0](../LICENSE).
 - `std::buffer`: growable byte buffer built on `std::mem`.
 - `std::io`: fd-level read/write/seek/copy helpers.
 - `std::fs`: basic open/read/write/copy/metadata helpers.
+- `fs_read_all` reads into caller-owned byte storage; it does not allocate or return `str`.
 - `std::bytes`: endian swap/load/store helpers.
 - `std::process`: fork/exec/wait and stdio redirection helpers.
 
