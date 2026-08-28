@@ -245,6 +245,16 @@ jobs:
           cargo build --locked --no-default-features
           --features llvm-target-riscv --jobs 2
 
+      - name: Build with the x86-only LLVM feature
+        run: >-
+          cargo build --locked --no-default-features
+          --features llvm-target-x86 --jobs 2
+
+      - name: Build with the AArch64-only LLVM feature
+        run: >-
+          cargo build --locked --no-default-features
+          --features llvm-target-aarch64 --jobs 2
+
       - name: Build with the core 64-bit LLVM feature set
         run: >-
           cargo build --locked --no-default-features
