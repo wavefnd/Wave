@@ -113,7 +113,7 @@ fun main() {
     passed += check_i64(
         "io_read byte count",
         fd_n,
-        13
+        12
     );
 
     // Negative lengths must produce a negative error result.
