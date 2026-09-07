@@ -90,7 +90,7 @@ jobs:
         run: cargo build --locked --release --verbose
 
       - name: Run Rust tests
-        run: cargo test --locked --all-targets --verbose
+        run: cargo test --locked --workspace --all-targets --verbose
 
       - name: Check examples and standard library corpus
         run: >-

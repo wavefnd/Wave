@@ -25,87 +25,95 @@ pub fn parse_unary_expression<'a, T>(tokens: &mut std::iter::Peekable<T>) -> Opt
 where
     T: Iterator<Item = &'a Token> + Clone,
 {
-    if let Some(token) = tokens.peek() {
-        match token.token_type {
-            TokenType::Not => {
-                tokens.next();
-                let inner = parse_unary_expression(tokens)?;
-                return Some(Expression::Unary {
-                    operator: Operator::Not,
-                    expr: Box::new(inner),
-                });
-            }
-            TokenType::BitwiseNot => {
-                tokens.next();
-                let inner = parse_unary_expression(tokens)?;
-                return Some(Expression::Unary {
-                    operator: Operator::BitwiseNot,
-                    expr: Box::new(inner),
-                });
-            }
-            TokenType::AddressOf => {
-                tokens.next();
-                let inner = parse_unary_expression(tokens)?;
-                return Some(Expression::AddressOf(Box::new(inner)));
-            }
-            TokenType::Deref => {
-                tokens.next();
-                let inner = parse_unary_expression(tokens)?;
-                return Some(Expression::Deref(Box::new(inner)));
-            }
-            TokenType::Increment => {
-                let tok = tokens.next()?; // '++'
-                let inner = parse_unary_expression(tokens)?;
-                if !is_assignable(&inner) {
-                    println!("Error: ++ target must be assignable (line {})", tok.line);
-                    return None;
+    let before = tokens.clone();
+    let result = (|| {
+        if let Some(token) = tokens.peek() {
+            match token.token_type {
+                TokenType::Not => {
+                    tokens.next();
+                    let inner = parse_unary_expression(tokens)?;
+                    return Some(Expression::Unary {
+                        operator: Operator::Not,
+                        expr: Box::new(inner),
+                    });
                 }
-                return Some(Expression::IncDec {
-                    kind: IncDecKind::PreInc,
-                    target: Box::new(inner),
-                });
-            }
-            TokenType::Decrement => {
-                let tok = tokens.next()?; // '--'
-                let inner = parse_unary_expression(tokens)?;
-                if !is_assignable(&inner) {
-                    println!("Error: -- target must be assignable (line {})", tok.line);
-                    return None;
+                TokenType::BitwiseNot => {
+                    tokens.next();
+                    let inner = parse_unary_expression(tokens)?;
+                    return Some(Expression::Unary {
+                        operator: Operator::BitwiseNot,
+                        expr: Box::new(inner),
+                    });
                 }
-                return Some(Expression::IncDec {
-                    kind: IncDecKind::PreDec,
-                    target: Box::new(inner),
-                });
-            }
-            TokenType::Minus => {
-                let _tok = tokens.next()?; // '-'
-                let inner = parse_unary_expression(tokens)?;
-
-                match inner {
-                    Expression::Literal(Literal::Int(s)) => {
-                        return Some(Expression::Literal(Literal::Int(format!("-{}", s))));
+                TokenType::AddressOf => {
+                    tokens.next();
+                    let inner = parse_unary_expression(tokens)?;
+                    return Some(Expression::AddressOf(Box::new(inner)));
+                }
+                TokenType::Deref => {
+                    tokens.next();
+                    let inner = parse_unary_expression(tokens)?;
+                    return Some(Expression::Deref(Box::new(inner)));
+                }
+                TokenType::Increment => {
+                    let tok = tokens.next()?; // '++'
+                    let inner = parse_unary_expression(tokens)?;
+                    if !is_assignable(&inner) {
+                        println!("Error: ++ target must be assignable (line {})", tok.line);
+                        return None;
                     }
-                    Expression::Literal(Literal::Float(f)) => {
-                        return Some(Expression::Literal(Literal::Float(-f)));
+                    return Some(Expression::IncDec {
+                        kind: IncDecKind::PreInc,
+                        target: Box::new(inner),
+                    });
+                }
+                TokenType::Decrement => {
+                    let tok = tokens.next()?; // '--'
+                    let inner = parse_unary_expression(tokens)?;
+                    if !is_assignable(&inner) {
+                        println!("Error: -- target must be assignable (line {})", tok.line);
+                        return None;
                     }
+                    return Some(Expression::IncDec {
+                        kind: IncDecKind::PreDec,
+                        target: Box::new(inner),
+                    });
+                }
+                TokenType::Minus => {
+                    let _tok = tokens.next()?; // '-'
+                    let inner = parse_unary_expression(tokens)?;
 
-                    other => {
-                        return Some(Expression::Unary {
-                            operator: Operator::Neg,
-                            expr: Box::new(other),
-                        })
+                    match inner.into_unspanned() {
+                        Expression::Literal(Literal::Int(s)) => {
+                            return Some(Expression::Literal(Literal::Int(
+                                s.strip_prefix('-')
+                                    .map(str::to_string)
+                                    .unwrap_or_else(|| format!("-{s}")),
+                            )));
+                        }
+                        Expression::Literal(Literal::Float(f)) => {
+                            return Some(Expression::Literal(Literal::Float(-f)));
+                        }
+
+                        other => {
+                            return Some(Expression::Unary {
+                                operator: Operator::Neg,
+                                expr: Box::new(other),
+                            })
+                        }
                     }
                 }
-            }
 
-            TokenType::Plus => {
-                tokens.next(); // consume '+'
-                let inner = parse_unary_expression(tokens)?;
-                return Some(inner);
+                TokenType::Plus => {
+                    tokens.next(); // consume '+'
+                    let inner = parse_unary_expression(tokens)?;
+                    return Some(inner);
+                }
+                _ => {}
             }
-            _ => {}
         }
-    }
 
-    parse_primary_expression(tokens)
+        parse_primary_expression(tokens)
+    })();
+    result.map(|value: Expression| value.with_span(lexer::consumed_span(before, tokens)))
 }

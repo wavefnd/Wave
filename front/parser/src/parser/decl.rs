@@ -17,8 +17,8 @@
 //! depth so inner commas and closing chevrons cannot terminate the outer type.
 
 use crate::ast::{
-    ASTNode, EnumNode, EnumVariantNode, Expression, ExternFunctionNode, Mutability, TypeAliasNode,
-    VariableNode, VariantCaseNode, VariantNode, Visibility, WaveType,
+    ASTNode, EnumNode, EnumVariantNode, Expression, ExternFunctionNode, Literal, Mutability,
+    TypeAliasNode, VariableNode, VariantCaseNode, VariantNode, Visibility, WaveType,
 };
 use crate::expr::parse_expression;
 use crate::parser::functions::parse_generic_param_names;
@@ -130,9 +130,10 @@ pub fn parse_const_decl(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<ASTNod
     }
     tokens.next();
 
-    if let (WaveType::Array(_, expected_len), Some(Expression::ArrayLiteral(elements))) =
-        (&wave_type, &initial_value)
-    {
+    if let (WaveType::Array(_, expected_len), Some(Expression::ArrayLiteral(elements))) = (
+        &wave_type,
+        &initial_value.as_ref().map(Expression::unspanned),
+    ) {
         if *expected_len != elements.len() as u32 {
             println!(
                 "❌ Error: Array length mismatch. Expected {}, but got {} elements",
@@ -217,9 +218,10 @@ pub fn parse_var(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<ASTNode> {
     }
     tokens.next();
 
-    if let (WaveType::Array(_, expected_len), Some(Expression::ArrayLiteral(elements))) =
-        (&wave_type, &initial_value)
-    {
+    if let (WaveType::Array(_, expected_len), Some(Expression::ArrayLiteral(elements))) = (
+        &wave_type,
+        &initial_value.as_ref().map(Expression::unspanned),
+    ) {
         if *expected_len != elements.len() as u32 {
             println!(
                 "❌ Error: Array length mismatch. Expected {}, but got {} elements",
@@ -685,16 +687,6 @@ pub fn parse_type_alias(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<ASTNod
     }))
 }
 
-fn token_text(tok: &Token) -> Option<String> {
-    if !tok.lexeme.is_empty() {
-        return Some(tok.lexeme.clone());
-    }
-    if let TokenType::Identifier(s) = &tok.token_type {
-        return Some(s.clone());
-    }
-    None
-}
-
 pub fn parse_enum(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<ASTNode> {
     // enum <Ident> -> <Type> { <Variant>(=<Int>)? (, ...)* }
     let name = match tokens.next() {
@@ -755,6 +747,7 @@ pub fn parse_enum(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<ASTNode> {
                 break;
             }
             TokenType::Identifier(_) => {
+                let before = tokens.clone();
                 // variant name
                 let vname = match tokens.next() {
                     Some(Token {
@@ -769,29 +762,17 @@ pub fn parse_enum(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<ASTNode> {
                 if matches!(tokens.peek().map(|t| &t.token_type), Some(TokenType::Equal)) {
                     tokens.next(); // consume '='
 
-                    let val_tok = match tokens.next() {
-                        Some(t) => t,
-                        None => {
-                            println!(
-                                "Error: Expected integer literal after '=' in enum '{}'",
-                                name
-                            );
-                            return None;
-                        }
+                    let value = parse_expression(tokens)?;
+                    let Expression::Literal(Literal::Int(raw)) = value.unspanned() else {
+                        return None;
                     };
-
-                    let raw = match token_text(val_tok) {
-                        Some(s) => s,
-                        None => {
-                            println!("Error: Expected integer literal after '=' in enum '{}', found {:?}", name, val_tok);
-                            return None;
-                        }
-                    };
+                    let raw = raw.clone();
 
                     explicit_value = Some(raw);
                 }
 
                 variants.push(EnumVariantNode {
+                    span: lexer::consumed_span(before, tokens),
                     name: vname,
                     explicit_value,
                 });
@@ -867,6 +848,7 @@ pub fn parse_variant(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<ASTNode> 
             break;
         }
 
+        let before = tokens.clone();
         let case_name = match tokens.next() {
             Some(Token {
                 token_type: TokenType::Identifier(case_name),
@@ -916,6 +898,7 @@ pub fn parse_variant(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<ASTNode> 
         }
 
         cases.push(VariantCaseNode {
+            span: lexer::consumed_span(before, tokens),
             name: case_name,
             payload_types,
         });

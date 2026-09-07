@@ -26,4 +26,4 @@ mod parse;
 pub mod stmt;
 pub mod types;
 
-pub use parse::{parse, parse_syntax_only, ParseError};
+pub use parse::{parse, parse_syntax_only, parse_syntax_with_spans, ParseError};

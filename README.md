@@ -231,3 +231,6 @@ Wave is developed in public with support from individuals and organizations. You
 </p>
 
 Thank you to everyone who contributes code, documentation, testing, funding, or time to Wave.
+
+The [Alpha language contract](spec/README.md) defines the grammar, numeric literals,
+token status and source-location conventions checked by frontend conformance tests.

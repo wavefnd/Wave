@@ -91,21 +91,21 @@ resource-intensive Cargo commands (CI sets `CARGO_BUILD_JOBS=2`).
 ```bash
 cargo fmt --all --check
 ./tools/check_std_policy.sh
-RUSTDOCFLAGS="-D warnings" cargo doc --locked --no-deps --jobs 2
-cargo clippy --locked --all-targets -- -D warnings
+RUSTDOCFLAGS="-D warnings" cargo doc --locked --workspace --no-deps --jobs 2
+cargo clippy --locked --workspace --all-targets -- -D warnings
 python3 -m py_compile x.py tools/check_wave_corpus.py tools/case_manifest.py \
   tools/populate_case_matrix.py tools/run_tests.py tools/test_contracts.py \
   tools/test_case_manifest.py tools/test_test_contracts.py
 python3 -m unittest tools.test_case_manifest tools.test_test_contracts
 cargo build --locked --release --jobs 2
-cargo test --locked --all-targets --verbose
+cargo test --locked --workspace --all-targets --verbose
 python3 tools/check_wave_corpus.py --wavec target/release/wavec --run-std-examples
 ```
 
 Notes:
 
 - Formatting must use `cargo fmt --all --check` (not bare `cargo fmt --check`).
-- Clippy denies warnings: `cargo clippy --locked --all-targets -- -D warnings`.
+- Clippy denies warnings: `cargo clippy --locked --workspace --all-targets -- -D warnings`.
 - rustdoc must be warning-free via `RUSTDOCFLAGS="-D warnings"`.
 - Standard-library policy is enforced by `./tools/check_std_policy.sh`.
 - Wave language corpus / std examples are checked with `tools/check_wave_corpus.py`
@@ -178,7 +178,7 @@ All formatting and lint rules must pass:
 
 ```bash
 cargo fmt --all --check
-cargo clippy --locked --all-targets -- -D warnings
+cargo clippy --locked --workspace --all-targets -- -D warnings
 ```
 
 ---
@@ -203,7 +203,7 @@ All additional functionality should be provided through external libraries
 
 Wave uses:
 
-- Locked Rust tests: `cargo test --locked --all-targets`
+- Locked Rust tests: `cargo test --locked --workspace --all-targets`
 - Automated `.wave` language cases and std examples via
   `python3 tools/check_wave_corpus.py`
 - Python tooling unit tests: `python3 -m unittest tools.test_case_manifest tools.test_test_contracts`
@@ -214,6 +214,10 @@ Contributors should:
 - Add `.wave` examples for new language features
 
 ---
+
+Frontend syntax changes must update [the Alpha grammar and token inventory](spec/README.md)
+and its positive/negative fixtures. Run `cargo test --locked -p lexer -p parser --jobs 2`
+for backend-independent frontend tests, then the workspace tests for driver and codegen coverage.
 
 ## 9. Pull Request Guidelines
 

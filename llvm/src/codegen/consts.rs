@@ -70,52 +70,11 @@ fn value_type_name<'ctx>(v: BasicValueEnum<'ctx>) -> String {
 }
 
 fn parse_signed_and_radix(s: &str) -> (bool, StringRadix, String) {
-    let mut t = s.trim().replace('_', "");
-    if t.is_empty() {
-        return (false, StringRadix::Decimal, "".to_string());
-    }
-
-    let mut neg = false;
-    if let Some(rest) = t.strip_prefix('-') {
-        neg = true;
-        t = rest.to_string();
-    } else if let Some(rest) = t.strip_prefix('+') {
-        t = rest.to_string();
-    }
-
-    let (radix, digits) = if let Some(rest) = t.strip_prefix("0x").or_else(|| t.strip_prefix("0X"))
-    {
-        (StringRadix::Hexadecimal, rest)
-    } else if let Some(rest) = t.strip_prefix("0b").or_else(|| t.strip_prefix("0B")) {
-        (StringRadix::Binary, rest)
-    } else if let Some(rest) = t.strip_prefix("0o").or_else(|| t.strip_prefix("0O")) {
-        (StringRadix::Octal, rest)
-    } else {
-        (StringRadix::Decimal, t.as_str())
-    };
-
-    (neg, radix, digits.to_string())
+    super::number::parse_integer(s).unwrap_or((false, StringRadix::Decimal, String::new()))
 }
 
 fn is_zero_like(s: &str) -> bool {
-    let s = s.trim().replace('_', "");
-    let s = s.strip_prefix('+').unwrap_or(&s);
-    let s = s.strip_prefix('-').unwrap_or(s);
-
-    let s = s
-        .strip_prefix("0x")
-        .or_else(|| s.strip_prefix("0X"))
-        .unwrap_or(s);
-    let s = s
-        .strip_prefix("0b")
-        .or_else(|| s.strip_prefix("0B"))
-        .unwrap_or(s);
-    let s = s
-        .strip_prefix("0o")
-        .or_else(|| s.strip_prefix("0O"))
-        .unwrap_or(s);
-
-    !s.is_empty() && s.chars().all(|c| c == '0')
+    lexer::number::IntegerLiteral::parse(s).is_some_and(|n| n.is_zero())
 }
 
 fn strip_struct_prefix(raw: &str) -> &str {
@@ -377,6 +336,12 @@ fn const_from_expected<'ctx>(
 
         // --- ints ---
         Expression::Literal(Literal::Int(s)) => match expected {
+            BasicTypeEnum::FloatType(float_ty) => {
+                let value = lexer::number::IntegerLiteral::parse(s)
+                    .and_then(|value| value.to_f64())
+                    .ok_or_else(|| ConstEvalError::InvalidLiteral(s.clone()))?;
+                Ok(float_ty.const_float(value).as_basic_value_enum())
+            }
             BasicTypeEnum::IntType(int_ty) => {
                 let (neg, radix, digits) = parse_signed_and_radix(s);
                 let mut iv = int_ty

@@ -1806,7 +1806,7 @@ fun value() -> i32 {
     let output = run_wavec_raw([OsStr::new("check"), source.as_os_str()]);
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("wrong_return.wave:3:5"), "{}", stderr);
+    assert!(stderr.contains("wrong_return.wave:3:12"), "{}", stderr);
     assert!(stderr.contains("return \"text\";"), "{}", stderr);
 
     let repeated_return = write_wave(
@@ -1824,7 +1824,7 @@ fun value(flag: bool) -> i32 {
     let output = run_wavec_raw([OsStr::new("check"), repeated_return.as_os_str()]);
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("repeated_return.wave:6:5"), "{}", stderr);
+    assert!(stderr.contains("repeated_return.wave:6:12"), "{}", stderr);
     assert!(stderr.contains("return \"text\";"), "{}", stderr);
 
     let duplicate = write_wave(

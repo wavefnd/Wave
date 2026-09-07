@@ -19,15 +19,11 @@
 
 use std::collections::HashMap;
 
-#[derive(Debug, Clone)]
-pub enum Value {
-    Int(i64),
-    Float(f64),
-    Text(String),
-}
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum WaveType {
+    /// Target-sized integers remain symbolic until the target-resolution pass.
+    Isz,
+    Usz,
     Int(u16),
     Uint(u16),
     Float(u16),
@@ -38,12 +34,18 @@ pub enum WaveType {
     Pointer(Box<WaveType>),
     Array(Box<WaveType>, u32),
     Void,
+    /// A function that cannot return to its caller (return position only).
+    Never,
     Struct(String),
     Variant(String),
 }
 
 #[derive(Debug, Clone)]
 pub enum ASTNode {
+    Located {
+        value: Box<ASTNode>,
+        span: error::SourceSpan,
+    },
     Function(FunctionNode),
     ExternFunction(ExternFunctionNode),
     Program(ParameterNode),
@@ -81,6 +83,7 @@ pub struct EnumNode {
 
 #[derive(Debug, Clone)]
 pub struct EnumVariantNode {
+    pub span: Option<error::SourceSpan>,
     pub name: String,
     pub explicit_value: Option<String>,
 }
@@ -95,16 +98,19 @@ pub struct VariantNode {
 
 #[derive(Debug, Clone)]
 pub struct VariantCaseNode {
+    pub span: Option<error::SourceSpan>,
     pub name: String,
     pub payload_types: Vec<WaveType>,
 }
 
 #[derive(Debug, Clone)]
 pub struct FunctionNode {
+    pub span: Option<error::SourceSpan>,
     pub name: String,
     pub generic_params: Vec<String>,
     pub parameters: Vec<ParameterNode>,
     pub return_type: Option<WaveType>,
+    pub return_type_span: Option<error::SourceSpan>,
     pub body: Vec<ASTNode>,
     pub export: Option<ExportAttribute>,
     pub visibility: Visibility,
@@ -121,6 +127,7 @@ pub struct StructNode {
     pub name: String,
     pub generic_params: Vec<String>,
     pub fields: Vec<(String, WaveType)>,
+    pub field_spans: Vec<Option<error::SourceSpan>>,
     pub methods: Vec<FunctionNode>,
     pub visibility: Visibility,
 }
@@ -140,9 +147,10 @@ pub struct FunctionSignature {
 
 #[derive(Debug, Clone)]
 pub struct ParameterNode {
+    pub span: Option<error::SourceSpan>,
     pub name: String,
     pub param_type: WaveType,
-    pub initial_value: Option<Value>,
+    pub initial_value: Option<Expression>,
 }
 
 #[derive(Debug, Clone)]
@@ -171,6 +179,10 @@ pub enum IncDecKind {
 
 #[derive(Debug, Clone)]
 pub enum Expression {
+    Located {
+        value: Box<Expression>,
+        span: error::SourceSpan,
+    },
     StructLiteral {
         name: String,
         fields: Vec<(String, Expression)>,
@@ -283,6 +295,10 @@ pub enum AssignOperator {
 
 #[derive(Debug, Clone)]
 pub enum MatchPattern {
+    Located {
+        value: Box<MatchPattern>,
+        span: error::SourceSpan,
+    },
     Int(String),
     Ident(String),
     Binding(String),
@@ -296,6 +312,7 @@ pub enum MatchPattern {
 
 #[derive(Debug, Clone)]
 pub struct MatchArm {
+    pub span: Option<error::SourceSpan>,
     pub pattern: MatchPattern,
     pub body: Vec<ASTNode>,
 }
@@ -387,7 +404,7 @@ pub struct VariableInfo {
 
 impl Expression {
     pub fn as_identifier(&self) -> Option<&str> {
-        match self {
+        match self.unspanned() {
             Expression::Variable(name) => Some(name.as_str()),
             Expression::AddressOf(inner) => {
                 if let Expression::Variable(name) = &**inner {
@@ -401,7 +418,7 @@ impl Expression {
     }
 
     pub fn get_wave_type(&self, variables: &HashMap<String, VariableInfo>) -> WaveType {
-        match self {
+        match self.unspanned() {
             Expression::Variable(name) => variables
                 .get(name)
                 .unwrap_or_else(|| panic!("Variable '{}' not found", name))
@@ -430,5 +447,119 @@ impl Expression {
             Expression::Cast { target_type, .. } => target_type.clone(),
             _ => panic!("get_wave_type not implemented for {:?}", self),
         }
+    }
+}
+
+impl ASTNode {
+    pub fn unspanned(&self) -> &Self {
+        match self {
+            Self::Located { value, .. } => value.unspanned(),
+            other => other,
+        }
+    }
+    pub fn into_unspanned(self) -> Self {
+        match self {
+            Self::Located { value, .. } => value.into_unspanned(),
+            other => other,
+        }
+    }
+    pub fn span(&self) -> Option<&error::SourceSpan> {
+        match self {
+            Self::Located { span, .. } => Some(span),
+            _ => None,
+        }
+    }
+    pub fn with_span(self, span: Option<error::SourceSpan>) -> Self {
+        if self.span() == span.as_ref() {
+            return self;
+        }
+        match span {
+            Some(span) => Self::Located {
+                value: Box::new(self),
+                span,
+            },
+            None => self,
+        }
+    }
+}
+
+impl Expression {
+    pub fn unspanned(&self) -> &Self {
+        match self {
+            Self::Located { value, .. } => value.unspanned(),
+            other => other,
+        }
+    }
+    pub fn into_unspanned(self) -> Self {
+        match self {
+            Self::Located { value, .. } => value.into_unspanned(),
+            other => other,
+        }
+    }
+    pub fn span(&self) -> Option<&error::SourceSpan> {
+        match self {
+            Self::Located { span, .. } => Some(span),
+            _ => None,
+        }
+    }
+    pub fn with_span(self, span: Option<error::SourceSpan>) -> Self {
+        if self.span() == span.as_ref() {
+            return self;
+        }
+        match span {
+            Some(span) => Self::Located {
+                value: Box::new(self),
+                span,
+            },
+            None => self,
+        }
+    }
+}
+
+impl MatchPattern {
+    pub fn unspanned(&self) -> &Self {
+        match self {
+            Self::Located { value, .. } => value.unspanned(),
+            other => other,
+        }
+    }
+    pub fn into_unspanned(self) -> Self {
+        match self {
+            Self::Located { value, .. } => value.into_unspanned(),
+            other => other,
+        }
+    }
+    pub fn span(&self) -> Option<&error::SourceSpan> {
+        match self {
+            Self::Located { span, .. } => Some(span),
+            _ => None,
+        }
+    }
+    pub fn with_span(self, span: Option<error::SourceSpan>) -> Self {
+        if self.span() == span.as_ref() {
+            return self;
+        }
+        match span {
+            Some(span) => Self::Located {
+                value: Box::new(self),
+                span,
+            },
+            None => self,
+        }
+    }
+}
+
+impl Expression {
+    pub fn binary(left: Expression, operator: Operator, right: Expression) -> Self {
+        let span = left
+            .span()
+            .zip(right.span())
+            .map(|(first, last)| first.through(last));
+        Self::BinaryExpression {
+            left: Box::new(left),
+            operator,
+            right: Box::new(right),
+        }
+        .with_span(span)
     }
 }

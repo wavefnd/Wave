@@ -56,6 +56,9 @@ pub fn wave_type_to_llvm_type<'ctx>(
     flavor: TypeFlavor,
 ) -> BasicTypeEnum<'ctx> {
     match wave_type {
+        WaveType::Isz | WaveType::Usz | WaveType::Never => {
+            unreachable!("typed HIR must resolve target-sized integers")
+        }
         WaveType::Int(bits) | WaveType::Uint(bits) => context
             .custom_width_int_type(*bits as u32)
             .as_basic_type_enum(),

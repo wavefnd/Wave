@@ -1,0 +1,2 @@
+struct Box<T> { value: T; fun get(self: ptr<Box<T>>) -> T { return self.value; } }
+proto Plain { fun f() {} }

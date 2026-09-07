@@ -23,8 +23,28 @@ pub mod core;
 pub mod cursor;
 pub mod ident;
 pub mod literals;
+pub mod number;
 pub mod scan;
 pub mod token;
 pub mod trivia;
 
 pub use crate::core::{Lexer, Token};
+
+/// Range of exactly the tokens consumed between two parser cursors.
+pub fn consumed_span<'a, T>(
+    before: std::iter::Peekable<T>,
+    after: &mut std::iter::Peekable<T>,
+) -> Option<error::SourceSpan>
+where
+    T: Iterator<Item = &'a Token> + Clone,
+{
+    let stop = after.peek().copied();
+    let mut consumed = before.take_while(|t| stop.is_none_or(|stop| !std::ptr::eq(*t, stop)));
+    let first = consumed.next()?.span.as_ref()?.clone();
+    Some(
+        consumed
+            .last()
+            .and_then(|t| t.span.as_ref())
+            .map_or(first.clone(), |last| first.through(last)),
+    )
+}

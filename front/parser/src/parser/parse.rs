@@ -29,6 +29,7 @@ pub struct ParseDiagnostic {
     pub message: String,
     pub line: usize,
     pub column: usize,
+    pub span: Option<error::SourceSpan>,
     pub expected: Vec<String>,
     pub found: Option<String>,
     pub context: Option<String>,
@@ -48,6 +49,7 @@ impl ParseError {
             message: message.into(),
             line: 0,
             column: 0,
+            span: None,
             expected: Vec::new(),
             found: None,
             context: None,
@@ -59,7 +61,8 @@ impl ParseError {
     pub fn syntax_at(token: Option<&Token>, message: impl Into<String>) -> Self {
         let mut err = Self::syntax(message);
         if let Some(tok) = token {
-            err = err.with_line_col(tok.line, 1);
+            err = err.with_line_col(tok.line, tok.span.as_ref().map_or(0, |s| s.column));
+            err.diag_mut().span = tok.span.clone();
         }
         err
     }
@@ -69,6 +72,7 @@ impl ParseError {
             message: message.into(),
             line: 0,
             column: 0,
+            span: None,
             expected: Vec::new(),
             found: None,
             context: None,
@@ -120,13 +124,13 @@ impl ParseError {
     pub fn with_found_token(mut self, token: Option<&Token>) -> Self {
         if let Some(tok) = token {
             let d = self.diag_mut();
-            if d.line == 0 {
-                d.line = tok.line;
-            }
-            if d.column == 0 {
-                d.column = 1;
-            }
+            d.line = tok.line;
+            d.column = tok.span.as_ref().map_or(0, |s| s.column);
+            d.span = tok.span.clone();
             d.found = Some(Self::token_desc(tok));
+            if let Some(spelling) = tok.token_type.reserved_spelling() {
+                d.message = format!("reserved syntax `{spelling}` is not implemented in Alpha");
+            }
         }
         self
     }
@@ -149,6 +153,12 @@ impl ParseError {
     pub fn message(&self) -> &str {
         match self {
             ParseError::Syntax(d) | ParseError::Semantic(d) => &d.message,
+        }
+    }
+
+    pub fn span(&self) -> Option<&error::SourceSpan> {
+        match self {
+            Self::Syntax(d) | Self::Semantic(d) => d.span.as_ref(),
         }
     }
 
@@ -195,13 +205,25 @@ impl ParseError {
     }
 }
 
+/// Compatibility entry point for consumers that do not retain source provenance.
 pub fn parse_syntax_only(tokens: &[Token]) -> Result<Vec<ASTNode>, ParseError> {
+    let mut tokens = tokens.to_vec();
+    for token in &mut tokens {
+        token.span = None;
+    }
+    parse_syntax_with_spans(&tokens)
+}
+
+/// Parse physical syntax with byte ranges preserved through frontend rewrites.
+pub fn parse_syntax_with_spans(tokens: &[Token]) -> Result<Vec<ASTNode>, ParseError> {
     validate_explicit_variable_types(tokens)?;
 
     let mut iter = tokens.iter().peekable();
     let mut nodes = vec![];
 
-    while let Some(token) = iter.peek() {
+    while let Some(token) = iter.peek().copied() {
+        let before = iter.clone();
+        let first_node = nodes.len();
         match token.token_type {
             TokenType::Whitespace | TokenType::Newline => {
                 iter.next();
@@ -514,6 +536,11 @@ pub fn parse_syntax_only(tokens: &[Token]) -> Result<Vec<ASTNode>, ParseError> {
                         .with_help("only declarations are allowed at top level"),
                 );
             }
+        }
+        for node in &mut nodes[first_node..] {
+            let value = std::mem::replace(node, ASTNode::Expression(crate::ast::Expression::Null));
+            let span = crate::source::node_span(before.clone(), &mut iter, &value);
+            *node = value.with_span(span);
         }
     }
 

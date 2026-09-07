@@ -27,6 +27,7 @@ pub(crate) fn gen_expr<'ctx, 'a>(
     expected_type: Option<BasicTypeEnum<'ctx>>,
 ) -> BasicValueEnum<'ctx> {
     match expr {
+        Expression::Located { .. } => unreachable!("typed HIR detaches source wrappers"),
         Expression::Literal(lit) => literals::gen(env, lit, expected_type),
         Expression::Null => literals::gen_null(env, expected_type),
         Expression::Variable(name) => {

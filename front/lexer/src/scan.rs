@@ -24,6 +24,27 @@ impl<'a> Lexer<'a> {
     #[allow(clippy::never_loop)]
     /// Scans the next non-trivia token while preserving its source line.
     pub fn next_token(&mut self) -> Result<Token, WaveError> {
+        self.skip_trivia()?;
+        let (start, line, column) = (self.current, self.line, self.current_column());
+        let mut token = self.scan_token()?;
+        token.line = line;
+        token.lexeme = self.source[start..self.current].to_string();
+        token.span = Some(error::SourceSpan {
+            file: self.file.clone(),
+            start,
+            end: self.current,
+            line,
+            column,
+            end_line: self.line,
+            end_column: self.current_column(),
+            expansion: Vec::new(),
+            focus: None,
+        });
+        Ok(token)
+    }
+
+    #[allow(clippy::never_loop)]
+    fn scan_token(&mut self) -> Result<Token, WaveError> {
         loop {
             self.skip_trivia()?;
 
@@ -32,6 +53,7 @@ impl<'a> Lexer<'a> {
                     token_type: TokenType::Eof,
                     lexeme: String::new(),
                     line: self.line,
+                    span: None,
                 });
             }
 
@@ -44,18 +66,21 @@ impl<'a> Lexer<'a> {
                             token_type: TokenType::Increment,
                             lexeme: "++".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     } else if self.match_next('=') {
                         return Ok(Token {
                             token_type: TokenType::PlusEq,
                             lexeme: "+=".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     } else {
                         return Ok(Token {
                             token_type: TokenType::Plus,
                             lexeme: "+".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     }
                 }
@@ -65,24 +90,28 @@ impl<'a> Lexer<'a> {
                             token_type: TokenType::Decrement,
                             lexeme: "--".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     } else if self.match_next('>') {
                         return Ok(Token {
                             token_type: TokenType::Arrow,
                             lexeme: "->".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     } else if self.match_next('=') {
                         return Ok(Token {
                             token_type: TokenType::MinusEq,
                             lexeme: "-=".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     } else {
                         return Ok(Token {
                             token_type: TokenType::Minus,
                             lexeme: "-".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     }
                 }
@@ -92,12 +121,14 @@ impl<'a> Lexer<'a> {
                             token_type: TokenType::StarEq,
                             lexeme: "*=".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     } else {
                         return Ok(Token {
                             token_type: TokenType::Star,
                             lexeme: "*".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     }
                 }
@@ -106,6 +137,7 @@ impl<'a> Lexer<'a> {
                         token_type: TokenType::Dot,
                         lexeme: ".".to_string(),
                         line: self.line,
+                        span: None,
                     })
                 }
                 '/' => {
@@ -114,12 +146,14 @@ impl<'a> Lexer<'a> {
                             token_type: TokenType::DivEq,
                             lexeme: "/=".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     } else {
                         return Ok(Token {
                             token_type: TokenType::Div,
                             lexeme: "/".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     }
                 }
@@ -129,12 +163,14 @@ impl<'a> Lexer<'a> {
                             token_type: TokenType::RemainderEq,
                             lexeme: "%=".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     } else {
                         return Ok(Token {
                             token_type: TokenType::Remainder,
                             lexeme: "%".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     }
                 }
@@ -143,6 +179,7 @@ impl<'a> Lexer<'a> {
                         token_type: TokenType::SemiColon,
                         lexeme: ";".to_string(),
                         line: self.line,
+                        span: None,
                     })
                 }
                 ':' => {
@@ -151,12 +188,14 @@ impl<'a> Lexer<'a> {
                             token_type: TokenType::DoubleColon,
                             lexeme: "::".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     }
                     return Ok(Token {
                         token_type: TokenType::Colon,
                         lexeme: ":".to_string(),
                         line: self.line,
+                        span: None,
                     });
                 }
                 '<' => {
@@ -165,18 +204,21 @@ impl<'a> Lexer<'a> {
                             token_type: TokenType::Rol,
                             lexeme: "<<".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     } else if self.match_next('=') {
                         return Ok(Token {
                             token_type: TokenType::LchevrEq,
                             lexeme: "<=".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     } else {
                         return Ok(Token {
                             token_type: TokenType::Lchevr,
                             lexeme: "<".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     }
                 }
@@ -186,18 +228,21 @@ impl<'a> Lexer<'a> {
                             token_type: TokenType::Ror,
                             lexeme: ">>".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     } else if self.match_next('=') {
                         return Ok(Token {
                             token_type: TokenType::RchevrEq,
                             lexeme: ">=".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     } else {
                         return Ok(Token {
                             token_type: TokenType::Rchevr,
                             lexeme: ">".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     }
                 }
@@ -206,6 +251,7 @@ impl<'a> Lexer<'a> {
                         token_type: TokenType::Lparen,
                         lexeme: "(".to_string(),
                         line: self.line,
+                        span: None,
                     })
                 }
                 ')' => {
@@ -213,6 +259,7 @@ impl<'a> Lexer<'a> {
                         token_type: TokenType::Rparen,
                         lexeme: ")".to_string(),
                         line: self.line,
+                        span: None,
                     })
                 }
                 '{' => {
@@ -220,6 +267,7 @@ impl<'a> Lexer<'a> {
                         token_type: TokenType::Lbrace,
                         lexeme: "{".to_string(),
                         line: self.line,
+                        span: None,
                     })
                 }
                 '}' => {
@@ -227,6 +275,7 @@ impl<'a> Lexer<'a> {
                         token_type: TokenType::Rbrace,
                         lexeme: "}".to_string(),
                         line: self.line,
+                        span: None,
                     })
                 }
                 '[' => {
@@ -234,6 +283,7 @@ impl<'a> Lexer<'a> {
                         token_type: TokenType::Lbrack,
                         lexeme: "[".to_string(),
                         line: self.line,
+                        span: None,
                     })
                 }
                 ']' => {
@@ -241,6 +291,7 @@ impl<'a> Lexer<'a> {
                         token_type: TokenType::Rbrack,
                         lexeme: "]".to_string(),
                         line: self.line,
+                        span: None,
                     })
                 }
                 '=' => {
@@ -249,12 +300,14 @@ impl<'a> Lexer<'a> {
                             token_type: TokenType::EqualTwo,
                             lexeme: "==".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     } else {
                         return Ok(Token {
                             token_type: TokenType::Equal,
                             lexeme: "=".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     }
                 }
@@ -264,12 +317,14 @@ impl<'a> Lexer<'a> {
                             token_type: TokenType::LogicalAnd,
                             lexeme: "&&".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     } else {
                         return Ok(Token {
                             token_type: TokenType::AddressOf,
                             lexeme: "&".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     }
                 }
@@ -279,12 +334,14 @@ impl<'a> Lexer<'a> {
                             token_type: TokenType::LogicalOr,
                             lexeme: "||".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     } else {
                         return Ok(Token {
                             token_type: TokenType::BitwiseOr,
                             lexeme: "|".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     }
                 }
@@ -294,24 +351,28 @@ impl<'a> Lexer<'a> {
                             token_type: TokenType::NotEqual,
                             lexeme: "!=".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     } else if self.match_next('&') {
                         return Ok(Token {
                             token_type: TokenType::Nand,
                             lexeme: "!&".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     } else if self.match_next('|') {
                         return Ok(Token {
                             token_type: TokenType::Nor,
                             lexeme: "!|".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     } else {
                         return Ok(Token {
                             token_type: TokenType::Not,
                             lexeme: "!".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     }
                 }
@@ -320,6 +381,7 @@ impl<'a> Lexer<'a> {
                         token_type: TokenType::Xor,
                         lexeme: "^".to_string(),
                         line: self.line,
+                        span: None,
                     })
                 }
                 '~' => {
@@ -328,12 +390,14 @@ impl<'a> Lexer<'a> {
                             token_type: TokenType::Xnor,
                             lexeme: "~^".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     } else {
                         return Ok(Token {
                             token_type: TokenType::BitwiseNot,
                             lexeme: "~".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     }
                 }
@@ -343,12 +407,14 @@ impl<'a> Lexer<'a> {
                             token_type: TokenType::NullCoalesce,
                             lexeme: "??".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     } else {
                         return Ok(Token {
                             token_type: TokenType::Condition,
                             lexeme: "?".to_string(),
                             line: self.line,
+                            span: None,
                         });
                     }
                 }
@@ -357,6 +423,7 @@ impl<'a> Lexer<'a> {
                         token_type: TokenType::Comma,
                         lexeme: ",".to_string(),
                         line: self.line,
+                        span: None,
                     })
                 }
                 '\'' => {
@@ -365,6 +432,7 @@ impl<'a> Lexer<'a> {
                         token_type: TokenType::CharLiteral(value),
                         lexeme: format!("'{}'", value),
                         line: self.line,
+                        span: None,
                     });
                 }
                 '"' => {
@@ -373,108 +441,40 @@ impl<'a> Lexer<'a> {
                         token_type: TokenType::String(string_value.clone()),
                         lexeme: format!("\"{}\"", string_value),
                         line: self.line,
+                        span: None,
                     });
                 }
 
-                'a'..='z' | 'A'..='Z' | '_' => {
-                    let ident = self.identifier();
+                ch if ch.is_alphabetic() || ch == '_' => {
+                    let ident = self.identifier(c);
                     return Ok(self.keyword_or_ident_token(ident));
                 }
 
                 '0'..='9' => {
-                    if c == '0' && (self.peek() == 'b' || self.peek() == 'B') {
-                        self.advance(); // consume 'b' or 'B'
-
-                        let mut bin_str = String::new();
-                        while self.peek() == '0' || self.peek() == '1' {
-                            bin_str.push(self.advance());
-                        }
-
-                        if bin_str.is_empty() {
-                            return Err(
-                                self.make_error_here(
-                                    WaveErrorKind::InvalidNumber("0b".to_string()),
-                                    "invalid binary literal: expected at least one binary digit after `0b`",
-                                )
-                                .with_code("E1006")
-                                .with_label("missing binary digits")
-                                .with_help("example: `0b1011`"),
-                            );
-                        }
-
-                        return Ok(Token {
-                            token_type: TokenType::IntLiteral(format!("0b{}", bin_str)),
-                            lexeme: format!("0b{}", bin_str),
-                            line: self.line,
-                        });
-                    }
-
-                    if c == '0' && (self.peek() == 'x' || self.peek() == 'X') {
-                        self.advance(); // consume 'x' or 'X'
-
-                        let mut hex_str = String::new();
-                        while self.peek().is_ascii_hexdigit() {
-                            hex_str.push(self.advance());
-                        }
-
-                        if hex_str.is_empty() {
-                            return Err(
-                                self.make_error_here(
-                                    WaveErrorKind::InvalidNumber("0x".to_string()),
-                                    "invalid hexadecimal literal: expected at least one hex digit after `0x`",
-                                )
-                                .with_code("E1006")
-                                .with_label("missing hexadecimal digits")
-                                .with_help("example: `0x1FF`"),
-                            );
-                        }
-
-                        return Ok(Token {
-                            token_type: TokenType::IntLiteral(format!("0x{}", hex_str)),
-                            lexeme: format!("0x{}", hex_str),
-                            line: self.line,
-                        });
-                    }
-
-                    let mut num_str = c.to_string();
-                    while self.peek().is_ascii_digit() {
-                        num_str.push(self.advance());
-                    }
-
-                    let is_float = if self.peek() == '.' {
-                        num_str.push('.');
+                    let start = self.current - 1;
+                    let radix =
+                        c == '0' && matches!(self.peek(), 'x' | 'X' | 'o' | 'O' | 'b' | 'B');
+                    while self.peek().is_ascii_alphanumeric()
+                        || self.peek() == '_'
+                        || (!radix && self.peek() == '.')
+                        || (!radix
+                            && matches!(self.peek(), '+' | '-')
+                            && self.source[..self.current].ends_with(['e', 'E']))
+                    {
                         self.advance();
-                        while self.peek().is_ascii_digit() {
-                            num_str.push(self.advance());
-                        }
-                        true
+                    }
+                    let raw = &self.source[start..self.current];
+                    let token_type = if crate::number::IntegerLiteral::parse(raw).is_some() {
+                        Some(TokenType::IntLiteral(raw.replace('_', "")))
                     } else {
-                        false
+                        crate::number::parse_float(raw).map(TokenType::Float)
                     };
-
-                    let token_type = if is_float {
-                        match num_str.parse::<f64>() {
-                            Ok(v) => TokenType::Float(v),
-                            Err(_) => {
-                                return Err(self
-                                    .make_error_here(
-                                        WaveErrorKind::InvalidNumber(num_str.clone()),
-                                        format!("invalid floating-point literal `{}`", num_str),
-                                    )
-                                    .with_code("E1006")
-                                    .with_label("cannot parse float literal")
-                                    .with_help("check decimal point placement and digits"));
-                            }
-                        }
-                    } else {
-                        TokenType::IntLiteral(num_str.clone())
-                    };
-
-                    return Ok(Token {
-                        token_type,
-                        lexeme: num_str,
-                        line: self.line,
-                    });
+                    return token_type.map(|token_type| Token {
+                        token_type, lexeme: raw.to_string(), line: self.line, span: None,
+                    }).ok_or_else(|| self.make_error(
+                        WaveErrorKind::InvalidNumber(raw.to_string()),
+                        format!("invalid numeric literal `{raw}`"), self.line, self.column_at(start),
+                    ).with_code("E1006").with_help("use binary, octal, decimal or hexadecimal digits; separate digits with a single underscore; floats use decimal fractions or exponents, without suffixes"));
                 }
 
                 _ => {

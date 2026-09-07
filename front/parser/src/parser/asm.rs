@@ -16,7 +16,7 @@
 //! register names and stack contracts are intentionally deferred to the
 //! architecture-aware backend planner.
 
-use crate::ast::{ASTNode, Expression, Literal, StatementNode};
+use crate::ast::{ASTNode, Expression, StatementNode};
 use crate::expr::is_assignable;
 use lexer::token::TokenType;
 use lexer::Token;
@@ -84,7 +84,7 @@ pub fn parse_asm_block(tokens: &mut Peekable<Iter<'_, Token>>) -> Option<ASTNode
 
             other => {
                 println!("Unexpected token in asm block: {:?}", other);
-                tokens.next();
+                return None;
             }
         }
     }
@@ -108,7 +108,7 @@ pub fn parse_asm_clobber_clause<'a, T>(
     clobbers: &mut Vec<String>,
 ) -> Option<()>
 where
-    T: Iterator<Item = &'a Token>,
+    T: Iterator<Item = &'a Token> + Clone,
 {
     // expect '('
     if tokens.peek().map(|t| &t.token_type) != Some(&TokenType::Lparen) {
@@ -174,7 +174,7 @@ pub fn parse_asm_inout_clause<'a, T>(
     outputs: &mut Vec<(String, Expression)>,
 ) -> Option<()>
 where
-    T: Iterator<Item = &'a Token>,
+    T: Iterator<Item = &'a Token> + Clone,
 {
     if tokens.peek().map(|t| &t.token_type) != Some(&TokenType::Lparen) {
         println!("Expected '(' after in/out");
@@ -227,62 +227,7 @@ where
 
 pub(crate) fn parse_asm_operand<'a, T>(tokens: &mut Peekable<T>) -> Option<Expression>
 where
-    T: Iterator<Item = &'a Token>,
+    T: Iterator<Item = &'a Token> + Clone,
 {
-    let tok = tokens.next()?;
-    match &tok.token_type {
-        TokenType::Identifier(s) => Some(Expression::Variable(s.clone())),
-        TokenType::IntLiteral(n) => Some(Expression::Literal(Literal::Int(n.clone()))),
-        TokenType::String(s) => Some(Expression::Literal(Literal::String(s.clone()))),
-
-        TokenType::AddressOf => {
-            // &x
-            let next = tokens.next()?;
-            match &next.token_type {
-                TokenType::Identifier(s) => Some(Expression::AddressOf(Box::new(
-                    Expression::Variable(s.clone()),
-                ))),
-                _ => {
-                    println!("Expected identifier after '&' in in/out(...)");
-                    None
-                }
-            }
-        }
-
-        TokenType::Deref => {
-            let next = tokens.next()?;
-            match &next.token_type {
-                TokenType::Identifier(s) => {
-                    Some(Expression::Deref(Box::new(Expression::Variable(s.clone()))))
-                }
-                _ => {
-                    println!("Expected identifier after 'deref' in in/out(...)");
-                    None
-                }
-            }
-        }
-
-        TokenType::Minus => match tokens.next()? {
-            Token {
-                token_type: TokenType::IntLiteral(n),
-                ..
-            } => Some(Expression::Literal(Literal::Int(format!("-{}", n)))),
-            Token {
-                token_type: TokenType::Float(f),
-                ..
-            } => Some(Expression::Literal(Literal::Float(-*f))),
-            other => {
-                println!(
-                    "Expected int/float after '-' in asm operand, got {:?}",
-                    other.token_type
-                );
-                None
-            }
-        },
-
-        other => {
-            println!("Expected asm operand, got {:?}", other);
-            None
-        }
-    }
+    crate::expr::parse_expression(tokens)
 }

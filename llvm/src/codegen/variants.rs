@@ -238,6 +238,8 @@ fn split_variant_application(name: &str) -> Option<(String, Vec<WaveType>)> {
 
 fn display_wave_type(ty: &WaveType) -> String {
     match ty {
+        WaveType::Isz => "isz".to_string(),
+        WaveType::Usz => "usz".to_string(),
         WaveType::Int(bits) => format!("i{bits}"),
         WaveType::Uint(bits) => format!("u{bits}"),
         WaveType::Float(bits) => format!("f{bits}"),
@@ -248,6 +250,7 @@ fn display_wave_type(ty: &WaveType) -> String {
         WaveType::Pointer(inner) => format!("ptr<{}>", display_wave_type(inner)),
         WaveType::Array(inner, length) => format!("array<{},{}>", display_wave_type(inner), length),
         WaveType::Void => "void".to_string(),
+        WaveType::Never => "!".to_string(),
         WaveType::Struct(name) | WaveType::Variant(name) => name.clone(),
     }
 }
@@ -265,6 +268,7 @@ fn collect_type_variants(ty: &WaveType, names: &mut BTreeSet<String>) {
 fn collect_node_variant_types(nodes: &[ASTNode], names: &mut BTreeSet<String>) {
     for node in nodes {
         match node {
+            ASTNode::Located { .. } => unreachable!("typed HIR detaches source wrappers"),
             ASTNode::Function(function) => {
                 for parameter in &function.parameters {
                     collect_type_variants(&parameter.param_type, names);

@@ -26,7 +26,7 @@ use ::parser::ast::*;
 use ::parser::generics::monomorphize_generics;
 use ::parser::hir::TypedProgram;
 use ::parser::import::*;
-use ::parser::verification::{validate_program_detailed, SemanticSpanHint, SemanticSpanKind};
+use ::parser::verification::validate_program_detailed;
 use ::parser::*;
 use lexer::Lexer;
 use llvm::backend::*;
@@ -61,7 +61,7 @@ fn parse_wave_tokens_or_exit(
     source: &str,
     tokens: &[lexer::Token],
 ) -> Vec<ASTNode> {
-    parse_syntax_only(tokens).unwrap_or_else(|err| {
+    parse_syntax_with_spans(tokens).unwrap_or_else(|err| {
         let (kind, title, code) = match &err {
             ParseError::Syntax(_) => (
                 WaveErrorKind::SyntaxError(err.message().to_string()),
@@ -85,6 +85,7 @@ fn parse_wave_tokens_or_exit(
         .with_code(code)
         .with_source_code(source.to_string());
 
+        wave_err = wave_err.with_span(err.span());
         if let Some(ctx) = err.context() {
             wave_err = wave_err.with_context(ctx.to_string());
         }
@@ -113,23 +114,22 @@ fn lower_wave_hir_or_exit(file_path: &Path, source: &str, ast: Vec<ASTNode>) -> 
     match TypedProgram::lower(ast) {
         Ok(program) => program,
         Err(error) => {
-            let (ast, diagnostic) = error.into_parts();
-            let node = ast.get(diagnostic.top_level_index);
-            let (line, column, span_len) = diagnostic
-                .primary
+            let (_ast, diagnostic) = error.into_parts();
+            let span = diagnostic.span.clone();
+            let diagnostic_source = span
                 .as_ref()
-                .and_then(|hint| semantic_hint_position(source, node, 1, hint))
-                .unwrap_or((1, 1, 1));
+                .and_then(|s| fs::read_to_string(&s.file).ok())
+                .unwrap_or_else(|| source.to_string());
             let mut error = WaveError::new(
                 WaveErrorKind::InvalidStatement(diagnostic.message.clone()),
                 format!("semantic validation failed: {}", diagnostic.message),
                 file_path.display().to_string(),
-                line,
-                column,
+                0,
+                0,
             )
             .with_code(diagnostic.code)
-            .with_source_code(source.to_string())
-            .with_span_len(span_len)
+            .with_source_code(diagnostic_source)
+            .with_span(span.as_ref())
             .with_context("semantic validation")
             .with_label(diagnostic.label)
             .with_help(diagnostic.help);
@@ -160,33 +160,28 @@ fn validate_expanded_ast_or_exit(expanded: &ExpandedWaveAst) {
         .copied()
         .unwrap_or(0);
     let source_unit = expanded.sources.get(origin).unwrap_or(&expanded.sources[0]);
-    let node = expanded.ast.get(diagnostic.top_level_index);
-    let scope_occurrence = node.map_or(1, |target| {
-        let key = semantic_node_key(target);
-        1 + expanded.ast[..diagnostic.top_level_index]
-            .iter()
-            .zip(&expanded.origins[..diagnostic.top_level_index])
-            .filter(|(candidate, candidate_origin)| {
-                **candidate_origin == origin && semantic_node_key(candidate) == key
-            })
-            .count()
-    });
-    let (line, column, span_len) = diagnostic
-        .primary
+    let span = diagnostic.span.clone();
+    let diagnostic_source = span
         .as_ref()
-        .and_then(|hint| semantic_hint_position(&source_unit.source, node, scope_occurrence, hint))
-        .unwrap_or((1, 1, 1));
+        .and_then(|span| {
+            expanded
+                .sources
+                .iter()
+                .find(|unit| unit.path.to_string_lossy() == span.file)
+        })
+        .map(|unit| unit.source.clone())
+        .unwrap_or_else(|| source_unit.source.clone());
 
     let mut error = WaveError::new(
         WaveErrorKind::InvalidStatement(diagnostic.message.clone()),
         format!("semantic validation failed: {}", diagnostic.message),
         source_unit.path.display().to_string(),
-        line,
-        column,
+        0,
+        0,
     )
     .with_code(diagnostic.code)
-    .with_source_code(source_unit.source.clone())
-    .with_span_len(span_len)
+    .with_source_code(diagnostic_source)
+    .with_span(span.as_ref())
     .with_context("semantic validation")
     .with_label(diagnostic.label)
     .with_help(diagnostic.help);
@@ -196,178 +191,6 @@ fn validate_expanded_ast_or_exit(expanded: &ExpandedWaveAst) {
     error.display_auto();
 
     process::exit(1);
-}
-
-fn semantic_hint_position(
-    source: &str,
-    node: Option<&ASTNode>,
-    scope_occurrence: usize,
-    hint: &SemanticSpanHint,
-) -> Option<(usize, usize, usize)> {
-    let (scope_start, scope_end) =
-        semantic_node_scope(source, node, scope_occurrence).unwrap_or((0, source.len()));
-    let scope = &source[scope_start..scope_end];
-    let alternatives: Vec<&str> = hint.text.split('|').collect();
-    let mut matches = Vec::new();
-
-    for alternative in alternatives {
-        if alternative.is_empty() {
-            continue;
-        }
-        let mut offset = 0usize;
-        while let Some(relative) = scope[offset..].find(alternative) {
-            let found = offset + relative;
-            let absolute = scope_start + found;
-            let boundary_ok = if alternative
-                .chars()
-                .all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
-            {
-                identifier_boundary(source, absolute, alternative.len())
-            } else {
-                true
-            };
-            let declaration_ok = !matches!(hint.kind, SemanticSpanKind::Declaration)
-                || is_declaration_occurrence(source, absolute, alternative);
-            if boundary_ok && declaration_ok {
-                matches.push((absolute, alternative.len()));
-            }
-            offset = found + alternative.len();
-        }
-    }
-
-    matches.sort_unstable();
-    matches.dedup();
-    let (offset, span_len) = *matches.get(hint.occurrence.saturating_sub(1))?;
-    let (line, column) = source_position(source, offset);
-    Some((line, column, span_len.max(1)))
-}
-
-fn identifier_boundary(source: &str, offset: usize, len: usize) -> bool {
-    let is_identifier = |byte: u8| byte.is_ascii_alphanumeric() || byte == b'_';
-    let before_ok = offset == 0 || !is_identifier(source.as_bytes()[offset - 1]);
-    let after = offset + len;
-    let after_ok = after >= source.len() || !is_identifier(source.as_bytes()[after]);
-    before_ok && after_ok
-}
-
-fn is_declaration_occurrence(source: &str, offset: usize, name: &str) -> bool {
-    let line_start = source[..offset].rfind('\n').map_or(0, |index| index + 1);
-    let prefix = source[line_start..offset].trim_start();
-    [
-        "fun ", "struct ", "proto ", "enum ", "variant ", "type ", "var ", "const ", "static ",
-    ]
-    .iter()
-    .any(|keyword| prefix.ends_with(keyword))
-        || source[offset + name.len()..].trim_start().starts_with(':')
-}
-
-fn semantic_node_key(node: &ASTNode) -> (u8, String) {
-    match node {
-        ASTNode::Function(function) => (0, function.name.clone()),
-        ASTNode::ExternFunction(function) => (0, function.name.clone()),
-        ASTNode::Struct(structure) => (1, structure.name.clone()),
-        ASTNode::ProtoImpl(implementation) => (2, implementation.target.clone()),
-        ASTNode::TypeAlias(alias) => (3, alias.name.clone()),
-        ASTNode::Enum(enumeration) => (4, enumeration.name.clone()),
-        ASTNode::Variant(variant) => (5, variant.name.clone()),
-        ASTNode::Variable(variable) => (6, variable.name.clone()),
-        ASTNode::Statement(_) => (7, String::new()),
-        ASTNode::Expression(_) => (8, String::new()),
-        ASTNode::Program(_) => (9, String::new()),
-    }
-}
-
-fn semantic_node_scope(
-    source: &str,
-    node: Option<&ASTNode>,
-    occurrence: usize,
-) -> Option<(usize, usize)> {
-    let node = node?;
-    let needle = match node {
-        ASTNode::Function(function) => {
-            format!("fun {}(", demangle_module_names(&function.name))
-        }
-        ASTNode::ExternFunction(function) => {
-            format!("fun {}(", demangle_module_names(&function.name))
-        }
-        ASTNode::Struct(structure) => {
-            format!("struct {}", demangle_module_names(&structure.name))
-        }
-        ASTNode::ProtoImpl(implementation) => {
-            format!("proto {}", demangle_module_names(&implementation.target))
-        }
-        ASTNode::TypeAlias(alias) => {
-            format!("type {}", demangle_module_names(&alias.name))
-        }
-        ASTNode::Enum(enumeration) => {
-            format!("enum {}", demangle_module_names(&enumeration.name))
-        }
-        ASTNode::Variant(variant) => {
-            format!("variant {}", demangle_module_names(&variant.name))
-        }
-        ASTNode::Variable(variable) => demangle_module_names(&variable.name),
-        ASTNode::Statement(_) | ASTNode::Expression(_) | ASTNode::Program(_) => {
-            return Some((0, source.len()));
-        }
-    };
-    let mut starts = source.match_indices(&needle);
-    let start = starts.nth(occurrence.saturating_sub(1))?.0;
-    let Some(open_relative) = source[start..].find('{') else {
-        let end = source[start..]
-            .find('\n')
-            .map_or(source.len(), |relative| start + relative);
-        return Some((start, end));
-    };
-    let open = start + open_relative;
-    let end = matching_source_brace(source, open).unwrap_or(source.len());
-    Some((start, end))
-}
-
-fn matching_source_brace(source: &str, open: usize) -> Option<usize> {
-    let bytes = source.as_bytes();
-    let mut depth = 0usize;
-    let mut index = open;
-    let mut quote = None;
-    let mut escaped = false;
-    while index < bytes.len() {
-        let byte = bytes[index];
-        if let Some(active_quote) = quote {
-            if escaped {
-                escaped = false;
-            } else if byte == b'\\' {
-                escaped = true;
-            } else if byte == active_quote {
-                quote = None;
-            }
-            index += 1;
-            continue;
-        }
-        if byte == b'"' || byte == b'\'' {
-            quote = Some(byte);
-        } else if byte == b'/' && bytes.get(index + 1) == Some(&b'/') {
-            index = source[index..]
-                .find('\n')
-                .map_or(bytes.len(), |relative| index + relative);
-            continue;
-        } else if byte == b'{' {
-            depth += 1;
-        } else if byte == b'}' {
-            depth = depth.checked_sub(1)?;
-            if depth == 0 {
-                return Some(index + 1);
-            }
-        }
-        index += 1;
-    }
-    None
-}
-
-fn source_position(source: &str, byte_offset: usize) -> (usize, usize) {
-    let prefix = &source[..byte_offset];
-    let line = prefix.bytes().filter(|byte| *byte == b'\n').count() + 1;
-    let line_start = prefix.rfind('\n').map_or(0, |index| index + 1);
-    let column = source[line_start..byte_offset].chars().count() + 1;
-    (line, column)
 }
 
 fn panic_payload_to_string(payload: &(dyn std::any::Any + Send)) -> String {
@@ -831,7 +654,21 @@ fn expand_imports_for_codegen(
     ast: Vec<ASTNode>,
     import_config: &ImportConfig,
 ) -> Result<ExpandedWaveAst, WaveError> {
-    let graph = resolve_import_graph(entry_path, entry_source, ast, import_config)?;
+    let mut graph = resolve_import_graph(entry_path, entry_source, ast, import_config)?;
+    let pointer_bits = if import_config.target.arch.as_deref() == Some("wasm32") {
+        32
+    } else {
+        64
+    };
+    ::parser::hir::resolve_target_types(&mut graph.ast, pointer_bits).map_err(|message| {
+        WaveError::new(
+            WaveErrorKind::InvalidStatement(message.clone()),
+            message,
+            entry_path.display().to_string(),
+            0,
+            0,
+        )
+    })?;
     Ok(ExpandedWaveAst {
         ast: graph.ast,
         origins: graph.origins,

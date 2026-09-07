@@ -1,0 +1,1 @@
+fun f() { var i: i32 = 0; if (true) { true; } else if (false) { !false; } else { +1; } while (i < 3) { i++; continue; } for (i: i32 = 0; i < 4; i++) { break; } return; }

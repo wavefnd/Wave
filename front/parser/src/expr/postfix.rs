@@ -31,6 +31,8 @@ pub fn parse_postfix_expression<'a, T>(
 where
     T: Iterator<Item = &'a Token> + Clone,
 {
+    let first = expr.span().cloned();
+    let before = tokens.clone();
     loop {
         match tokens.peek().map(|t| &t.token_type) {
             Some(TokenType::Dot) => {
@@ -165,6 +167,11 @@ where
 
             _ => break,
         }
+        let span = first
+            .as_ref()
+            .zip(lexer::consumed_span(before.clone(), tokens))
+            .map(|(first, last)| first.through(&last));
+        expr = expr.with_span(span);
     }
 
     Some(expr)

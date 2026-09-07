@@ -17,55 +17,17 @@
 //! does not invent a pointee type for an untyped null literal.
 
 use super::ExprGenEnv;
-use inkwell::types::{BasicTypeEnum, StringRadix};
+use inkwell::types::BasicTypeEnum;
 use inkwell::values::{BasicValue, BasicValueEnum};
 use inkwell::AddressSpace;
 use parser::ast::Literal;
 
-fn parse_signed_decimal<'a>(s: &'a str) -> (bool, &'a str) {
-    if let Some(rest) = s.strip_prefix('-') {
-        (true, rest)
-    } else {
-        (false, s)
-    }
-}
-
-fn parse_int_radix(s: &str) -> (StringRadix, &str) {
-    if let Some(rest) = s.strip_prefix("0b").or_else(|| s.strip_prefix("0B")) {
-        (StringRadix::Binary, rest)
-    } else if let Some(rest) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
-        (StringRadix::Hexadecimal, rest)
-    } else if let Some(rest) = s.strip_prefix("0o").or_else(|| s.strip_prefix("0O")) {
-        (StringRadix::Octal, rest)
-    } else {
-        (StringRadix::Decimal, s)
-    }
-}
-
 fn parse_int_as_f64(s: &str) -> Option<f64> {
-    let normalized = s.trim().replace('_', "");
-    let (negative, raw) = parse_signed_decimal(&normalized);
-    let (radix, digits) =
-        if let Some(rest) = raw.strip_prefix("0b").or_else(|| raw.strip_prefix("0B")) {
-            (2, rest)
-        } else if let Some(rest) = raw.strip_prefix("0x").or_else(|| raw.strip_prefix("0X")) {
-            (16, rest)
-        } else if let Some(rest) = raw.strip_prefix("0o").or_else(|| raw.strip_prefix("0O")) {
-            (8, rest)
-        } else {
-            (10, raw)
-        };
-    let magnitude = u128::from_str_radix(digits, radix).ok()? as f64;
-    Some(if negative { -magnitude } else { magnitude })
+    lexer::number::IntegerLiteral::parse(s)?.to_f64()
 }
 
 fn is_zero_int_literal(s: &str) -> bool {
-    let s = s.trim();
-    let s = s.strip_prefix('+').unwrap_or(s);
-    let (_neg, raw) = parse_signed_decimal(s);
-    let (_radix, digits) = parse_int_radix(raw);
-
-    !digits.is_empty() && digits.chars().all(|c| c == '0')
+    lexer::number::IntegerLiteral::parse(s).is_some_and(|n| n.is_zero())
 }
 
 pub(crate) fn gen_null<'ctx, 'a>(
@@ -95,11 +57,11 @@ pub(crate) fn gen<'ctx, 'a>(
         Literal::Int(v) => match expected_type {
             Some(BasicTypeEnum::IntType(int_ty)) => {
                 let s = v.as_str();
-                let (neg, raw) = parse_signed_decimal(s);
-                let (radix, digits) = parse_int_radix(raw);
+                let (neg, radix, digits) =
+                    crate::codegen::number::parse_integer(s).expect("validated integer literal");
 
                 let mut iv = int_ty
-                    .const_int_from_string(digits, radix)
+                    .const_int_from_string(&digits, radix)
                     .unwrap_or_else(|| panic!("invalid int literal: {}", s));
 
                 if neg {
@@ -134,11 +96,11 @@ pub(crate) fn gen<'ctx, 'a>(
                 // Default untyped integer literal to i32 when no contextual type exists.
                 let int_ty = env.context.i32_type();
                 let s = v.as_str();
-                let (neg, raw) = parse_signed_decimal(s);
-                let (radix, digits) = parse_int_radix(raw);
+                let (neg, radix, digits) =
+                    crate::codegen::number::parse_integer(s).expect("validated integer literal");
 
                 let mut iv = int_ty
-                    .const_int_from_string(digits, radix)
+                    .const_int_from_string(&digits, radix)
                     .unwrap_or_else(|| panic!("invalid int literal: {}", s));
 
                 if neg {

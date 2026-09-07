@@ -1,0 +1,13 @@
+# name	productions
+functions	function,parameter,default,generic-parameters
+records	structure,field,proto
+enums	enumeration,enum-case
+variants	variant,variant-case
+aliases	alias,global,type
+imports	import,declaration
+ffi	extern,export,ffi-header,extern-function
+control	block,statement,local,if,while,for
+matching	match,match-arm,pattern
+expressions	expression,assignment-operator,postfix,primary
+io_asm	io,asm,asm-operand,clobber
+numbers	number,integer,float,identifier,string,character

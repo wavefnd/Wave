@@ -63,6 +63,7 @@ pub fn split_top_level_generic_args(inner: &str) -> Option<Vec<String>> {
 pub fn token_type_to_wave_type(token_type: &TokenType) -> Option<WaveType> {
     match token_type {
         TokenType::TypeVoid => Some(WaveType::Void),
+        TokenType::Not => Some(WaveType::Never),
         TokenType::TypeInt(bits) => Some(WaveType::Int(*bits)),
         TokenType::TokenTypeInt(int_type) => match int_type {
             IntegerType::I8 => Some(WaveType::Int(8)),
@@ -73,7 +74,7 @@ pub fn token_type_to_wave_type(token_type: &TokenType) -> Option<WaveType> {
             IntegerType::I256 => Some(WaveType::Int(256)),
             IntegerType::I512 => Some(WaveType::Int(512)),
             IntegerType::I1024 => Some(WaveType::Int(1024)),
-            _ => panic!("Unhandled integer type: {:?}", int_type),
+            IntegerType::ISZ => Some(WaveType::Isz),
         },
         TokenType::TypeUint(bits) => Some(WaveType::Uint(*bits)),
         TokenType::TokenTypeUint(uint_type) => match uint_type {
@@ -85,7 +86,7 @@ pub fn token_type_to_wave_type(token_type: &TokenType) -> Option<WaveType> {
             UnsignedIntegerType::U256 => Some(WaveType::Uint(256)),
             UnsignedIntegerType::U512 => Some(WaveType::Uint(512)),
             UnsignedIntegerType::U1024 => Some(WaveType::Uint(1024)),
-            _ => panic!("Unhandled uint type: {:?}", uint_type),
+            UnsignedIntegerType::USZ => Some(WaveType::Usz),
         },
         TokenType::TokenTypeFloat(float_type) => match float_type {
             FloatType::F32 => Some(WaveType::Float(32)),
@@ -120,12 +121,23 @@ pub fn is_expression_start(token_type: &TokenType) -> bool {
             | TokenType::Deref
             | TokenType::Null
             | TokenType::CharLiteral(_)
+            | TokenType::BoolLiteral(_)
+            | TokenType::Plus
+            | TokenType::Minus
+            | TokenType::Not
+            | TokenType::BitwiseNot
+            | TokenType::AddressOf
+            | TokenType::Increment
+            | TokenType::Decrement
     )
 }
 
 pub fn parse_type(type_str: &str) -> Option<TokenType> {
     let type_str = type_str.trim();
 
+    if type_str == "!" {
+        return Some(TokenType::Not);
+    }
     if type_str == "void" {
         return Some(TokenType::TypeVoid);
     }
@@ -150,7 +162,8 @@ pub fn parse_type(type_str: &str) -> Option<TokenType> {
             let size_str = args[1].trim();
 
             let elem_type = parse_type(elem_type_str)?;
-            let size = size_str.parse::<u32>().ok()?;
+            let size =
+                u32::try_from(lexer::number::IntegerLiteral::parse(size_str)?.to_i128()?).ok()?;
 
             return Some(TokenType::TypeArray(Box::new(elem_type), size));
         }
@@ -167,23 +180,33 @@ pub fn parse_type(type_str: &str) -> Option<TokenType> {
         return Some(TokenType::TypeCustom(type_str.to_string()));
     }
 
-    if type_str.starts_with('i') {
-        let bits = type_str[1..].parse::<u16>().ok()?;
-        return Some(TokenType::TypeInt(bits));
-    } else if type_str.starts_with('u') {
-        let bits = type_str[1..].parse::<u16>().ok()?;
-        return Some(TokenType::TypeUint(bits));
-    } else if type_str.starts_with('f') {
-        let bits = type_str[1..].parse::<u16>().ok()?;
-        return Some(TokenType::TypeFloat(bits));
-    } else if type_str == "bool" {
-        return Some(TokenType::TypeBool);
-    } else if type_str == "char" {
-        return Some(TokenType::TypeChar);
-    } else if type_str == "byte" {
-        return Some(TokenType::TypeByte);
-    } else if type_str == "str" {
-        return Some(TokenType::TypeString);
+    match type_str {
+        "isz" => return Some(TokenType::TokenTypeInt(IntegerType::ISZ)),
+        "usz" => return Some(TokenType::TokenTypeUint(UnsignedIntegerType::USZ)),
+        "bool" => return Some(TokenType::TypeBool),
+        "char" => return Some(TokenType::TypeChar),
+        "byte" => return Some(TokenType::TypeByte),
+        "str" => return Some(TokenType::TypeString),
+        _ => {}
+    }
+    if let Some(prefix @ ('i' | 'u' | 'f')) = type_str.chars().next() {
+        let suffix = &type_str[1..];
+        if !suffix.is_empty() && suffix.bytes().all(|ch| ch.is_ascii_digit()) {
+            let bits = suffix.parse::<u16>().ok()?;
+            if suffix != bits.to_string() {
+                return None;
+            }
+            return match prefix {
+                'i' if matches!(bits, 8 | 16 | 32 | 64 | 128 | 256 | 512 | 1024) => {
+                    Some(TokenType::TypeInt(bits))
+                }
+                'u' if matches!(bits, 8 | 16 | 32 | 64 | 128 | 256 | 512 | 1024) => {
+                    Some(TokenType::TypeUint(bits))
+                }
+                'f' if matches!(bits, 32 | 64) => Some(TokenType::TypeFloat(bits)),
+                _ => None,
+            };
+        }
     }
 
     if type_str.split("::").all(|segment| {
@@ -236,29 +259,7 @@ pub fn parse_type_from_token(token_opt: Option<&&Token>) -> Option<WaveType> {
         | ty @ TokenType::TokenTypeUint(_)
         | ty @ TokenType::TokenTypeFloat(_) => token_type_to_wave_type(ty),
 
-        TokenType::Identifier(name) => match name.as_str() {
-            "i8" => Some(WaveType::Int(8)),
-            "i16" => Some(WaveType::Int(16)),
-            "i32" => Some(WaveType::Int(32)),
-            "i64" => Some(WaveType::Int(64)),
-            "u8" => Some(WaveType::Uint(8)),
-            "u16" => Some(WaveType::Uint(16)),
-            "u32" => Some(WaveType::Uint(32)),
-            "u64" => Some(WaveType::Uint(64)),
-            "f32" => Some(WaveType::Float(32)),
-            "f64" => Some(WaveType::Float(64)),
-            "bool" => Some(WaveType::Bool),
-            "char" => Some(WaveType::Char),
-            "byte" => Some(WaveType::Byte),
-            "str" => Some(WaveType::String),
-            _ => {
-                if let Some(tt) = parse_type(name) {
-                    token_type_to_wave_type(&tt)
-                } else {
-                    Some(WaveType::Struct(name.clone()))
-                }
-            }
-        },
+        TokenType::Identifier(name) => token_type_to_wave_type(&parse_type(name)?),
 
         _ => None,
     }

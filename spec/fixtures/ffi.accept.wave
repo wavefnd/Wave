@@ -1,0 +1,1 @@
+extern(c) { fun puts(str) -> i32; fun log(fmt: str, ...); } export(c, "entry") fun entry() {}

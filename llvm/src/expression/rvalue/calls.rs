@@ -544,7 +544,7 @@ pub(crate) fn gen_function_call<'ctx, 'a>(
         // 3) return
         match &info.ret {
             RetLowering::Void => {
-                if info.wave_ret != WaveType::Void {
+                if !matches!(info.wave_ret, WaveType::Void | WaveType::Never) {
                     return expected_type.map_or_else(
                         || env.context.i32_type().const_zero().as_basic_value_enum(),
                         BasicTypeEnum::const_zero,

@@ -1,0 +1,1 @@
+type Count = usz; const LIMIT: i128 = 0o20; static ptr_value: ptr<u8> = null;
