@@ -24,6 +24,7 @@ pub struct Token {
     pub token_type: TokenType,
     pub lexeme: String,
     pub line: usize,
+    pub span: Option<error::SourceSpan>,
 }
 
 impl Token {
@@ -32,6 +33,7 @@ impl Token {
             token_type,
             lexeme,
             line,
+            span: None,
         }
     }
 }
@@ -42,6 +44,7 @@ impl Default for Token {
             token_type: TokenType::Eof,
             lexeme: String::new(),
             line: 0,
+            span: None,
         }
     }
 }
@@ -103,8 +106,40 @@ impl<'a> Lexer<'a> {
         line: usize,
         column: usize,
     ) -> WaveError {
-        WaveError::new(kind, message, self.file.clone(), line.max(1), column.max(1))
+        let line_start: usize = self
+            .source
+            .split_inclusive('\n')
+            .take(line.saturating_sub(1))
+            .map(str::len)
+            .sum();
+        let line_text = self
+            .source
+            .get(line_start..)
+            .unwrap_or("")
+            .split('\n')
+            .next()
+            .unwrap_or("");
+        let start = line_start
+            + line_text
+                .char_indices()
+                .nth(column.saturating_sub(1))
+                .map_or(line_text.len(), |(offset, _)| offset);
+        let end = self.current.max(start).min(self.source.len());
+        let prefix = &self.source[..end];
+        let span = error::SourceSpan {
+            file: self.file.clone(),
+            start,
+            end,
+            line,
+            column,
+            end_line: prefix.bytes().filter(|byte| *byte == b'\n').count() + 1,
+            end_column: prefix.rsplit('\n').next().unwrap_or("").chars().count() + 1,
+            expansion: Vec::new(),
+            focus: None,
+        };
+        WaveError::new(kind, message, self.file.clone(), line, column)
             .with_source_code(self.source.to_string())
+            .with_span(Some(&span))
     }
 
     pub(crate) fn make_error_here(

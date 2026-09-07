@@ -14,8 +14,8 @@
 //!
 //! The verifier runs after imports and generics have been expanded. It first
 //! collects declarations into a program-wide type environment, then validates
-//! bodies with lexical scopes and expected types. It reports source-oriented
-//! hints instead of retaining parser token positions in the AST.
+//! bodies with lexical scopes and expected types. Physical diagnostics use the
+//! detached AST source map; legacy unlocated callers retain descriptive hints.
 
 use crate::ast::{
     ASTNode, AssignOperator, Expression, FunctionNode, IncDecKind, Literal, MatchPattern,
@@ -46,6 +46,7 @@ pub struct SemanticDiagnostic {
     pub message: String,
     pub top_level_index: usize,
     pub primary: Option<SemanticSpanHint>,
+    pub span: Option<error::SourceSpan>,
     pub label: String,
     pub note: Option<String>,
     pub help: String,
@@ -464,6 +465,8 @@ impl ProgramTypes {
         context: &str,
     ) -> Result<(), String> {
         match ty {
+            WaveType::Isz | WaveType::Usz => Err(format!("{context}: target-sized integer requires target resolution before semantic analysis")),
+            WaveType::Never if !allow_void => Err(format!("{context} cannot use the return-only `!` type")),
             WaveType::Void if !allow_void => Err(format!("{} cannot use the `void` type", context)),
             WaveType::Pointer(inner) | WaveType::Array(inner, _) => {
                 self.validate_type(inner, generic_params, false, context)
@@ -587,36 +590,7 @@ fn insert_unique_method(
 }
 
 fn parse_integer_value(raw: &str) -> Option<i128> {
-    let raw = raw.trim().replace('_', "");
-    let (negative, unsigned) = if let Some(value) = raw.strip_prefix('-') {
-        (true, value)
-    } else {
-        (false, raw.strip_prefix('+').unwrap_or(&raw))
-    };
-    let (radix, digits) = if let Some(value) = unsigned
-        .strip_prefix("0x")
-        .or_else(|| unsigned.strip_prefix("0X"))
-    {
-        (16, value)
-    } else if let Some(value) = unsigned
-        .strip_prefix("0b")
-        .or_else(|| unsigned.strip_prefix("0B"))
-    {
-        (2, value)
-    } else if let Some(value) = unsigned
-        .strip_prefix("0o")
-        .or_else(|| unsigned.strip_prefix("0O"))
-    {
-        (8, value)
-    } else {
-        (10, unsigned)
-    };
-    let value = i128::from_str_radix(digits, radix).ok()?;
-    if negative {
-        value.checked_neg()
-    } else {
-        Some(value)
-    }
+    lexer::number::IntegerLiteral::parse(raw)?.to_i128()
 }
 
 fn function_type(function: &FunctionNode) -> FunctionType {
@@ -795,6 +769,8 @@ struct Validator<'a> {
     top_level_index: usize,
     span_counts: HashMap<(SemanticSpanKind, String), usize>,
     primary_span: Option<SemanticSpanHint>,
+    source_map: &'a crate::source::SourceMap,
+    source_span: Option<error::SourceSpan>,
     diagnostic_help: Option<String>,
     expression_types: HashMap<usize, WaveType>,
     hir_expression_types: HashMap<usize, HirExpressionType>,
@@ -803,7 +779,7 @@ struct Validator<'a> {
 }
 
 impl<'a> Validator<'a> {
-    fn new(program: &'a ProgramTypes) -> Self {
+    fn new(program: &'a ProgramTypes, source_map: &'a crate::source::SourceMap) -> Self {
         Self {
             program,
             scopes: vec![HashMap::new()],
@@ -814,6 +790,8 @@ impl<'a> Validator<'a> {
             top_level_index: 0,
             span_counts: HashMap::new(),
             primary_span: None,
+            source_map,
+            source_span: None,
             diagnostic_help: None,
             expression_types: HashMap::new(),
             hir_expression_types: HashMap::new(),
@@ -850,6 +828,7 @@ impl<'a> Validator<'a> {
             message,
             top_level_index: self.top_level_index,
             primary: self.primary_span.clone(),
+            span: self.source_span.clone(),
             note: None,
             help: self.diagnostic_help.clone().unwrap_or_else(|| {
                 "fix type, mutability, scope, and control-flow errors".to_string()
@@ -903,6 +882,9 @@ impl<'a> Validator<'a> {
             .extend(function.generic_params.iter().cloned());
 
         for parameter in &function.parameters {
+            if let Some(span) = &parameter.span {
+                self.source_span = Some(span.clone());
+            }
             self.program.validate_type(
                 &parameter.param_type,
                 &self.current_type_params,
@@ -913,6 +895,27 @@ impl<'a> Validator<'a> {
                 ),
             )?;
         }
+        let mut saw_default = false;
+        for parameter in &function.parameters {
+            if let Some(value) = &parameter.initial_value {
+                saw_default = true;
+                let actual = self.validate_expr_expected(value, Some(&parameter.param_type))?;
+                self.require_assignable(
+                    &actual,
+                    &parameter.param_type,
+                    &format!("default for `{}`", parameter.name),
+                )?;
+            } else if saw_default {
+                return Err(format!(
+                    "required parameter `{}` follows a default parameter",
+                    parameter.name
+                ));
+            }
+        }
+        self.source_span = function
+            .return_type_span
+            .clone()
+            .or_else(|| function.span.clone());
         let return_type = function.return_type.clone().unwrap_or(WaveType::Void);
         self.program.validate_type(
             &return_type,
@@ -936,6 +939,7 @@ impl<'a> Validator<'a> {
             let falls_through = validator.validate_block(&function.body)?;
             let return_type = function.return_type.clone().unwrap_or(WaveType::Void);
             if return_type != WaveType::Void && falls_through {
+                validator.source_span = function.span.clone();
                 return Err(format!(
                     "non-void function `{}` may exit without returning `{}`",
                     display_name,
@@ -986,6 +990,9 @@ impl<'a> Validator<'a> {
     }
 
     fn validate_node(&mut self, node: &ASTNode) -> Result<bool, String> {
+        if let Some(span) = self.source_map.nodes.get(&(node as *const _ as usize)) {
+            self.source_span = Some(span.clone());
+        }
         match node {
             ASTNode::Variable(variable) => {
                 self.mark_span(SemanticSpanKind::Declaration, variable.name.clone());
@@ -1038,8 +1045,8 @@ impl<'a> Validator<'a> {
             }
             ASTNode::Statement(statement) => self.validate_statement(statement),
             ASTNode::Expression(expression) => {
-                self.validate_expr(expression)?;
-                Ok(true)
+                let ty = self.validate_expr(expression)?;
+                Ok(!matches!(ty, ExpressionType::Known(WaveType::Never)))
             }
             _ => Ok(true),
         }
@@ -1048,8 +1055,8 @@ impl<'a> Validator<'a> {
     fn validate_statement(&mut self, statement: &StatementNode) -> Result<bool, String> {
         match statement {
             StatementNode::Expression(expression) => {
-                self.validate_expr(expression)?;
-                Ok(true)
+                let ty = self.validate_expr(expression)?;
+                Ok(!matches!(ty, ExpressionType::Known(WaveType::Never)))
             }
             StatementNode::Assign { variable, value } => {
                 self.mark_span(SemanticSpanKind::Identifier, variable.clone());
@@ -1198,12 +1205,15 @@ impl<'a> Validator<'a> {
                 Ok(false)
             }
             StatementNode::AsmBlock {
-                inputs, outputs, ..
+                inputs,
+                outputs,
+                clobbers,
+                ..
             } => {
                 for (_, expression) in inputs.iter().chain(outputs.iter()) {
                     self.validate_expr(expression)?;
                 }
-                Ok(true)
+                Ok(!clobbers.iter().any(|clobber| clobber == "noreturn"))
             }
             _ => Ok(true),
         }
@@ -1215,7 +1225,17 @@ impl<'a> Validator<'a> {
         let mut all_arms_terminate = !arms.is_empty();
 
         for arm in arms {
+            if let Some(span) = self
+                .source_map
+                .patterns
+                .get(&(&arm.pattern as *const _ as usize))
+            {
+                self.source_span = Some(span.clone());
+            }
             let key = match &arm.pattern {
+                MatchPattern::Located { .. } => {
+                    unreachable!("source wrappers detached before analysis")
+                }
                 MatchPattern::Int(raw) => {
                     self.mark_span(SemanticSpanKind::Keyword, raw.clone());
                     let value = parse_integer_value(raw)
@@ -1278,6 +1298,13 @@ impl<'a> Validator<'a> {
         let mut all_arms_terminate = !arms.is_empty();
 
         for arm in arms {
+            if let Some(span) = self
+                .source_map
+                .patterns
+                .get(&(&arm.pattern as *const _ as usize))
+            {
+                self.source_span = Some(span.clone());
+            }
             if self.variant_patterns_cover(&covered_patterns, &expected_type) {
                 return Err(
                     if covered_patterns
@@ -1293,6 +1320,9 @@ impl<'a> Validator<'a> {
             }
             let mut bindings = HashMap::new();
             match &arm.pattern {
+                MatchPattern::Located { .. } => {
+                    unreachable!("source wrappers detached before analysis")
+                }
                 MatchPattern::Wildcard => {}
                 MatchPattern::Variant {
                     variant_type,
@@ -1383,6 +1413,9 @@ impl<'a> Validator<'a> {
         bindings: &mut HashMap<String, WaveType>,
     ) -> Result<(), String> {
         match pattern {
+            MatchPattern::Located { .. } => {
+                unreachable!("source wrappers detached before analysis")
+            }
             MatchPattern::Binding(name) => {
                 if bindings.insert(name.clone(), expected.clone()).is_some() {
                     return Err(format!("duplicate pattern binding `{}`", name));
@@ -1451,6 +1484,9 @@ impl<'a> Validator<'a> {
 
     fn variant_pattern_is_irrefutable(&self, pattern: &MatchPattern, expected: &WaveType) -> bool {
         match pattern {
+            MatchPattern::Located { .. } => {
+                unreachable!("source wrappers detached before analysis")
+            }
             MatchPattern::Binding(_) | MatchPattern::Wildcard => true,
             MatchPattern::Variant {
                 variant_type,
@@ -1550,6 +1586,9 @@ impl<'a> Validator<'a> {
         let expected = self.current_return_type.clone().unwrap_or(WaveType::Void);
 
         match (expected, value) {
+            (WaveType::Never, _) => Err(format!(
+                "never-returning function `{function}` cannot contain a return statement"
+            )),
             (WaveType::Void, None) => Ok(()),
             (WaveType::Void, Some(_)) => Err(format!(
                 "void function `{}` cannot return a value",
@@ -1664,6 +1703,14 @@ impl<'a> Validator<'a> {
         expression: &Expression,
         expected: Option<&WaveType>,
     ) -> Result<ExpressionType, String> {
+        if let Some(span) = self
+            .source_map
+            .expressions
+            .get(&(expression as *const _ as usize))
+        {
+            self.source_span = Some(span.clone());
+        }
+
         let result = self.validate_expr_inner(expression, expected);
         if let Ok(expression_type) = &result {
             self.hir_expression_types.insert(
@@ -1684,9 +1731,40 @@ impl<'a> Validator<'a> {
         expected: Option<&WaveType>,
     ) -> Result<ExpressionType, String> {
         match expression {
+            Expression::Located { .. } => unreachable!("source wrappers detached before analysis"),
             Expression::Literal(literal) => Ok(match literal {
-                Literal::Int(raw) => ExpressionType::IntLiteral(raw.clone()),
-                Literal::Float(_) => ExpressionType::FloatLiteral,
+                Literal::Int(raw) => {
+                    if let Some(WaveType::Float(bits)) =
+                        expected.map(|ty| self.program.canonical_type(ty))
+                    {
+                        let value = lexer::number::IntegerLiteral::parse(raw)
+                            .and_then(|value| value.to_f64())
+                            .ok_or_else(|| {
+                                "integer literal is out of range for floating-point conversion"
+                                    .to_string()
+                            })?;
+                        if bits == 32 && !(value as f32).is_finite() {
+                            return Err(
+                                "integer literal is out of range for f32 conversion".to_string()
+                            );
+                        }
+                    }
+                    ExpressionType::IntLiteral(raw.clone())
+                }
+                Literal::Float(value) => {
+                    if !value.is_finite()
+                        || (matches!(
+                            expected.map(|ty| self.program.canonical_type(ty)),
+                            Some(WaveType::Float(32))
+                        ) && !(*value as f32).is_finite())
+                    {
+                        return Err(
+                            "floating-point literal is out of range for its expected type"
+                                .to_string(),
+                        );
+                    }
+                    ExpressionType::FloatLiteral
+                }
                 Literal::String(_) => ExpressionType::Known(WaveType::String),
                 Literal::Bool(_) => ExpressionType::Known(WaveType::Bool),
                 Literal::Char(_) => ExpressionType::Known(WaveType::Char),
@@ -1704,7 +1782,7 @@ impl<'a> Validator<'a> {
                     Err(format!("use of undeclared identifier `{}`", name))
                 }
             }
-            Expression::Grouped(inner) => self.validate_expr(inner),
+            Expression::Grouped(inner) => self.validate_expr_expected(inner, expected),
             Expression::Cast { expr, target_type } => {
                 self.mark_span(SemanticSpanKind::Keyword, "as");
                 self.program.validate_type(
@@ -1713,7 +1791,7 @@ impl<'a> Validator<'a> {
                     false,
                     "cast target",
                 )?;
-                let source = self.validate_expr(expr)?;
+                let source = self.validate_expr_expected(expr, Some(target_type))?;
                 if !self.is_valid_cast(&source, target_type) {
                     return Err(format!(
                         "invalid cast from `{}` to `{}`",
@@ -1851,6 +1929,13 @@ impl<'a> Validator<'a> {
             Expression::FieldAccess { object, field } => {
                 self.mark_span(SemanticSpanKind::Identifier, field.clone());
                 let object_type = self.validate_expr(object)?;
+                if let Some(span) = self
+                    .source_map
+                    .expressions
+                    .get(&(expression as *const _ as usize))
+                {
+                    self.source_span = Some(span.clone());
+                }
                 let structure = match &object_type {
                     ExpressionType::Known(WaveType::Struct(name)) => Some(name.clone()),
                     ExpressionType::Known(WaveType::Pointer(inner)) => match inner.as_ref() {
@@ -2895,6 +2980,7 @@ fn find_base_var(target: &Expression, saw_deref: bool) -> Option<(String, bool)>
 
 fn is_lvalue_expression(expression: &Expression) -> bool {
     match expression {
+        Expression::Located { .. } => unreachable!("source wrappers detached before analysis"),
         Expression::Variable(_)
         | Expression::FieldAccess { .. }
         | Expression::IndexAccess { .. }
@@ -2955,6 +3041,7 @@ impl ConditionMutation {
 
 fn condition_mutation(expression: &Expression) -> Option<ConditionMutation> {
     match expression {
+        Expression::Located { value, .. } => condition_mutation(value),
         Expression::Assignment { .. } => Some(ConditionMutation::Assignment("=")),
         Expression::AssignOperation { operator, .. } => {
             let symbol = assign_operator_source_symbol(operator);
@@ -3039,18 +3126,7 @@ fn node_breaks_current_loop(node: &ASTNode) -> bool {
 }
 
 fn int_literal_is_zero(raw: &str) -> bool {
-    let raw = raw.trim().replace('_', "");
-    let raw = raw.strip_prefix('+').unwrap_or(&raw);
-    if let Some(hex) = raw.strip_prefix("0x").or_else(|| raw.strip_prefix("0X")) {
-        return u128::from_str_radix(hex, 16).ok() == Some(0);
-    }
-    if let Some(binary) = raw.strip_prefix("0b").or_else(|| raw.strip_prefix("0B")) {
-        return u128::from_str_radix(binary, 2).ok() == Some(0);
-    }
-    if let Some(octal) = raw.strip_prefix("0o").or_else(|| raw.strip_prefix("0O")) {
-        return u128::from_str_radix(octal, 8).ok() == Some(0);
-    }
-    raw.parse::<i128>().ok() == Some(0)
+    lexer::number::IntegerLiteral::parse(raw).is_some_and(|n| n.is_zero())
 }
 
 fn integer_literal_fits(raw: &str, ty: &WaveType) -> bool {
@@ -3083,34 +3159,12 @@ fn integer_literal_fits(raw: &str, ty: &WaveType) -> bool {
 }
 
 fn integer_literal_parts(raw: &str) -> Option<(bool, u32, String)> {
-    let raw = raw.trim().replace('_', "");
-    let (negative, unsigned) = if let Some(value) = raw.strip_prefix('-') {
-        (true, value)
-    } else {
-        (false, raw.strip_prefix('+').unwrap_or(&raw))
-    };
-    let (radix, digits) = if let Some(value) = unsigned
-        .strip_prefix("0x")
-        .or_else(|| unsigned.strip_prefix("0X"))
-    {
-        (16, value)
-    } else if let Some(value) = unsigned
-        .strip_prefix("0b")
-        .or_else(|| unsigned.strip_prefix("0B"))
-    {
-        (2, value)
-    } else if let Some(value) = unsigned
-        .strip_prefix("0o")
-        .or_else(|| unsigned.strip_prefix("0O"))
-    {
-        (8, value)
-    } else {
-        (10, unsigned)
-    };
-    if digits.is_empty() || !digits.chars().all(|ch| ch.is_digit(radix)) {
-        return None;
-    }
-    Some((negative, radix, digits.trim_start_matches('0').to_string()))
+    let n = lexer::number::IntegerLiteral::parse(raw)?;
+    Some((
+        n.negative,
+        n.radix,
+        n.digits.trim_start_matches('0').to_string(),
+    ))
 }
 
 fn unsigned_literal_bit_len(radix: u32, digits: &str) -> Option<usize> {
@@ -3231,6 +3285,8 @@ fn display_expression_type(ty: &ExpressionType) -> String {
 
 fn display_wave_type(ty: &WaveType) -> String {
     match ty {
+        WaveType::Isz => "isz".to_string(),
+        WaveType::Usz => "usz".to_string(),
         WaveType::Int(bits) => format!("i{}", bits),
         WaveType::Uint(bits) => format!("u{}", bits),
         WaveType::Float(bits) => format!("f{}", bits),
@@ -3241,6 +3297,7 @@ fn display_wave_type(ty: &WaveType) -> String {
         WaveType::Pointer(inner) => format!("ptr<{}>", display_wave_type(inner)),
         WaveType::Array(inner, size) => format!("array<{}, {}>", display_wave_type(inner), size),
         WaveType::Void => "void".to_string(),
+        WaveType::Never => "!".to_string(),
         WaveType::Struct(name) => name.clone(),
         WaveType::Variant(name) => name.clone(),
     }
@@ -3248,6 +3305,7 @@ fn display_wave_type(ty: &WaveType) -> String {
 
 fn variant_pattern_key(pattern: &MatchPattern) -> String {
     match pattern {
+        MatchPattern::Located { .. } => unreachable!("source wrappers detached before analysis"),
         MatchPattern::Int(raw) => format!("int:{}", raw),
         MatchPattern::Ident(name) => format!("ident:{}", name),
         MatchPattern::Binding(_) | MatchPattern::Wildcard => "*".to_string(),
@@ -3273,17 +3331,21 @@ pub fn validate_program(nodes: &Vec<ASTNode>) -> Result<(), String> {
 }
 
 pub fn validate_program_detailed(nodes: &[ASTNode]) -> Result<(), SemanticDiagnostic> {
-    analyze_expression_types(nodes).map(|_| ())
+    let mut syntax = nodes.to_vec().into_boxed_slice();
+    let sources = crate::source::SourceMap::detach(&mut syntax);
+    analyze_program_types(&syntax, &sources).map(|_| ())
 }
 
 pub fn analyze_expression_types(
     nodes: &[ASTNode],
 ) -> Result<HashMap<usize, WaveType>, SemanticDiagnostic> {
-    analyze_program_types(nodes).map(|analysis| analysis.expression_types)
+    analyze_program_types(nodes, &crate::source::SourceMap::default())
+        .map(|analysis| analysis.expression_types)
 }
 
 pub(crate) fn analyze_hir_expression_types(
     nodes: &[ASTNode],
+    sources: &crate::source::SourceMap,
 ) -> Result<
     (
         HashMap<usize, HirExpressionType>,
@@ -3292,7 +3354,7 @@ pub(crate) fn analyze_hir_expression_types(
     ),
     SemanticDiagnostic,
 > {
-    analyze_program_types(nodes).map(|analysis| {
+    analyze_program_types(nodes, sources).map(|analysis| {
         (
             analysis.hir_expression_types,
             analysis.hir_variant_constructions,
@@ -3312,15 +3374,30 @@ fn is_supported_foreign_abi(abi: &str) -> bool {
     abi.eq_ignore_ascii_case("c") || abi.eq_ignore_ascii_case("system")
 }
 
-fn analyze_program_types(nodes: &[ASTNode]) -> Result<ProgramAnalysis, SemanticDiagnostic> {
+fn analyze_program_types(
+    nodes: &[ASTNode],
+    sources: &crate::source::SourceMap,
+) -> Result<ProgramAnalysis, SemanticDiagnostic> {
     let program = ProgramTypes::collect(nodes).map_err(|(index, message, primary)| {
-        semantic_diagnostic_for_top_level(nodes, index, message, primary)
+        let mut diagnostic = semantic_diagnostic_for_top_level(nodes, index, message, primary);
+        diagnostic.span = nodes
+            .get(index)
+            .and_then(|node| sources.nodes.get(&(node as *const _ as usize)))
+            .cloned();
+        diagnostic
     })?;
-    validate_declaration_types(nodes, &program)?;
-    let mut validator = Validator::new(&program);
+    validate_declaration_types(nodes, &program).map_err(|mut diagnostic| {
+        diagnostic.span = nodes
+            .get(diagnostic.top_level_index)
+            .and_then(|node| sources.nodes.get(&(node as *const _ as usize)))
+            .cloned();
+        diagnostic
+    })?;
+    let mut validator = Validator::new(&program, sources);
 
     for (index, node) in nodes.iter().enumerate() {
         validator.begin_top_level(index, top_level_span_hint(node));
+        validator.source_span = sources.nodes.get(&(node as *const _ as usize)).cloned();
         let result = match node {
             ASTNode::Function(function) => {
                 if let Some(export) = &function.export {
@@ -3398,6 +3475,7 @@ fn analyze_program_types(nodes: &[ASTNode]) -> Result<ProgramAnalysis, SemanticD
 
 fn top_level_span_hint(node: &ASTNode) -> SemanticSpanHint {
     let (kind, text) = match node {
+        ASTNode::Located { value, .. } => return top_level_span_hint(value),
         ASTNode::Function(function) => (SemanticSpanKind::Declaration, function.name.clone()),
         ASTNode::ExternFunction(function) => (SemanticSpanKind::Declaration, function.name.clone()),
         ASTNode::Struct(structure) => (SemanticSpanKind::Declaration, structure.name.clone()),
@@ -3432,6 +3510,7 @@ fn semantic_diagnostic_for_top_level(
         message,
         top_level_index: index,
         primary,
+        span: nodes.get(index).and_then(ASTNode::span).cloned(),
         note: None,
         help: "fix type, mutability, scope, and control-flow errors".to_string(),
     }

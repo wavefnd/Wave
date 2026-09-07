@@ -1,0 +1,1 @@
+extern(c) fun bad(x i32);

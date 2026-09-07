@@ -20,7 +20,7 @@
 use crate::arch;
 use crate::ast::ASTNode;
 use crate::os;
-use crate::{parse_syntax_only, ParseError};
+use crate::{parse_syntax_with_spans, ParseError};
 use error::error::{WaveError, WaveErrorKind};
 use lexer::Lexer;
 use std::collections::{HashMap, HashSet};
@@ -137,8 +137,8 @@ fn is_supported_target_item_start(line: &str) -> bool {
 
     let trimmed = line.trim_start();
     for kw in [
-        "import", "extern", "export", "pub", "fun", "struct", "enum", "const", "static", "type",
-        "proto",
+        "import", "extern", "export", "pub", "fun", "struct", "enum", "variant", "const", "static",
+        "type", "proto",
     ] {
         if let Some(rest) = trimmed.strip_prefix(kw) {
             if has_ident_boundary(rest) {
@@ -248,7 +248,7 @@ fn consume_target_item(lines: &[&str], mut idx: usize, keep: bool, out: &mut Vec
         if keep {
             out.push(line.to_string());
         } else {
-            out.push(String::new());
+            out.push(" ".repeat(line.len()));
         }
 
         let mut saw_semicolon = false;
@@ -275,7 +275,7 @@ fn consume_target_item(lines: &[&str], mut idx: usize, keep: bool, out: &mut Vec
 }
 
 pub fn preprocess_target_attrs(source: &str, target: &TargetConditionContext) -> String {
-    let lines: Vec<&str> = source.lines().collect();
+    let lines: Vec<&str> = source.split('\n').collect();
     let mut out: Vec<String> = Vec::with_capacity(lines.len());
     let mut idx: usize = 0;
 
@@ -284,7 +284,7 @@ pub fn preprocess_target_attrs(source: &str, target: &TargetConditionContext) ->
         if let Some(target_attr) = parse_target_attr(line) {
             // Attribute line is removed for parser compatibility,
             // but we keep its line slot to preserve diagnostics.
-            out.push(String::new());
+            out.push(" ".repeat(line.len()));
             idx += 1;
 
             let keep_item = target_attr.matches(target);
@@ -304,7 +304,7 @@ pub fn preprocess_target_attrs(source: &str, target: &TargetConditionContext) ->
                     if keep_item {
                         out.push(item_line.to_string());
                     } else {
-                        out.push(String::new());
+                        out.push(" ".repeat(item_line.len()));
                     }
                     idx += 1;
                     continue;
@@ -316,7 +316,7 @@ pub fn preprocess_target_attrs(source: &str, target: &TargetConditionContext) ->
                     out.push(item_line.to_string());
                     idx += 1;
                 } else {
-                    out.push(String::new());
+                    out.push(" ".repeat(item_line.len()));
                     idx += 1;
                 }
                 break;
@@ -328,11 +328,7 @@ pub fn preprocess_target_attrs(source: &str, target: &TargetConditionContext) ->
         idx += 1;
     }
 
-    let mut processed = out.join("\n");
-    if source.ends_with('\n') {
-        processed.push('\n');
-    }
-    processed
+    out.join("\n")
 }
 
 pub struct ImportedUnit {
@@ -844,7 +840,7 @@ fn parse_wave_file(
     let mut lexer = Lexer::new_with_file(&content, abs_path.display().to_string());
     let tokens = lexer.tokenize()?;
 
-    let ast = parse_syntax_only(&tokens).map_err(|e| {
+    let ast = parse_syntax_with_spans(&tokens).map_err(|e| {
         let (kind, phase, code) = match &e {
             ParseError::Syntax(_) => (
                 WaveErrorKind::SyntaxError(e.message().to_string()),
@@ -873,6 +869,7 @@ fn parse_wave_file(
         .with_code(code)
         .with_source_code(content.clone());
 
+        we = we.with_span(e.span());
         if let Some(ctx) = e.context() {
             we = we.with_context(ctx.to_string());
         }

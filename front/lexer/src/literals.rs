@@ -273,7 +273,17 @@ impl<'a> Lexer<'a> {
                 .with_label("char literal must contain exactly one character")
                 .with_help("close with `'` and ensure exactly one character value"));
         }
-        self.advance(); // closing '
+        self.advance(); // closing quote
+        if u32::from(c) > 255 {
+            return Err(self
+                .make_error(
+                    WaveErrorKind::InvalidString("character is outside the byte range".into()),
+                    "char literals must fit the unsigned 8-bit char type",
+                    start_line,
+                    start_col,
+                )
+                .with_code("E1005"));
+        }
         Ok(c)
     }
 }

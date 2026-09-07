@@ -15,9 +15,9 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
-use wavec::link_validation::{
-    validate_loongarch64_link_inputs, validate_riscv_link_inputs, LoongArchFloatAbi, RiscvFloatAbi,
-};
+#[cfg(any(feature = "llvm-target-all", feature = "llvm-target-loongarch"))]
+use wavec::link_validation::{validate_loongarch64_link_inputs, LoongArchFloatAbi};
+use wavec::link_validation::{validate_riscv_link_inputs, RiscvFloatAbi};
 
 static NEXT_TEMP_CASE: AtomicU64 = AtomicU64::new(0);
 
@@ -330,6 +330,7 @@ fn riscv64_elf_flags(path: &Path) -> u32 {
     u32::from_le_bytes([object[48], object[49], object[50], object[51]])
 }
 
+#[cfg(any(feature = "llvm-target-all", feature = "llvm-target-loongarch"))]
 fn loongarch64_elf_flags(path: &Path) -> u32 {
     let object = fs::read(path).unwrap();
     assert!(
@@ -922,6 +923,7 @@ fn std_net_compiles_for_every_supported_socket_abi() {
         "x86_64-unknown-linux-gnu",
         "aarch64-unknown-linux-gnu",
         "riscv64-unknown-linux-gnu",
+        #[cfg(any(feature = "llvm-target-all", feature = "llvm-target-loongarch"))]
         "loongarch64-unknown-linux-gnu",
         "x86_64-apple-darwin",
         "aarch64-apple-darwin",
@@ -1804,7 +1806,7 @@ fun value() -> i32 {
     let output = run_wavec_raw([OsStr::new("check"), source.as_os_str()]);
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("wrong_return.wave:3:5"), "{}", stderr);
+    assert!(stderr.contains("wrong_return.wave:3:12"), "{}", stderr);
     assert!(stderr.contains("return \"text\";"), "{}", stderr);
 
     let repeated_return = write_wave(
@@ -1822,7 +1824,7 @@ fun value(flag: bool) -> i32 {
     let output = run_wavec_raw([OsStr::new("check"), repeated_return.as_os_str()]);
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(stderr.contains("repeated_return.wave:6:5"), "{}", stderr);
+    assert!(stderr.contains("repeated_return.wave:6:12"), "{}", stderr);
     assert!(stderr.contains("return \"text\";"), "{}", stderr);
 
     let duplicate = write_wave(
@@ -3048,7 +3050,9 @@ fn hosted_linux_link_plans_use_wave_crt_for_every_architecture_and_mode() {
         ("riscv64-unknown-linux-gnu", Some("lp64")),
         ("riscv64-unknown-linux-gnu", Some("lp64f")),
         ("riscv64-unknown-linux-gnu", Some("lp64d")),
+        #[cfg(any(feature = "llvm-target-all", feature = "llvm-target-loongarch"))]
         ("loongarch64-unknown-linux-gnu", Some("lp64s")),
+        #[cfg(any(feature = "llvm-target-all", feature = "llvm-target-loongarch"))]
         ("loongarch64-unknown-linux-gnu", Some("lp64d")),
     ] {
         for (options, object_name) in [
@@ -3457,6 +3461,54 @@ fun main() -> i32 {
             OsStr::new("--target-dir"),
             target_dir.as_os_str(),
         ]);
+    }
+}
+
+#[test]
+fn projected_deref_preserves_pointer_storage_types() {
+    let source = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/cases/shared/test103.wave");
+    let dir = temp_case_dir("projected-pointer-loads");
+    // Use the advertised targets so this regression also runs in isolated
+    // backend builds and covers WebAssembly's 32-bit pointer representation.
+    let (targets, _) = run_wavec_capture(["print", "target-list"]);
+    for target in targets
+        .lines()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+    {
+        let out = dir.join(target);
+        run_wavec([
+            OsStr::new("build"),
+            source.as_os_str(),
+            OsStr::new("--target"),
+            OsStr::new(target),
+            OsStr::new("--emit=ir"),
+            OsStr::new("--out-dir"),
+            out.as_os_str(),
+        ]);
+        let ir = fs::read_to_string(out.join("test103.ll")).unwrap();
+        for name in ["check_writer", "check_index", "check_depth"] {
+            let body = ir
+                .split(&format!("@{name}("))
+                .nth(1)
+                .unwrap()
+                .split("\n}")
+                .next()
+                .unwrap();
+            assert!(body.contains("load ptr"), "{target} {name}: {body}");
+            assert!(!body.contains("load i8"), "{target} {name}: {body}");
+        }
+        for name in ["widen_field", "widen_scalar"] {
+            let body = ir
+                .split(&format!("@{name}("))
+                .nth(1)
+                .unwrap()
+                .split("\n}")
+                .next()
+                .unwrap();
+            assert!(body.contains("load i8"), "{target} {name}: {body}");
+            assert!(!body.contains("load i64"), "{target} {name}: {body}");
+        }
     }
 }
 
@@ -4127,6 +4179,7 @@ fn odd_sized_aggregate_transport_matches_clang_ir_contracts() {
         "aarch64-apple-darwin",
         "riscv64-unknown-linux-gnu",
         "aarch64-w64-windows-gnu",
+        #[cfg(any(feature = "llvm-target-all", feature = "llvm-target-loongarch"))]
         "loongarch64-unknown-linux-gnu",
     ] {
         let tag = target.split('-').next().unwrap();
@@ -4317,6 +4370,7 @@ fun main() -> i32 { return c_i8(-1) as i32 + c_u8(1) as i32 + c_i16(-1) as i32 +
         "x86_64-pc-windows-gnu",
         "riscv64-unknown-linux-gnu",
         "aarch64-w64-windows-gnu",
+        #[cfg(any(feature = "llvm-target-all", feature = "llvm-target-loongarch"))]
         "loongarch64-unknown-linux-gnu",
     ] {
         let out = dir.join(target);
@@ -4573,6 +4627,7 @@ fn riscv_link_input_abi_is_validated_before_linking() {
     }
 }
 
+#[cfg(any(feature = "llvm-target-all", feature = "llvm-target-loongarch"))]
 #[test]
 fn loongarch64_link_inputs_require_matching_abi_before_linking() {
     let dir = temp_case_dir("loongarch64-pre-link-abi");
@@ -4629,6 +4684,7 @@ fn loongarch64_link_inputs_require_matching_abi_before_linking() {
     );
 }
 
+#[cfg(any(feature = "llvm-target-all", feature = "llvm-target-loongarch"))]
 #[test]
 fn loongarch64_lp64f_hosted_linking_is_rejected_before_the_linker() {
     let dir = temp_case_dir("loongarch64-lp64f-hosted-link");
@@ -4655,6 +4711,7 @@ fn loongarch64_lp64f_hosted_linking_is_rejected_before_the_linker() {
     );
 }
 
+#[cfg(any(feature = "llvm-target-all", feature = "llvm-target-loongarch"))]
 #[test]
 fn loongarch64_float_abi_modes_match_clang_contracts() {
     let dir = temp_case_dir("loongarch64-float-abi-modes");
@@ -5032,6 +5089,7 @@ fn riscv64_c_abi_interoperates_with_c_under_qemu() {
     );
 }
 
+#[cfg(any(feature = "llvm-target-all", feature = "llvm-target-loongarch"))]
 #[test]
 fn loongarch64_lp64d_c_abi_interoperates_with_clang_under_qemu() {
     if std::env::var_os("WAVE_RUN_LOONGARCH64_INTEROP_TESTS").is_none() {

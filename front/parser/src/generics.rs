@@ -19,15 +19,16 @@
 //! so repeated references resolve to one generated definition.
 
 use crate::ast::{
-    ASTNode, EnumNode, Expression, ExternFunctionNode, FunctionNode, Literal, MatchArm,
-    MatchPattern, ParameterNode, ProtoImplNode, StatementNode, StructNode, TypeAliasNode, Value,
-    VariableNode, VariantNode, WaveType,
+    ASTNode, EnumNode, Expression, ExternFunctionNode, FunctionNode, MatchArm, MatchPattern,
+    ParameterNode, ProtoImplNode, StatementNode, StructNode, TypeAliasNode, VariableNode,
+    VariantNode, WaveType,
 };
 use crate::types::{parse_type, split_top_level_generic_args, token_type_to_wave_type};
 use std::collections::{BTreeMap, HashMap, HashSet};
 
 #[derive(Default)]
 struct GenericEnv {
+    origin_spans: HashMap<String, error::SourceSpan>,
     // Templates are source definitions; instances are fully substituted nodes
     // that may be emitted. BTreeMap keeps generated output deterministic.
     function_templates: HashMap<String, FunctionNode>,
@@ -57,7 +58,18 @@ pub fn monomorphize_generics(ast: Vec<ASTNode>) -> Result<Vec<ASTNode>, String> 
     // Pass one records every callable signature and generic template before any
     // body is rewritten, allowing forward references between declarations.
     for node in &ast {
-        match node {
+        if let Some(span) = node.span() {
+            let name = match node.unspanned() {
+                ASTNode::Function(f) => Some(&f.name),
+                ASTNode::Struct(s) => Some(&s.name),
+                ASTNode::Variant(v) => Some(&v.name),
+                _ => None,
+            };
+            if let Some(name) = name {
+                env.origin_spans.insert(name.clone(), span.clone());
+            }
+        }
+        match node.unspanned() {
             ASTNode::Function(f) => {
                 if env
                     .function_parameters
@@ -107,7 +119,10 @@ pub fn monomorphize_generics(ast: Vec<ASTNode>) -> Result<Vec<ASTNode>, String> 
     // Pass two rewrites concrete roots. Referenced generic instances are added
     // to the environment recursively and appended after source declarations.
     for node in ast {
-        match node {
+        let span = node.span().cloned();
+        let first_output = out.len();
+        match node.into_unspanned() {
+            ASTNode::Located { .. } => unreachable!("unspanned root"),
             ASTNode::Function(f) => {
                 if f.generic_params.is_empty() {
                     out.push(ASTNode::Function(rewrite_function(
@@ -194,16 +209,23 @@ pub fn monomorphize_generics(ast: Vec<ASTNode>) -> Result<Vec<ASTNode>, String> 
             }
             ASTNode::Program(p) => out.push(ASTNode::Program(p)),
         }
+        for node in &mut out[first_output..] {
+            let value = std::mem::replace(node, ASTNode::Expression(Expression::Null));
+            *node = value.with_span(span.clone());
+        }
     }
 
     for (_, variant) in env.variant_instances {
-        out.push(ASTNode::Variant(variant));
+        let span = env.origin_spans.get(&variant.name).cloned();
+        out.push(ASTNode::Variant(variant).with_span(span));
     }
     for (_, s) in env.struct_instances {
-        out.push(ASTNode::Struct(s));
+        let span = env.origin_spans.get(&s.name).cloned();
+        out.push(ASTNode::Struct(s).with_span(span));
     }
     for (_, f) in env.function_instances {
-        out.push(ASTNode::Function(f));
+        let span = env.origin_spans.get(&f.name).cloned();
+        out.push(ASTNode::Function(f).with_span(span));
     }
 
     Ok(out)
@@ -215,6 +237,7 @@ fn rewrite_parameter(
     env: &mut GenericEnv,
 ) -> Result<ParameterNode, String> {
     Ok(ParameterNode {
+        span: param.span,
         name: param.name,
         param_type: rewrite_wave_type(&param.param_type, subst, env)?,
         initial_value: param.initial_value,
@@ -359,6 +382,9 @@ fn rewrite_node(
     env: &mut GenericEnv,
 ) -> Result<ASTNode, String> {
     match node {
+        ASTNode::Located { value, span } => {
+            Ok(rewrite_node(*value, subst, env)?.with_span(Some(span)))
+        }
         ASTNode::Variable(v) => Ok(ASTNode::Variable(rewrite_variable(v, subst, env)?)),
         ASTNode::Statement(s) => Ok(ASTNode::Statement(rewrite_statement(s, subst, env)?)),
         ASTNode::Expression(e) => Ok(ASTNode::Expression(rewrite_expression(e, subst, env)?)),
@@ -456,6 +482,7 @@ fn rewrite_statement(
                 .into_iter()
                 .map(|arm| {
                     Ok(MatchArm {
+                        span: arm.span,
                         pattern: rewrite_pattern(arm.pattern),
                         body: rewrite_node_list(arm.body, subst, env)?,
                     })
@@ -530,6 +557,14 @@ fn rewrite_expression(
     env: &mut GenericEnv,
 ) -> Result<Expression, String> {
     match expr {
+        Expression::Located { value, span } => {
+            let span = if subst.is_empty() {
+                span
+            } else {
+                span.generated("generic specialization")
+            };
+            Ok(rewrite_expression(*value, subst, env)?.with_span(Some(span)))
+        }
         Expression::FunctionCall {
             name,
             type_args,
@@ -685,18 +720,14 @@ fn append_default_arguments(
             .initial_value
             .as_ref()
             .ok_or_else(|| format!("function '{}' requires argument '{}'", name, parameter.name))?;
-        args.push(value_to_expression(default));
+        let span = default
+            .span()
+            .cloned()
+            .map(|span| span.generated(format!("default argument for {name}")));
+        args.push(default.clone().with_span(span));
     }
 
     Ok(())
-}
-
-fn value_to_expression(value: &Value) -> Expression {
-    match value {
-        Value::Int(value) => Expression::Literal(Literal::Int(value.to_string())),
-        Value::Float(value) => Expression::Literal(Literal::Float(*value)),
-        Value::Text(value) => Expression::Literal(Literal::String(value.clone())),
-    }
 }
 
 fn rewrite_wave_type(
@@ -802,6 +833,12 @@ fn ensure_variant_instance(
             .collect::<Vec<_>>()
             .join(",")
     );
+    if let Some(span) = env.origin_spans.get(base).cloned() {
+        env.origin_spans.insert(
+            instance_name.clone(),
+            span.generated(format!("specialization of {base}")),
+        );
+    }
     if env.variant_instances.contains_key(&instance_name)
         || env.variant_in_progress.contains(&instance_name)
     {
@@ -860,6 +897,12 @@ fn ensure_struct_instance(
     }
 
     let inst_name = mangle_instance_name(base, args);
+    if let Some(span) = env.origin_spans.get(base).cloned() {
+        env.origin_spans.insert(
+            inst_name.clone(),
+            span.generated(format!("specialization of {base}")),
+        );
+    }
     if env.struct_instances.contains_key(&inst_name) {
         return Ok(inst_name);
     }
@@ -912,6 +955,12 @@ fn ensure_function_instance(
     }
 
     let inst_name = mangle_instance_name(base, args);
+    if let Some(span) = env.origin_spans.get(base).cloned() {
+        env.origin_spans.insert(
+            inst_name.clone(),
+            span.generated(format!("specialization of {base}")),
+        );
+    }
     if env.function_instances.contains_key(&inst_name) {
         return Ok(inst_name);
     }
@@ -989,6 +1038,8 @@ fn mangle_instance_name(base: &str, args: &[WaveType]) -> String {
 
 fn mangle_type(ty: &WaveType) -> String {
     match ty {
+        WaveType::Isz => "isz".to_string(),
+        WaveType::Usz => "usz".to_string(),
         WaveType::Int(n) => format!("i{}", n),
         WaveType::Uint(n) => format!("u{}", n),
         WaveType::Float(n) => format!("f{}", n),
@@ -997,6 +1048,7 @@ fn mangle_type(ty: &WaveType) -> String {
         WaveType::Byte => "byte".to_string(),
         WaveType::String => "str".to_string(),
         WaveType::Void => "void".to_string(),
+        WaveType::Never => "!".to_string(),
         WaveType::Pointer(inner) => format!("p_{}", mangle_type(inner)),
         WaveType::Array(inner, n) => format!("a{}_{}", n, mangle_type(inner)),
         WaveType::Struct(name) => sanitize_ident(name),
@@ -1006,6 +1058,8 @@ fn mangle_type(ty: &WaveType) -> String {
 
 fn display_type_for_application(ty: &WaveType) -> String {
     match ty {
+        WaveType::Isz => "isz".to_string(),
+        WaveType::Usz => "usz".to_string(),
         WaveType::Int(bits) => format!("i{}", bits),
         WaveType::Uint(bits) => format!("u{}", bits),
         WaveType::Float(bits) => format!("f{}", bits),
@@ -1018,6 +1072,7 @@ fn display_type_for_application(ty: &WaveType) -> String {
             format!("array<{},{}>", display_type_for_application(inner), size)
         }
         WaveType::Void => "void".to_string(),
+        WaveType::Never => "!".to_string(),
         WaveType::Struct(name) | WaveType::Variant(name) => name.clone(),
     }
 }

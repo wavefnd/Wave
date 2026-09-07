@@ -24,7 +24,6 @@ use crate::statement::variable::{coerce_basic_value, expression_is_unsigned, Coe
 use inkwell::basic_block::BasicBlock;
 use inkwell::module::Module;
 use inkwell::targets::TargetData;
-use inkwell::types::StringRadix;
 use inkwell::types::{BasicType, StructType};
 use inkwell::values::{AnyValue, BasicValueEnum, FunctionValue, IntValue, PointerValue};
 use inkwell::{FloatPredicate, IntPredicate};
@@ -103,39 +102,20 @@ fn node_breaks_current_loop(node: &ASTNode) -> bool {
     }
 }
 
-fn parse_signed_decimal<'a>(s: &'a str) -> (bool, &'a str) {
-    if let Some(rest) = s.strip_prefix('-') {
-        (true, rest)
-    } else {
-        (false, s)
-    }
-}
-
-fn parse_int_radix(s: &str) -> (StringRadix, &str) {
-    if let Some(rest) = s.strip_prefix("0b").or_else(|| s.strip_prefix("0B")) {
-        (StringRadix::Binary, rest)
-    } else if let Some(rest) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X")) {
-        (StringRadix::Hexadecimal, rest)
-    } else if let Some(rest) = s.strip_prefix("0o").or_else(|| s.strip_prefix("0O")) {
-        (StringRadix::Octal, rest)
-    } else {
-        (StringRadix::Decimal, s)
-    }
-}
-
 fn eval_match_case_const<'ctx>(
     discr_ty: inkwell::types::IntType<'ctx>,
     pattern: &MatchPattern,
     global_consts: &HashMap<String, BasicValueEnum<'ctx>>,
 ) -> inkwell::values::IntValue<'ctx> {
     match pattern {
+        MatchPattern::Located { .. } => unreachable!("typed HIR detaches source wrappers"),
         MatchPattern::Int(raw) => {
             let text = raw.as_str();
-            let (neg, digits_src) = parse_signed_decimal(text);
-            let (radix, digits) = parse_int_radix(digits_src);
+            let (neg, radix, digits) =
+                crate::codegen::number::parse_integer(text).expect("validated match integer");
 
             let mut iv = discr_ty
-                .const_int_from_string(digits, radix)
+                .const_int_from_string(&digits, radix)
                 .unwrap_or_else(|| panic!("invalid integer literal in match case: {}", raw));
             if neg {
                 iv = iv.const_neg();
@@ -194,6 +174,7 @@ fn gen_variant_pattern_test<'ctx>(
     struct_types: &HashMap<String, StructType<'ctx>>,
 ) -> (IntValue<'ctx>, Vec<VariantBinding<'ctx>>) {
     match pattern {
+        MatchPattern::Located { .. } => unreachable!("typed HIR detaches source wrappers"),
         MatchPattern::Wildcard => (context.bool_type().const_int(1, false), Vec::new()),
         MatchPattern::Binding(name) => (
             context.bool_type().const_int(1, false),
@@ -789,6 +770,7 @@ pub(super) fn gen_match_ir<'ctx>(
 
     for (idx, arm) in arms.iter().enumerate() {
         match &arm.pattern {
+            MatchPattern::Located { .. } => unreachable!("typed HIR detaches source wrappers"),
             MatchPattern::Wildcard => {
                 if default_arm.is_some() {
                     panic!("duplicate wildcard match arm (`_`)");

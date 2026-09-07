@@ -66,102 +66,106 @@ fn parse_match_pattern(
     tokens: &mut Peekable<Iter<Token>>,
     payload_position: bool,
 ) -> Option<MatchPattern> {
-    skip_ws_and_newlines(tokens);
+    let before = tokens.clone();
+    let result = (|| {
+        skip_ws_and_newlines(tokens);
 
-    match tokens.next()? {
-        Token {
-            token_type: TokenType::IntLiteral(v),
-            ..
-        } => Some(MatchPattern::Int(v.clone())),
-        Token {
-            token_type: TokenType::Identifier(name),
-            ..
-        } => {
-            if name == "_" {
-                return Some(MatchPattern::Wildcard);
-            }
-
-            let mut segments = vec![name.clone()];
-            loop {
-                skip_ws_and_newlines(tokens);
-                if !matches!(
-                    tokens.peek().map(|token| &token.token_type),
-                    Some(TokenType::DoubleColon)
-                ) {
-                    break;
+        match tokens.next()? {
+            Token {
+                token_type: TokenType::IntLiteral(v),
+                ..
+            } => Some(MatchPattern::Int(v.clone())),
+            Token {
+                token_type: TokenType::Identifier(name),
+                ..
+            } => {
+                if name == "_" {
+                    return Some(MatchPattern::Wildcard);
                 }
-                tokens.next();
-                skip_ws_and_newlines(tokens);
-                match tokens.next() {
-                    Some(Token {
-                        token_type: TokenType::Identifier(segment),
-                        ..
-                    }) => segments.push(segment.clone()),
-                    _ => {
-                        println!("Error: Expected case name after '::' in match pattern");
-                        return None;
-                    }
-                }
-            }
 
-            if segments.len() == 1 {
-                return if payload_position {
-                    Some(MatchPattern::Binding(name.clone()))
-                } else {
-                    Some(MatchPattern::Ident(name.clone()))
-                };
-            }
-
-            let case_name = segments.pop().unwrap();
-            let variant_type = segments.join("::");
-            let mut payloads = Vec::new();
-            skip_ws_and_newlines(tokens);
-            if matches!(
-                tokens.peek().map(|token| &token.token_type),
-                Some(TokenType::Lparen)
-            ) {
-                tokens.next();
+                let mut segments = vec![name.clone()];
                 loop {
                     skip_ws_and_newlines(tokens);
-                    if matches!(
+                    if !matches!(
                         tokens.peek().map(|token| &token.token_type),
-                        Some(TokenType::Rparen)
+                        Some(TokenType::DoubleColon)
                     ) {
-                        tokens.next();
                         break;
                     }
-                    payloads.push(parse_match_pattern(tokens, true)?);
+                    tokens.next();
                     skip_ws_and_newlines(tokens);
-                    match tokens.peek().map(|token| &token.token_type) {
-                        Some(TokenType::Comma) => {
-                            tokens.next();
-                        }
-                        Some(TokenType::Rparen) => {
-                            tokens.next();
-                            break;
-                        }
+                    match tokens.next() {
+                        Some(Token {
+                            token_type: TokenType::Identifier(segment),
+                            ..
+                        }) => segments.push(segment.clone()),
                         _ => {
-                            println!("Error: Expected ',' or ')' in variant pattern");
+                            println!("Error: Expected case name after '::' in match pattern");
                             return None;
                         }
                     }
                 }
-            }
 
-            Some(MatchPattern::Variant {
-                variant_type,
-                case_name,
-                payloads,
-            })
-        }
-        other => {
-            println!(
+                if segments.len() == 1 {
+                    return if payload_position {
+                        Some(MatchPattern::Binding(name.clone()))
+                    } else {
+                        Some(MatchPattern::Ident(name.clone()))
+                    };
+                }
+
+                let case_name = segments.pop().unwrap();
+                let variant_type = segments.join("::");
+                let mut payloads = Vec::new();
+                skip_ws_and_newlines(tokens);
+                if matches!(
+                    tokens.peek().map(|token| &token.token_type),
+                    Some(TokenType::Lparen)
+                ) {
+                    tokens.next();
+                    loop {
+                        skip_ws_and_newlines(tokens);
+                        if matches!(
+                            tokens.peek().map(|token| &token.token_type),
+                            Some(TokenType::Rparen)
+                        ) {
+                            tokens.next();
+                            break;
+                        }
+                        payloads.push(parse_match_pattern(tokens, true)?);
+                        skip_ws_and_newlines(tokens);
+                        match tokens.peek().map(|token| &token.token_type) {
+                            Some(TokenType::Comma) => {
+                                tokens.next();
+                            }
+                            Some(TokenType::Rparen) => {
+                                tokens.next();
+                                break;
+                            }
+                            _ => {
+                                println!("Error: Expected ',' or ')' in variant pattern");
+                                return None;
+                            }
+                        }
+                    }
+                }
+
+                Some(MatchPattern::Variant {
+                    variant_type,
+                    case_name,
+                    payloads,
+                })
+            }
+            other => {
+                println!(
                 "Error: Invalid match pattern {:?} (expected integer literal, enum variant, or `_`)",
                 other.token_type
             );
-            None
+                None
+            }
         }
-    }
+    })();
+    result.map(|value: MatchPattern| value.with_span(lexer::consumed_span(before, tokens)))
 }
 
 pub fn parse_if(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
@@ -304,27 +308,34 @@ fn parse_typed_for_initializer(
 }
 
 fn parse_for_initializer(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
-    match tokens.peek().map(|t| &t.token_type) {
-        Some(TokenType::Var) => {
-            tokens.next(); // consume `var`
-            parse_typed_for_initializer(tokens, Mutability::Var)
+    let before = tokens.clone();
+    let result = (|| {
+        match tokens.peek().map(|t| &t.token_type) {
+            Some(TokenType::Var) => {
+                tokens.next(); // consume `var`
+                parse_typed_for_initializer(tokens, Mutability::Var)
+            }
+            Some(TokenType::Const) => {
+                println!("Error: `const` is not allowed in local for-loop initializer");
+                None
+            }
+            Some(TokenType::Static) => {
+                println!("Error: `static` is not allowed in local for-loop initializer");
+                None
+            }
+            _ if is_typed_for_initializer(tokens) => {
+                parse_typed_for_initializer(tokens, Mutability::Var)
+            }
+            _ => {
+                let expr = parse_expression(tokens)?;
+                Some(ASTNode::Statement(StatementNode::Expression(expr)))
+            }
         }
-        Some(TokenType::Const) => {
-            println!("Error: `const` is not allowed in local for-loop initializer");
-            None
-        }
-        Some(TokenType::Static) => {
-            println!("Error: `static` is not allowed in local for-loop initializer");
-            None
-        }
-        _ if is_typed_for_initializer(tokens) => {
-            parse_typed_for_initializer(tokens, Mutability::Var)
-        }
-        _ => {
-            let expr = parse_expression(tokens)?;
-            Some(ASTNode::Statement(StatementNode::Expression(expr)))
-        }
-    }
+    })();
+    result.map(|value: ASTNode| {
+        let span = crate::source::node_span(before, tokens, &value);
+        value.with_span(span)
+    })
 }
 
 // FOR parsing
@@ -464,8 +475,9 @@ pub fn parse_match(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
             break;
         }
 
+        let before = tokens.clone();
         let pattern = parse_match_pattern(tokens, false)?;
-        if matches!(pattern, MatchPattern::Wildcard) {
+        if matches!(pattern.unspanned(), MatchPattern::Wildcard) {
             if saw_wildcard {
                 println!("Error: Duplicate wildcard arm `_` in match");
                 return None;
@@ -485,7 +497,11 @@ pub fn parse_match(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
         tokens.next(); // consume '{'
 
         let body = parse_block(tokens)?;
-        arms.push(MatchArm { pattern, body });
+        arms.push(MatchArm {
+            pattern,
+            body,
+            span: lexer::consumed_span(before, tokens),
+        });
 
         skip_ws_and_newlines(tokens);
         if matches!(

@@ -35,11 +35,7 @@ where
     ) {
         tokens.next();
         let right = parse_logical_and_expression(tokens)?;
-        left = Expression::BinaryExpression {
-            left: Box::new(left),
-            operator: Operator::LogicalOr,
-            right: Box::new(right),
-        };
+        left = Expression::binary(left, Operator::LogicalOr, right);
     }
 
     Some(left)
@@ -59,11 +55,7 @@ where
     ) {
         tokens.next();
         let right = parse_bitwise_or_expression(tokens)?;
-        left = Expression::BinaryExpression {
-            left: Box::new(left),
-            operator: Operator::LogicalAnd,
-            right: Box::new(right),
-        };
+        left = Expression::binary(left, Operator::LogicalAnd, right);
     }
 
     Some(left)
@@ -81,11 +73,7 @@ where
     ) {
         tokens.next();
         let right = parse_bitwise_xor_expression(tokens)?;
-        left = Expression::BinaryExpression {
-            left: Box::new(left),
-            operator: Operator::BitwiseOr,
-            right: Box::new(right),
-        };
+        left = Expression::binary(left, Operator::BitwiseOr, right);
     }
 
     Some(left)
@@ -102,11 +90,7 @@ where
     while matches!(tokens.peek().map(|t| &t.token_type), Some(TokenType::Xor)) {
         tokens.next();
         let right = parse_bitwise_and_expression(tokens)?;
-        left = Expression::BinaryExpression {
-            left: Box::new(left),
-            operator: Operator::BitwiseXor,
-            right: Box::new(right),
-        };
+        left = Expression::binary(left, Operator::BitwiseXor, right);
     }
 
     Some(left)
@@ -126,11 +110,7 @@ where
     ) {
         tokens.next();
         let right = parse_equality_expression(tokens)?;
-        left = Expression::BinaryExpression {
-            left: Box::new(left),
-            operator: Operator::BitwiseAnd,
-            right: Box::new(right),
-        };
+        left = Expression::binary(left, Operator::BitwiseAnd, right);
     }
 
     Some(left)
@@ -150,11 +130,7 @@ where
         };
         tokens.next();
         let right = parse_relational_expression(tokens)?;
-        left = Expression::BinaryExpression {
-            left: Box::new(left),
-            operator: op,
-            right: Box::new(right),
-        };
+        left = Expression::binary(left, op, right);
     }
 
     Some(left)
@@ -176,11 +152,7 @@ where
         };
         tokens.next();
         let right = parse_shift_expression(tokens)?;
-        left = Expression::BinaryExpression {
-            left: Box::new(left),
-            operator: op,
-            right: Box::new(right),
-        };
+        left = Expression::binary(left, op, right);
     }
 
     Some(left)
@@ -201,11 +173,7 @@ where
 
         tokens.next();
         let right = parse_additive_expression(tokens)?;
-        left = Expression::BinaryExpression {
-            left: Box::new(left),
-            operator: op,
-            right: Box::new(right),
-        };
+        left = Expression::binary(left, op, right);
     }
 
     Some(left)
@@ -225,11 +193,7 @@ where
         };
         tokens.next();
         let right = parse_multiplicative_expression(tokens)?;
-        left = Expression::BinaryExpression {
-            left: Box::new(left),
-            operator: op,
-            right: Box::new(right),
-        };
+        left = Expression::binary(left, op, right);
     }
 
     Some(left)
@@ -252,11 +216,7 @@ where
         };
         tokens.next();
         let right = parse_cast_expression(tokens)?;
-        left = Expression::BinaryExpression {
-            left: Box::new(left),
-            operator: op,
-            right: Box::new(right),
-        };
+        left = Expression::binary(left, op, right);
     }
 
     Some(left)
@@ -269,12 +229,20 @@ where
     let mut expr = parse_unary_expression(tokens)?;
 
     while matches!(tokens.peek().map(|t| &t.token_type), Some(TokenType::As)) {
+        let before = tokens.clone();
+        let first = expr.span().cloned();
         tokens.next(); // consume `as`
         let target_type = parse_type_from_stream(tokens)?;
         expr = Expression::Cast {
             expr: Box::new(expr),
             target_type,
-        };
+        }
+        .with_span(
+            first
+                .as_ref()
+                .zip(lexer::consumed_span(before, tokens))
+                .map(|(first, last)| first.through(&last)),
+        );
     }
 
     Some(expr)

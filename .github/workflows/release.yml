@@ -1001,6 +1001,10 @@ jobs:
           ) | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "$llvmDirectory\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
+      - name: Provision pinned ARM64 libxml2 for LLVM
+        shell: pwsh
+        run: ./tools/provision_windows_arm64_libxml2.ps1
+
       - name: Verify native ARM64 toolchains
         shell: pwsh
         run: |
@@ -1042,7 +1046,7 @@ jobs:
           $source = Join-Path $temporary "smoke.wave"
           $outputDirectory = Join-Path $temporary "output"
           'fun main() { println("release smoke"); }' | Set-Content -Encoding utf8 $source
-          $output = & $compiler run $source --out-dir $outputDirectory
+          $output = & $compiler build $source --run --out-dir $outputDirectory
           if ($LASTEXITCODE -ne 0 -or $output -ne "release smoke") {
             throw "Windows ARM64 packaged compiler smoke test failed: $output"
           }

@@ -246,6 +246,7 @@ pub fn parse_struct(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
     tokens.next();
 
     let mut fields = Vec::new();
+    let mut field_spans = Vec::new();
     let mut methods = Vec::new();
 
     loop {
@@ -301,6 +302,7 @@ pub fn parse_struct(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
                     lookahead.peek().map(|t| &t.token_type),
                     Some(TokenType::Colon)
                 ) {
+                    let before = tokens.clone();
                     let field_name = if let Some(Token {
                         token_type: TokenType::Identifier(n),
                         ..
@@ -353,6 +355,7 @@ pub fn parse_struct(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
                     }
                     tokens.next(); // consume ';'
 
+                    field_spans.push(lexer::consumed_span(before, tokens));
                     fields.push((field_name, wave_type));
                 } else {
                     let id_str =
@@ -383,6 +386,7 @@ pub fn parse_struct(tokens: &mut Peekable<Iter<Token>>) -> Option<ASTNode> {
         name,
         generic_params,
         fields,
+        field_spans,
         methods,
         visibility: Visibility::Private,
     }))

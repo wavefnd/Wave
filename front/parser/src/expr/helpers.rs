@@ -25,7 +25,7 @@ use std::iter::Peekable;
 use std::slice::Iter;
 
 pub fn is_assignable(expr: &Expression) -> bool {
-    match expr {
+    match expr.unspanned() {
         Expression::Variable(_) => true,
         Expression::Deref(_) => true,
         Expression::FieldAccess { .. } => true,

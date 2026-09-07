@@ -1237,6 +1237,11 @@ def stage_release_package(target, binary, out_name):
         sys.exit(1)
     if target == WINDOWS_ARM64_HOST_TARGET:
         copy_windows_arm64_mingw_toolchain(stage_dir, target)
+        libxml2_license = os.environ.get("WAVE_LIBXML2_LICENSE")
+        if libxml2_license:
+            license_dir = stage_dir / "licenses"
+            license_dir.mkdir(exist_ok=True)
+            shutil.copy2(libxml2_license, license_dir / "libxml2.txt")
     else:
         copy_windows_mingw_self_contained_libs(stage_dir, target)
     patch_staged_runtime(stage_dir, target, staged_binary, lld_tools)

@@ -95,6 +95,7 @@ pub struct WaveError {
     pub source: Option<String>,
     pub source_code: Option<String>,
     pub span_len: usize,
+    pub span: Option<crate::SourceSpan>,
     pub label: Option<String>,
     pub context: Option<String>,
     pub expected: Vec<String>,
@@ -131,6 +132,7 @@ impl WaveError {
             source: None,
             source_code: None,
             span_len: 1,
+            span: None,
             label: None,
             context: None,
             expected: Vec::new(),
@@ -149,6 +151,22 @@ impl WaveError {
 
     pub fn with_source_code(mut self, source: impl Into<String>) -> Self {
         self.source_code = Some(source.into());
+        self
+    }
+
+    pub fn with_span(mut self, span: Option<&crate::SourceSpan>) -> Self {
+        if let Some(span) = span {
+            let span = span.focus.as_deref().unwrap_or(span);
+            self.file = span.file.clone();
+            self.line = span.line;
+            self.column = span.column;
+            self.span_len = if span.line == span.end_line {
+                span.end_column.saturating_sub(span.column).max(1)
+            } else {
+                1
+            };
+            self.span = Some(span.clone());
+        }
         self
     }
 
@@ -221,10 +239,26 @@ impl WaveError {
         push_json_field(&mut out, "file", &self.file);
         out.push_str(&format!(
             ",\"line\":{},\"column\":{},\"span_len\":{}",
-            self.line.max(1),
-            self.column.max(1),
+            self.line,
+            self.column,
             self.span_len.max(1)
         ));
+        out.push_str(",\"span\":");
+        if let Some(span) = &self.span {
+            out.push('{');
+            push_json_field(&mut out, "file", &span.file);
+            out.push_str(&format!(",\"start\":{},\"end\":{},\"line\":{},\"column\":{},\"end_line\":{},\"end_column\":{}", span.start, span.end, span.line, span.column, span.end_line, span.end_column));
+            out.push_str(",\"expansion\":[");
+            for (i, reason) in span.expansion.iter().enumerate() {
+                if i > 0 {
+                    out.push(',');
+                }
+                out.push_str(&json_string(reason));
+            }
+            out.push_str("]}");
+        } else {
+            out.push_str("null");
+        }
         out.push(',');
         push_json_field(
             &mut out,
@@ -333,8 +367,11 @@ impl WaveError {
         use utils::colorex::*;
 
         let pipe = "|".color("38,139,235").bold();
-        let line = self.line.max(1);
-        let col = self.column.max(1);
+        if self.line == 0 || self.column == 0 {
+            return;
+        }
+        let line = self.line;
+        let col = self.column;
 
         if let Some(source_code) = &self.source_code {
             let lines: Vec<&str> = source_code.lines().collect();
@@ -353,19 +390,20 @@ impl WaveError {
                         pipe,
                         source_line
                     );
-                }
-
-                let pad = " ".repeat(width);
-                let spaces = " ".repeat(col.saturating_sub(1));
-                let marks = "^"
-                    .repeat(self.span_len.max(1))
-                    .color(self.severity_color())
-                    .bold();
-                match &self.label {
-                    Some(label) => {
-                        eprintln!(" {} {} {}{} {}", pad, pipe, spaces, marks, label.dim())
+                    if ln == line {
+                        let pad = " ".repeat(width);
+                        let spaces = " ".repeat(col.saturating_sub(1));
+                        let marks = "^"
+                            .repeat(self.span_len.max(1))
+                            .color(self.severity_color())
+                            .bold();
+                        match &self.label {
+                            Some(label) => {
+                                eprintln!(" {} {} {}{} {}", pad, pipe, spaces, marks, label.dim())
+                            }
+                            None => eprintln!(" {} {} {}{}", pad, pipe, spaces, marks),
+                        }
                     }
-                    None => eprintln!(" {} {} {}{}", pad, pipe, spaces, marks),
                 }
 
                 return;
@@ -423,13 +461,17 @@ impl WaveError {
             eprintln!("{}{}: {}", severity_str, code, self.message.bold());
         }
 
-        eprintln!(
-            "  {} {}:{}:{}",
-            "-->".color("38,139,235").bold(),
-            self.file,
-            self.line.max(1),
-            self.column.max(1)
-        );
+        if self.line > 0 && self.column > 0 {
+            eprintln!(
+                "  {} {}:{}:{}",
+                "-->".color("38,139,235").bold(),
+                self.file,
+                self.line,
+                self.column
+            );
+        } else {
+            eprintln!("  {} {}", "-->".color("38,139,235").bold(), self.file);
+        }
         self.display_source_block();
 
         if let Some(context) = &self.context {

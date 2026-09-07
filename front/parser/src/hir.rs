@@ -24,6 +24,15 @@ use crate::verification::{analyze_hir_expression_types, SemanticDiagnostic};
 use std::collections::{HashMap, HashSet};
 use std::fmt;
 
+/// Stable identity of an AST declaration or statement in one typed program.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct NodeId(usize);
+impl NodeId {
+    pub fn index(self) -> usize {
+        self.0
+    }
+}
+
 /// Stable identity of an expression within one [`TypedProgram`].
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ExpressionId(usize);
@@ -86,11 +95,15 @@ pub struct HirVariantPattern {
 #[derive(Debug)]
 pub struct TypedProgram {
     syntax: Box<[ASTNode]>,
+    node_ids: HashMap<usize, NodeId>,
+    node_spans: Vec<Option<error::SourceSpan>>,
     expression_ids: HashMap<usize, ExpressionId>,
     expression_types: Vec<HirExpressionType>,
+    expression_spans: Vec<Option<error::SourceSpan>>,
     variant_constructions: Vec<Option<HirVariantConstruction>>,
     pattern_ids: HashMap<usize, PatternId>,
     variant_patterns: Vec<Option<HirVariantPattern>>,
+    pattern_spans: Vec<Option<error::SourceSpan>>,
 }
 
 /// Semantic lowering failure that retains the syntax used for source mapping.
@@ -130,8 +143,9 @@ impl TypedProgram {
     /// Validates a final AST and builds its stable typed frontend representation.
     pub fn lower(syntax: Vec<ASTNode>) -> Result<Self, HirLoweringError> {
         let mut syntax = syntax.into_boxed_slice();
+        let source_map = crate::source::SourceMap::detach(&mut syntax);
         let (analyzed_types, analyzed_variants, analyzed_patterns) =
-            match analyze_hir_expression_types(&syntax) {
+            match analyze_hir_expression_types(&syntax, &source_map) {
                 Ok(analysis) => analysis,
                 Err(diagnostic) => return Err(HirLoweringError { syntax, diagnostic }),
             };
@@ -140,6 +154,7 @@ impl TypedProgram {
         // concrete without invalidating the expression addresses used while
         // stable HIR identities are assigned below.
         canonicalize_syntax_types(&mut syntax);
+        let mut expression_spans = Vec::new();
         let mut expression_ids = HashMap::with_capacity(analyzed_types.len());
         let mut expression_types = Vec::with_capacity(analyzed_types.len());
         let mut variant_constructions = Vec::with_capacity(analyzed_variants.len());
@@ -148,6 +163,7 @@ impl TypedProgram {
             let address = expression as *const Expression as usize;
             let id = ExpressionId(expression_types.len());
             expression_ids.insert(address, id);
+            expression_spans.push(source_map.expressions.get(&address).cloned());
             expression_types.push(
                 analyzed_types
                     .get(&address)
@@ -157,23 +173,55 @@ impl TypedProgram {
             variant_constructions.push(analyzed_variants.get(&address).cloned());
         });
 
+        let mut pattern_spans = Vec::new();
         let mut pattern_ids = HashMap::with_capacity(analyzed_patterns.len());
         let mut variant_patterns = Vec::with_capacity(analyzed_patterns.len());
         walk_patterns_in_nodes(&syntax, &mut |pattern| {
             let address = pattern as *const MatchPattern as usize;
             let id = PatternId(variant_patterns.len());
             pattern_ids.insert(address, id);
+            pattern_spans.push(source_map.patterns.get(&address).cloned());
             variant_patterns.push(analyzed_patterns.get(&address).cloned());
         });
 
+        let node_ids = source_map
+            .node_order
+            .iter()
+            .enumerate()
+            .map(|(id, address)| (*address, NodeId(id)))
+            .collect();
+        let node_spans = source_map
+            .node_order
+            .iter()
+            .map(|address| source_map.nodes.get(address).cloned())
+            .collect();
         Ok(Self {
             syntax,
+            node_ids,
+            node_spans,
             expression_ids,
             expression_types,
+            expression_spans,
             variant_constructions,
             pattern_ids,
             variant_patterns,
+            pattern_spans,
         })
+    }
+
+    pub fn node_id(&self, node: &ASTNode) -> Option<NodeId> {
+        self.node_ids.get(&(node as *const _ as usize)).copied()
+    }
+    pub fn node_span(&self, id: NodeId) -> Option<&error::SourceSpan> {
+        self.node_spans.get(id.index())?.as_ref()
+    }
+
+    pub fn expression_span(&self, id: ExpressionId) -> Option<&error::SourceSpan> {
+        self.expression_spans.get(id.index())?.as_ref()
+    }
+
+    pub fn pattern_span(&self, id: PatternId) -> Option<&error::SourceSpan> {
+        self.pattern_spans.get(id.index())?.as_ref()
     }
 
     pub fn syntax(&self) -> &[ASTNode] {
@@ -241,6 +289,22 @@ impl TypedProgram {
     }
 }
 
+/// Resolve target-sized integers before semantic analysis and monomorphization.
+/// This pass uses only the selected pointer width, never LLVM or the host width.
+pub fn resolve_target_types(nodes: &mut [ASTNode], pointer_bits: u16) -> Result<(), String> {
+    if !matches!(pointer_bits, 32 | 64) {
+        return Err(format!("unsupported target pointer width {pointer_bits}"));
+    }
+    let named = HashMap::from([
+        ("isz".to_string(), WaveType::Int(pointer_bits)),
+        ("usz".to_string(), WaveType::Uint(pointer_bits)),
+    ]);
+    for node in nodes {
+        canonicalize_node_types(node, &named);
+    }
+    Ok(())
+}
+
 fn canonicalize_syntax_types(nodes: &mut [ASTNode]) {
     let named = collect_named_types(nodes);
     for node in nodes {
@@ -251,7 +315,7 @@ fn canonicalize_syntax_types(nodes: &mut [ASTNode]) {
 fn collect_named_types(nodes: &[ASTNode]) -> HashMap<String, WaveType> {
     let mut named = HashMap::new();
     for node in nodes {
-        match node {
+        match node.unspanned() {
             ASTNode::TypeAlias(alias) => {
                 named.insert(alias.name.clone(), alias.target.clone());
             }
@@ -276,6 +340,8 @@ fn canonical_type(
     visiting: &mut HashSet<String>,
 ) -> WaveType {
     match ty {
+        WaveType::Isz => named.get("isz").cloned().unwrap_or(WaveType::Isz),
+        WaveType::Usz => named.get("usz").cloned().unwrap_or(WaveType::Usz),
         WaveType::Pointer(inner) => {
             WaveType::Pointer(Box::new(canonical_type(inner, named, visiting)))
         }
@@ -313,16 +379,18 @@ fn canonical_variant_application(
     visiting: &mut HashSet<String>,
 ) -> Option<WaveType> {
     let (base, arguments) = split_named_application(name)?;
-    if !matches!(named.get(base), Some(WaveType::Variant(_))) {
-        return None;
-    }
     let arguments = arguments
         .into_iter()
         .map(|argument| canonical_type(&argument, named, visiting))
         .map(|argument| display_wave_type(&argument))
         .collect::<Vec<_>>()
         .join(",");
-    Some(WaveType::Variant(format!("{base}<{arguments}>")))
+    let name = format!("{base}<{arguments}>");
+    Some(if matches!(named.get(base), Some(WaveType::Variant(_))) {
+        WaveType::Variant(name)
+    } else {
+        WaveType::Struct(name)
+    })
 }
 
 fn split_named_application(name: &str) -> Option<(&str, Vec<WaveType>)> {
@@ -337,6 +405,8 @@ fn split_named_application(name: &str) -> Option<(&str, Vec<WaveType>)> {
 
 fn display_wave_type(ty: &WaveType) -> String {
     match ty {
+        WaveType::Isz => "isz".to_string(),
+        WaveType::Usz => "usz".to_string(),
         WaveType::Int(bits) => format!("i{bits}"),
         WaveType::Uint(bits) => format!("u{bits}"),
         WaveType::Float(bits) => format!("f{bits}"),
@@ -349,6 +419,7 @@ fn display_wave_type(ty: &WaveType) -> String {
             format!("array<{},{}>", display_wave_type(inner), length)
         }
         WaveType::Void => "void".to_string(),
+        WaveType::Never => "!".to_string(),
         WaveType::Struct(name) | WaveType::Variant(name) => name.clone(),
     }
 }
@@ -363,6 +434,9 @@ fn canonicalize_function_types(
 ) {
     for parameter in &mut function.parameters {
         canonicalize_type(&mut parameter.param_type, named);
+        if let Some(default) = &mut parameter.initial_value {
+            canonicalize_expression_types(default, named);
+        }
     }
     if let Some(return_type) = &mut function.return_type {
         canonicalize_type(return_type, named);
@@ -374,6 +448,7 @@ fn canonicalize_function_types(
 
 fn canonicalize_node_types(node: &mut ASTNode, named: &HashMap<String, WaveType>) {
     match node {
+        ASTNode::Located { value, .. } => canonicalize_node_types(value, named),
         ASTNode::Function(function) => canonicalize_function_types(function, named),
         ASTNode::ExternFunction(function) => {
             for (_, parameter_type) in &mut function.params {
@@ -498,7 +573,11 @@ fn canonicalize_statement_types(statement: &mut StatementNode, named: &HashMap<S
 
 fn canonicalize_expression_types(expression: &mut Expression, named: &HashMap<String, WaveType>) {
     match expression {
-        Expression::StructLiteral { fields, .. } => {
+        Expression::Located { value, .. } => canonicalize_expression_types(value, named),
+        Expression::StructLiteral { name, fields } => {
+            if let Some(ty) = canonical_variant_application(name, named, &mut HashSet::new()) {
+                *name = display_wave_type(&ty);
+            }
             for (_, value) in fields {
                 canonicalize_expression_types(value, named);
             }
@@ -572,7 +651,15 @@ fn walk_nodes(nodes: &[ASTNode], visit: &mut impl FnMut(&Expression)) {
 
 fn walk_node(node: &ASTNode, visit: &mut impl FnMut(&Expression)) {
     match node {
-        ASTNode::Function(function) => walk_nodes(&function.body, visit),
+        ASTNode::Located { value, .. } => walk_node(value, visit),
+        ASTNode::Function(function) => {
+            for parameter in &function.parameters {
+                if let Some(default) = &parameter.initial_value {
+                    walk_expression(default, visit);
+                }
+            }
+            walk_nodes(&function.body, visit);
+        }
         ASTNode::Struct(structure) => {
             for method in &structure.methods {
                 walk_nodes(&method.body, visit);
@@ -670,6 +757,7 @@ fn walk_statement(statement: &StatementNode, visit: &mut impl FnMut(&Expression)
 fn walk_expression(expression: &Expression, visit: &mut impl FnMut(&Expression)) {
     visit(expression);
     match expression {
+        Expression::Located { value, .. } => walk_expression(value, visit),
         Expression::StructLiteral { fields, .. } => {
             for (_, value) in fields {
                 walk_expression(value, visit);
@@ -729,6 +817,9 @@ fn walk_expression(expression: &Expression, visit: &mut impl FnMut(&Expression))
 fn walk_patterns_in_nodes(nodes: &[ASTNode], visit: &mut impl FnMut(&MatchPattern)) {
     for node in nodes {
         match node {
+            ASTNode::Located { value, .. } => {
+                walk_patterns_in_nodes(std::slice::from_ref(value), visit)
+            }
             ASTNode::Function(function) => walk_patterns_in_nodes(&function.body, visit),
             ASTNode::Struct(structure) => {
                 for method in &structure.methods {

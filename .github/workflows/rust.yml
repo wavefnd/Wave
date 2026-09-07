@@ -82,11 +82,15 @@ jobs:
           python3 -m py_compile x.py tools/check_wave_corpus.py tools/case_manifest.py tools/populate_case_matrix.py tools/run_tests.py tools/test_contracts.py tools/test_case_manifest.py tools/test_test_contracts.py
           python3 -m unittest tools.test_case_manifest tools.test_test_contracts
 
+      - name: Test Windows ARM64 dependency archive validation
+        shell: pwsh
+        run: ./tools/test_windows_arm64_libxml2.ps1
+
       - name: Build release compiler
         run: cargo build --locked --release --verbose
 
       - name: Run Rust tests
-        run: cargo test --locked --all-targets --verbose
+        run: cargo test --locked --workspace --all-targets --verbose
 
       - name: Check examples and standard library corpus
         run: >-
@@ -328,9 +332,9 @@ jobs:
           cargo build --locked --no-default-features
           --features llvm-target-aarch64 --jobs 2
 
-      - name: Build with the core 64-bit LLVM feature set
+      - name: Run Rust tests with the core 64-bit LLVM feature set
         run: >-
-          cargo build --locked --no-default-features
+          cargo test --locked --all-targets --no-default-features
           --features llvm-target-core64 --jobs 2
 
       - name: Verify bundled Linux CRT matrix
@@ -453,10 +457,13 @@ jobs:
       - name: Build release compiler
         run: cargo build --locked --release --jobs 2
 
-      - name: Build LoongArch-only LLVM feature set
+      - name: Run LoongArch-only LLVM regression tests
+        env:
+          WAVE_RUN_LOONGARCH64_INTEROP_TESTS: "1"
         run: >-
-          cargo build --locked --no-default-features
-          --features llvm-target-loongarch --jobs 2
+          cargo test --locked --no-default-features
+          --features llvm-target-loongarch --test codegen_regressions
+          loongarch64_ --jobs 2
 
       - name: Verify LoongArch64 CRT and target contracts
         env:
@@ -871,6 +878,10 @@ jobs:
             "LLVM_CONFIG_PATH=$directory\bin\llvm-config.exe"
           ) | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
           "$directory\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
+      - name: Provision pinned ARM64 libxml2 for LLVM
+        shell: pwsh
+        run: ./tools/provision_windows_arm64_libxml2.ps1
 
       - name: Verify native toolchain
         shell: pwsh

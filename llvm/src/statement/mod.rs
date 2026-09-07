@@ -260,6 +260,17 @@ pub fn generate_statement_ir<'ctx>(
                 extern_c_info,
                 program,
             );
+            if matches!(
+                program.type_of(expr),
+                Some(parser::hir::HirExpressionType::Resolved(
+                    parser::ast::WaveType::Never
+                ))
+            ) && builder
+                .get_insert_block()
+                .is_some_and(|block| block.get_terminator().is_none())
+            {
+                builder.build_unreachable().unwrap();
+            }
         }
 
         ASTNode::Statement(StatementNode::Assign { variable, value }) => {

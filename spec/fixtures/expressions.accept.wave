@@ -1,0 +1,1 @@
+fun f() { a = b = 1 + 2 * 3; a += 1; a.b[0]++; deref p; &a; ~a; a << 2; a >> 1; a & b ^ c | d; a < b && b != c || a == c; (1 as i64); [1, 2]; Box<i32> { value: 1 }; }

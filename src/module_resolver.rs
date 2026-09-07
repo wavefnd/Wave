@@ -146,7 +146,7 @@ impl Resolver<'_> {
         };
 
         for node in &ast {
-            let ASTNode::Statement(StatementNode::Import(import)) = node else {
+            let ASTNode::Statement(StatementNode::Import(import)) = node.unspanned() else {
                 continue;
             };
 
@@ -199,7 +199,10 @@ impl Resolver<'_> {
 
         let mut lowered = Vec::new();
         for node in ast {
-            if matches!(node, ASTNode::Statement(StatementNode::Import(_))) {
+            if matches!(
+                node.unspanned(),
+                ASTNode::Statement(StatementNode::Import(_))
+            ) {
                 continue;
             }
             lowered.push(rewrite_top_level(node, &names, &key, is_entry)?);
@@ -280,7 +283,7 @@ fn collect_symbols(
 ) -> Result<ModuleInterface, WaveError> {
     let mut symbols = HashMap::new();
     for node in ast {
-        match node {
+        match node.unspanned() {
             ASTNode::Function(function) => {
                 if !is_entry && function.name == "main" {
                     return Err(module_error(
@@ -341,16 +344,14 @@ fn collect_symbols(
                         SymbolKind::Value,
                         is_entry,
                     )?;
-                    if enumeration.visibility == Visibility::Public {
-                        symbols.insert(
-                            format!("{}::{}", enumeration.name, variant.name),
-                            ModuleSymbol {
-                                lowered: internal_name(path, &variant.name, is_entry),
-                                visibility: Visibility::Public,
-                                kind: SymbolKind::Value,
-                            },
-                        );
-                    }
+                    symbols.insert(
+                        format!("{}::{}", enumeration.name, variant.name),
+                        ModuleSymbol {
+                            lowered: internal_name(path, &variant.name, is_entry),
+                            visibility: enumeration.visibility,
+                            kind: SymbolKind::Value,
+                        },
+                    );
                 }
             }
             ASTNode::Variant(variant) => {
@@ -625,6 +626,9 @@ fn rewrite_top_level(
     is_entry: bool,
 ) -> Result<ASTNode, WaveError> {
     match node {
+        ASTNode::Located { value, span } => {
+            Ok(rewrite_top_level(*value, names, path, is_entry)?.with_span(Some(span)))
+        }
         ASTNode::Function(mut function) => {
             let original = function.name.clone();
             function.name = names.own[&original].lowered.clone();
@@ -751,6 +755,14 @@ fn rewrite_block(
     let mut out = Vec::with_capacity(nodes.len());
     for node in nodes {
         match node {
+            ASTNode::Located { value, span } => {
+                let rewritten = rewrite_block(vec![*value], names, path, locals)?;
+                out.extend(
+                    rewritten
+                        .into_iter()
+                        .map(|node| node.with_span(Some(span.clone()))),
+                );
+            }
             ASTNode::Variable(mut variable) => {
                 variable.type_name = rewrite_type(variable.type_name, names, path)?;
                 if let Some(value) = variable.initial_value.take() {
@@ -931,6 +943,8 @@ fn rewrite_match_pattern(
     locals: &HashSet<String>,
 ) -> Result<(), WaveError> {
     match pattern {
+        MatchPattern::Located { value, span } => rewrite_match_pattern(value, names, path, locals)
+            .map_err(|e| e.with_span(Some(span)))?,
         MatchPattern::Ident(name) => {
             if !locals.contains(name) {
                 if let Some(symbol) = resolve_name(name, names, path)? {
@@ -974,6 +988,7 @@ fn rewrite_match_pattern(
 
 fn collect_pattern_bindings(pattern: &MatchPattern, locals: &mut HashSet<String>) {
     match pattern {
+        MatchPattern::Located { value, .. } => collect_pattern_bindings(value, locals),
         MatchPattern::Binding(name) => {
             locals.insert(name.clone());
         }
@@ -993,6 +1008,9 @@ fn rewrite_expression(
     locals: &HashSet<String>,
 ) -> Result<Expression, WaveError> {
     Ok(match expression {
+        Expression::Located { value, span } => rewrite_expression(*value, names, path, locals)
+            .map_err(|e| e.with_span(Some(&span)))?
+            .with_span(Some(span)),
         Expression::StructLiteral { name, fields } => Expression::StructLiteral {
             name: rewrite_type_name(&name, names, path)?,
             fields: fields

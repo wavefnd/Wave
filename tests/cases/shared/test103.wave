@@ -1,0 +1,41 @@
+// A pointer field with a zero low byte must remain non-null after aggregate
+// return, local storage, address-of, and projected dereference. These pointer
+// values are only compared, never dereferenced as memory addresses.
+struct ByteWriter { data: ptr<u8>; len: i64; position: i64; }
+
+fun bytes_writer(data: ptr<u8>, len: i64) -> ByteWriter {
+    return ByteWriter { data: data, len: len, position: 0 };
+}
+
+fun check_writer(writer: ptr<ByteWriter>) -> i32 {
+    if (deref writer.data == null) { return 50; }
+    if (deref (writer.data) != (4096 as ptr<u8>)) { return 51; }
+    if (deref writer.len != 15 || deref writer.position != 0) { return 52; }
+    return 0;
+}
+
+fun check_index(values: ptr<ptr<u8>>) -> bool {
+    return deref values[0] == (4096 as ptr<u8>);
+}
+
+fun check_depth(value: ptr<ptr<u8>>) -> bool {
+    return deref value == (4096 as ptr<u8>);
+}
+
+struct WidthProbe { small: u8; guard: u8; }
+fun widen_field(value: ptr<WidthProbe>) -> i64 { return deref value.small; }
+fun widen_scalar(value: ptr<u8>) -> i64 { return deref value; }
+
+fun main() -> i32 {
+    var writer: ByteWriter = bytes_writer(4096 as ptr<u8>, 15);
+    if (writer.data == null) { return 1; }
+    var result: i32 = check_writer(&writer);
+    if (result != 0) { return result; }
+    var values: array<ptr<u8>, 1> = [writer.data];
+    if (!check_index(&values[0])) { return 53; }
+    if (!check_depth(&writer.data)) { return 54; }
+    var width: WidthProbe = WidthProbe { small: 255, guard: 127 };
+    if (widen_field(&width) != 255) { return 55; }
+    if (widen_scalar(&width.small) != 255) { return 56; }
+    return 0;
+}

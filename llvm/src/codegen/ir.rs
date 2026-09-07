@@ -1014,7 +1014,9 @@ fn build_module(
             context.i32_type().fn_type(&param_types, false)
         } else {
             match return_type {
-                None | Some(WaveType::Void) => context.void_type().fn_type(&param_types, false),
+                None | Some(WaveType::Void | WaveType::Never) => {
+                    context.void_type().fn_type(&param_types, false)
+                }
                 Some(wave_ret_ty) => {
                     let llvm_ret_type = wave_type_to_llvm_type(
                         context,
@@ -1040,7 +1042,7 @@ fn build_module(
                 })
                 .collect::<Vec<_>>();
             let wave_ret_type = return_type.as_ref().and_then(|return_type| {
-                if *return_type == WaveType::Void {
+                if matches!(return_type, WaveType::Void | WaveType::Never) {
                     None
                 } else {
                     Some(wave_type_to_llvm_type(
@@ -1073,12 +1075,24 @@ fn build_module(
             let wrapper = module.add_function(&lowered.llvm_name, lowered.fn_type, None);
             apply_extern_c_attrs(context, wrapper, &lowered.info);
             apply_function_codegen_attrs(context, wrapper, disable_red_zone, cpu, features);
+            if matches!(return_type, Some(WaveType::Never)) {
+                wrapper.add_attribute(
+                    AttributeLoc::Function,
+                    context.create_enum_attribute(Attribute::get_named_enum_kind_id("noreturn"), 0),
+                );
+            }
             apply_wasm_export_attr(context, wrapper, abi_target, &lowered.llvm_name);
 
             let implementation_name = format!("__wave_export_impl_{}", symbol);
             let implementation =
                 module.add_function(&implementation_name, fn_type, Some(Linkage::Internal));
             apply_function_codegen_attrs(context, implementation, disable_red_zone, cpu, features);
+            if matches!(return_type, Some(WaveType::Never)) {
+                implementation.add_attribute(
+                    AttributeLoc::Function,
+                    context.create_enum_attribute(Attribute::get_named_enum_kind_id("noreturn"), 0),
+                );
+            }
 
             functions.insert(symbol.clone(), implementation);
             extern_c_info.insert(symbol.clone(), lowered.info.clone());
@@ -1092,6 +1106,12 @@ fn build_module(
         } else {
             let function = module.add_function(symbol, fn_type, None);
             apply_function_codegen_attrs(context, function, disable_red_zone, cpu, features);
+            if matches!(return_type, Some(WaveType::Never)) {
+                function.add_attribute(
+                    AttributeLoc::Function,
+                    context.create_enum_attribute(Attribute::get_named_enum_kind_id("noreturn"), 0),
+                );
+            }
             functions.insert(symbol.clone(), function);
         }
     }
@@ -1197,6 +1217,8 @@ fn build_module(
             if implicit_i32_main {
                 let zero = context.i32_type().const_zero();
                 builder.build_return(Some(&zero)).unwrap();
+            } else if func_node.return_type == Some(WaveType::Never) {
+                builder.build_unreachable().unwrap();
             } else if is_void_like {
                 builder.build_return(None).unwrap();
             } else {
@@ -1246,34 +1268,7 @@ fn pipeline_from_opt_flag(opt_flag: &str) -> &'static str {
 }
 
 fn parse_int_literal(raw: &str) -> Option<i128> {
-    let mut s = raw.trim().replace('_', "");
-    if s.is_empty() {
-        return None;
-    }
-
-    let neg = if let Some(rest) = s.strip_prefix('-') {
-        s = rest.to_string();
-        true
-    } else if let Some(rest) = s.strip_prefix('+') {
-        s = rest.to_string();
-        false
-    } else {
-        false
-    };
-
-    let (radix, digits) = if let Some(rest) = s.strip_prefix("0x").or_else(|| s.strip_prefix("0X"))
-    {
-        (16, rest)
-    } else if let Some(rest) = s.strip_prefix("0b").or_else(|| s.strip_prefix("0B")) {
-        (2, rest)
-    } else if let Some(rest) = s.strip_prefix("0o").or_else(|| s.strip_prefix("0O")) {
-        (8, rest)
-    } else {
-        (10, s.as_str())
-    };
-
-    let v = i128::from_str_radix(digits, radix).ok()?;
-    Some(if neg { -v } else { v })
+    lexer::number::IntegerLiteral::parse(raw)?.to_i128()
 }
 
 fn repr_bits_signed(ty: &WaveType) -> Option<(u32, bool)> {

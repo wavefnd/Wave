@@ -1044,7 +1044,7 @@ pub fn lower_extern_c<'ctx>(
         .collect();
 
     let wave_ret_layout: Option<BasicTypeEnum<'ctx>> = match &ext.return_type {
-        WaveType::Void => None,
+        WaveType::Void | WaveType::Never => None,
         ty => Some(wave_type_to_llvm_type(
             context,
             ty,
@@ -1158,6 +1158,13 @@ pub fn apply_extern_c_attrs<'ctx>(
     f: FunctionValue<'ctx>,
     info: &ExternCInfo<'ctx>,
 ) {
+    if info.wave_ret == WaveType::Never {
+        f.add_attribute(
+            AttributeLoc::Function,
+            context.create_enum_attribute(Attribute::get_named_enum_kind_id("noreturn"), 0),
+        );
+    }
+
     let mut llvm_param_index: u32 = 0;
 
     if let Some(extension) = info.ret_extension {
