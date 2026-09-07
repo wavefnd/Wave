@@ -1,2 +1,0 @@
-fun id<T>(x: T) -> T { return x; }
-fun value(x: i32 = 0x10) -> i32 { return x; }

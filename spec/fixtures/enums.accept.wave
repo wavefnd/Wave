@@ -1,1 +1,0 @@
-enum Code -> i32 { Zero, Negative = -1, Hex = 0x10, }

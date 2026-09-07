@@ -1,4 +1,4 @@
-//! Alpha grammar regressions: malformed source must never be silently accepted.
+//! Parser regressions: malformed source must never be silently accepted.
 use lexer::Lexer;
 use parser::ast::{ASTNode, Expression, Literal};
 use parser::generics::monomorphize_generics;

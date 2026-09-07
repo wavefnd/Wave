@@ -1,1 +1,0 @@
-enum Code -> i32 { Bad = "text" }

@@ -198,7 +198,7 @@ pub enum TokenType {
 }
 
 impl TokenType {
-    /// Reserved spellings have no executable Alpha grammar production.
+    /// These reserved spellings are not implemented.
     pub fn reserved_spelling(&self) -> Option<&'static str> {
         match self {
             Self::Module => Some("module"),

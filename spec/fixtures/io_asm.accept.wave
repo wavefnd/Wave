@@ -1,1 +1,0 @@
-fun f() { print("{}", 1); println("ok"); input("{}", &x); asm { "nop"; in("r") (&x as i64); out("r") x; clobber("memory"); } }

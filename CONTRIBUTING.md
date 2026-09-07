@@ -215,10 +215,6 @@ Contributors should:
 
 ---
 
-Frontend syntax changes must update [the Alpha grammar and token inventory](spec/README.md)
-and its positive/negative fixtures. Run `cargo test --locked -p lexer -p parser --jobs 2`
-for backend-independent frontend tests, then the workspace tests for driver and codegen coverage.
-
 ## 9. Pull Request Guidelines
 
 A PR should include:
