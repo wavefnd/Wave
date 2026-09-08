@@ -224,6 +224,16 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_array(&mut self) -> Result<Vec<Json>, String> {
+        if self.depth >= MAX_DEPTH {
+            return Err("maximum nesting depth exceeded".into());
+        }
+        self.depth += 1;
+        let result = self.parse_array_inner();
+        self.depth -= 1;
+        result
+    }
+
+    fn parse_array_inner(&mut self) -> Result<Vec<Json>, String> {
         self.expect(b'[')?;
         self.skip_ws();
         let mut out = Vec::new();
