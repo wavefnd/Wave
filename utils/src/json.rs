@@ -66,14 +66,17 @@ pub fn parse(input: &str) -> Result<Json, String> {
     Ok(v)
 }
 
+const MAX_DEPTH: usize = 256;
+
 struct Parser<'a> {
     s: &'a [u8],
     i: usize,
+    depth: usize,
 }
 
 impl<'a> Parser<'a> {
     fn new(s: &'a [u8]) -> Self {
-        Self { s, i: 0 }
+        Self { s, i: 0, depth: 0 }
     }
 
     fn eof(&self) -> bool {
@@ -243,6 +246,16 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_object(&mut self) -> Result<Vec<(String, Json)>, String> {
+        if self.depth >= MAX_DEPTH {
+            return Err("maximum nesting depth exceeded".into());
+        }
+        self.depth += 1;
+        let result = self.parse_object_inner();
+        self.depth -= 1;
+        result
+    }
+
+    fn parse_object_inner(&mut self) -> Result<Vec<(String, Json)>, String> {
         self.expect(b'{')?;
         self.skip_ws();
         let mut out = Vec::new();
