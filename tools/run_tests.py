@@ -387,8 +387,19 @@ def run_and_classify(name, rel_path, cmd):
             timeout=TIMEOUT_SEC
         )
 
-        if looks_like_fail(result.stderr):
-            print(f"{RED}→ FAIL (exit={result.returncode}){RESET}")
+        if result.returncode != expected_exit:
+            if looks_like_fail(result.stderr):
+                print(f"{RED}→ FAIL (exit={result.returncode}, expected {expected_exit}){RESET}")
+                if result.stdout.strip():
+                    print(f"{BLUE}--- STDOUT ---{RESET}")
+                    print(result.stdout.rstrip())
+                if result.stderr.strip():
+                    print(f"{YELLOW}--- STDERR ---{RESET}")
+                    print(result.stderr.rstrip())
+                print()
+                return 0, None
+            # Exit code doesn't match expected - still a failure
+            print(f"{RED}→ FAIL (exit={result.returncode}, expected {expected_exit}){RESET}")
             if result.stdout.strip():
                 print(f"{BLUE}--- STDOUT ---{RESET}")
                 print(result.stdout.rstrip())
