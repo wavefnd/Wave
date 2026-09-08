@@ -72,14 +72,14 @@ FAIL_PATTERNS = [
     "stack overflow",
 ]
 
-def resolve_wavec() -> Path:
+def resolve_wavec(root: Path = ROOT) -> Path:
     candidates = [
-        ROOT / "target" / "release" / "wavec.exe",
-        ROOT / "target" / "release" / "wavec",
-        ROOT / "target" / "debug" / "wavec.exe",
-        ROOT / "target" / "debug" / "wavec",
-        ROOT / "target" / "x86_64-pc-windows-gnu" / "release" / "wavec.exe",
-        ROOT / "target" / "x86_64-pc-windows-gnu" / "debug" / "wavec.exe",
+        root / "target" / "release" / "wavec.exe",
+        root / "target" / "release" / "wavec",
+        root / "target" / "debug" / "wavec.exe",
+        root / "target" / "debug" / "wavec",
+        root / "target" / "x86_64-pc-windows-gnu" / "release" / "wavec.exe",
+        root / "target" / "x86_64-pc-windows-gnu" / "debug" / "wavec.exe",
     ]
     for candidate in candidates:
         if candidate.exists():
@@ -88,23 +88,20 @@ def resolve_wavec() -> Path:
     print("wavec not found. Run `cargo build --release` or `cargo build` first.")
     sys.exit(1)
 
-
-WAVEC = resolve_wavec()
-
+WAVEC = None
 results = []
 
 SYSTEM_NAME = platform.system().lower()
 HOST_OS = {"darwin": "macos"}.get(SYSTEM_NAME, SYSTEM_NAME)
 HOST_ARCH = normalize_arch(platform.machine())
-TEST_OUTPUT_DIR = Path(tempfile.mkdtemp(prefix="wave-test-output-"))
+TEST_OUTPUT_DIR = None
 
 ARCH_SUITE_NAMES = {
     "x86_64": "amd64",
     "aarch64": "arm64",
 }
 
-
-def parse_args():
+def parse_args(args=None):
     parser = argparse.ArgumentParser(description="Run Wave end-to-end tests")
     parser.add_argument(
         "--only",
@@ -141,14 +138,12 @@ def parse_args():
         metavar="PATH",
         help="write a machine-readable result report",
     )
-    args = parser.parse_args()
-    if args.suite and args.target_id:
+    parsed = parser.parse_args(args)
+    if parsed.suite and parsed.target_id:
         parser.error("--suite and --target-id cannot be used together")
-    return args
+    return parsed
 
-
-ARGS = parse_args()
-
+ARGS = None
 
 @cache
 def configured_target():
@@ -162,7 +157,6 @@ def configured_target():
         raise ValueError(f"case target '{target.id}' is disabled")
     return target
 
-
 def manifest_compile_target():
     if ARGS.suite:
         return None
@@ -170,7 +164,6 @@ def manifest_compile_target():
     if target.executor in {"compile", "qemu", "wasm"}:
         return target
     return None
-
 
 def selected_suite_paths():
     suite_names = ARGS.suite or configured_target().suites
@@ -191,12 +184,10 @@ def selected_suite_paths():
             continue
         yield path
 
-
 def test_number(path: Path):
     unit = path.parent.name if path.name == "main.wave" else path.stem
     suffix = unit.removeprefix("test")
     return int(suffix) if suffix.isdigit() else 0
-
 
 def iter_test_entries():
     excluded = set() if ARGS.suite else set(configured_target().exclude)
@@ -223,10 +214,8 @@ def iter_test_entries():
             ):
                 yield name, path.relative_to(ROOT).as_posix()
 
-
 def parse_test_metadata(rel_path: str):
     return parse_test_metadata_file(ROOT / rel_path, rel_path)
-
 
 def command_for_test(name: str, rel_path: str):
     meta = parse_test_metadata(rel_path)
@@ -275,7 +264,6 @@ def command_for_test(name: str, rel_path: str):
         return cmd
 
     raise ValueError(f"unsupported wave-test mode '{mode}' in {rel_path}")
-
 
 def send_udp_test_input():
     try:
@@ -338,7 +326,6 @@ def run_server_test(cmd):
             proc.wait(timeout=1)
         except subprocess.TimeoutExpired:
             proc.kill()
-
 
 def looks_like_fail(stderr: str) -> bool:
     if not stderr:
@@ -438,113 +425,121 @@ def run_and_classify(name, rel_path, cmd):
             print(f"{YELLOW}→ TIMEOUT ({TIMEOUT_SEC}s){RESET}\n")
             return -1, f"timed out after {TIMEOUT_SEC}s"
 
-try:
-    entries = list(iter_test_entries())
-except ValueError as error:
-    shutil.rmtree(TEST_OUTPUT_DIR, ignore_errors=True)
-    print(f"invalid Wave test suite: {error}", file=sys.stderr)
-    sys.exit(2)
-selected_names = {name for name, _ in entries}
-missing_names = sorted(set(ARGS.only) - selected_names)
+def main(argv=None):
+    global ARGS, WAVEC, TEST_OUTPUT_DIR
+    ARGS = parse_args(argv)
+    WAVEC = resolve_wavec()
+    TEST_OUTPUT_DIR = Path(tempfile.mkdtemp(prefix="wave-test-output-"))
 
-if missing_names:
-    shutil.rmtree(TEST_OUTPUT_DIR, ignore_errors=True)
-    print(f"unknown test name(s): {', '.join(missing_names)}", file=sys.stderr)
-    sys.exit(2)
-
-if not entries:
-    shutil.rmtree(TEST_OUTPUT_DIR, ignore_errors=True)
-    print("no tests selected", file=sys.stderr)
-    sys.exit(2)
-
-try:
-    for name, rel_path in entries:
-        result, detail = run_and_classify(
-            name,
-            rel_path,
-            command_for_test(name, rel_path)
-        )
-        results.append((name, result, detail))
-
-        time.sleep(0.3)
-except KeyboardInterrupt:
-    print(f"\n{YELLOW}Interrupted by user.{RESET}")
-    sys.exit(130)
-except ValueError as error:
-    print(f"{RED}invalid wave-test metadata: {error}{RESET}", file=sys.stderr)
-    sys.exit(2)
-finally:
-    shutil.rmtree(TEST_OUTPUT_DIR, ignore_errors=True)
-
-pass_zero = [name for name, result, _ in results if result == 1]
-pass_nonzero = [name for name, result, _ in results if result == 3]
-fail_tests = [name for name, result, _ in results if result == 0]
-timeout_tests = [name for name, result, _ in results if result == -1]
-skip_tests = [name for name, result, _ in results if result == 2]
-
-print("\n=========================")
-print("🎉 FINAL TEST RESULT")
-print("=========================\n")
-
-print(f"{GREEN}PASS (exit=0) ({len(pass_zero)}){RESET}")
-for name in pass_zero:
-    print(f"  - {name}")
-
-print(f"\n{MAGENTA}PASS (expected non-zero exit) ({len(pass_nonzero)}){RESET}")
-for name in pass_nonzero:
-    print(f"  - {name}")
-
-print(f"\n{CYAN}SKIP ({len(skip_tests)}){RESET}")
-for name in skip_tests:
-    print(f"  - {name}")
-
-print(f"\n{RED}FAIL ({len(fail_tests)}){RESET}")
-for name in fail_tests:
-    print(f"  - {name}")
-
-print(f"\n{YELLOW}TIMEOUT ({len(timeout_tests)}){RESET}")
-for name in timeout_tests:
-    print(f"  - {name}")
-
-print("\n=========================")
-print(f"{GREEN}PASS(0): {len(pass_zero)}{RESET}")
-print(f"{MAGENTA}PASS(expected !0): {len(pass_nonzero)}{RESET}")
-print(f"{CYAN}SKIP: {len(skip_tests)}{RESET}")
-print(f"{RED}FAIL: {len(fail_tests)}{RESET}")
-print(f"{YELLOW}TIMEOUT: {len(timeout_tests)}{RESET}")
-print("=========================\n")
-
-report_failed = False
-if ARGS.report_json is not None:
-    statuses = {-1: "timeout", 0: "fail", 1: "pass", 2: "skip", 3: "pass"}
-    report = {
-        "compiler": str(WAVEC),
-        "host": {"os": HOST_OS, "arch": HOST_ARCH},
-        "summary": {
-            "pass": len(pass_zero) + len(pass_nonzero),
-            "skip": len(skip_tests),
-            "fail": len(fail_tests),
-            "timeout": len(timeout_tests),
-        },
-        "tests": [
-            {
-                "name": name,
-                "status": statuses[result],
-                **({"reason": detail} if detail else {}),
-            }
-            for name, result, detail in results
-        ],
-    }
     try:
-        ARGS.report_json.parent.mkdir(parents=True, exist_ok=True)
-        ARGS.report_json.write_text(
-            json.dumps(report, indent=2, sort_keys=True) + "\n",
-            encoding="utf-8",
-        )
-        print(f"Wrote test report to {ARGS.report_json}")
-    except OSError as error:
-        print(f"failed to write test report: {error}", file=sys.stderr)
-        report_failed = True
+        try:
+            entries = list(iter_test_entries())
+        except ValueError as error:
+            print(f"invalid Wave test suite: {error}", file=sys.stderr)
+            sys.exit(2)
+        selected_names = {name for name, _ in entries}
+        missing_names = sorted(set(ARGS.only) - selected_names)
 
-if fail_tests or timeout_tests or report_failed:
-    sys.exit(1)
+        if missing_names:
+            print(f"unknown test name(s): {', '.join(missing_names)}", file=sys.stderr)
+            sys.exit(2)
+
+        if not entries:
+            print("no tests selected", file=sys.stderr)
+            sys.exit(2)
+
+        try:
+            for name, rel_path in entries:
+                result, detail = run_and_classify(
+                    name,
+                    rel_path,
+                    command_for_test(name, rel_path)
+                )
+                results.append((name, result, detail))
+
+                time.sleep(0.3)
+        except KeyboardInterrupt:
+            print(f"\n{YELLOW}Interrupted by user.{RESET}")
+            sys.exit(130)
+        except ValueError as error:
+            print(f"{RED}invalid wave-test metadata: {error}{RESET}", file=sys.stderr)
+            sys.exit(2)
+
+        pass_zero = [name for name, result, _ in results if result == 1]
+        pass_nonzero = [name for name, result, _ in results if result == 3]
+        fail_tests = [name for name, result, _ in results if result == 0]
+        timeout_tests = [name for name, result, _ in results if result == -1]
+        skip_tests = [name for name, result, _ in results if result == 2]
+
+        print("\n=========================")
+        print("🎉 FINAL TEST RESULT")
+        print("=========================\n")
+
+        print(f"{GREEN}PASS (exit=0) ({len(pass_zero)}){RESET}")
+        for name in pass_zero:
+            print(f"  - {name}")
+
+        print(f"\n{MAGENTA}PASS (expected non-zero exit) ({len(pass_nonzero)}){RESET}")
+        for name in pass_nonzero:
+            print(f"  - {name}")
+
+        print(f"\n{CYAN}SKIP ({len(skip_tests)}){RESET}")
+        for name in skip_tests:
+            print(f"  - {name}")
+
+        print(f"\n{RED}FAIL ({len(fail_tests)}){RESET}")
+        for name in fail_tests:
+            print(f"  - {name}")
+
+        print(f"\n{YELLOW}TIMEOUT ({len(timeout_tests)}){RESET}")
+        for name in timeout_tests:
+            print(f"  - {name}")
+
+        print("\n=========================")
+        print(f"{GREEN}PASS(0): {len(pass_zero)}{RESET}")
+        print(f"{MAGENTA}PASS(expected !0): {len(pass_nonzero)}{RESET}")
+        print(f"{CYAN}SKIP: {len(skip_tests)}{RESET}")
+        print(f"{RED}FAIL: {len(fail_tests)}{RESET}")
+        print(f"{YELLOW}TIMEOUT: {len(timeout_tests)}{RESET}")
+        print("=========================\n")
+
+        report_failed = False
+        if ARGS.report_json is not None:
+            statuses = {-1: "timeout", 0: "fail", 1: "pass", 2: "skip", 3: "pass"}
+            report = {
+                "compiler": str(WAVEC),
+                "host": {"os": HOST_OS, "arch": HOST_ARCH},
+                "summary": {
+                    "pass": len(pass_zero) + len(pass_nonzero),
+                    "skip": len(skip_tests),
+                    "fail": len(fail_tests),
+                    "timeout": len(timeout_tests),
+                },
+                "tests": [
+                    {
+                        "name": name,
+                        "status": statuses[result],
+                        **({"reason": detail} if detail else {}),
+                    }
+                    for name, result, detail in results
+                ],
+            }
+            try:
+                ARGS.report_json.parent.mkdir(parents=True, exist_ok=True)
+                ARGS.report_json.write_text(
+                    json.dumps(report, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+                print(f"Wrote test report to {ARGS.report_json}")
+            except OSError as error:
+                print(f"failed to write test report: {error}", file=sys.stderr)
+                report_failed = True
+
+        if fail_tests or timeout_tests or report_failed:
+            sys.exit(1)
+    finally:
+        if TEST_OUTPUT_DIR:
+            shutil.rmtree(TEST_OUTPUT_DIR, ignore_errors=True)
+
+if __name__ == "__main__":
+    main()
