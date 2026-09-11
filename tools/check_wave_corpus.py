@@ -49,7 +49,14 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="run every examples/std/*.wave program after checking the corpus",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    
+    # Validate timeout is finite and greater than zero
+    import math
+    if not math.isfinite(args.timeout) or args.timeout <= 0:
+        parser.error(f"--timeout must be a finite value greater than 0, got {args.timeout}")
+    
+    return args
 
 
 def resolve_wavec(explicit: Path | None) -> Path:
