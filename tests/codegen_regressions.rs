@@ -362,8 +362,20 @@ fn json_string_for_test(value: &str) -> String {
 }
 
 fn json_contains_path_components(json: &str, components: &[&str]) -> bool {
-    json_contains_path_value(json, &components.join("/"))
+    if components.is_empty() {
+        return true;
+    }
+    // Check direct matches first (all forward slash or all backslash)
+    if json_contains_path_value(json, &components.join("/"))
         || json_contains_path_value(json, &components.join("\\"))
+    {
+        return true;
+    }
+
+    // Handle mixed separators or escaped separators by checking normalized token runs
+    let normalized_json = json.replace("\\\\", "/").replace('\\', "/");
+    let normalized_target = components.join("/");
+    normalized_json.contains(&normalized_target)
 }
 
 fn json_contains_path_value(json: &str, value: &str) -> bool {
@@ -391,6 +403,10 @@ fn json_path_matching_accepts_unix_and_escaped_windows_separators() {
     assert!(json_contains_path_components(
         r#"{"args":["C:\\wave\\crt\\riscv64-unknown-linux-gnu\\crt1.o"]}"#,
         &components
+    ));
+    assert!(json_contains_path_components(
+        r#"{"args":["D:\\sysroot\\usr/lib\\crt1.o"]}"#,
+        &["sysroot", "usr", "lib", "crt1.o"]
     ));
     assert!(json_contains_path_value(
         r#"{"args":["-LD:\\wave\\sysroot\\lib"]}"#,
