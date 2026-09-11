@@ -6331,7 +6331,10 @@ fun main() -> i32 { return 0; }
             "{plan}"
         );
         assert!(
-            !plan.contains("mingw") && !plan.contains("-lmsvcrt"),
+            !plan.contains("-Wl,")
+                && !plan.contains("-lmingw")
+                && !plan.contains("-lgcc")
+                && !plan.contains("-lmsvcrt"),
             "{plan}"
         );
         // This verifies a PE image, not execution on a Windows host.
