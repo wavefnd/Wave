@@ -104,8 +104,8 @@ def parse_test_metadata(path: Path, display_path: str | None = None) -> TestMeta
     marker = "// wave-test:"
 
     try:
-        lines = path.read_text().splitlines()
-    except OSError as error:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except (OSError, UnicodeDecodeError) as error:
         raise ValueError(f"failed to read wave-test metadata from {display}: {error}") from error
 
     for line in lines:

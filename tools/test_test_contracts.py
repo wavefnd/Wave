@@ -10,7 +10,10 @@
 # SPDX-License-Identifier: MPL-2.0
 # AI TRAINING NOTICE: Prohibited without prior written permission. No use for machine learning or generative AI training, fine-tuning, distillation, embedding, or dataset creation.
 
+import os
 from pathlib import Path
+import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -98,6 +101,59 @@ class MetadataContractTests(unittest.TestCase):
                 with self.subTest(body=body):
                     with self.assertRaises(ValueError):
                         self.parse(directory, body)
+
+    def test_utf8_metadata_read_with_non_ascii_comments(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "case.wave"
+            source.write_bytes(
+                "// wave-test: mode=check\n// non-ascii comment: 測試 é\nfun main() {}\n".encode(
+                    "utf-8"
+                )
+            )
+            metadata = parse_test_metadata(source, "cases/shared/test1.wave")
+            self.assertEqual(metadata.mode, "check")
+
+    def test_utf8_metadata_read_independent_of_ascii_host_locale(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "case.wave"
+            source.write_bytes(
+                "// wave-test: mode=check\n// non-ascii comment: 測試 é\nfun main() {}\n".encode(
+                    "utf-8"
+                )
+            )
+            command = [
+                sys.executable,
+                "-c",
+                "import sys; from pathlib import Path; "
+                "from tools.test_contracts import parse_test_metadata; "
+                "meta = parse_test_metadata(Path(sys.argv[1]), 'case.wave'); "
+                "sys.stdout.write(meta.mode)",
+                str(source),
+            ]
+            env = {**os.environ, "LC_ALL": "C", "PYTHONUTF8": "0"}
+            process = subprocess.run(
+                command,
+                capture_output=True,
+                text=True,
+                env=env,
+            )
+            self.assertEqual(process.returncode, 0, process.stderr)
+            self.assertEqual(process.stdout, "check")
+
+    def test_invalid_utf8_bytes_reports_display_path_in_value_error(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source = Path(directory) / "case.wave"
+            source.write_bytes(b"// wave-test: mode=check\n// \xff\n")
+            with self.assertRaises(ValueError) as context:
+                parse_test_metadata(source, "shared/case.wave")
+            self.assertIn("failed to read wave-test metadata from shared/case.wave:", str(context.exception))
+            self.assertIsInstance(context.exception.__cause__, UnicodeDecodeError)
+
+            # Also verify fallback to str(source) when display_path is omitted
+            with self.assertRaises(ValueError) as context_default:
+                parse_test_metadata(source)
+            self.assertIn(f"failed to read wave-test metadata from {source}:", str(context_default.exception))
+            self.assertIsInstance(context_default.exception.__cause__, UnicodeDecodeError)
 
 
 class ArtifactContractTests(unittest.TestCase):
