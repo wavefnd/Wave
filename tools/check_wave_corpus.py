@@ -15,6 +15,7 @@
 """Check every maintained Wave example and standard-library source file."""
 
 import argparse
+import math
 import os
 from pathlib import Path
 import shutil
@@ -31,7 +32,21 @@ except ModuleNotFoundError:
 ROOT = Path(__file__).resolve().parent.parent
 
 
-def parse_args() -> argparse.Namespace:
+def _parse_timeout(value: str) -> float:
+    try:
+        timeout = float(value)
+    except ValueError:
+        raise argparse.ArgumentTypeError(
+            f"timeout must be a finite positive number, got {value!r}"
+        ) from None
+    if not math.isfinite(timeout) or timeout <= 0:
+        raise argparse.ArgumentTypeError(
+            f"timeout must be a finite positive number, got {value!r}"
+        )
+    return timeout
+
+
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument(
         "--wavec",
@@ -40,7 +55,7 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--timeout",
-        type=float,
+        type=_parse_timeout,
         default=15.0,
         help="per-file timeout in seconds (default: 15)",
     )
@@ -49,7 +64,7 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="run every examples/std/*.wave program after checking the corpus",
     )
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
 def resolve_wavec(explicit: Path | None) -> Path:
@@ -128,8 +143,8 @@ def run_std_examples(
     return failures
 
 
-def main() -> int:
-    args = parse_args()
+def main(argv: list[str] | None = None) -> int:
+    args = parse_args(argv)
     try:
         wavec = resolve_wavec(args.wavec)
     except FileNotFoundError as error:
