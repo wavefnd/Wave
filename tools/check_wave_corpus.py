@@ -67,27 +67,48 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def _resolve_compiler_path(candidate: Path | str) -> Path | None:
+    raw = Path(candidate)
+    if not str(raw).strip():
+        return None
+    if raw.is_file():
+        return raw
+    if not raw.is_absolute():
+        rel = ROOT / raw
+        if rel.is_file():
+            return rel
+    which = shutil.which(str(candidate))
+    if which:
+        return Path(which)
+    return None
+
+
 def resolve_wavec(explicit: Path | None) -> Path:
-    candidates = []
     if explicit is not None:
-        candidates.append(explicit)
-    if os.environ.get("WAVEC"):
-        candidates.append(Path(os.environ["WAVEC"]))
-    candidates.extend(
-        [
-            ROOT / "target" / "release" / "wavec.exe",
-            ROOT / "target" / "release" / "wavec",
-            ROOT / "target" / "debug" / "wavec.exe",
-            ROOT / "target" / "debug" / "wavec",
-            ROOT / "target" / "x86_64-pc-windows-gnu" / "release" / "wavec.exe",
-            ROOT / "target" / "x86_64-pc-windows-gnu" / "debug" / "wavec.exe",
-        ]
-    )
+        resolved = _resolve_compiler_path(explicit)
+        if resolved is not None:
+            return resolved
+        raise FileNotFoundError(f"wavec executable not found at {explicit}")
+
+    env_wavec = os.environ.get("WAVEC")
+    if env_wavec and env_wavec.strip():
+        resolved = _resolve_compiler_path(env_wavec)
+        if resolved is not None:
+            return resolved
+        raise FileNotFoundError(f"wavec executable specified by WAVEC not found: {env_wavec}")
+
+    candidates = [
+        ROOT / "target" / "release" / "wavec.exe",
+        ROOT / "target" / "release" / "wavec",
+        ROOT / "target" / "debug" / "wavec.exe",
+        ROOT / "target" / "debug" / "wavec",
+        ROOT / "target" / "x86_64-pc-windows-gnu" / "release" / "wavec.exe",
+        ROOT / "target" / "x86_64-pc-windows-gnu" / "debug" / "wavec.exe",
+    ]
 
     for candidate in candidates:
-        path = candidate if candidate.is_absolute() else ROOT / candidate
-        if path.is_file():
-            return path
+        if candidate.is_file():
+            return candidate
 
     raise FileNotFoundError("wavec not found; build it or pass --wavec")
 
