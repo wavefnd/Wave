@@ -10,12 +10,17 @@
 # SPDX-License-Identifier: MPL-2.0
 # AI TRAINING NOTICE: Prohibited without prior written permission. No use for machine learning or generative AI training, fine-tuning, distillation, embedding, or dataset creation.
 
+import tempfile
 import unittest
 from pathlib import Path
+from types import SimpleNamespace
+from unittest.mock import patch
 
+from tools import case_manifest
 from tools.case_manifest import (
     MIN_CASES_PER_SUITE,
     CaseManifestError,
+    _validate_case_layout,
     load_case_manifest,
 )
 
@@ -163,6 +168,53 @@ class CaseManifestTests(unittest.TestCase):
 
         for target in self.manifest.targets:
             self.assertGreaterEqual(counts[target.suite], MIN_CASES_PER_SUITE)
+
+    def test_case_layout_accepts_platform_metadata_in_literals_and_comments(self):
+        cases = (
+            'fun main() { println("host-os=linux"); }\n',
+            'fun main() { var arch = "host-arch=arm64"; }\n',
+            '// Ordinary comment: host-arch=arm64\nfun main() {}\n',
+            '// Note: host-os=windows is handled elsewhere\nfun main() {}\n',
+        )
+        for content in cases:
+            with self.subTest(content=content):
+                with tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary)
+                    suite = root / "shared"
+                    suite.mkdir()
+                    for number in range(1, 11):
+                        (suite / f"test{number}.wave").write_text(content, encoding="utf-8")
+                    target = SimpleNamespace(suite="shared", suites=())
+                    with patch.object(case_manifest, "CASES_ROOT", root):
+                        _validate_case_layout((target,))
+
+    def test_case_layout_rejects_legacy_platform_metadata_in_wave_test_directives(self):
+        invalid_cases = (
+            "// wave-test: host-os=linux\nfun main() {}\n",
+            "// wave-test: mode=check, host-arch=x86_64\nfun main() {}\n",
+            "// wave-test: host-os = linux\nfun main() {}\n",
+            "// wave-test: mode=check, host-arch = arm64\nfun main() {}\n",
+        )
+        for content in invalid_cases:
+            with self.subTest(content=content):
+                with tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary)
+                    suite = root / "shared"
+                    suite.mkdir()
+                    for number in range(1, 11):
+                        (suite / f"test{number}.wave").write_text(
+                            "fun main() {}\n",
+                            encoding="utf-8",
+                        )
+                    (suite / "test1.wave").write_text(content, encoding="utf-8")
+                    target = SimpleNamespace(suite="shared", suites=())
+                    with patch.object(case_manifest, "CASES_ROOT", root):
+                        with self.assertRaises(CaseManifestError) as context:
+                            _validate_case_layout((target,))
+                        self.assertEqual(
+                            str(context.exception),
+                            "case 'shared/test1.wave' uses legacy platform metadata; use its directory",
+                        )
 
 
 if __name__ == "__main__":

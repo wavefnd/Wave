@@ -51,6 +51,8 @@ TARGET_KEYS = {
 }
 NAME_PATTERN = re.compile(r"^[a-z0-9][a-z0-9_-]*$")
 ROOT_KEYS = {"version", "supported", "ci", "target"}
+LEGACY_PLATFORM_KEYS = {"host-os", "host-arch"}
+WAVE_TEST_MARKER = "// wave-test:"
 
 
 class CaseManifestError(ValueError):
@@ -327,6 +329,31 @@ def _test_number(path):
     return int(suffix) if suffix.isdigit() else 0
 
 
+def _has_legacy_platform_metadata(path: Path) -> bool:
+    try:
+        lines = path.read_text(encoding="utf-8").splitlines()
+    except OSError:
+        return False
+
+    for line in lines:
+        stripped = line.strip()
+        if not stripped.startswith("//"):
+            if stripped:
+                break
+            continue
+        if not stripped.startswith(WAVE_TEST_MARKER):
+            continue
+
+        body = stripped[len(WAVE_TEST_MARKER):].strip()
+        for raw_item in body.split(","):
+            item = raw_item.strip()
+            if "=" in item:
+                key = item.split("=", 1)[0].strip()
+                if key in LEGACY_PLATFORM_KEYS:
+                    return True
+    return False
+
+
 def _validate_case_layout(targets):
     suites = {
         suite
@@ -357,8 +384,7 @@ def _validate_case_layout(targets):
         raise CaseManifestError(f"case files must live in a configured suite: {names}")
 
     for source in CASES_ROOT.rglob("*.wave"):
-        text = source.read_text(encoding="utf-8")
-        if "host-os=" in text or "host-arch=" in text:
+        if _has_legacy_platform_metadata(source):
             relative = source.relative_to(CASES_ROOT).as_posix()
             raise CaseManifestError(
                 f"case '{relative}' uses legacy platform metadata; use its directory"
