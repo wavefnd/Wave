@@ -27,11 +27,12 @@ Example:
 
 import sys
 import os
+from pathlib import Path
 
-MAINTAINERS_FILE = "MAINTAINERS"
+MAINTAINERS_FILE = Path(__file__).resolve().parent.parent / "MAINTAINERS"
 
 if not os.path.exists(MAINTAINERS_FILE):
-    print("Error: MAINTAINERS file not found.")
+    print(f"Error: MAINTAINERS file not found at {MAINTAINERS_FILE}.")
     sys.exit(1)
 
 if len(sys.argv) < 2:
