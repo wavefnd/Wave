@@ -83,18 +83,24 @@ def _resolve_compiler_path(candidate: Path | str) -> Path | None:
     return None
 
 
+def _require_launchable(path: Path) -> Path:
+    if os.name != "nt" and not os.access(path, os.X_OK):
+        raise PermissionError(f"wavec executable is not launchable: {path}")
+    return path
+
+
 def resolve_wavec(explicit: Path | None) -> Path:
     if explicit is not None:
         resolved = _resolve_compiler_path(explicit)
         if resolved is not None:
-            return resolved
+            return _require_launchable(resolved)
         raise FileNotFoundError(f"wavec executable not found at {explicit}")
 
     env_wavec = os.environ.get("WAVEC")
     if env_wavec and env_wavec.strip():
         resolved = _resolve_compiler_path(env_wavec)
         if resolved is not None:
-            return resolved
+            return _require_launchable(resolved)
         raise FileNotFoundError(f"wavec executable specified by WAVEC not found: {env_wavec}")
 
     candidates = [
@@ -108,7 +114,7 @@ def resolve_wavec(explicit: Path | None) -> Path:
 
     for candidate in candidates:
         if candidate.is_file():
-            return candidate
+            return _require_launchable(candidate)
 
     raise FileNotFoundError("wavec not found; build it or pass --wavec")
 
@@ -168,7 +174,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parse_args(argv)
     try:
         wavec = resolve_wavec(args.wavec)
-    except FileNotFoundError as error:
+    except OSError as error:
         print(error, file=sys.stderr)
         return 2
 

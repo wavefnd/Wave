@@ -129,7 +129,7 @@ class TestResolveWavec(unittest.TestCase):
             root = Path(td)
             custom = root / "bin" / "custom_wavec"
             custom.parent.mkdir(parents=True)
-            custom.touch()
+            custom.touch(mode=0o700)
 
             fallback = root / "target" / "release" / "wavec"
             fallback.parent.mkdir(parents=True)
@@ -147,11 +147,11 @@ class TestResolveWavec(unittest.TestCase):
             root = Path(td)
             custom = root / "bin" / "custom_wavec"
             custom.parent.mkdir(parents=True)
-            custom.touch()
+            custom.touch(mode=0o700)
 
             fallback = root / "target" / "release" / "wavec"
             fallback.parent.mkdir(parents=True)
-            fallback.touch()
+            fallback.touch(mode=0o700)
 
             with patch.object(check_wave_corpus, "ROOT", root):
                 with patch.dict(os.environ, {"WAVEC": str(custom)}, clear=False):
@@ -162,7 +162,7 @@ class TestResolveWavec(unittest.TestCase):
             root = Path(td)
             fallback = root / "target" / "release" / "wavec"
             fallback.parent.mkdir(parents=True)
-            fallback.touch()
+            fallback.touch(mode=0o700)
 
             with patch.object(check_wave_corpus, "ROOT", root):
                 env = os.environ.copy()
@@ -175,7 +175,7 @@ class TestResolveWavec(unittest.TestCase):
             root = Path(td)
             fallback = root / "target" / "release" / "wavec"
             fallback.parent.mkdir(parents=True)
-            fallback.touch()
+            fallback.touch(mode=0o700)
 
             with patch.object(check_wave_corpus, "ROOT", root):
                 with patch.dict(os.environ, {"WAVEC": "   "}, clear=False):
@@ -192,6 +192,19 @@ class TestResolveWavec(unittest.TestCase):
                         resolve_wavec(None)
 
                     self.assertIn("wavec not found; build it or pass --wavec", str(cm.exception))
+
+    @unittest.skipIf(os.name == "nt", "POSIX executable bits do not apply")
+    def test_main_rejects_non_executable_compiler_without_traceback(self):
+        with tempfile.TemporaryDirectory() as td:
+            compiler = Path(td) / "wavec"
+            compiler.touch(mode=0o600)
+            stderr = io.StringIO()
+            with patch("sys.stderr", stderr):
+                self.assertEqual(main(["--wavec", str(compiler)]), 2)
+
+        self.assertIn(str(compiler), stderr.getvalue())
+        self.assertIn("not launchable", stderr.getvalue())
+        self.assertNotIn("Traceback", stderr.getvalue())
 
 
 if __name__ == "__main__":
