@@ -70,6 +70,7 @@ files_to_check = sys.argv[1:]
 matched_maintainers = set()
 
 for file in files_to_check:
+    file = file.replace("\\", "/")
     for section in sections:
         for path in section["files"]:
             # Direct folder matching (Wave-style directory structure)
