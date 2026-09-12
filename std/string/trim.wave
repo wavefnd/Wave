@@ -16,13 +16,15 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import("std::string::ascii")::{is_space};
+
 pub fun trim_left_index(s: str) -> i32 {
     var i: i32 = 0;
 
     while (s[i] != 0) {
         var c: u8 = s[i];
 
-        if (c == 32 || c == 9 || c == 10 || c == 13) {
+        if (is_space(c)) {
             i += 1;
         } else {
             return i;
@@ -48,7 +50,7 @@ pub fun trim_right_index(s: str) -> i32 {
     while (i >= 0) {
         var c: u8 = s[i];
 
-        if (c == 32 || c == 9 || c == 10 || c == 13) {
+        if (is_space(c)) {
             i -= 1;
         } else {
             return i + 1;

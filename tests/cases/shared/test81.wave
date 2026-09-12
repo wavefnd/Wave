@@ -29,9 +29,11 @@ fun main() -> i32 {
     if (!starts_with("wave-lang", "wave") || !ends_with("main.wave", ".wave")) { failed += 1; }
     if (find_char("banana", 97) != 1 || rfind_char("banana", 97) != 5) { failed += 1; }
     if (!contains_char("wave", 118) || count_char("banana", 97) != 3) { failed += 1; }
-    if (!is_alpha(87) || !is_digit(55) || !is_space(10)) { failed += 1; }
+    if (!is_alpha(87) || !is_digit(55)) { failed += 1; }
+    if (!is_space(9) || !is_space(10) || !is_space(11) || !is_space(12) || !is_space(13) || !is_space(32) || is_space(8)) { failed += 1; }
     if (to_lower(87) != 119 || to_upper(119) != 87) { failed += 1; }
     if (trim_left_index("  wave \n") != 2 || trim_right_index("  wave \n") != 6) { failed += 1; }
+    if (trim_left_index("\x0b\x0cwave") != 2 || trim_right_index("wave\x0b\x0c") != 4) { failed += 1; }
     if (djb2_32("wave") == 0 || fnv1a_64("wave") == 0) { failed += 1; }
 
     return failed;

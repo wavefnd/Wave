@@ -77,6 +77,10 @@ pub fun is_space(c: u8) -> bool {
         return true;
     }
 
+    if (c == 11 || c == 12) {
+        return true;
+    }
+
     if (c == 13) {
         return true;
     }
