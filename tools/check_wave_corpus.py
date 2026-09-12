@@ -197,8 +197,11 @@ def main(argv: list[str] | None = None) -> int:
                     timeout=args.timeout,
                     check=False,
                 )
-            except subprocess.TimeoutExpired:
-                failures.append((relative, f"timed out after {args.timeout:g}s"))
+            except subprocess.TimeoutExpired as error:
+                detail = timeout_output(error)
+                failures.append(
+                    (relative, f"timed out after {args.timeout:g}s" + (f"\n{detail}" if detail else ""))
+                )
                 print(f"[TIMEOUT] {relative}")
                 continue
 

@@ -1,5 +1,6 @@
 ﻿import io
 import os
+import subprocess
 import tempfile
 import unittest
 from pathlib import Path
@@ -192,6 +193,30 @@ class TestResolveWavec(unittest.TestCase):
                         resolve_wavec(None)
 
                     self.assertIn("wavec not found; build it or pass --wavec", str(cm.exception))
+
+
+class TestCorpusTimeout(unittest.TestCase):
+    def test_main_preserves_partial_timeout_output(self):
+        error = subprocess.TimeoutExpired(
+            ["wavec", "check"], 0.1, output="partial stdout", stderr="partial stderr"
+        )
+        with tempfile.TemporaryDirectory() as td:
+            root = Path(td)
+            source = root / "std" / "sample.wave"
+            source.parent.mkdir(parents=True)
+            source.write_text("fun main() -> i32 { return 0; }")
+            stdout = io.StringIO()
+            stderr = io.StringIO()
+            with patch.object(check_wave_corpus, "ROOT", root):
+                with patch.object(check_wave_corpus, "resolve_wavec", return_value=Path("wavec")):
+                    with patch.object(check_wave_corpus, "corpus_files", return_value=[source]):
+                        with patch.object(check_wave_corpus, "run_process", side_effect=error):
+                            with patch("sys.stdout", stdout), patch("sys.stderr", stderr):
+                                self.assertEqual(main(["--timeout=0.1"]), 1)
+
+        self.assertIn("timed out after 0.1s", stderr.getvalue())
+        self.assertIn("partial stdout", stderr.getvalue())
+        self.assertIn("partial stderr", stderr.getvalue())
 
 
 if __name__ == "__main__":
