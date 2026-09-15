@@ -42,6 +42,34 @@ class SourceCheckTests(unittest.TestCase):
             with patch.object(checker, "run_process", return_value=subprocess.CompletedProcess([], 0, "", "")):
                 self.assertEqual(checker.check_sources("wavec", ["valid"], report), 0)
 
+    def test_atomic_report_replaces_previous_complete_json(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "report.json"
+            report.write_text('{"old": true}\n')
+            checker._write_report(report, {"phase": "source-check", "results": [{"status": "passed"}]})
+            self.assertEqual(json.loads(report.read_text())["results"][0]["status"], "passed")
+            self.assertEqual(list(report.parent.glob(f".{report.name}.*.tmp")), [])
+
+    def test_atomic_report_write_failure_preserves_previous_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "report.json"
+            report.write_text('{"old": true}\n')
+            with patch.object(checker.os, "fdopen", side_effect=OSError("write failed")):
+                with self.assertRaisesRegex(OSError, "write failed"):
+                    checker._write_report(report, {"new": True})
+            self.assertEqual(json.loads(report.read_text()), {"old": True})
+            self.assertEqual(list(report.parent.glob(f".{report.name}.*.tmp")), [])
+
+    def test_atomic_report_replace_failure_preserves_previous_report(self):
+        with tempfile.TemporaryDirectory() as directory:
+            report = Path(directory) / "report.json"
+            report.write_text('{"old": true}\n')
+            with patch.object(Path, "replace", side_effect=OSError("replace failed")):
+                with self.assertRaisesRegex(OSError, "replace failed"):
+                    checker._write_report(report, {"new": True})
+            self.assertEqual(json.loads(report.read_text()), {"old": True})
+            self.assertEqual(list(report.parent.glob(f".{report.name}.*.tmp")), [])
+
     def test_manifest_failure_leaves_a_failure_report(self):
         with tempfile.TemporaryDirectory() as directory:
             report = Path(directory) / "report.json"
