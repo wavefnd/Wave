@@ -3,6 +3,7 @@ import argparse
 import json
 import os
 from pathlib import Path
+import shutil
 import subprocess
 import tempfile
 import sys
@@ -31,6 +32,36 @@ def _write_report(report, payload):
         temp_path.replace(report)
     finally:
         temp_path.unlink(missing_ok=True)
+
+
+def validate_compiler(wavec: Path | str) -> Path:
+    raw_str = str(wavec)
+    if isinstance(wavec, Path) and not wavec.parts:
+        raw_str = ""
+    if not raw_str.strip():
+        raise ValueError("wavec compiler path cannot be empty")
+    raw = Path(raw_str)
+    candidate = raw if raw.is_absolute() else (ROOT / raw if (ROOT / raw).is_file() else raw)
+    if not candidate.exists():
+        which = shutil.which(str(wavec))
+        if which:
+            candidate = Path(which)
+        else:
+            raise FileNotFoundError(f"wavec executable not found at {wavec}")
+    if not candidate.is_file():
+        raise ValueError(f"wavec path is not a regular file: {wavec}")
+    if os.name == "nt":
+        pathext = [
+            ext.lower()
+            for ext in os.environ.get("PATHEXT", ".COM;.EXE;.BAT;.CMD").split(";")
+            if ext
+        ]
+        if candidate.suffix.lower() not in pathext:
+            raise PermissionError(f"wavec executable is not launchable: {candidate}")
+    else:
+        if not os.access(candidate, os.X_OK):
+            raise PermissionError(f"wavec executable is not launchable: {candidate}")
+    return candidate.resolve()
 
 
 def check_sources(wavec, sources, report, timeout=15):
@@ -63,16 +94,17 @@ def check_sources(wavec, sources, report, timeout=15):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--wavec", type=Path, required=True)
+    parser.add_argument("--wavec", required=True)
     parser.add_argument("--report-json", type=Path, required=True)
     args = parser.parse_args(argv)
     try:
         sources = load_case_manifest().sources()
+        compiler = validate_compiler(args.wavec)
     except (ValueError, OSError) as error:
         _write_report(args.report_json, {"phase": "source-check", "error": str(error), "results": []})
         print(error, file=sys.stderr)
         return 1
-    return check_sources(args.wavec.resolve(), sources, args.report_json)
+    return check_sources(compiler, sources, args.report_json)
 
 
 if __name__ == "__main__":
