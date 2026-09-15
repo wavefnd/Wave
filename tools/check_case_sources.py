@@ -21,7 +21,12 @@ def _write_report(report, payload):
     fd, temp_name = tempfile.mkstemp(prefix=f".{report.name}.", suffix=".tmp", dir=report.parent)
     temp_path = Path(temp_name)
     try:
-        with os.fdopen(fd, "w", encoding="utf-8") as stream:
+        try:
+            stream = os.fdopen(fd, "w", encoding="utf-8")
+        except Exception:
+            os.close(fd)
+            raise
+        with stream:
             stream.write(json.dumps(payload, indent=2) + "\n")
         temp_path.replace(report)
     finally:
