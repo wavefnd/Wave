@@ -70,19 +70,24 @@ fun time_parse_digits(text: str, start: i32, count: i32) -> i32 {
     return value;
 }
 
-// Parses UTC ISO 8601 with either whole seconds or exactly nine fractional digits.
+// Parses UTC ISO 8601 with whole seconds or one through nine fractional digits.
 pub fun time_datetime_parse_iso8601(text: str) -> DateTimeResult {
     var length: i32 = len(text);
-    if (length != 20 && length != 30) {
+    if (length != 20 && (length < 22 || length > 30)) {
         return DateTimeResult { ok: false, value: time_datetime_zero() };
     }
     if (text[4] != 45 || text[7] != 45 || text[10] != 84
         || text[13] != 58 || text[16] != 58) {
         return DateTimeResult { ok: false, value: time_datetime_zero() };
     }
-    if ((length == 20 && text[19] != 90)
-        || (length == 30 && (text[19] != 46 || text[29] != 90))) {
-        return DateTimeResult { ok: false, value: time_datetime_zero() };
+    if (length == 20) {
+        if (text[19] != 90) {
+            return DateTimeResult { ok: false, value: time_datetime_zero() };
+        }
+    } else {
+        if (text[19] != 46 || text[length - 1] != 90) {
+            return DateTimeResult { ok: false, value: time_datetime_zero() };
+        }
     }
 
     var year: i32 = time_parse_digits(text, 0, 4);
@@ -92,8 +97,15 @@ pub fun time_datetime_parse_iso8601(text: str) -> DateTimeResult {
     var minute: i32 = time_parse_digits(text, 14, 2);
     var second: i32 = time_parse_digits(text, 17, 2);
     var nanosecond: i32 = 0;
-    if (length == 30) {
-        nanosecond = time_parse_digits(text, 20, 9);
+    if (length != 20) {
+        var fractional_digits: i32 = length - 21;
+        nanosecond = time_parse_digits(text, 20, fractional_digits);
+        if (nanosecond >= 0) {
+            while (fractional_digits < 9) {
+                nanosecond *= 10;
+                fractional_digits += 1;
+            }
+        }
     }
     if (year < 0 || month < 0 || day < 0 || hour < 0
         || minute < 0 || second < 0 || nanosecond < 0) {

@@ -16,6 +16,20 @@ import("std::time::format")::{
 };
 import("std::string::cmp")::{eq};
 
+fun iso8601_round_trip_matches(text: str, expected_nanosecond: i64) -> bool {
+    var parsed: DateTimeResult = time_datetime_parse_iso8601(text);
+    if (!parsed.ok || parsed.value.nanosecond != expected_nanosecond) {
+        return false;
+    }
+
+    var formatted: array<u8, 31>;
+    if (time_datetime_format_iso8601(parsed.value, &formatted[0], 31) != 30) {
+        return false;
+    }
+    var reparsed: DateTimeResult = time_datetime_parse_iso8601(&formatted[0] as str);
+    return reparsed.ok && time_datetime_compare(reparsed.value, parsed.value) == 0;
+}
+
 fun main() -> i32 {
     var epoch: DateTime = time_datetime_from_unix(0, 0);
     if (epoch.year != 1970 || epoch.month != 1 || epoch.day != 1
@@ -97,6 +111,53 @@ fun main() -> i32 {
     if (!parsed.ok || time_datetime_compare(parsed.value, leap_day) != 0
         || !parsed_whole.ok || parsed_whole.value.weekday != 4 || parsed_invalid.ok) {
         return 11;
+    }
+
+    if (!iso8601_round_trip_matches("2026-09-20T12:34:56Z", 0)
+        || !iso8601_round_trip_matches("2026-09-20T12:34:56.1Z", 100000000)
+        || !iso8601_round_trip_matches("2026-09-20T12:34:56.02Z", 20000000)
+        || !iso8601_round_trip_matches("2026-09-20T12:34:56.003Z", 3000000)
+        || !iso8601_round_trip_matches("2026-09-20T12:34:56.0004Z", 400000)
+        || !iso8601_round_trip_matches("2026-09-20T12:34:56.1200Z", 120000000)
+        || !iso8601_round_trip_matches("2026-09-20T12:34:56.00005Z", 50000)
+        || !iso8601_round_trip_matches("2026-09-20T12:34:56.000006Z", 6000)
+        || !iso8601_round_trip_matches("2026-09-20T12:34:56.0000007Z", 700)
+        || !iso8601_round_trip_matches("2026-09-20T12:34:56.00000008Z", 80)
+        || !iso8601_round_trip_matches("2026-09-20T12:34:56.000000009Z", 9)
+        || !iso8601_round_trip_matches("2026-09-20T12:34:56.000000000Z", 0)) {
+        return 17;
+    }
+
+    var empty_fraction: DateTimeResult = time_datetime_parse_iso8601(
+        "2026-09-20T12:34:56.Z"
+    );
+    var excess_fraction: DateTimeResult = time_datetime_parse_iso8601(
+        "2026-09-20T12:34:56.1234567890Z"
+    );
+    var non_digit_fraction: DateTimeResult = time_datetime_parse_iso8601(
+        "2026-09-20T12:34:56.12aZ"
+    );
+    var missing_z: DateTimeResult = time_datetime_parse_iso8601(
+        "2026-09-20T12:34:56.123"
+    );
+    var misplaced_z: DateTimeResult = time_datetime_parse_iso8601(
+        "2026-09-20T12:34:56.1Z3"
+    );
+    var trailing_input: DateTimeResult = time_datetime_parse_iso8601(
+        "2026-09-20T12:34:56.1Zx"
+    );
+    var lowercase_separator: DateTimeResult = time_datetime_parse_iso8601(
+        "2026-09-20t12:34:56.1Z"
+    );
+    var invalid_time: DateTimeResult = time_datetime_parse_iso8601(
+        "2026-09-20T24:34:56.1Z"
+    );
+    var empty_input: DateTimeResult = time_datetime_parse_iso8601("");
+    var short_input: DateTimeResult = time_datetime_parse_iso8601("2026");
+    if (empty_fraction.ok || excess_fraction.ok || non_digit_fraction.ok
+        || missing_z.ok || misplaced_z.ok || trailing_input.ok || lowercase_separator.ok
+        || invalid_time.ok || empty_input.ok || short_input.ok) {
+        return 18;
     }
 
     var end_of_year: DateTimeResult = time_datetime_from_parts(
