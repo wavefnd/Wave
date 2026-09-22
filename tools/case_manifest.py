@@ -394,7 +394,7 @@ def _validate_case_layout(targets):
 def load_case_manifest(path=DEFAULT_MANIFEST):
     try:
         data = tomllib.loads(Path(path).read_text(encoding="utf-8"))
-    except (OSError, tomllib.TOMLDecodeError) as error:
+    except (OSError, UnicodeDecodeError, tomllib.TOMLDecodeError) as error:
         raise CaseManifestError(f"cannot read case manifest {path}: {error}") from error
 
     unknown_keys = sorted(set(data) - ROOT_KEYS)

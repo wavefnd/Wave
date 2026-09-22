@@ -216,6 +216,25 @@ class CaseManifestTests(unittest.TestCase):
                             "case 'shared/test1.wave' uses legacy platform metadata; use its directory",
                         )
 
+    def test_manifest_accepts_non_ascii_utf8_comments(self):
+        contents = case_manifest.DEFAULT_MANIFEST.read_text(encoding="utf-8")
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest = Path(temporary) / "cases.toml"
+            manifest.write_bytes(
+                f"# non-ascii comment: 測試 é\n{contents}".encode("utf-8")
+            )
+            self.assertEqual(load_case_manifest(manifest), self.manifest)
+
+    def test_invalid_utf8_manifest_reports_path_in_case_manifest_error(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            manifest = Path(temporary) / "cases.toml"
+            manifest.write_bytes(b"version = 2\n# \xff\n")
+            with self.assertRaises(CaseManifestError) as context:
+                load_case_manifest(manifest)
+            self.assertIn(f"cannot read case manifest {manifest}:", str(context.exception))
+            self.assertIn("can't decode byte 0xff", str(context.exception))
+            self.assertIsInstance(context.exception.__cause__, UnicodeDecodeError)
+
 
 if __name__ == "__main__":
     unittest.main()
