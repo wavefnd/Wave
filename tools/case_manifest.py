@@ -141,7 +141,7 @@ class CaseManifest:
     def runtime_sources(self, target_id: str):
         target = self.target(target_id)
         paths = []
-        for suite in (f"shared/{target.arch}", target.suite):
+        for suite in target.suites:
             directory = CASES_ROOT / suite
             entries = list(directory.glob("test*.wave"))
             entries.extend(directory.glob("test*/main.wave"))
