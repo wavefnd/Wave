@@ -170,6 +170,26 @@ class ProcessTreeTests(unittest.TestCase):
         self.assertEqual(status, 1)
         self.assert_descendant_stopped()
 
+    def test_text_mode_replaces_invalid_utf8_on_both_streams(self):
+        for stream in ("stdout", "stderr"):
+            with self.subTest(stream=stream):
+                result = run_process(
+                    [sys.executable, "-c",
+                     f"import sys; sys.{stream}.buffer.write(bytes([255]))"],
+                    capture_output=True, text=True, timeout=3,
+                )
+                self.assertEqual(result.returncode, 0)
+                decoded = result.stdout if stream == "stdout" else result.stderr
+                self.assertEqual(decoded, "\ufffd")
+
+    def test_text_mode_preserves_ordinary_utf8(self):
+        result = run_process(
+            [sys.executable, "-c", "import sys; print('caf\u00e9', end='')"],
+            capture_output=True, text=True, timeout=3,
+        )
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "caf\u00e9")
+
     def test_input_and_nonzero_status_are_preserved(self):
         result = run_process([sys.executable, "-c",
             "import sys; print(sys.stdin.read()); sys.exit(7)"],

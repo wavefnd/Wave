@@ -116,6 +116,13 @@ class ProcessTree:
         self.process = None
         self.closed = False
         self.terminated = False
+        # Captured stdout/stderr use replacement decoding by default so a
+        # program that writes non-UTF-8 bytes cannot raise UnicodeDecodeError
+        # and abort a suite before its report is written. Callers that need
+        # strict decoding can pass errors= explicitly. Source and manifest
+        # readers stay strict and do not go through this helper.
+        if kwargs.get("text") and "errors" not in kwargs:
+            kwargs["errors"] = "replace"
         try:
             if os.name == "nt":
                 self.job = _WindowsJob()

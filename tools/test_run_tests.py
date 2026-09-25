@@ -1,4 +1,5 @@
 import io
+import sys
 import json
 import subprocess
 import tempfile
@@ -151,6 +152,57 @@ class TestRunTestsCLI(unittest.TestCase):
                 "wavec not found. Run `cargo build --release` or `cargo build` first.",
                 stdout.getvalue(),
             )
+
+    def test_binary_program_output_does_not_abort_classification(self):
+        """Binary bytes on either stream must not raise or skip report data."""
+        for stream in ("stdout", "stderr"):
+            with self.subTest(stream=stream), patch("sys.stdout", io.StringIO()):
+                command = [
+                    sys.executable, "-c",
+                    f"import sys; sys.{stream}.buffer.write(bytes([255]))",
+                ]
+                status, detail = runner.classify_program(
+                    "binary-output", "case.wave", command, TestMetadata(), None,
+                )
+                self.assertEqual(status, 1, detail)
+                self.assertIsNone(detail)
+
+    def test_binary_program_output_preserves_nonzero_exit_and_diagnostics(self):
+        with patch("sys.stdout", io.StringIO()):
+            command = [
+                sys.executable, "-c",
+                "import sys; sys.stdout.buffer.write(b'ok' + bytes([255])); "
+                "sys.stderr.buffer.write(bytes([255])); sys.exit(7)",
+            ]
+            status, detail = runner.classify_program(
+                "binary-fail", "case.wave", command, TestMetadata(), None,
+            )
+        self.assertEqual(status, 0)
+        self.assertEqual(detail["actual_exit"], 7)
+        self.assertEqual(detail["expected_exit"], 0)
+        self.assertEqual(detail["phase"], "run")
+        self.assertIn("exit=7", detail["reason"])
+        self.assertEqual(detail["stdout"], "ok\ufffd")
+        self.assertEqual(detail["stderr"], "\ufffd")
+        # Bounded JSON diagnostics remain UTF-8-safe for report generation.
+        json.dumps(detail)
+
+    def test_ordinary_utf8_program_output_is_preserved(self):
+        with patch("sys.stdout", io.StringIO()):
+            command = [
+                sys.executable, "-c",
+                "import sys; "
+                "sys.stdout.buffer.write(('caf' + chr(0xe9) + chr(10)).encode()); "
+                "sys.stderr.buffer.write(('na' + chr(0xef) + 've').encode()); "
+                "sys.exit(9)",
+            ]
+            status, detail = runner.classify_program(
+                "utf8-output", "case.wave", command, TestMetadata(), None,
+            )
+        self.assertEqual(status, 0, detail)
+        self.assertEqual(detail["actual_exit"], 9)
+        self.assertEqual(detail["stdout"], "caf\u00e9\n")
+        self.assertEqual(detail["stderr"], "na\u00efve")
 
     def test_found_compiler(self):
         with tempfile.TemporaryDirectory() as tmp_dir:

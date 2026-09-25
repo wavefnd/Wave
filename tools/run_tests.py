@@ -239,7 +239,8 @@ def parse_test_metadata(rel_path: str):
 def compiler_default_target():
     result = run_process(
         [str(WAVEC), "print", "default-target"], cwd=str(ROOT),
-        capture_output=True, text=True, timeout=TIMEOUT_SEC, check=True,
+        capture_output=True, text=True, errors="replace",
+        timeout=TIMEOUT_SEC, check=True,
     )
     return result.stdout.strip()
 
@@ -315,7 +316,8 @@ def run_server_test(cmd):
         cwd=str(ROOT),
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
-        text=True
+        text=True,
+        errors="replace",
     )
 
     try:
@@ -405,7 +407,8 @@ def run_and_classify(name, rel_path, cmd):
                     build_cmd.extend(["--target", output_target])
                 built = run_process(
                     build_cmd, cwd=str(ROOT), stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE, text=True, timeout=TIMEOUT_SEC,
+                    stderr=subprocess.PIPE, text=True, errors="replace",
+                    timeout=TIMEOUT_SEC,
                 )
                 if built.returncode != 0 or not executable.is_file():
                     detail = f"build failed (exit={built.returncode}, executable={executable.is_file()})"
@@ -449,7 +452,8 @@ def classify_program(name, rel_path, cmd, metadata, compile_target):
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
-            timeout=TIMEOUT_SEC
+            errors="replace",
+            timeout=TIMEOUT_SEC,
         )
 
         if result.returncode != expected_exit:
