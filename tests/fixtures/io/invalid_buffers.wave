@@ -1,4 +1,4 @@
-import("std::fs::file")::{fs_read_all, fs_copy};
+import("std::fs::file")::{fs_read_all, fs_copy, fs_write_all, fs_append_all};
 import("std::io::consts")::{IO_ERR_INVALID};
 fun main() -> i32 {
     var value: u8 = 0;
@@ -9,6 +9,22 @@ fun main() -> i32 {
     if (fs_copy("source.bin", "destination.bin", null, 1, 384) != IO_ERR_INVALID
         || fs_copy("source.bin", "destination.bin", &value, 0, 384) != IO_ERR_INVALID) {
         return 2;
+    }
+    // Positive-length null writes/appends must fail before opening or truncating.
+    if (fs_write_all("existing.bin", null, 1, 384) != IO_ERR_INVALID
+        || fs_append_all("existing.bin", null, 1, 384) != IO_ERR_INVALID) {
+        return 3;
+    }
+    // Missing destinations must also reject without creating the file.
+    if (fs_write_all("missing-write.bin", null, 1, 384) != IO_ERR_INVALID
+        || fs_append_all("missing-append.bin", null, 1, 384) != IO_ERR_INVALID) {
+        return 4;
+    }
+    // Negative length still rejected. Zero-length null write remains allowed
+    // (truncates) and uses a dedicated path so existing.bin stays untouched.
+    if (fs_write_all("existing.bin", null, -1, 384) != IO_ERR_INVALID
+        || fs_write_all("zero-truncate.bin", null, 0, 384) < 0) {
+        return 5;
     }
     return 0;
 }

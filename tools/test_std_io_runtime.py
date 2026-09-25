@@ -106,10 +106,17 @@ class StandardIoRuntimeTests(unittest.TestCase):
         return {"preexec_fn": limit}
 
     def test_invalid_buffers_do_not_open_or_truncate_files(self):
-        target = self.directory / "destination.bin"
-        target.write_bytes(b"untouched")
+        destination = self.directory / "destination.bin"
+        existing = self.directory / "existing.bin"
+        destination.write_bytes(b"untouched")
+        existing.write_bytes(b"preserve me")
         self.run_fixture("invalid_buffers")
-        self.assertEqual(target.read_bytes(), b"untouched")
+        self.assertEqual(destination.read_bytes(), b"untouched")
+        self.assertEqual(existing.read_bytes(), b"preserve me")
+        self.assertFalse((self.directory / "missing-write.bin").exists())
+        self.assertFalse((self.directory / "missing-append.bin").exists())
+        # Zero-length null write is still allowed and truncates/creates.
+        self.assertEqual((self.directory / "zero-truncate.bin").read_bytes(), b"")
 
     def test_copy_self_preserves_bytes_and_closes_error_handles(self):
         source = self.directory / "source.bin"

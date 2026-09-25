@@ -245,7 +245,7 @@ pub fun fs_read_all(path: str, dst: ptr<u8>, dst_cap: i64) -> i64 {
 // Replaces a file with len bytes from caller-owned storage.
 // Example: fs_write_all("notes.txt", text as ptr<u8>, 4, FS_MODE_FILE_DEFAULT);
 pub fun fs_write_all(path: str, src: ptr<u8>, len: i64, mode: i32) -> i64 {
-    if (len < 0) {
+    if (len < 0 || (src == null && len > 0)) {
         return IO_ERR_INVALID;
     }
 
@@ -270,7 +270,7 @@ pub fun fs_write_all(path: str, src: ptr<u8>, len: i64, mode: i32) -> i64 {
 
 // Appends len bytes from caller-owned storage, creating the file if needed.
 pub fun fs_append_all(path: str, src: ptr<u8>, len: i64, mode: i32) -> i64 {
-    if (len < 0) {
+    if (len < 0 || (src == null && len > 0)) {
         return IO_ERR_INVALID;
     }
 
