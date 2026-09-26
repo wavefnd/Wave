@@ -89,6 +89,7 @@ pub fun event_wait(
         || capacity > WINDOWS_EVENT_CAPACITY || timeout_ms < -1) { return -22; }
     var descriptors: array<PollFd, 64>;
     var count: i32 = deref state.count;
+    if (count == 0) { return 0; }
     var i: i32 = 0;
     while (i < count) {
         descriptors[i] = PollFd {
