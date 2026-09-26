@@ -19,6 +19,8 @@ const MAX_MEMORY: u64 = 18446744073709486080;
 static next_address: u64 = 0;
 static memory_limit: u64 = 0;
 static blocks: ptr<MemoryBlock> = null;
+static blocks_tail: ptr<MemoryBlock> = null;
+static free_blocks: ptr<MemoryBlock> = null;
 
 fun align16(value: u64) -> u64 {
     return (value + 15) & 18446744073709551600;
@@ -56,7 +58,7 @@ pub fun sys_alloc(size: i64) -> ptr<u8> {
     if (!initialize_allocator()) {
         return null;
     }
-    var reused: ptr<u8> = blocks_reuse(blocks, size, capacity);
+    var reused: ptr<u8> = blocks_reuse(&free_blocks, &blocks_tail, size, capacity);
     if (reused != null) {
         return reused;
     }
@@ -84,11 +86,11 @@ pub fun sys_alloc(size: i64) -> ptr<u8> {
         memory_limit = start + pages * WASM_PAGE_SIZE;
     }
     next_address = start + total;
-    return blocks_append(&blocks, start as ptr<u8>, size, capacity);
+    return blocks_append(&blocks, &blocks_tail, start as ptr<u8>, size, capacity);
 }
 
 pub fun sys_free(p: ptr<u8>, size: i64) -> i64 {
-    return blocks_free(blocks, p, size);
+    return blocks_free(blocks, &blocks_tail, &free_blocks, p, size);
 }
 
 pub fun mmap(

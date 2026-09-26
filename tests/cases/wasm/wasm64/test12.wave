@@ -54,5 +54,14 @@ fun main() -> i32 {
     if (merged[31999] != 117 || mem_free(merged, 32000) != 0) {
         return 7;
     }
+    var live_count: i64 = 0;
+    while (live_count < 16000) {
+        var live: ptr<u8> = mem_alloc(16);
+        if (live == null) {
+            return 9;
+        }
+        live[0] = live_count as u8;
+        live_count += 1;
+    }
     return 0;
 }

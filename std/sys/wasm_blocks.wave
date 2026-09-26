@@ -11,79 +11,134 @@ pub struct MemoryBlock {
     capacity: u64;
     requested: i64;
     next: ptr<MemoryBlock>;
+    free_next: ptr<MemoryBlock>;
 }
 
-pub fun blocks_reuse(head: ptr<MemoryBlock>, size: i64, capacity: u64) -> ptr<u8> {
-    var block: ptr<MemoryBlock> = head;
+fun free_list_insert(head: ptr<ptr<MemoryBlock>>, block: ptr<MemoryBlock>) {
+    if (deref head == null || block as u64 < deref head as u64) {
+        block.free_next = deref head;
+        deref head = block;
+        return;
+    }
+    var previous: ptr<MemoryBlock> = deref head;
+    while (previous.free_next != null && previous.free_next as u64 < block as u64) {
+        previous = previous.free_next;
+    }
+    block.free_next = previous.free_next;
+    previous.free_next = block;
+}
+
+fun free_list_remove(head: ptr<ptr<MemoryBlock>>, target: ptr<MemoryBlock>) {
+    var previous: ptr<MemoryBlock> = null;
+    var block: ptr<MemoryBlock> = deref head;
     while (block != null) {
-        if (block.requested == 0 && block.capacity >= capacity) {
+        if (block == target) {
+            if (previous == null) {
+                deref head = block.free_next;
+            } else {
+                previous.free_next = block.free_next;
+            }
+            block.free_next = null;
+            return;
+        }
+        previous = block;
+        block = block.free_next;
+    }
+}
+
+pub fun blocks_reuse(
+    free_head: ptr<ptr<MemoryBlock>>, tail: ptr<ptr<MemoryBlock>>, size: i64, capacity: u64
+) -> ptr<u8> {
+    var block: ptr<MemoryBlock> = deref free_head;
+    while (block != null) {
+        if (block.capacity >= capacity) {
+            free_list_remove(free_head, block);
             var remaining: u64 = block.capacity - capacity;
             if (remaining >= 48) {
                 var split: ptr<MemoryBlock> = ((block as u64) + 32 + capacity) as ptr<MemoryBlock>;
                 deref split = MemoryBlock {
                     capacity: remaining - 32,
                     requested: 0,
-                    next: block.next
+                    next: block.next,
+                    free_next: null
                 };
                 block.next = split;
                 block.capacity = capacity;
+                if (deref tail == block) {
+                    deref tail = split;
+                }
+                free_list_insert(free_head, split);
             }
             block.requested = size;
+            block.free_next = null;
             return ((block as u64) + 32) as ptr<u8>;
         }
-        block = block.next;
+        block = block.free_next;
     }
     return null;
 }
 
-pub fun blocks_append(head: ptr<ptr<MemoryBlock>>, storage: ptr<u8>, size: i64, capacity: u64) -> ptr<u8> {
+pub fun blocks_append(
+    head: ptr<ptr<MemoryBlock>>, tail: ptr<ptr<MemoryBlock>>, storage: ptr<u8>, size: i64, capacity: u64
+) -> ptr<u8> {
     var block: ptr<MemoryBlock> = storage as ptr<MemoryBlock>;
-    deref block = MemoryBlock { capacity: capacity, requested: size, next: null };
+    deref block = MemoryBlock { capacity: capacity, requested: size, next: null, free_next: null };
     if (deref head == null) {
         deref head = block;
     } else {
-        var last: ptr<MemoryBlock> = deref head;
-        while (last.next != null) {
-            last = last.next;
-        }
-        last.next = block;
+        (deref tail).next = block;
     }
+    deref tail = block;
     return ((block as u64) + 32) as ptr<u8>;
 }
 
-pub fun blocks_free(head: ptr<MemoryBlock>, address: ptr<u8>, size: i64) -> i64 {
+pub fun blocks_free(
+    head: ptr<MemoryBlock>, tail: ptr<ptr<MemoryBlock>>, free_head: ptr<ptr<MemoryBlock>>,
+    address: ptr<u8>, size: i64
+) -> i64 {
     if (address == null) {
         return 0;
     }
     if (size <= 0) {
         return -22;
     }
+    var previous: ptr<MemoryBlock> = null;
     var block: ptr<MemoryBlock> = head;
-    var found: bool = false;
     while (block != null) {
         if ((block as u64) + 32 == address as u64) {
             if (block.requested != size) {
                 return -22;
             }
             block.requested = 0;
-            found = true;
             break;
         }
+        previous = block;
         block = block.next;
     }
-    if (!found) {
+    if (block == null) {
         return -22;
     }
-    block = head;
-    while (block != null && block.next != null) {
-        var next_block: ptr<MemoryBlock> = block.next;
-        if (block.requested == 0 && next_block.requested == 0
-            && (block as u64) + 32 + block.capacity == next_block as u64) {
-            block.capacity += 32 + next_block.capacity;
-            block.next = next_block.next;
-        } else {
-            block = next_block;
+
+    var next_block: ptr<MemoryBlock> = block.next;
+    if (next_block != null && next_block.requested == 0
+        && (block as u64) + 32 + block.capacity == next_block as u64) {
+        free_list_remove(free_head, next_block);
+        block.capacity += 32 + next_block.capacity;
+        block.next = next_block.next;
+        if (deref tail == next_block) {
+            deref tail = block;
         }
+    }
+
+    if (previous != null && previous.requested == 0
+        && (previous as u64) + 32 + previous.capacity == block as u64) {
+        previous.capacity += 32 + block.capacity;
+        previous.next = block.next;
+        if (deref tail == block) {
+            deref tail = previous;
+        }
+    } else {
+        free_list_insert(free_head, block);
     }
     return 0;
 }
