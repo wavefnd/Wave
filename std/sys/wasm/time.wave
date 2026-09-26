@@ -48,7 +48,7 @@ pub fun clock_gettime(clock_id: i32, tp: ptr<TimeSpec>) -> i64 {
     var timestamp: u64 = 0;
     var error: u16 = wasi_clock_time_get(clock_id as u32, 1, &timestamp);
     if (error != 0) { return -(error as i64); }
-    if (timestamp > 9223372036854775807) { return -75; }
+    // Split unsigned nanoseconds first: both fields fit i64 even at u64::MAX.
     deref tp.sec = (timestamp / 1000000000) as i64;
     deref tp.nsec = (timestamp % 1000000000) as i64;
     return 0;

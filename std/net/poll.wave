@@ -39,7 +39,19 @@ fun _net_poll_fd(fd: i64, events: i16) -> PollFd {
     return PollFd { fd: fd as i32, events: events, revents: 0 };
 }
 
+// Generic POSIX poll may disable negative entries, but a single-descriptor
+// wait must reject them. Winsock handles retain their own provider contract.
+#[target(os="linux")]
+const NET_POLL_POSIX: bool = true;
+#[target(os="macos")]
+const NET_POLL_POSIX: bool = true;
+#[target(os="freebsd")]
+const NET_POLL_POSIX: bool = true;
+#[target(os="windows")]
+const NET_POLL_POSIX: bool = false;
+
 pub fun net_wait_readable(fd: i64, timeout_ms: i32) -> i64 {
+    if (NET_POLL_POSIX && fd < 0) { return -9; }
     var descriptor: PollFd = _net_poll_fd(fd, NET_POLLIN);
     var result: i64 = net_poll(&descriptor, 1, timeout_ms);
     if (result <= 0) { return result; }
@@ -56,6 +68,7 @@ pub fun net_wait_readable(fd: i64, timeout_ms: i32) -> i64 {
 }
 
 pub fun net_wait_writable(fd: i64, timeout_ms: i32) -> i64 {
+    if (NET_POLL_POSIX && fd < 0) { return -9; }
     var descriptor: PollFd = _net_poll_fd(fd, NET_POLLOUT);
     var result: i64 = net_poll(&descriptor, 1, timeout_ms);
     if (result <= 0) { return result; }

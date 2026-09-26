@@ -79,6 +79,8 @@ pub fun path_ext_start(path: str) -> i32 {
     var dot: i32 = -1;
 
     var end: i32 = base + path_basename_len(path);
+    // A parent component is not a filename with an empty extension.
+    if (end - base == 2 && path[base] == 46 && path[base + 1] == 46) { return -1; }
     while (i < end) {
         if (path[i] == 46) {
             dot = i;

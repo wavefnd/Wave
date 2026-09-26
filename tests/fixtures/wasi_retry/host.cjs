@@ -75,5 +75,17 @@ const fs = require('node:fs');
     assert.equal(instance.exports.raw_sleep_ns(-1n), -28n);
     clockError = 29;
     assert.equal(instance.exports.sleep_ns(100n), -29n);
-    console.log('WASI retry and deadline cases passed');
+    assert.equal(instance.exports.clock_read(1, 0, 0), -29n);
+    clockError = 0;
+    for (const timestamp of [0n, (1n << 63n) - 1n, 1n << 63n, (1n << 64n) - 1n]) {
+        times = [timestamp, timestamp];
+        assert.equal(instance.exports.clock_read(1, 0, 0), timestamp / 1000000000n);
+        assert.equal(instance.exports.clock_read(1, 1, 0), timestamp % 1000000000n);
+        assert.equal(times.length, 0);
+    }
+    times = [];
+    assert.equal(instance.exports.clock_read(1, 0, 1), -22n);
+    assert.equal(instance.exports.clock_read(-1, 0, 0), -22n);
+    assert.equal(instance.exports.clock_read(4, 0, 0), -22n);
+    console.log('WASI retry, deadline and full timestamp range cases passed');
 })().catch(error => { console.error(error); process.exitCode = 1; });

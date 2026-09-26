@@ -348,6 +348,7 @@ fn webassembly_runtime_is_freestanding_and_wasi_retries_preserve_errors() {
                     "close_fd",
                     "sleep_ns",
                     "raw_sleep_ns",
+                    "clock_read",
                 ] {
                     linker.arg(format!("--export={name}"));
                 }

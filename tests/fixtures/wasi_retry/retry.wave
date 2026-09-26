@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 import("std::io::fd")::{io_read_exact, io_write_all, io_close};
 import("std::time::sleep")::{time_sleep_ns};
-import("std::sys::time")::{TimeSpec, nanosleep};
+import("std::sys::time")::{TimeSpec, nanosleep, clock_gettime};
 export(c) fun read_bytes() -> i64 {
     var buffer: array<u8, 8>;
     return io_read_exact(0, &buffer[0], 8);
@@ -17,4 +17,16 @@ export(c) fun raw_sleep_ns(ns: i64) -> i64 {
     var result: i64 = nanosleep(&request, &request);
     if (result != -27) { return result; }
     return request.sec * 1000000000 + request.nsec;
+}
+
+export(c) fun clock_read(clock: i32, field: i32, null_output: bool) -> i64 {
+    if (null_output) { return clock_gettime(clock, null); }
+    var value: TimeSpec = TimeSpec { sec: -123, nsec: -456 };
+    var status: i64 = clock_gettime(clock, &value);
+    if (status != 0) {
+        if (value.sec != -123 || value.nsec != -456) { return 1; }
+        return status;
+    }
+    if (field == 0) { return value.sec; }
+    return value.nsec;
 }

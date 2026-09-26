@@ -30,6 +30,7 @@ import("std::path::analyze")::{
 };
 
 pub fun path_join2(dst: ptr<u8>, dst_cap: i32, left: str, right: str) -> i32 {
+    if (dst == null || dst_cap <= 0) { return -1; }
     var ll: i32 = path_len(left);
     var rl: i32 = path_len(right);
 
@@ -45,11 +46,10 @@ pub fun path_join2(dst: ptr<u8>, dst_cap: i32, left: str, right: str) -> i32 {
         }
     }
 
+    // Compare against remaining capacity before adding lengths.
+    if (ll >= dst_cap || rl >= dst_cap - ll) { return -1; }
+    if (need_sep >= dst_cap - ll - rl) { return -1; }
     var total: i32 = ll + rl + need_sep;
-
-    if (total + 1 > dst_cap) {
-        return -1;
-    }
 
     var k: i32 = 0;
     while (k < ll) {
@@ -75,10 +75,11 @@ pub fun path_join2(dst: ptr<u8>, dst_cap: i32, left: str, right: str) -> i32 {
 }
 
 pub fun path_basename_copy(dst: ptr<u8>, dst_cap: i32, path: str) -> i32 {
+    if (dst == null || dst_cap <= 0) { return -1; }
     var start: i32 = path_basename_start(path);
     var n: i32 = path_basename_len(path);
 
-    if (n + 1 > dst_cap) {
+    if (n >= dst_cap) {
         return -1;
     }
 
@@ -95,6 +96,7 @@ pub fun path_basename_copy(dst: ptr<u8>, dst_cap: i32, path: str) -> i32 {
 }
 
 pub fun path_dirname_copy(dst: ptr<u8>, dst_cap: i32, path: str) -> i32 {
+    if (dst == null || dst_cap <= 0) { return -1; }
     var n: i32 = path_dirname_len(path);
     var output_len: i32 = n;
     if (output_len == 0) {

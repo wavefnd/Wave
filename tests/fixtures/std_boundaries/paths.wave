@@ -1,0 +1,41 @@
+// SPDX-License-Identifier: MPL-2.0
+import("std::path::copy")::{path_join2, path_basename_copy, path_dirname_copy};
+import("std::path::analyze")::{path_ext_start, path_has_ext};
+fun unchanged(p: ptr<u8>) -> bool {
+    var i: i32 = 0;
+    while (i < 16) { if (p[i] != 165) { return false; } i += 1; }
+    return true;
+}
+fun main() -> i32 {
+    var buffer: array<u8, 16>;
+    var i: i32 = 0;
+    while (i < 16) { buffer[i] = 165; i += 1; }
+    if (path_join2(null, 8, "a", "b") != -1 || path_basename_copy(null, 8, "a") != -1 || path_dirname_copy(null, 8, "a") != -1) { return 1; }
+    var caps: array<i32, 3> = [-2147483648, -1, 0];
+    i = 0;
+    while (i < 3) {
+        if (path_join2(&buffer[1], caps[i], "", "") != -1 || path_basename_copy(&buffer[1], caps[i], "") != -1 || path_dirname_copy(&buffer[1], caps[i], "") != -1) { return 2; }
+        if (!unchanged(&buffer[0])) { return 3; }
+        i += 1;
+    }
+    if (path_join2(&buffer[1], 3, "a", "b") != -1 || path_basename_copy(&buffer[1], 1, "a/b/") != -1 || path_dirname_copy(&buffer[1], 1, "a/b") != -1) { return 4; }
+    if (!unchanged(&buffer[0])) { return 5; }
+    if (path_join2(&buffer[1], 4, "a", "b") != 3 || buffer[1] != 97 || buffer[2] != 47 || buffer[3] != 98 || buffer[4] != 0 || buffer[0] != 165 || buffer[5] != 165) { return 6; }
+    if (path_basename_copy(&buffer[1], 2, "a/b/") != 1 || buffer[1] != 98 || buffer[2] != 0) { return 7; }
+    if (path_dirname_copy(&buffer[1], 2, "a/b") != 1 || buffer[1] != 97 || buffer[2] != 0) { return 8; }
+    if (path_basename_copy(&buffer[1], 1, "/") != 0 || buffer[1] != 0) { return 9; }
+    if (path_basename_copy(&buffer[1], 1, "") != 0 || buffer[1] != 0) { return 10; }
+    if (path_dirname_copy(&buffer[1], 2, "/") != 1 || buffer[1] != 47 || buffer[2] != 0) { return 11; }
+    if (path_dirname_copy(&buffer[1], 2, "") != 1 || buffer[1] != 46 || buffer[2] != 0) { return 12; }
+    if (path_join2(&buffer[1], 1, "", "") != 0 || buffer[1] != 0) { return 13; }
+    var no_ext: array<str, 9> = [".", "..", "dir/..", "dir/../", "dir/.", "dir/.//", ".gitignore", "plain", "dir\\..\\"];
+    i = 0;
+    while (i < 9) {
+        if (path_ext_start(no_ext[i]) != -1 || path_has_ext(no_ext[i])) { return 14 + i; }
+        i += 1;
+    }
+    if (path_ext_start("archive.tar.gz") != 11 || !path_has_ext("archive.tar.gz")) { return 24; }
+    if (path_ext_start("dir/.config.json/") != 11 || !path_has_ext("dir/.config.json/")) { return 25; }
+    if (path_ext_start("file.") != 4 || !path_has_ext("file.")) { return 26; }
+    return 0;
+}
