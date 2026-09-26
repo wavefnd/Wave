@@ -234,3 +234,42 @@ fn read_to_end_rejects_capacity_overflow_and_preserves_normal_growth() {
     fs::write(case.root.join("empty.bin"), []).unwrap();
     case.run(&source("tests/fixtures/boundaries/read_to_end.wave"));
 }
+#[test]
+#[cfg(windows)]
+fn empty_windows_event_set_returns_zero() {
+    let case = Case::new("empty-windows-event");
+
+    let path = case.root.join("empty_event.wave");
+
+    fs::write(
+        &path,
+        r#"
+import("std::sys::event")::{
+    NativeEvent, event_create, event_wait, event_close
+};
+
+fun main() -> i32 {
+    var handle: i64 = event_create(4);
+    if (handle < 0) { return 1; }
+
+    var events: array<NativeEvent, 4>;
+    var count: i64 = event_wait(handle, &events[0], 4, 0);
+
+    event_close(handle);
+
+    if (count != 0) { return 2; }
+    return 0;
+}
+"#,
+    )
+    .unwrap();
+
+    success(
+        case.command()
+            .arg("build")
+            .arg(&path)
+            .arg("--run")
+            .output()
+            .unwrap(),
+    );
+}
