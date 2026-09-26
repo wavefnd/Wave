@@ -1,12 +1,30 @@
-// Unix-domain sockets are intentionally unavailable through this Unix API.
-// Windows named pipes and AF_UNIX require separate Windows-native contracts.
+// Unix-domain sockets are supported on Windows via AF_UNIX for local IPC.
+// This provider supports pathname sockets only. Abstract sockets are not
+// available on Windows and remain unsupported.
 
-pub const AF_LOCAL: i32 = 1;
-pub const NATIVE_LOCAL_PATH_CAPACITY: i32 = 1;
+pub const AF_LOCAL: i32 = 16;
+pub const NATIVE_LOCAL_PATH_CAPACITY: i32 = 260;
 
 pub struct NativeLocalAddr {
-    unavailable: u8;
+    path: char;
+    path_len: u32;
 }
 
-pub fun native_local_addr(path: str, output: ptr<NativeLocalAddr>) -> i32 { return -95; }
-pub fun native_local_abstract(name: str, output: ptr<NativeLocalAddr>) -> i32 { return -95; }
+pub fun native_local_addr(path: str, output: ptr<NativeLocalAddr>) -> i32 {
+    if len(path) > NATIVE_LOCAL_PATH_CAPACITY {
+        return -95;
+    }
+    output.path = null_char;
+    output.path_len = 0;
+    for i in 0..len(path) {
+        output.path = path[i];
+        output.path_len = i + 1;
+    }
+    output.path = path[path.len];
+    output.path_len = len(path);
+    return 0;
+}
+
+pub fun native_local_abstract(name: str, output: ptr<NativeLocalAddr>) -> i32 {
+    return -95;
+}
