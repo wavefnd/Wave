@@ -19,7 +19,9 @@ from unittest.mock import patch
 from tools import case_manifest
 from tools.case_manifest import (
     MIN_CASES_PER_SUITE,
+    CaseManifest,
     CaseManifestError,
+    CaseTarget,
     _validate_case_layout,
     load_case_manifest,
 )
@@ -224,6 +226,48 @@ class CaseManifestTests(unittest.TestCase):
                 f"# non-ascii comment: 測試 é\n{contents}".encode("utf-8")
             )
             self.assertEqual(load_case_manifest(manifest), self.manifest)
+
+    def test_runtime_sources_include_eligible_generic_shared_cases(self):
+        eligible = "fun main() {}\n"
+        included = (
+            "shared/test1.wave",
+            "shared/test10.wave",
+            "shared/amd64/test1.wave",
+            "linux/amd64/test3.wave",
+        )
+        omitted = {
+            "shared/test2.wave": "// wave-test: mode=check\nfun main() {}\n",
+            "shared/test3.wave": "// wave-test: runner=server\nfun main() {}\n",
+            "shared/test4.wave": "// wave-test: stdin=hello\nfun main() {}\n",
+            "shared/test5.wave": "// wave-test: udp-input=true\nfun main() {}\n",
+            "shared/test6.wave": "// wave-test: expected-exit=1\nfun main() {}\n",
+            "shared/test7.wave": eligible,
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for relative in (*included, *omitted):
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(omitted.get(relative, eligible), encoding="utf-8")
+
+            target = CaseTarget(
+                id="linux-amd64",
+                os="linux",
+                arch="amd64",
+                suite="linux/amd64",
+                status="supported",
+                enabled=True,
+                ci=True,
+                executor="native",
+                suites=("shared", "shared/amd64", "linux/amd64"),
+                exclude=("shared/test7.wave",),
+            )
+            manifest = CaseManifest(version=2, targets=(target,))
+            with patch.object(case_manifest, "CASES_ROOT", root):
+                sources = manifest.runtime_sources("linux-amd64")
+
+        self.assertEqual(sources, included)
+        self.assertEqual(len(sources), len(set(sources)))
 
     def test_invalid_utf8_manifest_reports_path_in_case_manifest_error(self):
         with tempfile.TemporaryDirectory() as temporary:
