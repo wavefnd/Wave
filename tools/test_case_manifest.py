@@ -269,6 +269,40 @@ class CaseManifestTests(unittest.TestCase):
         self.assertEqual(sources, included)
         self.assertEqual(len(sources), len(set(sources)))
 
+    def test_runtime_sources_respect_wasm_shared_exclusions(self):
+        eligible = "fun main() {}\n"
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            for relative in (
+                "shared/test1.wave",
+                "shared/wasm32/test1.wave",
+                "wasm/wasm32/test1.wave",
+            ):
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(eligible, encoding="utf-8")
+
+            target = CaseTarget(
+                id="wasm-unknown",
+                os="wasm",
+                arch="wasm32",
+                suite="wasm/wasm32",
+                status="supported",
+                enabled=True,
+                ci=True,
+                executor="wasm",
+                suites=("shared", "shared/wasm32", "wasm/wasm32"),
+                exclude=("shared/test1.wave",),
+            )
+            manifest = CaseManifest(version=2, targets=(target,))
+            with patch.object(case_manifest, "CASES_ROOT", root):
+                sources = manifest.runtime_sources("wasm-unknown")
+
+        self.assertEqual(
+            sources,
+            ("shared/wasm32/test1.wave", "wasm/wasm32/test1.wave"),
+        )
+
     def test_invalid_utf8_manifest_reports_path_in_case_manifest_error(self):
         with tempfile.TemporaryDirectory() as temporary:
             manifest = Path(temporary) / "cases.toml"
