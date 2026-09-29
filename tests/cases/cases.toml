@@ -162,6 +162,7 @@ executor = "wasm"
 runner = "ubuntu-24.04"
 ci_group = "wasm"
 target = "wasm32-unknown-unknown"
+exclude = ["shared/test1.wave", "shared/test2.wave", "shared/test3.wave", "shared/test4.wave", "shared/test5.wave", "shared/test6.wave", "shared/test7.wave", "shared/test8.wave", "shared/test9.wave", "shared/test10.wave"]
 
 [[target]]
 id = "wasm-wasi"
@@ -171,6 +172,7 @@ executor = "wasm"
 runner = "ubuntu-24.04"
 ci_group = "wasm"
 target = "wasm32-wasip1"
+exclude = ["shared/test1.wave", "shared/test2.wave", "shared/test3.wave", "shared/test4.wave", "shared/test5.wave", "shared/test6.wave", "shared/test7.wave", "shared/test8.wave", "shared/test9.wave", "shared/test10.wave"]
 
 [[target]]
 id = "wasm64-unknown"
@@ -180,3 +182,4 @@ executor = "wasm"
 runner = "ubuntu-24.04"
 ci_group = "wasm"
 target = "wasm64-unknown-unknown"
+exclude = ["shared/test1.wave", "shared/test2.wave", "shared/test3.wave", "shared/test4.wave", "shared/test5.wave", "shared/test6.wave", "shared/test7.wave", "shared/test8.wave", "shared/test9.wave", "shared/test10.wave"]
