@@ -1337,6 +1337,7 @@ def main():
     else:
         print("Unknown command:", cmd)
         print("Usage: x.py [install | build | package | release | clean | gui] [target...]")
+        sys.exit(1)
 
 if __name__ == "__main__":
     main()
