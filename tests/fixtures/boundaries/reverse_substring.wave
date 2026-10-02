@@ -1,0 +1,28 @@
+// #716: reverse substring search returns the last byte offset.
+import("std::string::find")::{find, count, rfind, rfind_char};
+
+fun main() -> i32 {
+    if (rfind("", "") != 0 || rfind("", "a") != -1) { return 1; }
+    if (rfind("abc", "") != 3) { return 2; }
+    if (rfind("ababa", "aba") != 2 || rfind("aaaa", "aa") != 2) { return 3; }
+    if (rfind("route/end", "end") != 6 || rfind("abc", "abc") != 0) { return 4; }
+    if (rfind("abc", "a") != 0 || rfind("banana", "a") != 5) { return 5; }
+    if (rfind("abc", "abcd") != -1 || rfind("abc", "x") != -1 || rfind("aaaab", "aac") != -1) { return 6; }
+    if (rfind("é/猫/é", "é") != 7 || rfind("é/猫/é", "猫") != 3 || rfind("é/猫/é", "/") != 6) { return 7; }
+    if (rfind("é/猫/é", "") != 9 || rfind("é/猫/é", "é/") != 0) { return 8; }
+
+    var s: array<u8, 7> = [97, 98, 97, 98, 97, 0, 19];
+    var needle: array<u8, 5> = [97, 98, 97, 0, 23];
+    if (rfind(&s[0] as str, &needle[0] as str) != 2) { return 9; }
+    if (s[0] != 97 || s[1] != 98 || s[2] != 97 || s[3] != 98 || s[4] != 97 || s[5] != 0 || s[6] != 19) { return 10; }
+    if (needle[0] != 97 || needle[1] != 98 || needle[2] != 97 || needle[3] != 0 || needle[4] != 23) { return 11; }
+    var terminated: array<u8, 5> = [97, 0, 98, 97, 0];
+    if (rfind(&terminated[0] as str, "a") != 0 || rfind(&terminated[0] as str, "b") != -1) { return 12; }
+    if (rfind(&terminated[0] as str, "") != 1) { return 13; }
+
+    // Existing forward, count and reverse-byte contracts stay unchanged.
+    if (find("ababa", "aba") != 0 || find("abc", "") != 0) { return 14; }
+    if (count("aaaa", "aa") != 2 || count("abc", "") != 0) { return 15; }
+    if (rfind_char("banana", 97) != 5 || rfind_char("abc", 0) != -1) { return 16; }
+    return 0;
+}

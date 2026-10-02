@@ -16,6 +16,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import("std::string::len")::{len};
+
 pub fun find_char(s: str, c: u8) -> i32 {
     var i: i32 = 0;
 
@@ -107,6 +109,49 @@ pub fun find(s: str, needle: str) -> i32 {
         }
 
         i += 1;
+    }
+
+    return -1;
+}
+
+// Return the last matching byte offset, or -1. An empty needle matches the end.
+// Inputs are NUL-terminated strings; neither is modified and nothing is allocated.
+pub fun rfind(s: str, needle: str) -> i32 {
+    var sl: i32 = len(s);
+    var nl: i32 = len(needle);
+
+    if (nl > sl) {
+        return -1;
+    }
+
+    if (nl == 0) {
+        return sl;
+    }
+
+    var i: i32 = sl - nl;
+    while (true) {
+        var j: i32 = 0;
+        var ok: bool = true;
+
+        while (j < nl) {
+            var idx: i32 = i + j;
+            if (s[idx] != needle[j]) {
+                ok = false;
+                j = nl;
+            } else {
+                j += 1;
+            }
+        }
+
+        if (ok) {
+            return i;
+        }
+
+        if (i == 0) {
+            return -1;
+        }
+
+        i -= 1;
     }
 
     return -1;

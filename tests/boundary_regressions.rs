@@ -280,3 +280,9 @@ fun main() -> i32 {
 fn ascii_insensitive_equality_preserves_bytes_and_nul_boundaries() {
     shared(139);
 }
+
+#[test]
+fn reverse_substring_search_preserves_boundaries_and_byte_offsets() {
+    let case = Case::new("reverse-substring");
+    case.run(&source("tests/fixtures/boundaries/reverse_substring.wave"));
+}
