@@ -275,3 +275,8 @@ fun main() -> i32 {
             .unwrap(),
     );
 }
+
+#[test]
+fn ascii_insensitive_equality_preserves_bytes_and_nul_boundaries() {
+    shared(139);
+}

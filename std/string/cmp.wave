@@ -16,6 +16,8 @@
 //
 // SPDX-License-Identifier: Apache-2.0
 
+import("std::string::ascii")::{to_lower};
+
 pub fun eq(a: str, b: str) -> bool {
     var i: i32 = 0;
 
@@ -24,6 +26,29 @@ pub fun eq(a: str, b: str) -> bool {
         var cb: u8 = b[i];
 
         if (ca != cb) {
+            return false;
+        }
+
+        if (ca == 0) {
+            return true;
+        }
+
+        i += 1;
+    }
+
+    return true;
+}
+
+// Compare NUL-terminated strings, folding only ASCII A-Z.
+// Other bytes compare exactly; neither input is modified and nothing is allocated.
+pub fun eq_ignore_ascii_case(a: str, b: str) -> bool {
+    var i: i32 = 0;
+
+    while (true) {
+        var ca: u8 = a[i];
+        var cb: u8 = b[i];
+
+        if (to_lower(ca) != to_lower(cb)) {
             return false;
         }
 

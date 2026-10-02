@@ -1,5 +1,5 @@
 import("std::string::ascii")::{is_alnum, to_lower, to_upper};
-import("std::string::cmp")::{ends_with, eq, starts_with};
+import("std::string::cmp")::{ends_with, eq, eq_ignore_ascii_case, starts_with};
 import("std::string::find")::{count_char, find_char};
 import("std::string::hash")::{djb2_32, fnv1a_64};
 import("std::string::len")::{is_empty, len};
@@ -14,6 +14,7 @@ fun main() {
     println("starts with Wave: {}", starts_with(text, "Wave"));
     println("ends with language: {}", ends_with(text, "language"));
     println("equal to Wave: {}", eq(text, "Wave"));
+    println("ASCII equal to WAVE LANGUAGE: {}", eq_ignore_ascii_case(text, "WAVE LANGUAGE"));
     println("first a: {}", find_char(text, 97));
     println("number of a bytes: {}", count_char(text, 97));
     println("trim range: {}..{}", trim_left_index(padded), trim_right_index(padded));

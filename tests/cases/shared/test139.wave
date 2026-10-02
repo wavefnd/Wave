@@ -1,0 +1,39 @@
+// #715: ASCII equality preserves all other bytes and NUL boundaries.
+import("std::string::cmp")::{eq, eq_ignore_ascii_case};
+
+fun main() -> i32 {
+    if (!eq_ignore_ascii_case("", "")) { return 1; }
+    if (eq_ignore_ascii_case("", "a") || eq_ignore_ascii_case("a", "")) { return 2; }
+    if (!eq_ignore_ascii_case("WaVe language", "wAvE LANGUAGE")) { return 3; }
+    if (!eq_ignore_ascii_case("ABCDEFGHIJKLMNOPQRSTUVWXYZ", "abcdefghijklmnopqrstuvwxyz")) { return 4; }
+    if (eq_ignore_ascii_case("Wave", "Waves") || eq_ignore_ascii_case("Waves", "Wave")) { return 5; }
+    if (eq_ignore_ascii_case("abc", "abd")) { return 6; }
+    if (eq_ignore_ascii_case("[", "{") || eq_ignore_ascii_case("@", "`")) { return 7; }
+    if (eq("Wave", "wave") || !eq("Wave", "Wave")) { return 8; }
+
+    var a: array<u8, 4> = [65, 0, 17, 19];
+    var b: array<u8, 4> = [97, 0, 23, 29];
+    if (!eq_ignore_ascii_case(&a[0] as str, &b[0] as str)) { return 9; }
+    if (a[0] != 65 || b[0] != 97 || a[2] != 17 || b[2] != 23) { return 10; }
+
+    // Exhaust all non-NUL byte pairs against an independent range-based oracle.
+    var left: array<u8, 2> = [0, 0];
+    var right: array<u8, 2> = [0, 0];
+    var x: i32 = 1;
+    while (x < 256) {
+        var y: i32 = 1;
+        while (y < 256) {
+            left[0] = x as u8;
+            right[0] = y as u8;
+            var expected: bool = x == y;
+            if (x >= 65 && x <= 90 && y == x + 32) { expected = true; }
+            if (y >= 65 && y <= 90 && x == y + 32) { expected = true; }
+            var actual: bool = eq_ignore_ascii_case(&left[0] as str, &right[0] as str);
+            if ((actual && !expected) || (!actual && expected)) { return 11; }
+            if (left[0] != x as u8 || right[0] != y as u8) { return 12; }
+            y += 1;
+        }
+        x += 1;
+    }
+    return 0;
+}
