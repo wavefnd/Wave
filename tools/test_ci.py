@@ -20,6 +20,20 @@ from tools.ci import common, targets, build, package, release, test as ci_test
 
 
 class PlatformSmokeTests(unittest.TestCase):
+    def test_windows_object_reports_compiler_failure_even_with_existing_artifact(self):
+        with tempfile.TemporaryDirectory() as directory:
+            artifact = Path(directory) / "default-object" / "test1.o"
+            artifact.parent.mkdir()
+            artifact.write_bytes(b"\x64\xaa")
+            runner = SimpleNamespace(
+                target=targets.resolve("windows-arm64"),
+                temp=Path(directory),
+                run=Mock(side_effect=RuntimeError("command exited 1, expected 0")),
+            )
+            with patch.object(ci_test, "compiler", return_value=Path("wavec.exe")):
+                with self.assertRaisesRegex(RuntimeError, "command exited 1"):
+                    ci_test.windows_object(runner, {"explicit": False})
+
     def test_cross_package_smoke_passes_linker_sysroot_in_isolated_environment(self):
         from tools.ci.llvm_bundle import MACHINES
 
