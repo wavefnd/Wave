@@ -119,6 +119,18 @@ Notes:
 - Wave language corpus / std examples are checked with `tools/check_wave_corpus.py`
   after a release `wavec` build.
 
+When tracing a CI check, follow its operation from the plan to its handler:
+[`tools/ci/procedures.json`](tools/ci/procedures.json) names an operation,
+[`tools/ci/common.py`](tools/ci/common.py) dispatches it to a handler such as
+[`windows_object`](tools/ci/test.py#L320), and command handlers use
+[`Runner.run`](tools/ci/common.py#L236). `Runner.run` records the command result
+and raises if its exit status differs from the expected status; the handler
+continues to artifact checks only after that command succeeds. For example,
+the Windows ARM64 object-output procedure calls `windows_object`, which runs
+the compiler before reading `test1.o`. If a check’s failure or artifact seems
+misleading, inspect both the handler and `Runner.run`, then look for regression
+tests in [`tools/test_ci.py`](tools/test_ci.py).
+
 Case runner JSON reports (`tools/run_tests.py --report-json PATH`) use
 `schema_version: 1`. `selection.mode` distinguishes automatic native selection
 (`auto`), an explicit manifest target (`target`), and explicit suites (`suites`).
