@@ -91,21 +91,16 @@ pub(super) fn infer_binary_type(
 
     let left_pointer = left_canonical.as_ref().is_some_and(is_pointer_like_type);
     let right_pointer = right_canonical.as_ref().is_some_and(is_pointer_like_type);
-    let left_integer = left_canonical
-        .as_ref()
-        .is_some_and(|ty| integer_bit_width(ty).is_some());
-    let right_integer = right_canonical
-        .as_ref()
-        .is_some_and(|ty| integer_bit_width(ty).is_some());
+    let left_integer = left_canonical.as_ref().is_some_and(|ty| integer_bit_width(ty).is_some());
+    let right_integer = right_canonical.as_ref().is_some_and(|ty| integer_bit_width(ty).is_some());
     let left_numeric = left_canonical.as_ref().is_some_and(is_numeric_type);
     let right_numeric = right_canonical.as_ref().is_some_and(is_numeric_type);
 
     if let (ExpressionType::Known(left_known), ExpressionType::Known(right_known)) = (&left, &right)
     {
-        if let (WaveType::Float(left_bits), WaveType::Float(right_bits)) = (
-            program.canonical_type(left_known),
-            program.canonical_type(right_known),
-        ) {
+        if let (WaveType::Float(left_bits), WaveType::Float(right_bits)) =
+            (program.canonical_type(left_known), program.canonical_type(right_known))
+        {
             if left_bits != right_bits {
                 return Err(format!(
                     "mixed float widths require an explicit cast: found `f{}` and `f{}`",
@@ -124,20 +119,16 @@ pub(super) fn infer_binary_type(
 
     if left_pointer || right_pointer {
         let valid = match (left_pointer, right_pointer) {
-            (true, true) => matches!(
-                operator,
-                Operator::Equal | Operator::NotEqual | Operator::Subtract
-            ),
+            (true, true) => {
+                matches!(operator, Operator::Equal | Operator::NotEqual | Operator::Subtract)
+            },
             (true, false) if right_integer => matches!(
                 operator,
                 Operator::Add | Operator::Subtract | Operator::Equal | Operator::NotEqual
             ),
             (false, true) if left_integer => {
-                matches!(
-                    operator,
-                    Operator::Add | Operator::Equal | Operator::NotEqual
-                )
-            }
+                matches!(operator, Operator::Add | Operator::Equal | Operator::NotEqual)
+            },
             _ => false,
         };
         if !valid {
@@ -255,12 +246,12 @@ pub(super) fn contextual_integer_expression(
             if integer_bit_width(&program.canonical_type(ty)).is_some() =>
         {
             right
-        }
+        },
         (ExpressionType::Known(ty), ExpressionType::IntLiteral(_))
             if integer_bit_width(&program.canonical_type(ty)).is_some() =>
         {
             left
-        }
+        },
         _ => wider_integer_expression(program, left, right),
     }
 }
@@ -304,7 +295,7 @@ pub(super) fn integer_literal_fits(raw: &str, ty: &WaveType) -> bool {
                 // Non-decimal literals may spell the full-width bit pattern.
                 bit_len <= bits
             }
-        }
+        },
         WaveType::Uint(bits) if *bits > 0 => !negative && bit_len <= usize::from(*bits),
         WaveType::Char | WaveType::Byte => !negative && bit_len <= 8,
         _ => false,
@@ -313,11 +304,7 @@ pub(super) fn integer_literal_fits(raw: &str, ty: &WaveType) -> bool {
 
 pub(super) fn integer_literal_parts(raw: &str) -> Option<(bool, u32, String)> {
     let n = lexer::number::IntegerLiteral::parse(raw)?;
-    Some((
-        n.negative,
-        n.radix,
-        n.digits.trim_start_matches('0').to_string(),
-    ))
+    Some((n.negative, n.radix, n.digits.trim_start_matches('0').to_string()))
 }
 
 pub(super) fn unsigned_literal_bit_len(radix: u32, digits: &str) -> Option<usize> {
@@ -331,7 +318,7 @@ pub(super) fn unsigned_literal_bit_len(radix: u32, digits: &str) -> Option<usize
             let first = digits.chars().next()?.to_digit(radix)?;
             let first_bits = (u32::BITS - first.leading_zeros()) as usize;
             Some((digits.len() - 1) * bits_per_digit + first_bits)
-        }
+        },
         10 => {
             let mut decimal: Vec<u8> = digits.bytes().map(|byte| byte - b'0').collect();
             let mut bits = 0usize;
@@ -345,7 +332,7 @@ pub(super) fn unsigned_literal_bit_len(radix: u32, digits: &str) -> Option<usize
                 bits = bits.checked_add(1)?;
             }
             Some(bits)
-        }
+        },
         _ => None,
     }
 }
@@ -394,10 +381,7 @@ pub(super) fn unsigned_is_power_of_two(radix: u32, digits: &str) -> bool {
 }
 
 pub(super) fn is_integer_type(ty: &WaveType) -> bool {
-    matches!(
-        ty,
-        WaveType::Int(_) | WaveType::Uint(_) | WaveType::Char | WaveType::Byte
-    )
+    matches!(ty, WaveType::Int(_) | WaveType::Uint(_) | WaveType::Char | WaveType::Byte)
 }
 
 pub(super) fn integer_bit_width(ty: &WaveType) -> Option<u16> {
@@ -418,10 +402,7 @@ pub(super) fn is_pointer_like_type(ty: &WaveType) -> bool {
 }
 
 pub(super) fn is_byte_like_type(ty: &WaveType) -> bool {
-    matches!(
-        ty,
-        WaveType::Int(8) | WaveType::Uint(8) | WaveType::Char | WaveType::Byte
-    )
+    matches!(ty, WaveType::Int(8) | WaveType::Uint(8) | WaveType::Char | WaveType::Byte)
 }
 
 pub(super) fn require_assignable(
@@ -521,7 +502,7 @@ pub(super) fn is_assignable(
         ExpressionType::IntLiteral(raw) => {
             integer_literal_fits(raw, &expected)
                 || (matches!(expected, WaveType::Pointer(_)) && int_literal_is_zero(raw))
-        }
+        },
         ExpressionType::FloatLiteral => matches!(expected, WaveType::Float(_)),
         ExpressionType::Known(actual) => {
             if program.is_generic_placeholder(actual) {
@@ -538,16 +519,16 @@ pub(super) fn is_assignable(
                         && integer_bit_width(expected).is_some() =>
                 {
                     integer_bit_width(actual) <= integer_bit_width(expected)
-                }
+                },
                 (WaveType::Int(_) | WaveType::Uint(_), WaveType::Float(_))
                 | (WaveType::Float(_), WaveType::Int(_) | WaveType::Uint(_)) => true,
                 (WaveType::String, WaveType::Pointer(inner)) => {
                     is_byte_like_type(inner.as_ref()) || matches!(inner.as_ref(), WaveType::String)
-                }
+                },
                 (WaveType::Pointer(actual), WaveType::Pointer(expected)) => actual == expected,
                 _ => false,
             }
-        }
+        },
     }
 }
 
@@ -570,10 +551,8 @@ pub(super) fn is_valid_cast(
     if matches!(source, ExpressionType::Null) {
         return matches!(target, WaveType::Pointer(_));
     }
-    if matches!(
-        source,
-        ExpressionType::ArrayLiteral(_) | ExpressionType::AddressedArrayLiteral(_)
-    ) {
+    if matches!(source, ExpressionType::ArrayLiteral(_) | ExpressionType::AddressedArrayLiteral(_))
+    {
         return false;
     }
 
@@ -618,11 +597,7 @@ mod tests {
             ("-128", WaveType::Int(8), true),
             ("-129", WaveType::Int(8), false),
             ("-1", WaveType::Uint(8), false),
-            (
-                "340282366920938463463374607431768211455",
-                WaveType::Uint(128),
-                true,
-            ),
+            ("340282366920938463463374607431768211455", WaveType::Uint(128), true),
         ] {
             assert_eq!(integer_literal_fits(raw, &ty), fits, "{raw} {ty:?}");
         }

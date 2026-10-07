@@ -34,7 +34,7 @@ pub fn split_top_level_generic_args(inner: &str) -> Option<Vec<String>> {
                 if depth < 0 {
                     return None;
                 }
-            }
+            },
             ',' if depth == 0 => {
                 let part = inner[start..i].trim();
                 if part.is_empty() {
@@ -42,8 +42,8 @@ pub fn split_top_level_generic_args(inner: &str) -> Option<Vec<String>> {
                 }
                 parts.push(part.to_string());
                 start = i + 1;
-            }
-            _ => {}
+            },
+            _ => {},
         }
     }
 
@@ -99,20 +99,18 @@ pub fn token_type_to_wave_type(token_type: &TokenType) -> Option<WaveType> {
         TokenType::TypeString => Some(WaveType::String),
         TokenType::TypePointer(inner) => {
             token_type_to_wave_type(inner).map(|t| WaveType::Pointer(Box::new(t)))
-        }
+        },
         TokenType::TypeArray(inner, size) => {
             token_type_to_wave_type(inner).map(|t| WaveType::Array(Box::new(t), *size))
-        }
+        },
         TokenType::TypeCustom(name) if name.starts_with("Future<") => {
             let inner = name.strip_prefix("Future<")?.strip_suffix('>')?;
             let args = split_top_level_generic_args(inner)?;
             if args.len() != 1 {
                 return None;
             }
-            Some(WaveType::Future(Box::new(token_type_to_wave_type(
-                &parse_type(&args[0])?,
-            )?)))
-        }
+            Some(WaveType::Future(Box::new(token_type_to_wave_type(&parse_type(&args[0])?)?)))
+        },
         TokenType::TypeCustom(name) => Some(WaveType::Struct(name.clone())),
         _ => None,
     }
@@ -198,7 +196,7 @@ pub fn parse_type(type_str: &str) -> Option<TokenType> {
         "char" => return Some(TokenType::TypeChar),
         "byte" => return Some(TokenType::TypeByte),
         "str" => return Some(TokenType::TypeString),
-        _ => {}
+        _ => {},
     }
     if let Some(prefix @ ('i' | 'u' | 'f')) = type_str.chars().next() {
         let suffix = &type_str[1..];
@@ -210,10 +208,10 @@ pub fn parse_type(type_str: &str) -> Option<TokenType> {
             return match prefix {
                 'i' if matches!(bits, 8 | 16 | 32 | 64 | 128 | 256 | 512 | 1024) => {
                     Some(TokenType::TypeInt(bits))
-                }
+                },
                 'u' if matches!(bits, 8 | 16 | 32 | 64 | 128 | 256 | 512 | 1024) => {
                     Some(TokenType::TypeUint(bits))
-                }
+                },
                 'f' if matches!(bits, 32 | 64) => Some(TokenType::TypeFloat(bits)),
                 _ => None,
             };
@@ -222,10 +220,7 @@ pub fn parse_type(type_str: &str) -> Option<TokenType> {
 
     if type_str.split("::").all(|segment| {
         !segment.is_empty()
-            && segment
-                .chars()
-                .next()
-                .is_some_and(|c| c.is_alphabetic() || c == '_')
+            && segment.chars().next().is_some_and(|c| c.is_alphabetic() || c == '_')
             && segment.chars().all(|c| c.is_alphanumeric() || c == '_')
     }) {
         return Some(TokenType::TypeCustom(type_str.to_string()));
@@ -244,10 +239,10 @@ pub fn validate_type(expected: &TokenType, actual: &TokenType) -> bool {
         (TokenType::TypeByte, TokenType::TypeByte) => true,
         (TokenType::TypePointer(inner1), TokenType::TypePointer(inner2)) => {
             validate_type(&**inner1, &**inner2) // Double dereference to get TokenType
-        }
+        },
         (TokenType::TypeArray(inner1, size1), TokenType::TypeArray(inner2, size2)) => {
             validate_type(&**inner1, &**inner2) && size1 == size2 // Double dereference to get TokenType
-        }
+        },
         (TokenType::TypeString, TokenType::TypeString) => true,
         _ => false,
     }
@@ -280,10 +275,7 @@ pub fn parse_type_from_stream<'a, T>(tokens: &mut Peekable<T>) -> Option<WaveTyp
 where
     T: Iterator<Item = &'a Token>,
 {
-    while matches!(
-        tokens.peek().map(|t| &t.token_type),
-        Some(TokenType::Whitespace)
-    ) {
+    while matches!(tokens.peek().map(|t| &t.token_type), Some(TokenType::Whitespace)) {
         tokens.next();
     }
 
@@ -291,16 +283,13 @@ where
 
     if let TokenType::Identifier(name) = &type_token.token_type {
         let mut name = name.clone();
-        while matches!(
-            tokens.peek().map(|token| &token.token_type),
-            Some(TokenType::DoubleColon)
-        ) {
+        while matches!(tokens.peek().map(|token| &token.token_type), Some(TokenType::DoubleColon)) {
             tokens.next();
             match tokens.next().map(|token| &token.token_type) {
                 Some(TokenType::Identifier(segment)) => {
                     name.push_str("::");
                     name.push_str(segment);
-                }
+                },
                 _ => return None,
             }
         }
@@ -312,10 +301,7 @@ where
             tokens.next();
         }
 
-        if matches!(
-            tokens.peek().map(|t| &t.token_type),
-            Some(TokenType::Lchevr)
-        ) {
+        if matches!(tokens.peek().map(|t| &t.token_type), Some(TokenType::Lchevr)) {
             tokens.next(); // consume '<'
 
             let inner = collect_generic_inner(tokens)?;
@@ -348,9 +334,7 @@ where
         Some(ty) => {
             *tokens = probe;
             Ok(ty)
-        }
-        None => Err(crate::parser::ParseError::expected_at(
-            anchor, anchor, "type", context,
-        )),
+        },
+        None => Err(crate::parser::ParseError::expected_at(anchor, anchor, "type", context)),
     }
 }

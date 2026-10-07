@@ -26,7 +26,7 @@ fn is_rooted_in_const(env: &ExprGenEnv<'_, '_>, expression: &Expression) -> bool
     match expression {
         Expression::Variable(name) => {
             !env.variables.contains_key(name) && env.global_consts.contains_key(name)
-        }
+        },
         Expression::Grouped(inner) => is_rooted_in_const(env, inner),
         Expression::FieldAccess { object, .. } => is_rooted_in_const(env, object),
         Expression::IndexAccess { target, .. } => is_rooted_in_const(env, target),
@@ -35,9 +35,7 @@ fn is_rooted_in_const(env: &ExprGenEnv<'_, '_>, expression: &Expression) -> bool
 }
 
 fn normalize_struct_name(raw: &str) -> &str {
-    raw.strip_prefix("struct.")
-        .unwrap_or(raw)
-        .trim_start_matches('%')
+    raw.strip_prefix("struct.").unwrap_or(raw).trim_start_matches('%')
 }
 
 pub(crate) fn try_gen_field_access<'ctx, 'a>(
@@ -70,17 +68,15 @@ pub(crate) fn try_gen_field_access<'ctx, 'a>(
                     )
                 });
 
-            Some(
-                env.builder
-                    .build_extract_value(value, field_index, "const.field")
-                    .unwrap_or_else(|error| {
-                        panic!(
-                            "typed HIR produced an invalid constant field projection '{}.{}': {}",
-                            struct_name, field, error
-                        )
-                    }),
-            )
-        }
+            Some(env.builder.build_extract_value(value, field_index, "const.field").unwrap_or_else(
+                |error| {
+                    panic!(
+                        "typed HIR produced an invalid constant field projection '{}.{}': {}",
+                        struct_name, field, error
+                    )
+                },
+            ))
+        },
         BasicValueEnum::PointerValue(pointer) => {
             let WaveType::Pointer(pointee) = env.wave_type(object).unwrap_or_else(|| {
                 panic!("typed HIR omitted the type of constant pointer field access")
@@ -114,7 +110,7 @@ pub(crate) fn try_gen_field_access<'ctx, 'a>(
                     .unwrap()
                     .as_basic_value_enum(),
             )
-        }
+        },
         other => panic!(
             "typed HIR allowed field access on a non-aggregate constant value: {:?}",
             other.get_type()
@@ -150,10 +146,7 @@ pub(crate) fn try_gen_index_access<'ctx, 'a>(
             // LLVM extractvalue requires a fixed immediate index. Keep dynamic
             // indexing value-only by materializing an internal temporary whose
             // address is never entered in the Wave variable environment.
-            let storage = env
-                .builder
-                .build_alloca(array_type, "const.array.storage")
-                .unwrap();
+            let storage = env.builder.build_alloca(array_type, "const.array.storage").unwrap();
             env.builder.build_store(storage, array).unwrap();
             let zero = env.context.i32_type().const_zero();
             let element_pointer = unsafe {
@@ -176,7 +169,7 @@ pub(crate) fn try_gen_index_access<'ctx, 'a>(
                     .unwrap()
                     .as_basic_value_enum(),
             )
-        }
+        },
         BasicValueEnum::PointerValue(pointer) => {
             let target_type = env.wave_type(target).unwrap_or_else(|| {
                 panic!("typed HIR omitted the type of constant pointer index access")
@@ -203,7 +196,7 @@ pub(crate) fn try_gen_index_access<'ctx, 'a>(
                                 .unwrap()
                         };
                         (array_type.get_element_type(), element_pointer)
-                    }
+                    },
                     element => {
                         let element_type = wave_type_to_llvm_type(
                             env.context,
@@ -222,7 +215,7 @@ pub(crate) fn try_gen_index_access<'ctx, 'a>(
                                 .unwrap()
                         };
                         (element_type, element_pointer)
-                    }
+                    },
                 },
                 WaveType::String => {
                     let element_type = env.context.i8_type().as_basic_type_enum();
@@ -237,11 +230,8 @@ pub(crate) fn try_gen_index_access<'ctx, 'a>(
                             .unwrap()
                     };
                     (element_type, element_pointer)
-                }
-                other => panic!(
-                    "constant pointer index access has unsupported type {:?}",
-                    other
-                ),
+                },
+                other => panic!("constant pointer index access has unsupported type {:?}", other),
             };
 
             Some(
@@ -250,7 +240,7 @@ pub(crate) fn try_gen_index_access<'ctx, 'a>(
                     .unwrap()
                     .as_basic_value_enum(),
             )
-        }
+        },
         other => panic!(
             "typed HIR allowed index access on a non-indexable constant value: {:?}",
             other.get_type()

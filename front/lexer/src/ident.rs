@@ -37,17 +37,11 @@ impl<'a> Lexer<'a> {
 
     pub(crate) fn keyword_or_ident_token(&self, ident: String) -> Token {
         match ident.as_str() {
-            "async" => Token {
-                token_type: TokenType::Async,
-                lexeme: ident,
-                line: self.line,
-                span: None,
+            "async" => {
+                Token { token_type: TokenType::Async, lexeme: ident, line: self.line, span: None }
             },
-            "await" => Token {
-                token_type: TokenType::Await,
-                lexeme: ident,
-                line: self.line,
-                span: None,
+            "await" => {
+                Token { token_type: TokenType::Await, lexeme: ident, line: self.line, span: None }
             },
             "fun" => Token {
                 token_type: TokenType::Fun,

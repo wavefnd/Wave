@@ -24,15 +24,8 @@ fn rejects_unterminated_and_unsupported_statements_at_every_depth() {
         "var x: i32 = asm { ? };",
     ] {
         for nested in [false, true] {
-            let body = if nested {
-                format!("if (true) {{ {body} }}")
-            } else {
-                body.into()
-            };
-            assert!(
-                syntax(&format!("fun main() {{ {body} }}")).is_err(),
-                "{body}"
-            );
+            let body = if nested { format!("if (true) {{ {body} }}") } else { body.into() };
+            assert!(syntax(&format!("fun main() {{ {body} }}")).is_err(), "{body}");
         }
     }
     assert!(syntax("fun main() { asm { \"nop\"").is_err());
@@ -57,22 +50,12 @@ fn expression_statements_have_the_same_grammar_in_all_blocks() {
 
 #[test]
 fn numeric_defaults_preserve_radix_and_large_values() {
-    for value in [
-        "0x10",
-        "0b10000",
-        "0o20",
-        "16",
-        "1_024",
-        "-0x10",
-        "18446744073709551616",
-    ] {
+    for value in ["0x10", "0b10000", "0o20", "16", "1_024", "-0x10", "18446744073709551616"] {
         let nodes = syntax(&format!(
             "fun value(x: i128 = {value}) -> i128 {{ return x; }} fun main() {{ value(); }}"
         ))
         .unwrap();
-        let ASTNode::Function(f) = &nodes[0] else {
-            panic!()
-        };
+        let ASTNode::Function(f) = &nodes[0] else { panic!() };
         assert!(matches!(
             &f.parameters[0].initial_value,
             Some(Expression::Literal(Literal::Int(_)))
@@ -102,10 +85,7 @@ fn numeric_defaults_preserve_radix_and_large_values() {
         "x: i32 y: i32",
         "x: i32 = unknown",
     ] {
-        assert!(
-            syntax(&format!("fun f({declaration}) {{}} ")).is_err(),
-            "{declaration}"
-        );
+        assert!(syntax(&format!("fun f({declaration}) {{}} ")).is_err(), "{declaration}");
     }
 }
 
@@ -145,30 +125,11 @@ fn target_sized_types_resolve_recursively_without_host_assumptions() {
     use hir::resolve_target_types;
     use parser::ast::WaveType;
     use parser::types::{parse_type, token_type_to_wave_type};
-    assert_eq!(
-        token_type_to_wave_type(&parse_type("isz").unwrap()),
-        Some(WaveType::Isz)
-    );
-    assert_eq!(
-        token_type_to_wave_type(&parse_type("usz").unwrap()),
-        Some(WaveType::Usz)
-    );
-    for invalid in [
-        "i0",
-        "i1",
-        "i24",
-        "u7",
-        "u2048",
-        "i9999999999999",
-        "f16",
-        "f128",
-        "i032",
-    ] {
+    assert_eq!(token_type_to_wave_type(&parse_type("isz").unwrap()), Some(WaveType::Isz));
+    assert_eq!(token_type_to_wave_type(&parse_type("usz").unwrap()), Some(WaveType::Usz));
+    for invalid in ["i0", "i1", "i24", "u7", "u2048", "i9999999999999", "f16", "f128", "i032"] {
         assert!(parse_type(invalid).is_none(), "{invalid}");
-        assert!(
-            syntax(&format!("fun f(x: {invalid}) {{}} ")).is_err(),
-            "{invalid}"
-        );
+        assert!(syntax(&format!("fun f(x: {invalid}) {{}} ")).is_err(), "{invalid}");
     }
     for name in ["item", "user", "file", "이름", "pkg::item"] {
         assert!(parse_type(name).is_some());
@@ -177,18 +138,13 @@ fn target_sized_types_resolve_recursively_without_host_assumptions() {
     for bits in [32, 64] {
         let mut nodes = syntax(source).unwrap();
         resolve_target_types(&mut nodes, bits).unwrap();
-        let ASTNode::Function(f) = &nodes[2] else {
-            panic!()
-        };
+        let ASTNode::Function(f) = &nodes[2] else { panic!() };
         assert_eq!(f.return_type, Some(WaveType::Int(bits)));
         assert_eq!(
             f.parameters[0].param_type,
             WaveType::Pointer(Box::new(WaveType::Array(Box::new(WaveType::Int(bits)), 2)))
         );
-        assert_eq!(
-            f.parameters[1].param_type,
-            WaveType::Struct(format!("Box<u{bits}>"))
-        );
+        assert_eq!(f.parameters[1].param_type, WaveType::Struct(format!("Box<u{bits}>")));
         TypedProgram::lower(monomorphize_generics(nodes).unwrap()).unwrap();
     }
 }
@@ -210,22 +166,16 @@ fn never_returning_functions_must_terminate_without_returning() {
         "fun bad() { var x: !; }",
         "type Bad = !;",
     ] {
-        assert!(
-            TypedProgram::lower(syntax(source).unwrap()).is_err(),
-            "{source}"
-        );
+        assert!(TypedProgram::lower(syntax(source).unwrap()).is_err(), "{source}");
     }
 }
 
 #[test]
 fn asm_operands_keep_casts_and_projections_instead_of_skipping_tokens() {
     let nodes = syntax("fun f() { asm { in(\"r\") p as i64 out(\"r\") value.field } }").unwrap();
-    let ASTNode::Function(f) = &nodes[0] else {
-        panic!()
-    };
-    let ASTNode::Statement(parser::ast::StatementNode::AsmBlock {
-        inputs, outputs, ..
-    }) = &f.body[0]
+    let ASTNode::Function(f) = &nodes[0] else { panic!() };
+    let ASTNode::Statement(parser::ast::StatementNode::AsmBlock { inputs, outputs, .. }) =
+        &f.body[0]
     else {
         panic!()
     };

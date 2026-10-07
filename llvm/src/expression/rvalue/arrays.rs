@@ -35,7 +35,7 @@ pub(crate) fn gen_array_literal<'ctx, 'a>(
                 "ArrayLiteral cannot use pointer expected_type on opaque-pointer LLVM. \
 Use a temp variable: `var tmp: array<T,N> = [...]; foo(tmp);`"
             );
-        }
+        },
 
         Some(t) => panic!("ArrayLiteral expected array type, got {:?}", t),
         None => panic!("ArrayLiteral requires expected_type (array type)"),
@@ -74,8 +74,5 @@ Use a temp variable: `var tmp: array<T,N> = [...]; foo(tmp);`"
         env.builder.build_store(gep, v).unwrap();
     }
 
-    env.builder
-        .build_load(arr_ty, alloca, "arr_lit_load")
-        .unwrap()
-        .as_basic_value_enum()
+    env.builder.build_load(arr_ty, alloca, "arr_lit_load").unwrap().as_basic_value_enum()
 }

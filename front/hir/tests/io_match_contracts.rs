@@ -3,9 +3,8 @@ use lexer::Lexer;
 use parser::{generics::monomorphize_generics, parse_syntax_with_spans};
 
 fn validate(source: &str) -> Result<TypedProgram, String> {
-    let tokens = Lexer::new_with_file(source, "contracts.wave")
-        .tokenize()
-        .map_err(|e| format!("{e:?}"))?;
+    let tokens =
+        Lexer::new_with_file(source, "contracts.wave").tokenize().map_err(|e| format!("{e:?}"))?;
     let ast = parse_syntax_with_spans(&tokens).map_err(|e| format!("{e:?}"))?;
     let ast = monomorphize_generics(ast)?;
     TypedProgram::lower(ast).map_err(|e| format!("{e:?}"))
@@ -19,10 +18,7 @@ fn format_checks_happen_before_backend_lowering() {
         (r#"fun main() { print("{d}", "text"); }"#, "incompatible"),
         (r#"fun main() { print("{p}", 12); }"#, "incompatible"),
         (r#"fun main() { print("{c}", 1.2); }"#, "incompatible"),
-        (
-            r#"fun main() { var n: i32 = 0; input("{x}", n); }"#,
-            "unsupported format placeholder",
-        ),
+        (r#"fun main() { var n: i32 = 0; input("{x}", n); }"#, "unsupported format placeholder"),
         (r#"fun main() { print("{} {}", 1); }"#, "arguments"),
         (r#"fun main() { println("{}", 1, 2); }"#, "arguments"),
     ] {
@@ -65,19 +61,14 @@ fn integer_patterns_are_range_checked_and_deduplicated_in_the_scrutinee_type() {
     )
     .unwrap();
     let pattern = format!("0x8{}", "0".repeat(255));
-    validate(&format!(
-        "fun f(n: u1024) {{ match (n) {{ {pattern} => {{}} _ => {{}} }} }}"
-    ))
-    .unwrap();
+    validate(&format!("fun f(n: u1024) {{ match (n) {{ {pattern} => {{}} _ => {{}} }} }}"))
+        .unwrap();
 }
 
 #[test]
 fn invalid_defaulted_method_arguments_are_still_rejected() {
     let prefix = "struct S { fun f(self: S, n: i32 = 1) -> i32 { return n; } }";
     for call in ["s.f(1, 2)", "s.f(\"bad\")"] {
-        assert!(validate(&format!(
-            "{prefix} fun main() {{ var s: S = S {{}}; {call}; }}"
-        ))
-        .is_err());
+        assert!(validate(&format!("{prefix} fun main() {{ var s: S = S {{}}; {call}; }}")).is_err());
     }
 }

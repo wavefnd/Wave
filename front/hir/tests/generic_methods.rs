@@ -4,9 +4,7 @@ use parser::generics::monomorphize_generics;
 use parser::{ast::ASTNode, parse_syntax_with_spans};
 
 fn specialize(source: &str) -> Result<Vec<ASTNode>, String> {
-    let tokens = Lexer::new_with_file(source, "methods.wave")
-        .tokenize()
-        .unwrap();
+    let tokens = Lexer::new_with_file(source, "methods.wave").tokenize().unwrap();
     monomorphize_generics(parse_syntax_with_spans(&tokens).unwrap())
 }
 
@@ -100,10 +98,7 @@ fn nested_method_receivers_have_resolved_hir_types() {
         panic!("result");
     };
     let expression = result.initial_value.as_ref().unwrap();
-    assert_eq!(
-        program.type_of(expression),
-        Some(&HirExpressionType::Resolved(WaveType::Int(32)))
-    );
+    assert_eq!(program.type_of(expression), Some(&HirExpressionType::Resolved(WaveType::Int(32))));
     let Expression::MethodCall { object, .. } = expression else {
         panic!("read call");
     };

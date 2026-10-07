@@ -60,28 +60,23 @@ impl ProgramTypes {
             }
             match node {
                 ASTNode::Function(function) => {
-                    out.generic_type_params
-                        .extend(function.generic_params.iter().cloned());
-                }
+                    out.generic_type_params.extend(function.generic_params.iter().cloned());
+                },
                 ASTNode::Struct(structure) => {
-                    out.generic_type_params
-                        .extend(structure.generic_params.iter().cloned());
+                    out.generic_type_params.extend(structure.generic_params.iter().cloned());
                     for method in &structure.methods {
-                        out.generic_type_params
-                            .extend(method.generic_params.iter().cloned());
+                        out.generic_type_params.extend(method.generic_params.iter().cloned());
                     }
-                }
+                },
                 ASTNode::Variant(variant) => {
-                    out.generic_type_params
-                        .extend(variant.generic_params.iter().cloned());
-                }
+                    out.generic_type_params.extend(variant.generic_params.iter().cloned());
+                },
                 ASTNode::ProtoImpl(implementation) => {
                     for method in &implementation.methods {
-                        out.generic_type_params
-                            .extend(method.generic_params.iter().cloned());
+                        out.generic_type_params.extend(method.generic_params.iter().cloned());
                     }
-                }
-                _ => {}
+                },
+                _ => {},
             }
         }
 
@@ -102,7 +97,7 @@ impl ProgramTypes {
                         function_type(function),
                     )
                     .map_err(|message| failure(message, Some(top_level_span_hint(node))))?;
-                }
+                },
                 ASTNode::ExternFunction(function) => {
                     insert_unique_value_name(&mut value_names, &function.name)
                         .map_err(|message| failure(message, Some(top_level_span_hint(node))))?;
@@ -119,7 +114,7 @@ impl ProgramTypes {
                         },
                     )
                     .map_err(|message| failure(message, Some(top_level_span_hint(node))))?;
-                }
+                },
                 ASTNode::Struct(structure) => {
                     let mut fields = HashMap::new();
                     for (name, ty) in &structure.fields {
@@ -158,7 +153,7 @@ impl ProgramTypes {
                             )
                         })?;
                     }
-                }
+                },
                 ASTNode::ProtoImpl(implementation) => {
                     for method in &implementation.methods {
                         let signature = function_type(method);
@@ -185,10 +180,10 @@ impl ProgramTypes {
                         insert_unique_function(&mut out.functions, &lowered, signature)
                             .map_err(|message| failure(message, Some(top_level_span_hint(node))))?;
                     }
-                }
+                },
                 ASTNode::TypeAlias(alias) => {
                     out.aliases.insert(alias.name.clone(), alias.target.clone());
-                }
+                },
                 ASTNode::Variable(variable)
                     if matches!(variable.mutability, Mutability::Const | Mutability::Static) =>
                 {
@@ -196,25 +191,20 @@ impl ProgramTypes {
                         .map_err(|message| failure(message, Some(top_level_span_hint(node))))?;
                     out.globals.insert(
                         variable.name.clone(),
-                        Binding {
-                            mutability: variable.mutability,
-                            ty: variable.type_name.clone(),
-                        },
+                        Binding { mutability: variable.mutability, ty: variable.type_name.clone() },
                     );
                     if matches!(variable.mutability, Mutability::Const) {
                         if let Some(Expression::Literal(Literal::Int(raw))) =
                             &variable.initial_value
                         {
                             if lexer::number::IntegerLiteral::parse(raw).is_some() {
-                                out.constant_values
-                                    .insert(variable.name.clone(), raw.clone());
+                                out.constant_values.insert(variable.name.clone(), raw.clone());
                             }
                         }
                     }
-                }
+                },
                 ASTNode::Enum(enumeration) => {
-                    out.enum_reprs
-                        .insert(enumeration.name.clone(), enumeration.repr_type.clone());
+                    out.enum_reprs.insert(enumeration.name.clone(), enumeration.repr_type.clone());
                     let mut variants = HashSet::new();
                     let mut next = 0i128;
                     for variant in &enumeration.variants {
@@ -255,8 +245,7 @@ impl ProgramTypes {
                                 )
                             })?;
                         }
-                        out.constant_values
-                            .insert(variant.name.clone(), next.to_string());
+                        out.constant_values.insert(variant.name.clone(), next.to_string());
                         next = next.checked_add(1).ok_or_else(|| {
                             failure(
                                 format!("enum `{}` value overflow", enumeration.name),
@@ -264,7 +253,7 @@ impl ProgramTypes {
                             )
                         })?;
                     }
-                }
+                },
                 ASTNode::Variant(variant) => {
                     let mut names = HashSet::new();
                     let mut cases = Vec::with_capacity(variant.cases.len());
@@ -288,13 +277,10 @@ impl ProgramTypes {
                         .insert(variant.name.clone(), variant.generic_params.clone());
                     out.variants.insert(
                         variant.name.clone(),
-                        VariantType {
-                            generic_params: variant.generic_params.clone(),
-                            cases,
-                        },
+                        VariantType { generic_params: variant.generic_params.clone(), cases },
                     );
-                }
-                _ => {}
+                },
+                _ => {},
             }
         }
 
@@ -303,9 +289,7 @@ impl ProgramTypes {
 
     pub(super) fn is_known_named_type(&self, name: &str) -> bool {
         self.type_names.contains(name)
-            || name
-                .split_once('<')
-                .is_some_and(|(base, _)| self.type_names.contains(base.trim()))
+            || name.split_once('<').is_some_and(|(base, _)| self.type_names.contains(base.trim()))
     }
 
     pub(super) fn named_type_base<'a>(&self, name: &'a str) -> &'a str {
@@ -313,9 +297,7 @@ impl ProgramTypes {
     }
 
     pub(super) fn struct_fields(&self, name: &str) -> Option<&HashMap<String, WaveType>> {
-        self.structs
-            .get(name)
-            .or_else(|| self.structs.get(self.named_type_base(name)))
+        self.structs.get(name).or_else(|| self.structs.get(self.named_type_base(name)))
     }
 
     pub(super) fn generic_substitution(&self, name: &str) -> HashMap<String, WaveType> {
@@ -338,17 +320,10 @@ impl ProgramTypes {
     }
 
     pub(super) fn method_type(&self, owner: &str, name: &str) -> Option<FunctionType> {
-        let signature = self
-            .methods
-            .get(&(owner.to_string(), name.to_string()))
-            .or_else(|| {
-                self.methods
-                    .get(&(self.named_type_base(owner).to_string(), name.to_string()))
-            })?;
-        Some(substitute_function_type(
-            signature,
-            &self.generic_substitution(owner),
-        ))
+        let signature = self.methods.get(&(owner.to_string(), name.to_string())).or_else(|| {
+            self.methods.get(&(self.named_type_base(owner).to_string(), name.to_string()))
+        })?;
+        Some(substitute_function_type(signature, &self.generic_substitution(owner)))
     }
 
     pub(super) fn is_generic_placeholder(&self, ty: &WaveType) -> bool {
@@ -356,9 +331,7 @@ impl ProgramTypes {
     }
 
     pub(super) fn variant_type(&self, name: &str) -> Option<&VariantType> {
-        self.variants
-            .get(name)
-            .or_else(|| self.variants.get(self.named_type_base(name)))
+        self.variants.get(name).or_else(|| self.variants.get(self.named_type_base(name)))
     }
 
     pub(super) fn variant_constructor<'b>(&self, name: &'b str) -> Option<(&'b str, &'b str)> {
@@ -370,12 +343,8 @@ impl ProgramTypes {
     pub(super) fn variant_case(&self, owner: &str, case: &str) -> Option<(u32, Vec<WaveType>)> {
         let definition = self.variant_type(owner)?;
         let substitution = self.generic_substitution(owner);
-        definition
-            .cases
-            .iter()
-            .enumerate()
-            .find(|(_, (name, _))| name == case)
-            .map(|(index, (_, payloads))| {
+        definition.cases.iter().enumerate().find(|(_, (name, _))| name == case).map(
+            |(index, (_, payloads))| {
                 (
                     index as u32,
                     payloads
@@ -383,7 +352,8 @@ impl ProgramTypes {
                         .map(|ty| self.canonical_type(&substitute_wave_type(ty, &substitution)))
                         .collect(),
                 )
-            })
+            },
+        )
     }
 
     pub(super) fn validate_type(
@@ -474,16 +444,16 @@ impl ProgramTypes {
                 };
                 seen.remove(name);
                 resolved
-            }
+            },
             WaveType::Future(inner) => {
                 WaveType::Future(Box::new(self.canonical_type_inner(inner, seen)))
-            }
+            },
             WaveType::Pointer(inner) => {
                 WaveType::Pointer(Box::new(self.canonical_type_inner(inner, seen)))
-            }
+            },
             WaveType::Array(inner, size) => {
                 WaveType::Array(Box::new(self.canonical_type_inner(inner, seen)), *size)
-            }
+            },
             WaveType::Variant(name) => WaveType::Variant(name.clone()),
             _ => ty.clone(),
         }
@@ -516,10 +486,7 @@ fn insert_unique_method(
     name: &str,
     signature: FunctionType,
 ) -> Result<(), String> {
-    if methods
-        .insert((owner.to_string(), name.to_string()), signature)
-        .is_none()
-    {
+    if methods.insert((owner.to_string(), name.to_string()), signature).is_none() {
         Ok(())
     } else {
         Err(format!("duplicate method `{}.{}`", owner, name))
@@ -532,25 +499,15 @@ pub(super) fn parse_integer_value(raw: &str) -> Option<i128> {
 
 pub(super) fn function_type(function: &FunctionNode) -> FunctionType {
     FunctionType {
-        defaults: function
-            .parameters
-            .iter()
-            .map(|p| p.initial_value.clone())
-            .collect(),
-        params: function
-            .parameters
-            .iter()
-            .map(|parameter| parameter.param_type.clone())
-            .collect(),
+        defaults: function.parameters.iter().map(|p| p.initial_value.clone()).collect(),
+        params: function.parameters.iter().map(|parameter| parameter.param_type.clone()).collect(),
         required_params: function
             .parameters
             .iter()
             .filter(|parameter| parameter.initial_value.is_none())
             .count(),
         return_type: if function.is_async {
-            WaveType::Future(Box::new(
-                function.return_type.clone().unwrap_or(WaveType::Void),
-            ))
+            WaveType::Future(Box::new(function.return_type.clone().unwrap_or(WaveType::Void)))
         } else {
             function.return_type.clone().unwrap_or(WaveType::Void)
         },
@@ -593,16 +550,16 @@ pub(super) fn substitute_wave_type(
             } else {
                 ty.clone()
             }
-        }
+        },
         WaveType::Future(inner) => {
             WaveType::Future(Box::new(substitute_wave_type(inner, substitutions)))
-        }
+        },
         WaveType::Pointer(inner) => {
             WaveType::Pointer(Box::new(substitute_wave_type(inner, substitutions)))
-        }
+        },
         WaveType::Array(inner, size) => {
             WaveType::Array(Box::new(substitute_wave_type(inner, substitutions)), *size)
-        }
+        },
         WaveType::Variant(name) => {
             if let Some((base, arguments)) = parse_named_type_application(name) {
                 let arguments = arguments
@@ -616,7 +573,7 @@ pub(super) fn substitute_wave_type(
             } else {
                 ty.clone()
             }
-        }
+        },
         _ => ty.clone(),
     }
 }

@@ -58,14 +58,8 @@ impl fmt::Display for LoongArchFloatAbi {
 #[derive(Debug)]
 pub enum LoongArchAbiValidationError {
     Inspection(LinkInputInspectionError),
-    Unsupported {
-        input: String,
-    },
-    Mismatch {
-        target: LoongArchFloatAbi,
-        input: String,
-        input_abi: LoongArchFloatAbi,
-    },
+    Unsupported { input: String },
+    Mismatch { target: LoongArchFloatAbi, input: String, input_abi: LoongArchFloatAbi },
 }
 
 impl fmt::Display for LoongArchAbiValidationError {
@@ -110,9 +104,7 @@ pub fn validate_loongarch64_link_inputs(
             continue;
         }
         let input_abi = LoongArchFloatAbi::from_elf_flags(metadata.flags).ok_or_else(|| {
-            LoongArchAbiValidationError::Unsupported {
-                input: metadata.input.clone(),
-            }
+            LoongArchAbiValidationError::Unsupported { input: metadata.input.clone() }
         })?;
         if input_abi != target_abi {
             return Err(LoongArchAbiValidationError::Mismatch {

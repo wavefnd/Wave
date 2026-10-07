@@ -100,11 +100,8 @@ impl Colorize for &str {
             return self.to_string();
         }
 
-        let color = if color.starts_with('#') {
-            Color::from_hex(color)
-        } else {
-            Color::from_rgb(color)
-        };
+        let color =
+            if color.starts_with('#') { Color::from_hex(color) } else { Color::from_rgb(color) };
 
         match color {
             Ok(c) => format!("\x1b[38;2;{};{};{}m{}\x1b[0m", c.0, c.1, c.2, self),
@@ -117,11 +114,8 @@ impl Colorize for &str {
             return self.to_string();
         }
 
-        let color = if color.starts_with('#') {
-            Color::from_hex(color)
-        } else {
-            Color::from_rgb(color)
-        };
+        let color =
+            if color.starts_with('#') { Color::from_hex(color) } else { Color::from_rgb(color) };
 
         match color {
             Ok(c) => format!("\x1b[48;2;{};{};{}m{}\x1b[0m", c.0, c.1, c.2, self),

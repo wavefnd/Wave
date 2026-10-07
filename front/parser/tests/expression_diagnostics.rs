@@ -5,31 +5,17 @@ use parser::{parse_syntax_with_spans, ParseError};
 fn failure(marked: &str, expected: &str, context: &str) -> ParseError {
     let start = marked.find('@').expect("mark the offending token");
     let source = marked.replace('@', "");
-    let tokens = Lexer::new_with_file(&source, "expressions.wave")
-        .tokenize()
-        .unwrap();
+    let tokens = Lexer::new_with_file(&source, "expressions.wave").tokenize().unwrap();
     let error = parse_syntax_with_spans(&tokens).unwrap_err();
     assert_eq!(error.expected(), [expected], "{source}: {error:?}");
     assert_eq!(error.context(), Some(context), "{source}: {error:?}");
     let span = error.span().unwrap();
     assert_eq!(span.start, start, "{source}: {error:?}");
     assert_eq!(span.file, "expressions.wave");
-    assert_eq!(
-        error.line(),
-        source[..start].bytes().filter(|b| *b == b'\n').count() + 1
-    );
-    assert_eq!(
-        error.column(),
-        source[..start].rsplit('\n').next().unwrap().chars().count() + 1
-    );
+    assert_eq!(error.line(), source[..start].bytes().filter(|b| *b == b'\n').count() + 1);
+    assert_eq!(error.column(), source[..start].rsplit('\n').next().unwrap().chars().count() + 1);
     if span.start < source.len() {
-        assert!(
-            error
-                .found()
-                .unwrap()
-                .contains(&source[span.start..span.end]),
-            "{error:?}"
-        );
+        assert!(error.found().unwrap().contains(&source[span.start..span.end]), "{error:?}");
     } else {
         assert_eq!(error.found(), Some("Eof"));
     }
@@ -55,18 +41,10 @@ fn malformed_postfix_and_aggregate_forms_keep_their_construct_context() {
         ("Point<i32> { x: 1 @y: 2 }", "',' or '}'", "struct literal"),
         ("call(1, @)", "expression", "primary expression"),
         ("[1, @]", "expression", "primary expression"),
-        (
-            "call(object.method([Point { x: item.@; }]))",
-            "identifier",
-            "member access",
-        ),
+        ("call(object.method([Point { x: item.@; }]))", "identifier", "member access"),
         ("call<Box<i32>>(item.@;)", "identifier", "member access"),
     ] {
-        failure(
-            &format!("// 한글\r\nfun f() {{\r\n    {expr}\r\n}}"),
-            expected,
-            context,
-        );
+        failure(&format!("// 한글\r\nfun f() {{\r\n    {expr}\r\n}}"), expected, context);
     }
 }
 

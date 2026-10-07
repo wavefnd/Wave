@@ -37,10 +37,7 @@ fn llvm_messages_and_target_layouts_share_allocator_ownership() {
         // This explicit destruction is where #493 crashed on native ARM64.
         drop(layout);
         drop(target_data);
-        assert_eq!(
-            module.get_data_layout().as_str().to_str().unwrap(),
-            expected
-        );
+        assert_eq!(module.get_data_layout().as_str().to_str().unwrap(), expected);
         let ir = module.print_to_string();
         assert!(ir.to_str().unwrap().contains(expected));
         drop(ir);

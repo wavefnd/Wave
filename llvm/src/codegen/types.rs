@@ -58,10 +58,10 @@ pub fn wave_type_to_llvm_type<'ctx>(
     match wave_type {
         WaveType::Isz | WaveType::Usz | WaveType::Never => {
             unreachable!("typed HIR must resolve target-sized integers")
-        }
-        WaveType::Int(bits) | WaveType::Uint(bits) => context
-            .custom_width_int_type(*bits as u32)
-            .as_basic_type_enum(),
+        },
+        WaveType::Int(bits) | WaveType::Uint(bits) => {
+            context.custom_width_int_type(*bits as u32).as_basic_type_enum()
+        },
 
         WaveType::Float(bits) => match bits {
             32 => context.f32_type().as_basic_type_enum(),
@@ -75,25 +75,21 @@ pub fn wave_type_to_llvm_type<'ctx>(
             } else {
                 context.bool_type().as_basic_type_enum()
             }
-        }
+        },
 
         WaveType::Char | WaveType::Byte => context.i8_type().as_basic_type_enum(),
 
         WaveType::Void => context.i8_type().as_basic_type_enum(),
 
         WaveType::Future(_) => context.i64_type().as_basic_type_enum(),
-        WaveType::Pointer(_inner) => context
-            .ptr_type(AddressSpace::default())
-            .as_basic_type_enum(),
+        WaveType::Pointer(_inner) => context.ptr_type(AddressSpace::default()).as_basic_type_enum(),
 
         WaveType::Array(inner, size) => {
             let inner_ty = wave_type_to_llvm_type(context, inner, struct_types, flavor);
             inner_ty.array_type(*size as u32).as_basic_type_enum()
-        }
+        },
 
-        WaveType::String => context
-            .ptr_type(AddressSpace::default())
-            .as_basic_type_enum(),
+        WaveType::String => context.ptr_type(AddressSpace::default()).as_basic_type_enum(),
 
         WaveType::Struct(name) => struct_types
             .get(name)
@@ -113,13 +109,13 @@ fn flatten_leaves<'ctx>(t: BasicTypeEnum<'ctx>, out: &mut Vec<BasicTypeEnum<'ctx
                 let f = st.get_field_type_at_index(i).unwrap();
                 flatten_leaves(f, out);
             }
-        }
+        },
         BasicTypeEnum::ArrayType(at) => {
             let elem = at.get_element_type();
             for _ in 0..at.len() {
                 flatten_leaves(elem, out);
             }
-        }
+        },
         _ => out.push(t),
     }
 }
@@ -129,13 +125,10 @@ fn is_integer_only_aggregate<'ctx>(t: BasicTypeEnum<'ctx>) -> bool {
         BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_) => {
             let mut leaves = vec![];
             flatten_leaves(t, &mut leaves);
-            leaves.iter().all(|lt| {
-                matches!(
-                    lt,
-                    BasicTypeEnum::IntType(_) | BasicTypeEnum::PointerType(_)
-                )
-            })
-        }
+            leaves
+                .iter()
+                .all(|lt| matches!(lt, BasicTypeEnum::IntType(_) | BasicTypeEnum::PointerType(_)))
+        },
         _ => false,
     }
 }

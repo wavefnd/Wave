@@ -25,10 +25,7 @@ pub(super) fn classify_param_wasm<'ctx>(
     td: &TargetData,
     t: BasicTypeEnum<'ctx>,
 ) -> ParamLowering<'ctx> {
-    let is_aggregate = matches!(
-        t,
-        BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_)
-    );
+    let is_aggregate = matches!(t, BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_));
     if !is_aggregate {
         return ParamLowering::Direct(t);
     }
@@ -38,10 +35,7 @@ pub(super) fn classify_param_wasm<'ctx>(
     if let Some(leaf) = wasm_single_leaf(t) {
         return ParamLowering::Direct(leaf);
     }
-    ParamLowering::ByVal {
-        ty: t.as_any_type_enum(),
-        align: td.get_abi_alignment(&t),
-    }
+    ParamLowering::ByVal { ty: t.as_any_type_enum(), align: td.get_abi_alignment(&t) }
 }
 
 pub(super) fn classify_ret_wasm<'ctx>(
@@ -51,10 +45,7 @@ pub(super) fn classify_ret_wasm<'ctx>(
     let Some(t) = t else {
         return RetLowering::Void;
     };
-    let is_aggregate = matches!(
-        t,
-        BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_)
-    );
+    let is_aggregate = matches!(t, BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_));
     if !is_aggregate {
         return RetLowering::Direct(t);
     }
@@ -64,8 +55,5 @@ pub(super) fn classify_ret_wasm<'ctx>(
     if let Some(leaf) = wasm_single_leaf(t) {
         return RetLowering::Direct(leaf);
     }
-    RetLowering::SRet {
-        ty: t.as_any_type_enum(),
-        align: td.get_abi_alignment(&t),
-    }
+    RetLowering::SRet { ty: t.as_any_type_enum(), align: td.get_abi_alignment(&t) }
 }

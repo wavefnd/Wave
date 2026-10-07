@@ -51,11 +51,8 @@ fn parse_lvalue_tail(
                 let dot = tokens.next();
                 let field = identifier(tokens, dot, "member access")?;
 
-                base = Expression::FieldAccess {
-                    object: Box::new(base),
-                    field,
-                };
-            }
+                base = Expression::FieldAccess { object: Box::new(base), field };
+            },
 
             // a[b]
             Some(TokenType::Lbrack) => {
@@ -64,11 +61,8 @@ fn parse_lvalue_tail(
                 let idx = parse_expression(tokens)?;
                 expect_token(tokens, opener, TokenType::Rbrack, "']'", "index expression")?;
 
-                base = Expression::IndexAccess {
-                    target: Box::new(base),
-                    index: Box::new(idx),
-                };
-            }
+                base = Expression::IndexAccess { target: Box::new(base), index: Box::new(idx) };
+            },
 
             _ => break,
         }
@@ -86,13 +80,13 @@ pub fn parse_expression_from_token(
         TokenType::Identifier(name) => {
             let base = Expression::Variable(name.clone());
             parse_lvalue_tail(base, tokens)
-        }
+        },
 
         TokenType::Deref => {
             let _nesting = crate::expression_depth::Nesting::enter(Some(first_token))?;
             let inner = parse_unary_expression(tokens)?;
             Ok(Expression::Deref(Box::new(inner)))
-        }
+        },
 
         _ => Err(ParseError::expected_at(
             Some(first_token),

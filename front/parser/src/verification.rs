@@ -84,7 +84,7 @@ fn infer_variant_type_pair(
         | (WaveType::Pointer(template), WaveType::Pointer(actual))
         | (WaveType::Array(template, _), WaveType::Array(actual, _)) => {
             infer_variant_type_pair(program, template, actual, generic_params, substitutions)
-        }
+        },
         (WaveType::Struct(template_name), WaveType::Struct(actual_name))
         | (WaveType::Struct(template_name), WaveType::Variant(actual_name))
         | (WaveType::Variant(template_name), WaveType::Struct(actual_name))
@@ -109,7 +109,7 @@ fn infer_variant_type_pair(
                 )?;
             }
             Ok(())
-        }
+        },
         _ => Ok(()),
     }
 }
@@ -177,11 +177,7 @@ impl<'a> Validator<'a> {
             .entry((kind.clone(), text.clone()))
             .and_modify(|count| *count += 1)
             .or_insert(1);
-        self.primary_span = Some(SemanticSpanHint {
-            kind,
-            text,
-            occurrence: *occurrence,
-        });
+        self.primary_span = Some(SemanticSpanHint { kind, text, occurrence: *occurrence });
     }
 
     fn diagnostic(&self, message: String) -> SemanticDiagnostic {
@@ -240,10 +236,8 @@ impl<'a> Validator<'a> {
             .replace(function.return_type.clone().unwrap_or(WaveType::Void));
         let previous_loop_depth = std::mem::replace(&mut self.loop_depth, 0);
         let previous_type_params = std::mem::take(&mut self.current_type_params);
-        self.current_type_params
-            .extend(inherited_type_params.iter().cloned());
-        self.current_type_params
-            .extend(function.generic_params.iter().cloned());
+        self.current_type_params.extend(inherited_type_params.iter().cloned());
+        self.current_type_params.extend(function.generic_params.iter().cloned());
 
         for parameter in &function.parameters {
             if let Some(span) = &parameter.span {
@@ -253,10 +247,7 @@ impl<'a> Validator<'a> {
                 &parameter.param_type,
                 &self.current_type_params,
                 false,
-                &format!(
-                    "parameter `{}` of function `{}`",
-                    parameter.name, display_name
-                ),
+                &format!("parameter `{}` of function `{}`", parameter.name, display_name),
             )?;
         }
         let mut saw_default = false;
@@ -276,10 +267,7 @@ impl<'a> Validator<'a> {
                 ));
             }
         }
-        self.source_span = function
-            .return_type_span
-            .clone()
-            .or_else(|| function.span.clone());
+        self.source_span = function.return_type_span.clone().or_else(|| function.span.clone());
         let return_type = function.return_type.clone().unwrap_or(WaveType::Void);
         self.program.validate_type(
             &return_type,
@@ -292,10 +280,7 @@ impl<'a> Validator<'a> {
             for parameter in &function.parameters {
                 validator.insert_current_binding(
                     parameter.name.clone(),
-                    Binding {
-                        mutability: Mutability::Var,
-                        ty: parameter.param_type.clone(),
-                    },
+                    Binding { mutability: Mutability::Var, ty: parameter.param_type.clone() },
                     "parameter",
                 )?;
             }
@@ -330,10 +315,7 @@ impl<'a> Validator<'a> {
     ) -> Result<(), String> {
         let scope = self.scopes.last_mut().unwrap();
         if scope.contains_key(&name) {
-            return Err(format!(
-                "duplicate {} declaration `{}` in the same scope",
-                kind, name
-            ));
+            return Err(format!("duplicate {} declaration `{}` in the same scope", kind, name));
         }
         scope.insert(name, binding);
         Ok(())
@@ -378,10 +360,7 @@ impl<'a> Validator<'a> {
                 if asm_initializer {
                     self.insert_current_binding(
                         variable.name.clone(),
-                        Binding {
-                            mutability: variable.mutability,
-                            ty: variable.type_name.clone(),
-                        },
+                        Binding { mutability: variable.mutability, ty: variable.type_name.clone() },
                         "variable",
                     )?;
                 }
@@ -399,20 +378,17 @@ impl<'a> Validator<'a> {
                 if !asm_initializer {
                     self.insert_current_binding(
                         variable.name.clone(),
-                        Binding {
-                            mutability: variable.mutability,
-                            ty: variable.type_name.clone(),
-                        },
+                        Binding { mutability: variable.mutability, ty: variable.type_name.clone() },
                         "variable",
                     )?;
                 }
                 Ok(true)
-            }
+            },
             ASTNode::Statement(statement) => self.validate_statement(statement),
             ASTNode::Expression(expression) => {
                 let ty = self.validate_expr(expression)?;
                 Ok(!matches!(ty, ExpressionType::Known(WaveType::Never)))
-            }
+            },
             _ => Ok(true),
         }
     }
@@ -422,7 +398,7 @@ impl<'a> Validator<'a> {
             StatementNode::Expression(expression) => {
                 let ty = self.validate_expr(expression)?;
                 Ok(!matches!(ty, ExpressionType::Known(WaveType::Never)))
-            }
+            },
             StatementNode::Assign { variable, value } => {
                 self.mark_span(SemanticSpanKind::Identifier, variable.clone());
                 let binding = self
@@ -436,7 +412,7 @@ impl<'a> Validator<'a> {
                     &format!("assignment to `{}`", variable),
                 )?;
                 Ok(true)
-            }
+            },
             StatementNode::PrintFormat { args, format }
             | StatementNode::PrintlnFormat { args, format } => {
                 self.mark_span(SemanticSpanKind::Keyword, "println|print");
@@ -456,24 +432,23 @@ impl<'a> Validator<'a> {
                         )?;
                     }
                     let concrete = canonical_expression_type(self.program, &ty);
-                    let generic = concrete
-                        .as_ref()
-                        .is_some_and(|t| self.program.is_generic_placeholder(t));
+                    let generic =
+                        concrete.as_ref().is_some_and(|t| self.program.is_generic_placeholder(t));
                     let valid = generic
                         || match spec {
                             "" => true,
                             "d" | "x" | "c" => {
                                 self.is_integer_expression(&ty)
                                     || matches!(concrete, Some(WaveType::Bool))
-                            }
+                            },
                             "p" => {
                                 matches!(concrete, Some(WaveType::Pointer(_) | WaveType::String))
                                     || matches!(ty, ExpressionType::Null)
-                            }
+                            },
                             "s" => {
                                 matches!(concrete, Some(WaveType::String))
                                     || matches!(concrete, Some(WaveType::Pointer(ref t)) if matches!(t.as_ref(), WaveType::Byte | WaveType::Char))
-                            }
+                            },
                             _ => false,
                         };
                     if !valid {
@@ -484,7 +459,7 @@ impl<'a> Validator<'a> {
                     }
                 }
                 Ok(true)
-            }
+            },
             StatementNode::Input { args, .. } => {
                 self.mark_span(SemanticSpanKind::Keyword, "input");
                 for argument in args {
@@ -513,13 +488,8 @@ impl<'a> Validator<'a> {
                     }
                 }
                 Ok(true)
-            }
-            StatementNode::If {
-                condition,
-                body,
-                else_if_blocks,
-                else_block,
-            } => {
+            },
+            StatementNode::If { condition, body, else_if_blocks, else_block } => {
                 self.mark_span(SemanticSpanKind::Keyword, "if");
                 self.validate_condition(condition, "if condition")?;
                 let mut any_branch_falls_through = self.validate_scoped_block(body)?;
@@ -539,7 +509,7 @@ impl<'a> Validator<'a> {
                 }
 
                 Ok(any_branch_falls_through)
-            }
+            },
             StatementNode::While { condition, body } => {
                 self.mark_span(SemanticSpanKind::Keyword, "while");
                 self.validate_condition(condition, "while condition")?;
@@ -549,24 +519,21 @@ impl<'a> Validator<'a> {
                 body_result?;
 
                 Ok(!expression_is_true(condition) || block_breaks_current_loop(body))
-            }
-            StatementNode::For {
-                initialization,
-                condition,
-                increment,
-                body,
-            } => self.with_scope(|validator| {
-                validator.mark_span(SemanticSpanKind::Keyword, "for");
-                validator.validate_node(initialization)?;
-                validator.validate_condition(condition, "for condition")?;
-                validator.validate_expr(increment)?;
-                validator.loop_depth += 1;
-                let body_result = validator.validate_block(body);
-                validator.loop_depth -= 1;
-                body_result?;
+            },
+            StatementNode::For { initialization, condition, increment, body } => {
+                self.with_scope(|validator| {
+                    validator.mark_span(SemanticSpanKind::Keyword, "for");
+                    validator.validate_node(initialization)?;
+                    validator.validate_condition(condition, "for condition")?;
+                    validator.validate_expr(increment)?;
+                    validator.loop_depth += 1;
+                    let body_result = validator.validate_block(body);
+                    validator.loop_depth -= 1;
+                    body_result?;
 
-                Ok(!expression_is_true(condition) || block_breaks_current_loop(body))
-            }),
+                    Ok(!expression_is_true(condition) || block_breaks_current_loop(body))
+                })
+            },
             StatementNode::Match { value, arms } => {
                 self.mark_span(SemanticSpanKind::Keyword, "match");
                 let value_type = self.validate_expr(value)?;
@@ -575,7 +542,7 @@ impl<'a> Validator<'a> {
                         WaveType::Variant(name) => self.validate_variant_match(&name, arms),
                         _ if self.is_integer_expression(&value_type) => {
                             self.validate_integer_match(&value_type, arms)
-                        }
+                        },
                         _ => Err(format!(
                             "match value must be an integer, enum, or variant, found `{}`",
                             display_expression_type(&value_type)
@@ -583,43 +550,38 @@ impl<'a> Validator<'a> {
                     },
                     _ if self.is_integer_expression(&value_type) => {
                         self.validate_integer_match(&value_type, arms)
-                    }
+                    },
                     _ => Err(format!(
                         "match value must be an integer, enum, or variant, found `{}`",
                         display_expression_type(&value_type)
                     )),
                 }
-            }
+            },
             StatementNode::Break => {
                 self.mark_span(SemanticSpanKind::Keyword, "break");
                 if self.loop_depth == 0 {
                     return Err("`break` can only be used inside a loop".to_string());
                 }
                 Ok(false)
-            }
+            },
             StatementNode::Continue => {
                 self.mark_span(SemanticSpanKind::Keyword, "continue");
                 if self.loop_depth == 0 {
                     return Err("`continue` can only be used inside a loop".to_string());
                 }
                 Ok(false)
-            }
+            },
             StatementNode::Return(value) => {
                 self.mark_span(SemanticSpanKind::Keyword, "return");
                 self.validate_return(value.as_ref())?;
                 Ok(false)
-            }
-            StatementNode::AsmBlock {
-                inputs,
-                outputs,
-                clobbers,
-                ..
-            } => {
+            },
+            StatementNode::AsmBlock { inputs, outputs, clobbers, .. } => {
                 for (_, expression) in inputs.iter().chain(outputs.iter()) {
                     self.validate_expr(expression)?;
                 }
                 Ok(!clobbers.iter().any(|clobber| clobber == "noreturn"))
-            }
+            },
             _ => Ok(true),
         }
     }
@@ -652,24 +614,19 @@ impl<'a> Validator<'a> {
         let mut all_arms_terminate = !arms.is_empty();
 
         for arm in arms {
-            if let Some(span) = self
-                .source_map
-                .patterns
-                .get(&(&arm.pattern as *const _ as usize))
-            {
+            if let Some(span) = self.source_map.patterns.get(&(&arm.pattern as *const _ as usize)) {
                 self.source_span = Some(span.clone());
             }
             let key = match &arm.pattern {
                 MatchPattern::Located { .. } => {
                     unreachable!("source wrappers detached before analysis")
-                }
+                },
                 MatchPattern::Int(raw) => {
                     self.mark_span(SemanticSpanKind::Keyword, raw.clone());
                     let value = normalize(raw, &ty)?;
-                    self.integer_patterns
-                        .insert(&arm.pattern as *const _ as usize, value.clone());
+                    self.integer_patterns.insert(&arm.pattern as *const _ as usize, value.clone());
                     format!("value:{}", value)
-                }
+                },
                 MatchPattern::Ident(name) => {
                     self.mark_span(SemanticSpanKind::Identifier, name.clone());
                     let binding = self
@@ -684,25 +641,21 @@ impl<'a> Validator<'a> {
                         ));
                     }
                     let value = self.program.constant_values.get(name).ok_or_else(|| {
-                        format!(
-                            "match case `{}` does not have a compile-time integer value",
-                            name
-                        )
+                        format!("match case `{}` does not have a compile-time integer value", name)
                     })?;
                     let value = normalize(value, &self.program.canonical_type(&binding.ty))?;
                     let value = normalize(&value, &ty)?;
-                    self.integer_patterns
-                        .insert(&arm.pattern as *const _ as usize, value.clone());
+                    self.integer_patterns.insert(&arm.pattern as *const _ as usize, value.clone());
                     format!("value:{}", value)
-                }
+                },
                 MatchPattern::Wildcard => {
                     self.mark_span(SemanticSpanKind::Keyword, "_");
                     has_wildcard = true;
                     "wildcard:_".to_string()
-                }
+                },
                 MatchPattern::Binding(_) | MatchPattern::Variant { .. } => {
                     return Err("variant patterns require a variant match value".to_string())
-                }
+                },
             };
             if !seen.insert(key.clone()) {
                 return Err(format!("duplicate match case pattern `{}`", key));
@@ -719,22 +672,15 @@ impl<'a> Validator<'a> {
         arms: &[crate::ast::MatchArm],
     ) -> Result<bool, String> {
         let definition = self.program.variant_type(variant_name).cloned().unwrap();
-        let all_cases = definition
-            .cases
-            .iter()
-            .map(|(name, _)| name.clone())
-            .collect::<HashSet<_>>();
+        let all_cases =
+            definition.cases.iter().map(|(name, _)| name.clone()).collect::<HashSet<_>>();
         let expected_type = WaveType::Variant(variant_name.to_string());
         let mut seen_patterns = HashSet::new();
         let mut covered_patterns: Vec<&MatchPattern> = Vec::new();
         let mut all_arms_terminate = !arms.is_empty();
 
         for arm in arms {
-            if let Some(span) = self
-                .source_map
-                .patterns
-                .get(&(&arm.pattern as *const _ as usize))
-            {
+            if let Some(span) = self.source_map.patterns.get(&(&arm.pattern as *const _ as usize)) {
                 self.source_span = Some(span.clone());
             }
             if self.variant_patterns_cover(&covered_patterns, &expected_type) {
@@ -754,13 +700,9 @@ impl<'a> Validator<'a> {
             match &arm.pattern {
                 MatchPattern::Located { .. } => {
                     unreachable!("source wrappers detached before analysis")
-                }
-                MatchPattern::Wildcard => {}
-                MatchPattern::Variant {
-                    variant_type,
-                    case_name,
-                    ..
-                } => {
+                },
+                MatchPattern::Wildcard => {},
+                MatchPattern::Variant { variant_type, case_name, .. } => {
                     if self.program.named_type_base(variant_type)
                         != self.program.named_type_base(variant_name)
                     {
@@ -781,23 +723,20 @@ impl<'a> Validator<'a> {
                         &expected_type,
                         &mut bindings,
                     )?;
-                }
+                },
                 MatchPattern::Int(_) | MatchPattern::Ident(_) | MatchPattern::Binding(_) => {
                     return Err(format!(
                         "match on variant `{}` requires a qualified case pattern or `_`",
                         variant_name
                     ))
-                }
+                },
             }
 
             let arm_falls_through = self.with_scope(|validator| {
                 for (name, ty) in bindings {
                     validator.insert_current_binding(
                         name,
-                        Binding {
-                            mutability: Mutability::Var,
-                            ty,
-                        },
+                        Binding { mutability: Mutability::Var, ty },
                         "pattern binding",
                     )?;
                 }
@@ -847,19 +786,15 @@ impl<'a> Validator<'a> {
         match pattern {
             MatchPattern::Located { .. } => {
                 unreachable!("source wrappers detached before analysis")
-            }
+            },
             MatchPattern::Binding(name) => {
                 if bindings.insert(name.clone(), expected.clone()).is_some() {
                     return Err(format!("duplicate pattern binding `{}`", name));
                 }
                 Ok(())
-            }
+            },
             MatchPattern::Wildcard => Ok(()),
-            MatchPattern::Variant {
-                variant_type,
-                case_name,
-                payloads,
-            } => {
+            MatchPattern::Variant { variant_type, case_name, payloads } => {
                 let WaveType::Variant(expected_name) = self.program.canonical_type(expected) else {
                     return Err(format!(
                         "nested variant pattern `{}::{}` cannot match payload type `{}`",
@@ -876,14 +811,9 @@ impl<'a> Validator<'a> {
                         variant_type, case_name, expected_name
                     ));
                 }
-                let (discriminant, payload_types) = self
-                    .program
-                    .variant_case(&expected_name, case_name)
-                    .ok_or_else(|| {
-                        format!(
-                            "unknown case `{}` in variant `{}`",
-                            case_name, expected_name
-                        )
+                let (discriminant, payload_types) =
+                    self.program.variant_case(&expected_name, case_name).ok_or_else(|| {
+                        format!("unknown case `{}` in variant `{}`", case_name, expected_name)
                     })?;
                 if payloads.len() != payload_types.len() {
                     return Err(format!(
@@ -907,10 +837,10 @@ impl<'a> Validator<'a> {
                     self.collect_variant_pattern_bindings(payload, ty, bindings)?;
                 }
                 Ok(())
-            }
+            },
             MatchPattern::Int(_) | MatchPattern::Ident(_) => {
                 Err("variant payload patterns support bindings, `_`, or nested cases".to_string())
-            }
+            },
         }
     }
 
@@ -918,13 +848,9 @@ impl<'a> Validator<'a> {
         match pattern {
             MatchPattern::Located { .. } => {
                 unreachable!("source wrappers detached before analysis")
-            }
+            },
             MatchPattern::Binding(_) | MatchPattern::Wildcard => true,
-            MatchPattern::Variant {
-                variant_type,
-                case_name,
-                payloads,
-            } => {
+            MatchPattern::Variant { variant_type, case_name, payloads } => {
                 let WaveType::Variant(expected_name) = self.program.canonical_type(expected) else {
                     return false;
                 };
@@ -948,7 +874,7 @@ impl<'a> Validator<'a> {
                         .iter()
                         .zip(&payload_types)
                         .all(|(payload, ty)| self.variant_pattern_is_irrefutable(payload, ty))
-            }
+            },
             MatchPattern::Int(_) | MatchPattern::Ident(_) => false,
         }
     }
@@ -970,16 +896,13 @@ impl<'a> Validator<'a> {
             let case_patterns = patterns
                 .iter()
                 .filter_map(|pattern| match pattern {
-                    MatchPattern::Variant {
-                        variant_type,
-                        case_name: pattern_case,
-                        payloads,
-                    } if self.program.named_type_base(variant_type)
-                        == self.program.named_type_base(&expected_name)
-                        && pattern_case == case_name =>
+                    MatchPattern::Variant { variant_type, case_name: pattern_case, payloads }
+                        if self.program.named_type_base(variant_type)
+                            == self.program.named_type_base(&expected_name)
+                            && pattern_case == case_name =>
                     {
                         Some(payloads)
-                    }
+                    },
                     _ => None,
                 })
                 .collect::<Vec<_>>();
@@ -1011,10 +934,8 @@ impl<'a> Validator<'a> {
     }
 
     fn validate_return(&mut self, value: Option<&Expression>) -> Result<(), String> {
-        let function = self
-            .current_function
-            .clone()
-            .unwrap_or_else(|| "<unknown function>".to_string());
+        let function =
+            self.current_function.clone().unwrap_or_else(|| "<unknown function>".to_string());
         let expected = self.current_return_type.clone().unwrap_or(WaveType::Void);
 
         match (expected, value) {
@@ -1023,15 +944,13 @@ impl<'a> Validator<'a> {
             )),
             (WaveType::Void, None) => Ok(()),
             (WaveType::Void, Some(expression)) => {
-                if matches!(
-                    self.validate_expr(expression)?,
-                    ExpressionType::Known(WaveType::Void)
-                ) {
+                if matches!(self.validate_expr(expression)?, ExpressionType::Known(WaveType::Void))
+                {
                     Ok(())
                 } else {
                     Err(format!("void function `{function}` cannot return a value"))
                 }
-            }
+            },
             (expected, None) => Err(format!(
                 "non-void function `{}` must return `{}`",
                 function,
@@ -1044,7 +963,7 @@ impl<'a> Validator<'a> {
                     &expected,
                     &format!("return value of function `{}`", function),
                 )
-            }
+            },
         }
     }
 
@@ -1090,7 +1009,7 @@ impl<'a> Validator<'a> {
                             | WaveType::String
                             | WaveType::Pointer(_)
                     )
-            }
+            },
             ExpressionType::ArrayLiteral(_) | ExpressionType::AddressedArrayLiteral(_) => false,
         };
         if supported {
@@ -1141,11 +1060,7 @@ impl<'a> Validator<'a> {
         expression: &Expression,
         expected: Option<&WaveType>,
     ) -> Result<ExpressionType, String> {
-        if let Some(span) = self
-            .source_map
-            .expressions
-            .get(&(expression as *const _ as usize))
-        {
+        if let Some(span) = self.source_map.expressions.get(&(expression as *const _ as usize)) {
             self.source_span = Some(span.clone());
         }
 
@@ -1162,8 +1077,7 @@ impl<'a> Validator<'a> {
                 analyzed_expression_type(self.program, expression_type),
             );
             if let Some(ty) = canonical_expression_type(self.program, expression_type) {
-                self.expression_types
-                    .insert(expression as *const Expression as usize, ty);
+                self.expression_types.insert(expression as *const Expression as usize, ty);
             }
         }
         result
@@ -1230,9 +1144,7 @@ impl<'a> Validator<'a> {
     ) -> Result<ExpressionType, String> {
         if crate::layout_intrinsics::is_intrinsic(name) {
             if type_args.len() != 1 || !args.is_empty() {
-                return Err(format!(
-                    "{name} requires one type argument and no value arguments"
-                ));
+                return Err(format!("{name} requires one type argument and no value arguments"));
             }
             self.program.validate_type(
                 &type_args[0],
@@ -1265,10 +1177,8 @@ impl<'a> Validator<'a> {
                     return Err("async frame creation requires a generated resume function".into());
                 }
             }
-            let actual = args
-                .iter()
-                .map(|a| self.validate_expr(a))
-                .collect::<Result<Vec<_>, _>>()?;
+            let actual =
+                args.iter().map(|a| self.validate_expr(a)).collect::<Result<Vec<_>, _>>()?;
             let concrete = actual
                 .iter()
                 .map(|a| match a {
@@ -1304,10 +1214,7 @@ impl<'a> Validator<'a> {
         if let Some(signature) = self.program.functions.get(name).cloned() {
             if type_args.is_empty()
                 && !signature.generic_params.is_empty()
-                && signature
-                    .params
-                    .iter()
-                    .any(|t| matches!(t, WaveType::Future(_)))
+                && signature.params.iter().any(|t| matches!(t, WaveType::Future(_)))
             {
                 let mut subst = HashMap::new();
                 for (template, arg) in signature.params.iter().zip(args) {
@@ -1340,18 +1247,10 @@ impl<'a> Validator<'a> {
                 );
             }
         }
-        let type_args = if inferred.is_empty() {
-            type_args
-        } else {
-            &inferred
-        };
+        let type_args = if inferred.is_empty() { type_args } else { &inferred };
         let signature = self.program.functions.get(name).map(|signature| {
-            let substitutions: HashMap<String, WaveType> = signature
-                .generic_params
-                .iter()
-                .cloned()
-                .zip(type_args.iter().cloned())
-                .collect();
+            let substitutions: HashMap<String, WaveType> =
+                signature.generic_params.iter().cloned().zip(type_args.iter().cloned()).collect();
             substitute_function_type(signature, &substitutions)
         });
         let Some(signature) = signature else {
@@ -1361,11 +1260,8 @@ impl<'a> Validator<'a> {
             return Err(format!("call to unknown function `{}`", name));
         };
 
-        let declared_generic_count = self
-            .program
-            .functions
-            .get(name)
-            .map_or(0, |function| function.generic_params.len());
+        let declared_generic_count =
+            self.program.functions.get(name).map_or(0, |function| function.generic_params.len());
         if type_args.len() != declared_generic_count {
             return Err(format!(
                 "function `{}` expects {} generic argument(s), found {}",
@@ -1406,15 +1302,14 @@ impl<'a> Validator<'a> {
             ));
         }
 
-        let expected_variant = expected
-            .map(|ty| self.program.canonical_type(ty))
-            .and_then(|ty| match ty {
+        let expected_variant =
+            expected.map(|ty| self.program.canonical_type(ty)).and_then(|ty| match ty {
                 WaveType::Variant(name)
                     if self.program.named_type_base(&name)
                         == self.program.named_type_base(owner) =>
                 {
                     Some(name)
-                }
+                },
                 _ => None,
             });
 
@@ -1495,11 +1390,8 @@ impl<'a> Validator<'a> {
             ExpressionType::Known(ty) => ExpressionType::Known(self.program.canonical_type(&ty)),
             other => other,
         };
-        self.source_span = self
-            .source_map
-            .expressions
-            .get(&(expression as *const _ as usize))
-            .cloned();
+        self.source_span =
+            self.source_map.expressions.get(&(expression as *const _ as usize)).cloned();
         self.mark_span(SemanticSpanKind::Identifier, name);
         let structure = match canonical_expression_type(self.program, &object_type) {
             Some(WaveType::Struct(name)) => Some(name),
@@ -1509,9 +1401,7 @@ impl<'a> Validator<'a> {
             },
             _ => None,
         };
-        let method = structure
-            .as_ref()
-            .and_then(|owner| self.program.method_type(owner, name));
+        let method = structure.as_ref().and_then(|owner| self.program.method_type(owner, name));
         let inherent = method.is_some();
         let Some(mut signature) = method.or_else(|| self.program.functions.get(name).cloned())
         else {
@@ -1577,9 +1467,8 @@ impl<'a> Validator<'a> {
             let (function, mut all_args) = if inherent {
                 let owner = structure.as_ref().unwrap();
                 let base = self.program.named_type_base(owner);
-                let owner_args = parse_named_type_application(owner)
-                    .map(|(_, args)| args)
-                    .unwrap_or_default();
+                let owner_args =
+                    parse_named_type_application(owner).map(|(_, args)| args).unwrap_or_default();
                 (crate::methods::method_symbol(base, name), owner_args)
             } else {
                 (name.to_string(), Vec::new())
@@ -1590,11 +1479,7 @@ impl<'a> Validator<'a> {
         let Some(receiver) = signature.params.first() else {
             return Err(format!("method `{name}` requires a receiver parameter"));
         };
-        self.require_assignable(
-            &object_type,
-            receiver,
-            &format!("receiver of method `{name}`"),
-        )?;
+        self.require_assignable(&object_type, receiver, &format!("receiver of method `{name}`"))?;
         self.validate_call_arguments(
             "method",
             name,
@@ -1620,12 +1505,7 @@ impl<'a> Validator<'a> {
             .collect();
         self.generic_method_calls.insert(
             expression as *const _ as usize,
-            crate::methods::GenericMethodCall {
-                function,
-                type_args,
-                defaults,
-                rewrite,
-            },
+            crate::methods::GenericMethodCall { function, type_args, defaults, rewrite },
         );
         Ok(ExpressionType::Known(signature.return_type))
     }
@@ -1683,7 +1563,7 @@ impl<'a> Validator<'a> {
                         .and_then(i128::checked_neg)
                         .ok_or_else(|| format!("integer literal `{}` overflows", raw))?;
                     Ok(ExpressionType::IntLiteral(value.to_string()))
-                }
+                },
                 other => Ok(other),
             }
         } else {
@@ -1891,10 +1771,10 @@ impl ConditionMutation {
         match self {
             Self::Assignment(_) => {
                 "use `==` for comparison, or move the assignment before the condition"
-            }
+            },
             Self::CompoundAssignment(_) | Self::IncrementOrDecrement(_) => {
                 "move the mutation before the condition"
-            }
+            },
         }
     }
 }
@@ -1910,20 +1790,20 @@ fn condition_mutation(expression: &Expression) -> Option<ConditionMutation> {
             } else {
                 Some(ConditionMutation::CompoundAssignment(symbol))
             }
-        }
+        },
         Expression::IncDec { kind, .. } => {
             Some(ConditionMutation::IncrementOrDecrement(match kind {
                 IncDecKind::PreInc | IncDecKind::PostInc => "++",
                 IncDecKind::PreDec | IncDecKind::PostDec => "--",
             }))
-        }
-        Expression::StructLiteral { fields, .. } => fields
-            .iter()
-            .find_map(|(_, value)| condition_mutation(value)),
+        },
+        Expression::StructLiteral { fields, .. } => {
+            fields.iter().find_map(|(_, value)| condition_mutation(value))
+        },
         Expression::FunctionCall { args, .. } => args.iter().find_map(condition_mutation),
         Expression::MethodCall { object, args, .. } => {
             condition_mutation(object).or_else(|| args.iter().find_map(condition_mutation))
-        }
+        },
         Expression::Deref(inner)
         | Expression::AddressOf(inner)
         | Expression::Await(inner)
@@ -1932,17 +1812,13 @@ fn condition_mutation(expression: &Expression) -> Option<ConditionMutation> {
         | Expression::Cast { expr: inner, .. }
         | Expression::FieldAccess { object: inner, .. } => condition_mutation(inner),
         Expression::BinaryExpression { left, right, .. }
-        | Expression::IndexAccess {
-            target: left,
-            index: right,
-        } => condition_mutation(left).or_else(|| condition_mutation(right)),
+        | Expression::IndexAccess { target: left, index: right } => {
+            condition_mutation(left).or_else(|| condition_mutation(right))
+        },
         Expression::ArrayLiteral(values) => values.iter().find_map(condition_mutation),
-        Expression::AsmBlock {
-            inputs, outputs, ..
-        } => inputs
-            .iter()
-            .chain(outputs.iter())
-            .find_map(|(_, value)| condition_mutation(value)),
+        Expression::AsmBlock { inputs, outputs, .. } => {
+            inputs.iter().chain(outputs.iter()).find_map(|(_, value)| condition_mutation(value))
+        },
         Expression::Null | Expression::Literal(_) | Expression::Variable(_) => None,
     }
 }
@@ -1962,25 +1838,16 @@ fn node_breaks_current_loop(node: &ASTNode) -> bool {
 
     match statement {
         StatementNode::Break => true,
-        StatementNode::If {
-            body,
-            else_if_blocks,
-            else_block,
-            ..
-        } => {
+        StatementNode::If { body, else_if_blocks, else_block, .. } => {
             block_breaks_current_loop(body)
                 || else_if_blocks.as_ref().is_some_and(|blocks| {
-                    blocks
-                        .iter()
-                        .any(|(_, block)| block_breaks_current_loop(block))
+                    blocks.iter().any(|(_, block)| block_breaks_current_loop(block))
                 })
-                || else_block
-                    .as_ref()
-                    .is_some_and(|block| block_breaks_current_loop(block))
-        }
+                || else_block.as_ref().is_some_and(|block| block_breaks_current_loop(block))
+        },
         StatementNode::Match { arms, .. } => {
             arms.iter().any(|arm| block_breaks_current_loop(&arm.body))
-        }
+        },
         StatementNode::While { .. } | StatementNode::For { .. } => false,
         _ => false,
     }
@@ -1992,19 +1859,11 @@ fn variant_pattern_key(pattern: &MatchPattern) -> String {
         MatchPattern::Int(raw) => format!("int:{}", raw),
         MatchPattern::Ident(name) => format!("ident:{}", name),
         MatchPattern::Binding(_) | MatchPattern::Wildcard => "*".to_string(),
-        MatchPattern::Variant {
-            variant_type,
-            case_name,
-            payloads,
-        } => format!(
+        MatchPattern::Variant { variant_type, case_name, payloads } => format!(
             "{}::{}({})",
             variant_type,
             case_name,
-            payloads
-                .iter()
-                .map(variant_pattern_key)
-                .collect::<Vec<_>>()
-                .join(",")
+            payloads.iter().map(variant_pattern_key).collect::<Vec<_>>().join(",")
         ),
     }
 }
@@ -2104,7 +1963,7 @@ fn analyze_program_types(
                 } else {
                     validator.validate_function(function, &function.name, &[])
                 }
-            }
+            },
             ASTNode::ProtoImpl(implementation) => {
                 let mut result = Ok(());
                 for method in &implementation.methods {
@@ -2119,7 +1978,7 @@ fn analyze_program_types(
                     }
                 }
                 result
-            }
+            },
             ASTNode::Struct(structure) => {
                 let mut result = Ok(());
                 for method in &structure.methods {
@@ -2134,7 +1993,7 @@ fn analyze_program_types(
                     }
                 }
                 result
-            }
+            },
             ASTNode::ExternFunction(function) => {
                 if !is_supported_foreign_abi(&function.abi) {
                     validator.mark_span(SemanticSpanKind::Keyword, "extern");
@@ -2145,10 +2004,10 @@ fn analyze_program_types(
                 } else {
                     Ok(())
                 }
-            }
+            },
             ASTNode::Variable(_) | ASTNode::Statement(_) | ASTNode::Expression(_) => {
                 validator.validate_node(node).map(|_| ())
-            }
+            },
             _ => Ok(()),
         };
         if let Err(message) = result {
@@ -2201,18 +2060,12 @@ fn validate_declaration_types(
                 .map(|p| &p.param_type)
                 .chain(f.return_type.iter())
                 .collect::<Vec<_>>(),
-            ASTNode::ExternFunction(f) => f
-                .params
-                .iter()
-                .map(|(_, t)| t)
-                .chain(std::iter::once(&f.return_type))
-                .collect(),
+            ASTNode::ExternFunction(f) => {
+                f.params.iter().map(|(_, t)| t).chain(std::iter::once(&f.return_type)).collect()
+            },
             _ => Vec::new(),
         };
-        if ffi_types
-            .iter()
-            .any(|t| contains_future(program, t, &mut HashSet::new()))
-        {
+        if ffi_types.iter().any(|t| contains_future(program, t, &mut HashSet::new())) {
             return Err(semantic_diagnostic_for_top_level(
                 nodes,
                 index,
@@ -2265,7 +2118,7 @@ fn validate_declaration_types(
                     }
                 }
                 result
-            }
+            },
             ASTNode::Struct(structure) => {
                 let mut result =
                     validate_unique_generic_params(&structure.generic_params, &structure.name);
@@ -2285,7 +2138,7 @@ fn validate_declaration_types(
                     }
                 }
                 result
-            }
+            },
             ASTNode::ProtoImpl(implementation) => {
                 if !program.is_known_named_type(&implementation.target) {
                     Err(format!(
@@ -2295,7 +2148,7 @@ fn validate_declaration_types(
                 } else {
                     Ok(())
                 }
-            }
+            },
             ASTNode::TypeAlias(alias) => program
                 .validate_type(
                     &alias.target,
@@ -2329,16 +2182,14 @@ fn validate_declaration_types(
                 } else {
                     result
                 }
-            }
+            },
             ASTNode::Variant(variant) => {
                 let mut result =
                     validate_unique_generic_params(&variant.generic_params, &variant.name);
                 let generics: HashSet<String> = variant.generic_params.iter().cloned().collect();
                 if result.is_ok() && variant.cases.is_empty() {
-                    result = Err(format!(
-                        "variant `{}` must declare at least one case",
-                        variant.name
-                    ));
+                    result =
+                        Err(format!("variant `{}` must declare at least one case", variant.name));
                 }
                 if result.is_ok() {
                     for case in &variant.cases {
@@ -2362,7 +2213,7 @@ fn validate_declaration_types(
                     result = validate_finite_variant(&variant.name, program);
                 }
                 result
-            }
+            },
             ASTNode::ExternFunction(function) => {
                 let mut params = HashSet::new();
                 let mut result = Ok(());
@@ -2378,10 +2229,7 @@ fn validate_declaration_types(
                         ty,
                         &no_generics,
                         false,
-                        &format!(
-                            "parameter `{}` of extern function `{}`",
-                            name, function.name
-                        ),
+                        &format!("parameter `{}` of extern function `{}`", name, function.name),
                     );
                     if result.is_err() {
                         break;
@@ -2413,7 +2261,7 @@ fn validate_declaration_types(
                     ));
                 }
                 result
-            }
+            },
             ASTNode::Variable(variable) => program.validate_type(
                 &variable.type_name,
                 &no_generics,
@@ -2423,9 +2271,7 @@ fn validate_declaration_types(
             _ => Ok(()),
         };
         if let Err(message) = result {
-            return Err(semantic_diagnostic_for_top_level(
-                nodes, index, message, None,
-            ));
+            return Err(semantic_diagnostic_for_top_level(nodes, index, message, None));
         }
     }
 
@@ -2490,10 +2336,10 @@ fn validate_finite_payload_type(
         WaveType::Pointer(_) => Ok(()),
         WaveType::Array(inner, _) => {
             validate_finite_payload_type(root, inner, program, active, checked)
-        }
+        },
         WaveType::Struct(name) | WaveType::Variant(name) => {
             validate_finite_named_type(root, name, program, active, checked)
-        }
+        },
         _ => Ok(()),
     }
 }
@@ -2527,10 +2373,10 @@ fn validate_alias_type_cycle(
     match ty {
         WaveType::Struct(name) if program.aliases.contains_key(name) => {
             validate_alias_cycle(name, program, active, checked)
-        }
+        },
         WaveType::Future(inner) | WaveType::Pointer(inner) | WaveType::Array(inner, _) => {
             validate_alias_type_cycle(inner, program, active, checked)
-        }
+        },
         _ => Ok(()),
     }
 }
@@ -2539,10 +2385,7 @@ fn validate_unique_generic_params(params: &[String], owner: &str) -> Result<(), 
     let mut seen = HashSet::new();
     for param in params {
         if !seen.insert(param) {
-            return Err(format!(
-                "duplicate generic parameter `{}` in `{}`",
-                param, owner
-            ));
+            return Err(format!("duplicate generic parameter `{}` in `{}`", param, owner));
         }
     }
     Ok(())
@@ -2553,7 +2396,7 @@ fn contains_future(program: &ProgramTypes, ty: &WaveType, seen: &mut HashSet<Str
         WaveType::Future(_) => true,
         WaveType::Pointer(inner) | WaveType::Array(inner, _) => {
             contains_future(program, inner, seen)
-        }
+        },
         WaveType::Struct(name) | WaveType::Variant(name) if seen.insert(name.clone()) => {
             if let Some(alias) = program.aliases.get(name) {
                 if contains_future(program, alias, seen) {
@@ -2566,16 +2409,12 @@ fn contains_future(program: &ProgramTypes, ty: &WaveType, seen: &mut HashSet<Str
                 }
             }
             if let Some(v) = program.variants.get(name) {
-                if v.cases
-                    .iter()
-                    .flat_map(|(_, p)| p)
-                    .any(|t| contains_future(program, t, seen))
-                {
+                if v.cases.iter().flat_map(|(_, p)| p).any(|t| contains_future(program, t, seen)) {
                     return true;
                 }
             }
             false
-        }
+        },
         _ => false,
     }
 }

@@ -24,11 +24,7 @@ use inkwell::IntPredicate;
 use parser::ast::{Expression, Operator, WaveType};
 
 fn pointer_index(value: IntValue<'_>) -> IntValue<'_> {
-    assert_eq!(
-        value.get_type().get_bit_width(),
-        64,
-        "ICE: pointer index missing HIR conversion"
-    );
+    assert_eq!(value.get_type().get_bit_width(), 64, "ICE: pointer index missing HIR conversion");
     value
 }
 
@@ -39,7 +35,7 @@ fn infer_ptr_pointee_ty<'ctx, 'a>(
     match env.wave_type(expr) {
         Some(WaveType::Pointer(inner)) => {
             wave_type_to_llvm_type(env.context, &inner, env.struct_types, TypeFlavor::Value)
-        }
+        },
         Some(WaveType::String) => env.context.i8_type().as_basic_type_enum(),
         other => panic!("typed pointer arithmetic requires a pointee type, found {other:?}"),
     }
@@ -56,11 +52,7 @@ fn gep_with_i64_offset<'ctx, 'a>(
     // SAFETY: Wave pointer arithmetic is explicitly unchecked. A source program
     // must keep an inbounds result within the original allocation (or one past
     // it), which is the contract required by LLVM's `inbounds` GEP.
-    unsafe {
-        env.builder
-            .build_in_bounds_gep(pointee_ty, ptr, &[idx_i64], tag)
-            .unwrap()
-    }
+    unsafe { env.builder.build_in_bounds_gep(pointee_ty, ptr, &[idx_i64], tag).unwrap() }
 }
 
 pub(crate) fn gen<'ctx, 'a>(
@@ -79,13 +71,9 @@ pub(crate) fn gen<'ctx, 'a>(
         let merge_block = env.context.append_basic_block(function, "logical.end");
 
         if matches!(operator, Operator::LogicalAnd) {
-            env.builder
-                .build_conditional_branch(left_bool, right_block, merge_block)
-                .unwrap();
+            env.builder.build_conditional_branch(left_bool, right_block, merge_block).unwrap();
         } else {
-            env.builder
-                .build_conditional_branch(left_bool, merge_block, right_block)
-                .unwrap();
+            env.builder.build_conditional_branch(left_bool, merge_block, right_block).unwrap();
         }
 
         env.builder.position_at_end(right_block);
@@ -95,27 +83,17 @@ pub(crate) fn gen<'ctx, 'a>(
         env.builder.build_unconditional_branch(merge_block).unwrap();
 
         env.builder.position_at_end(merge_block);
-        let short_value = env.context.bool_type().const_int(
-            if matches!(operator, Operator::LogicalOr) {
-                1
-            } else {
-                0
-            },
-            false,
-        );
-        let phi = env
-            .builder
-            .build_phi(env.context.bool_type(), "logical.result")
-            .unwrap();
+        let short_value = env
+            .context
+            .bool_type()
+            .const_int(if matches!(operator, Operator::LogicalOr) { 1 } else { 0 }, false);
+        let phi = env.builder.build_phi(env.context.bool_type(), "logical.result").unwrap();
         phi.add_incoming(&[(&short_value, left_block), (&right_bool, right_end)]);
         let mut result = phi.as_basic_value().into_int_value();
 
         if let Some(BasicTypeEnum::IntType(expected)) = expected_type {
             if result.get_type() != expected {
-                result = env
-                    .builder
-                    .build_int_z_extend(result, expected, "logical.cast")
-                    .unwrap();
+                result = env.builder.build_int_z_extend(result, expected, "logical.cast").unwrap();
             }
         }
 
@@ -127,24 +105,16 @@ pub(crate) fn gen<'ctx, 'a>(
     match (left_val, right_val) {
         (BasicValueEnum::PointerValue(lp), BasicValueEnum::PointerValue(rp)) => {
             let i64_ty = env.context.i64_type();
-            let li = env
-                .builder
-                .build_ptr_to_int(lp, i64_ty, "l_ptr2int")
-                .unwrap();
-            let ri = env
-                .builder
-                .build_ptr_to_int(rp, i64_ty, "r_ptr2int")
-                .unwrap();
+            let li = env.builder.build_ptr_to_int(lp, i64_ty, "l_ptr2int").unwrap();
+            let ri = env.builder.build_ptr_to_int(rp, i64_ty, "r_ptr2int").unwrap();
 
             let mut result = match operator {
-                Operator::Equal => env
-                    .builder
-                    .build_int_compare(IntPredicate::EQ, li, ri, "ptreq")
-                    .unwrap(),
-                Operator::NotEqual => env
-                    .builder
-                    .build_int_compare(IntPredicate::NE, li, ri, "ptrne")
-                    .unwrap(),
+                Operator::Equal => {
+                    env.builder.build_int_compare(IntPredicate::EQ, li, ri, "ptreq").unwrap()
+                },
+                Operator::NotEqual => {
+                    env.builder.build_int_compare(IntPredicate::NE, li, ri, "ptrne").unwrap()
+                },
                 Operator::Subtract => env.builder.build_int_sub(li, ri, "ptrdiff").unwrap(),
                 _ => panic!("Unsupported pointer operator: {:?}", operator),
             };
@@ -166,7 +136,7 @@ pub(crate) fn gen<'ctx, 'a>(
                                 .unwrap();
                         }
                     }
-                }
+                },
                 Operator::Subtract => {
                     if let Some(inkwell::types::BasicTypeEnum::IntType(target_ty)) = expected_type {
                         if result.get_type() != target_ty {
@@ -176,12 +146,12 @@ pub(crate) fn gen<'ctx, 'a>(
                                 .unwrap();
                         }
                     }
-                }
-                _ => {}
+                },
+                _ => {},
             }
 
             return result.as_basic_value_enum();
-        }
+        },
 
         (BasicValueEnum::PointerValue(lp), BasicValueEnum::IntValue(ri)) => {
             match operator {
@@ -192,27 +162,22 @@ pub(crate) fn gen<'ctx, 'a>(
                     }
                     let p = gep_with_i64_offset(env, lp, left, idx, "ptr_gep");
                     return p.as_basic_value_enum();
-                }
-                _ => {}
+                },
+                _ => {},
             };
 
             let i64_ty = env.context.i64_type();
-            let li = env
-                .builder
-                .build_ptr_to_int(lp, i64_ty, "l_ptr2int")
-                .unwrap();
+            let li = env.builder.build_ptr_to_int(lp, i64_ty, "l_ptr2int").unwrap();
 
             let ri = pointer_index(ri);
 
             let mut result = match operator {
-                Operator::Equal => env
-                    .builder
-                    .build_int_compare(IntPredicate::EQ, li, ri, "ptreq0")
-                    .unwrap(),
-                Operator::NotEqual => env
-                    .builder
-                    .build_int_compare(IntPredicate::NE, li, ri, "ptrne0")
-                    .unwrap(),
+                Operator::Equal => {
+                    env.builder.build_int_compare(IntPredicate::EQ, li, ri, "ptreq0").unwrap()
+                },
+                Operator::NotEqual => {
+                    env.builder.build_int_compare(IntPredicate::NE, li, ri, "ptrne0").unwrap()
+                },
                 _ => panic!("Unsupported ptr/int operator: {:?}", operator),
             };
 
@@ -225,15 +190,12 @@ pub(crate) fn gen<'ctx, 'a>(
                             target_ty.get_bit_width()
                         );
                     }
-                    result = env
-                        .builder
-                        .build_int_cast(result, target_ty, "cast_result")
-                        .unwrap();
+                    result = env.builder.build_int_cast(result, target_ty, "cast_result").unwrap();
                 }
             }
 
             return result.as_basic_value_enum();
-        }
+        },
 
         (BasicValueEnum::IntValue(li), BasicValueEnum::PointerValue(rp)) => {
             if matches!(operator, Operator::Add) {
@@ -245,20 +207,15 @@ pub(crate) fn gen<'ctx, 'a>(
             let i64_ty = env.context.i64_type();
             let li = pointer_index(li);
 
-            let ri = env
-                .builder
-                .build_ptr_to_int(rp, i64_ty, "r_ptr2int")
-                .unwrap();
+            let ri = env.builder.build_ptr_to_int(rp, i64_ty, "r_ptr2int").unwrap();
 
             let mut result = match operator {
-                Operator::Equal => env
-                    .builder
-                    .build_int_compare(IntPredicate::EQ, li, ri, "ptreq0")
-                    .unwrap(),
-                Operator::NotEqual => env
-                    .builder
-                    .build_int_compare(IntPredicate::NE, li, ri, "ptrne0")
-                    .unwrap(),
+                Operator::Equal => {
+                    env.builder.build_int_compare(IntPredicate::EQ, li, ri, "ptreq0").unwrap()
+                },
+                Operator::NotEqual => {
+                    env.builder.build_int_compare(IntPredicate::NE, li, ri, "ptrne0").unwrap()
+                },
                 _ => panic!("Unsupported int/ptr operator: {:?}", operator),
             };
 
@@ -271,15 +228,12 @@ pub(crate) fn gen<'ctx, 'a>(
                             target_ty.get_bit_width()
                         );
                     }
-                    result = env
-                        .builder
-                        .build_int_cast(result, target_ty, "cast_result")
-                        .unwrap();
+                    result = env.builder.build_int_cast(result, target_ty, "cast_result").unwrap();
                 }
             }
 
             return result.as_basic_value_enum();
-        }
+        },
 
         _ => panic!("Type mismatch in binary expression"),
     }

@@ -37,13 +37,7 @@ pub fn signature(
     let scalar = || {
         arguments
             .last()
-            .and_then(|t| {
-                if let Future(t) = t {
-                    Some(*t.clone())
-                } else {
-                    None
-                }
-            })
+            .and_then(|t| if let Future(t) = t { Some(*t.clone()) } else { None })
             .ok_or_else(|| format!("{name} requires a Future<T>"))
     };
     let no_types = || {
@@ -58,11 +52,7 @@ pub fn signature(
         "__wave_async_create" if types.len() == 2 => (
             vec![
                 ptr(types[0].clone()),
-                ptr(if types[1] == Void {
-                    Byte
-                } else {
-                    types[1].clone()
-                }),
+                ptr(if types[1] == Void { Byte } else { types[1].clone() }),
                 String,
             ],
             future(types[1].clone()),
@@ -70,71 +60,68 @@ pub fn signature(
         "__wave_async_complete" => {
             no_types()?;
             (vec![Int(64)], Void)
-        }
+        },
         "__wave_async_wait" => {
             no_types()?;
             let t = scalar()?;
             (vec![Int(64), future(t)], Void)
-        }
+        },
         "__wave_async_ready" | "__wave_async_cancel" => {
             no_types()?;
             let t = scalar()?;
             (vec![future(t)], Bool)
-        }
+        },
         "__wave_async_take" | "__wave_async_block_on" => {
             no_types()?;
             let t = scalar()?;
             (vec![future(t.clone())], t)
-        }
+        },
         "__wave_async_spawn" => {
             no_types()?;
             let t = scalar()?;
             (vec![future(t.clone())], future(t))
-        }
+        },
         "__wave_async_yield" => {
             no_types()?;
             (vec![], future(Void))
-        }
+        },
         "__wave_async_shutdown" => {
             no_types()?;
             (vec![], Void)
-        }
+        },
         "__wave_async_free_slot" if arguments.len() == 1 && matches!(&arguments[0], Pointer(_)) => {
             no_types()?;
             (arguments.to_vec(), Void)
-        }
+        },
         "__wave_async_interest" => {
             no_types()?;
             (vec![Int(64), Int(32), Int(64)], future(Int(32)))
-        }
+        },
         "__wave_async_sleep" => {
             no_types()?;
             (vec![Int(64)], future(Int(32)))
-        }
+        },
         "__wave_async_cancel_join" => {
             no_types()?;
             let t = scalar()?;
             (vec![future(t)], future(Void))
-        }
+        },
         "__wave_async_io" => {
             no_types()?;
-            (
-                vec![Int(64), ptr(Uint(8)), Int(64), Int(32), Int(64)],
-                future(Int(64)),
-            )
-        }
+            (vec![Int(64), ptr(Uint(8)), Int(64), Int(32), Int(64)], future(Int(64)))
+        },
         "__wave_async_windows_notify_address" => {
             no_types()?;
             (vec![], ptr(Uint(8)))
-        }
+        },
         "__wave_async_close_fd" => {
             no_types()?;
             (vec![Int(64)], Void)
-        }
+        },
         "__wave_async_invoke" => {
             no_types()?;
             (vec![ptr(Uint(8)), ptr(Uint(8)), Int(64)], Bool)
-        }
+        },
         _ => return Err(format!("invalid async intrinsic {name}")),
     })
 }
@@ -146,11 +133,9 @@ pub fn runtime_symbols(name: &str) -> &'static [&'static str] {
         "__wave_async_free_slot" => &["__wave_task_free"],
         "__wave_async_create" => &["__wave_task_new"],
         "__wave_async_take" => &["__wave_task_result", "__wave_task_release"],
-        "__wave_async_block_on" => &[
-            "__wave_task_drive",
-            "__wave_task_result",
-            "__wave_task_release",
-        ],
+        "__wave_async_block_on" => {
+            &["__wave_task_drive", "__wave_task_result", "__wave_task_release"]
+        },
         "__wave_async_ready" => &["__wave_task_ready"],
         "__wave_async_wait" => &["__wave_task_wait"],
         "__wave_async_complete" => &["__wave_task_complete"],

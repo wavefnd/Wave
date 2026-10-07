@@ -22,7 +22,5 @@ pub(crate) fn to_bool<'ctx>(builder: &Builder<'ctx>, v: IntValue<'ctx>) -> IntVa
     }
 
     let zero = v.get_type().const_zero();
-    builder
-        .build_int_compare(IntPredicate::NE, v, zero, "tobool")
-        .unwrap()
+    builder.build_int_compare(IntPredicate::NE, v, zero, "tobool").unwrap()
 }

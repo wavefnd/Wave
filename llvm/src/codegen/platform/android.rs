@@ -14,11 +14,8 @@
 
 use super::{LinkerFamily, PlatformPlan};
 
-pub const CANDIDATE_TRIPLES: &[&str] = &[
-    "x86_64-linux-android",
-    "aarch64-linux-android",
-    "riscv64-linux-android",
-];
+pub const CANDIDATE_TRIPLES: &[&str] =
+    &["x86_64-linux-android", "aarch64-linux-android", "riscv64-linux-android"];
 
 pub const PLAN: PlatformPlan = PlatformPlan {
     os: "android",

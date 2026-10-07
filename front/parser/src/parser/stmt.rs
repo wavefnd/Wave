@@ -44,7 +44,7 @@ pub fn parse_block(tokens: &mut Peekable<Iter<Token>>) -> Result<Vec<ASTNode>, P
             Some(TokenType::Rbrace) => {
                 tokens.next();
                 return Ok(body);
-            }
+            },
             None | Some(TokenType::Eof) => {
                 return Err(ParseError::expected_at(
                     tokens.peek().copied(),
@@ -52,7 +52,7 @@ pub fn parse_block(tokens: &mut Peekable<Iter<Token>>) -> Result<Vec<ASTNode>, P
                     "'}'",
                     "block",
                 ));
-            }
+            },
             _ => body.push(parse_statement(tokens)?),
         }
     }
@@ -65,19 +65,19 @@ pub fn parse_statement(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, Pa
         Some(TokenType::If) => {
             tokens.next();
             parse_if(tokens)
-        }
+        },
         Some(TokenType::For) => {
             tokens.next();
             parse_for(tokens)
-        }
+        },
         Some(TokenType::While) => {
             tokens.next();
             parse_while(tokens)
-        }
+        },
         Some(TokenType::Match) => {
             tokens.next();
             parse_match(tokens)
-        }
+        },
         _ => parse_simple_statement(tokens),
     };
     result.map(|value: ASTNode| {
@@ -100,38 +100,35 @@ fn parse_simple_statement(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode,
         TokenType::Var => {
             tokens.next();
             parse_var(tokens)
-        }
+        },
         TokenType::Let | TokenType::Mut => {
             println!("Error: `let` and `let mut` declarations were removed; use `var`");
             Err(invalid(tokens.peek().copied()))
-        }
-        TokenType::Const | TokenType::Static => Err(local_storage_error(
-            tokens.peek().copied(),
-            "block statement",
-        )),
+        },
+        TokenType::Const | TokenType::Static => {
+            Err(local_storage_error(tokens.peek().copied(), "block statement"))
+        },
         TokenType::Println => {
             tokens.next();
             parse_println(tokens)
-        }
+        },
         TokenType::Print => {
             tokens.next();
             parse_print(tokens)
-        }
+        },
         TokenType::Input => {
             tokens.next();
             parse_input(tokens)
-        }
+        },
         TokenType::Continue | TokenType::Break => {
             tokens.next();
             semicolon(tokens).ok_or_else(|| invalid(tokens.peek().copied()))?;
-            Ok(ASTNode::Statement(
-                if token.token_type == TokenType::Continue {
-                    StatementNode::Continue
-                } else {
-                    StatementNode::Break
-                },
-            ))
-        }
+            Ok(ASTNode::Statement(if token.token_type == TokenType::Continue {
+                StatementNode::Continue
+            } else {
+                StatementNode::Break
+            }))
+        },
         TokenType::Return => {
             tokens.next();
             let expr =
@@ -142,18 +139,15 @@ fn parse_simple_statement(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode,
                 };
             semicolon(tokens).ok_or_else(|| invalid(tokens.peek().copied()))?;
             Ok(ASTNode::Statement(StatementNode::Return(expr)))
-        }
+        },
         TokenType::Asm => {
             tokens.next();
             let node = crate::parser::asm::parse_asm_block(tokens)?;
-            if tokens
-                .peek()
-                .is_some_and(|t| t.token_type == TokenType::SemiColon)
-            {
+            if tokens.peek().is_some_and(|t| t.token_type == TokenType::SemiColon) {
                 tokens.next();
             }
             Ok(node)
-        }
+        },
         TokenType::Rbrace => Err(invalid(tokens.peek().copied())),
 
         _ => {
@@ -168,17 +162,14 @@ fn parse_simple_statement(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode,
                 );
                 Err(invalid(tokens.peek().copied()))
             }
-        }
+        },
     }
 }
 
 pub(crate) fn local_storage_error(token: Option<&Token>, context: &str) -> ParseError {
-    ParseError::syntax_at(
-        token,
-        "`const` and `static` declarations are only allowed at top level",
-    )
-    .with_context(context)
-    .with_expected("var declaration or expression")
-    .with_found_token(token)
-    .with_help("use `var` for local storage, or move the declaration to top level")
+    ParseError::syntax_at(token, "`const` and `static` declarations are only allowed at top level")
+        .with_context(context)
+        .with_expected("var declaration or expression")
+        .with_found_token(token)
+        .with_help("use `var` for local storage, or move the declaration to top level")
 }

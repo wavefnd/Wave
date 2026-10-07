@@ -20,35 +20,34 @@ impl Validator<'_> {
             Expression::Deref(..) => self.validate_expr_deref(expression, expected),
             Expression::BinaryExpression { .. } => {
                 self.validate_expr_binary_expression(expression, expected)
-            }
+            },
             Expression::Await(..) => self.validate_expr_await(expression, expected),
             Expression::Unary { .. } => self.validate_expr_unary(expression, expected),
             Expression::FunctionCall { .. } => {
                 self.validate_expr_function_call(expression, expected)
-            }
+            },
             Expression::MethodCall { .. } => self.validate_expr_method_call(expression, expected),
             Expression::StructLiteral { .. } => {
                 self.validate_expr_struct_literal(expression, expected)
-            }
+            },
             Expression::FieldAccess { .. } => self.validate_expr_field_access(expression, expected),
             Expression::IndexAccess { .. } => self.validate_expr_index_access(expression, expected),
             Expression::ArrayLiteral(..) => self.validate_expr_array_literal(expression, expected),
             Expression::Assignment { .. } => self.validate_expr_assignment(expression, expected),
             Expression::AssignOperation { .. } => {
                 self.validate_expr_assign_operation(expression, expected)
-            }
+            },
             Expression::IncDec { .. } => self.validate_expr_inc_dec(expression, expected),
             Expression::AsmBlock { .. } => self.validate_expr_asm_block(expression, expected),
         }
     }
+
     fn validate_expr_literal(
         &mut self,
         expression: &Expression,
         expected: Option<&WaveType>,
     ) -> Result<ExpressionType, String> {
-        let Expression::Literal(literal) = expression else {
-            unreachable!("expression dispatch")
-        };
+        let Expression::Literal(literal) = expression else { unreachable!("expression dispatch") };
         Ok(match literal {
             Literal::Int(raw) => {
                 if let Some(WaveType::Float(bits)) =
@@ -67,7 +66,7 @@ impl Validator<'_> {
                     }
                 }
                 ExpressionType::IntLiteral(raw.clone())
-            }
+            },
             Literal::Float(value) => {
                 if !value.is_finite()
                     || (matches!(
@@ -76,11 +75,11 @@ impl Validator<'_> {
                     ) && !(*value as f32).is_finite())
                 {
                     return Err(
-                        "floating-point literal is out of range for its expected type".to_string(),
+                        "floating-point literal is out of range for its expected type".to_string()
                     );
                 }
                 ExpressionType::FloatLiteral
-            }
+            },
             Literal::String(_) => ExpressionType::Known(WaveType::String),
             Literal::Bool(_) => ExpressionType::Known(WaveType::Bool),
             Literal::Char(_) => ExpressionType::Known(WaveType::Char),
@@ -93,9 +92,7 @@ impl Validator<'_> {
         expression: &Expression,
         expected: Option<&WaveType>,
     ) -> Result<ExpressionType, String> {
-        let Expression::Variable(name) = expression else {
-            unreachable!("expression dispatch")
-        };
+        let Expression::Variable(name) = expression else { unreachable!("expression dispatch") };
 
         if self.program.variant_constructor(name).is_some() {
             return self.validate_variant_constructor(expression, name, &[], expected);
@@ -118,8 +115,7 @@ impl Validator<'_> {
         };
 
         self.mark_span(SemanticSpanKind::Keyword, "as");
-        self.program
-            .validate_type(target_type, &self.current_type_params, false, "cast target")?;
+        self.program.validate_type(target_type, &self.current_type_params, false, "cast target")?;
         let source = self.validate_expr_expected(expr, Some(target_type))?;
         if !self.is_valid_cast(&source, target_type) {
             return Err(format!(
@@ -136,9 +132,7 @@ impl Validator<'_> {
         expression: &Expression,
         expected: Option<&WaveType>,
     ) -> Result<ExpressionType, String> {
-        let Expression::AddressOf(inner) = expression else {
-            unreachable!("expression dispatch")
-        };
+        let Expression::AddressOf(inner) = expression else { unreachable!("expression dispatch") };
 
         self.mark_span(SemanticSpanKind::Keyword, "&");
         if !is_lvalue_expression(inner) && !matches!(inner.as_ref(), Expression::ArrayLiteral(_)) {
@@ -149,15 +143,14 @@ impl Validator<'_> {
         }
         // Addressed literals borrow their complete array layout from
         // the validated pointer destination, including element widths.
-        let array_context = expected
-            .map(|ty| self.program.canonical_type(ty))
-            .and_then(|ty| match ty {
+        let array_context =
+            expected.map(|ty| self.program.canonical_type(ty)).and_then(|ty| match ty {
                 WaveType::Pointer(pointee)
                     if matches!(inner.as_ref(), Expression::ArrayLiteral(_))
                         && matches!(pointee.as_ref(), WaveType::Array(_, _)) =>
                 {
                     Some(*pointee)
-                }
+                },
                 _ => None,
             });
         let inner_type = self.validate_expr_expected(inner, array_context.as_ref())?;
@@ -169,7 +162,7 @@ impl Validator<'_> {
             ExpressionType::Known(ty) => ExpressionType::Known(WaveType::Pointer(Box::new(ty))),
             ExpressionType::ArrayLiteral(elements) => {
                 ExpressionType::AddressedArrayLiteral(elements)
-            }
+            },
             _ => ExpressionType::Unknown,
         })
     }
@@ -179,9 +172,7 @@ impl Validator<'_> {
         expression: &Expression,
         _expected: Option<&WaveType>,
     ) -> Result<ExpressionType, String> {
-        let Expression::Deref(inner) = expression else {
-            unreachable!("expression dispatch")
-        };
+        let Expression::Deref(inner) = expression else { unreachable!("expression dispatch") };
 
         self.mark_span(SemanticSpanKind::Keyword, "deref");
         let mut projection = inner.as_ref();
@@ -201,10 +192,9 @@ impl Validator<'_> {
         };
         match inner_type {
             ExpressionType::Known(WaveType::Pointer(ty)) => Ok(ExpressionType::Known(*ty)),
-            other => Err(format!(
-                "deref expects a pointer, found `{}`",
-                display_expression_type(&other)
-            )),
+            other => {
+                Err(format!("deref expects a pointer, found `{}`", display_expression_type(&other)))
+            },
         }
     }
 
@@ -213,12 +203,7 @@ impl Validator<'_> {
         expression: &Expression,
         expected: Option<&WaveType>,
     ) -> Result<ExpressionType, String> {
-        let Expression::BinaryExpression {
-            left,
-            operator,
-            right,
-        } = expression
-        else {
+        let Expression::BinaryExpression { left, operator, right } = expression else {
             unreachable!("expression dispatch")
         };
 
@@ -246,17 +231,17 @@ impl Validator<'_> {
                     self.validate_integer_operand(left, &operand_type)?,
                     self.validate_integer_operand(right, &operand_type)?,
                 )
-            }
+            },
             (true, false) => {
                 let right_type = self.validate_expr(right)?;
                 let left_type = self.validate_contextual_operand(left, &right_type)?;
                 (left_type, right_type)
-            }
+            },
             (false, true) => {
                 let left_type = self.validate_expr(left)?;
                 let right_type = self.validate_contextual_operand(right, &left_type)?;
                 (left_type, right_type)
-            }
+            },
             (false, false) => (self.validate_expr(left)?, self.validate_expr(right)?),
         };
         infer_binary_type(self.program, operator, left_type, right_type)
@@ -267,9 +252,7 @@ impl Validator<'_> {
         expression: &Expression,
         _expected: Option<&WaveType>,
     ) -> Result<ExpressionType, String> {
-        let Expression::Await(inner) = expression else {
-            unreachable!("expression dispatch")
-        };
+        let Expression::Await(inner) = expression else { unreachable!("expression dispatch") };
 
         if !self.current_async {
             return Err("await is only valid inside an async function".into());
@@ -302,12 +285,7 @@ impl Validator<'_> {
         expression: &Expression,
         expected: Option<&WaveType>,
     ) -> Result<ExpressionType, String> {
-        let Expression::FunctionCall {
-            name,
-            type_args,
-            args,
-        } = expression
-        else {
+        let Expression::FunctionCall { name, type_args, args } = expression else {
             unreachable!("expression dispatch")
         };
 
@@ -330,13 +308,7 @@ impl Validator<'_> {
         expression: &Expression,
         _expected: Option<&WaveType>,
     ) -> Result<ExpressionType, String> {
-        let Expression::MethodCall {
-            object,
-            name,
-            args,
-            type_args,
-        } = expression
-        else {
+        let Expression::MethodCall { object, name, args, type_args } = expression else {
             unreachable!("expression dispatch")
         };
         self.validate_method_call(expression, object, name, type_args, args)
@@ -408,11 +380,7 @@ impl Validator<'_> {
             ExpressionType::Known(ty) => ExpressionType::Known(self.program.canonical_type(&ty)),
             other => other,
         };
-        if let Some(span) = self
-            .source_map
-            .expressions
-            .get(&(expression as *const _ as usize))
-        {
+        if let Some(span) = self.source_map.expressions.get(&(expression as *const _ as usize)) {
             self.source_span = Some(span.clone());
         }
         let structure = match &object_type {
@@ -463,7 +431,7 @@ impl Validator<'_> {
             ExpressionType::Known(WaveType::String) => Ok(ExpressionType::Known(WaveType::Int(8))),
             ExpressionType::Known(WaveType::Array(element, _)) => {
                 Ok(ExpressionType::Known(*element))
-            }
+            },
             ExpressionType::Known(WaveType::Pointer(element)) => match *element {
                 WaveType::Array(array_element, _) => Ok(ExpressionType::Known(*array_element)),
                 other => Ok(ExpressionType::Known(other)),
@@ -485,9 +453,8 @@ impl Validator<'_> {
         };
 
         self.mark_span(SemanticSpanKind::Keyword, "[");
-        let expected_element = expected
-            .map(|ty| self.program.canonical_type(ty))
-            .and_then(|ty| match ty {
+        let expected_element =
+            expected.map(|ty| self.program.canonical_type(ty)).and_then(|ty| match ty {
                 WaveType::Array(element, _) => Some(*element),
                 _ => None,
             });
@@ -536,19 +503,11 @@ impl Validator<'_> {
         expression: &Expression,
         _expected: Option<&WaveType>,
     ) -> Result<ExpressionType, String> {
-        let Expression::AssignOperation {
-            target,
-            operator,
-            value,
-        } = expression
-        else {
+        let Expression::AssignOperation { target, operator, value } = expression else {
             unreachable!("expression dispatch")
         };
 
-        self.mark_span(
-            SemanticSpanKind::Keyword,
-            assign_operator_source_symbol(operator),
-        );
+        self.mark_span(SemanticSpanKind::Keyword, assign_operator_source_symbol(operator));
         if !is_lvalue_expression(target) {
             return Err("compound assignment target is not an lvalue".to_string());
         }
@@ -590,11 +549,7 @@ impl Validator<'_> {
             ));
         }
         if let ExpressionType::Known(expected) = &target_type {
-            self.require_assignable(
-                &value_type,
-                expected,
-                "right operand of compound assignment",
-            )?;
+            self.require_assignable(&value_type, expected, "right operand of compound assignment")?;
         }
         Ok(target_type)
     }
@@ -640,10 +595,7 @@ impl Validator<'_> {
         expression: &Expression,
         _expected: Option<&WaveType>,
     ) -> Result<ExpressionType, String> {
-        let Expression::AsmBlock {
-            inputs, outputs, ..
-        } = expression
-        else {
+        let Expression::AsmBlock { inputs, outputs, .. } = expression else {
             unreachable!("expression dispatch")
         };
 

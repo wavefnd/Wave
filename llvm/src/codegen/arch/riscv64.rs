@@ -107,7 +107,7 @@ pub(crate) fn register_group(token: &str) -> Option<String> {
                 return None;
             }
             raw.parse::<u32>().ok()?
-        }
+        },
     };
     (number <= 31).then(|| format!("x{}", number))
 }
@@ -152,7 +152,7 @@ fn floating_register_number(token: &str) -> Option<u32> {
                 return None;
             }
             raw.parse::<u32>().ok()?
-        }
+        },
     };
     (number <= 31).then_some(number)
 }

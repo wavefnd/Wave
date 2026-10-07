@@ -26,30 +26,18 @@ fn unclosed_delimiters_retain_their_opening_span_at_every_depth() {
         let marked = format!("// 한글\r\n{marked}");
         let start = marked.find('@').unwrap();
         let source = marked.replace('@', "");
-        let tokens = Lexer::new_with_file(&source, "unclosed.wave")
-            .tokenize()
-            .unwrap();
+        let tokens = Lexer::new_with_file(&source, "unclosed.wave").tokenize().unwrap();
         let error = parse_syntax_with_spans(&tokens).unwrap_err();
         assert_eq!(error.found(), Some("Eof"), "{source}: {error:?}");
-        assert_eq!(
-            error.span().unwrap().start,
-            source.len(),
-            "{source}: {error:?}"
-        );
+        assert_eq!(error.span().unwrap().start, source.len(), "{source}: {error:?}");
         assert_eq!(error.related().len(), 1, "{source}: {error:?}");
         let related = &error.related()[0];
         assert_eq!(related.span.start, start, "{source}: {error:?}");
         assert_eq!(related.span.end, start + 1);
         assert_eq!(related.span.file, "unclosed.wave");
-        assert!(
-            related.message.contains(&format!("expected '{closer}'")),
-            "{error:?}"
-        );
+        assert!(related.message.contains(&format!("expected '{closer}'")), "{error:?}");
         let no_spans = parse_syntax_only(&tokens).unwrap_err();
-        assert!(no_spans
-            .note()
-            .unwrap()
-            .contains(&format!("expected '{closer}'")));
+        assert!(no_spans.note().unwrap().contains(&format!("expected '{closer}'")));
     }
 }
 

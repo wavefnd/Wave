@@ -11,17 +11,13 @@ pub fn find_builtins(target: &str, roots: &[PathBuf]) -> Option<PathBuf> {
     roots
         .iter()
         .map(|root| {
-            root.join("lib/clang/21/lib/windows")
-                .join(format!("clang_rt.builtins-{arch}.lib"))
+            root.join("lib/clang/21/lib/windows").join(format!("clang_rt.builtins-{arch}.lib"))
         })
         .find(|path| path.is_file())
 }
 
 pub fn add_builtins(target: &str, args: &mut Vec<String>) {
-    if args
-        .iter()
-        .any(|arg| arg.eq_ignore_ascii_case("/NODEFAULTLIB"))
-    {
+    if args.iter().any(|arg| arg.eq_ignore_ascii_case("/NODEFAULTLIB")) {
         return;
     }
     let mut roots = Vec::new();

@@ -17,29 +17,19 @@ fn numeric_tokens_and_shared_values_agree() {
         let number = IntegerLiteral::parse(raw).unwrap();
         assert_eq!(number.to_i128(), Some(value));
         let tokens = Lexer::new(raw).tokenize().unwrap();
-        let TokenType::IntLiteral(normalized) = &tokens[0].token_type else {
-            panic!()
-        };
+        let TokenType::IntLiteral(normalized) = &tokens[0].token_type else { panic!() };
         assert_eq!(IntegerLiteral::parse(normalized), Some(number));
     }
     assert_eq!(
-        IntegerLiteral::parse("-170141183460469231731687303715884105728")
-            .unwrap()
-            .to_i128(),
+        IntegerLiteral::parse("-170141183460469231731687303715884105728").unwrap().to_i128(),
         Some(i128::MIN)
     );
     assert_eq!(
-        IntegerLiteral::parse("-9223372036854775808")
-            .unwrap()
-            .to_f64(),
+        IntegerLiteral::parse("-9223372036854775808").unwrap().to_f64(),
         Some(i64::MIN as f64)
     );
-    for (raw, value) in [
-        ("1.0", 1.0),
-        ("1e3", 1000.0),
-        ("1E-3", 0.001),
-        ("1_000.2_5e+2", 100025.0),
-    ] {
+    for (raw, value) in [("1.0", 1.0), ("1e3", 1000.0), ("1E-3", 0.001), ("1_000.2_5e+2", 100025.0)]
+    {
         assert_eq!(parse_float(raw), Some(value));
         assert!(
             matches!(Lexer::new(raw).tokenize().unwrap()[0].token_type,TokenType::Float(n) if n == value)

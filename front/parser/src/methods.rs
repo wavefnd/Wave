@@ -39,10 +39,7 @@ pub(crate) fn lower_generic_methods(mut ast: Vec<ASTNode>) -> Result<Vec<ASTNode
     });
     let mut ordered = ordered.into_iter();
     walk_nodes(&mut ast, &mut |expression| {
-        let Some(call) = ordered
-            .next()
-            .expect("source and semantic traversal must agree")
-        else {
+        let Some(call) = ordered.next().expect("source and semantic traversal must agree") else {
             return;
         };
         if !call.rewrite {
@@ -56,7 +53,7 @@ pub(crate) fn lower_generic_methods(mut ast: Vec<ASTNode>) -> Result<Vec<ASTNode
                 let mut arguments = vec![*object];
                 arguments.extend(args);
                 arguments
-            }
+            },
             Expression::FunctionCall { args, .. } => args,
             _ => unreachable!("semantic generic call resolution"),
         };
@@ -67,10 +64,7 @@ pub(crate) fn lower_generic_methods(mut ast: Vec<ASTNode>) -> Result<Vec<ASTNode
             args: arguments,
         };
     });
-    assert!(
-        ordered.next().is_none(),
-        "source and semantic traversal must agree"
-    );
+    assert!(ordered.next().is_none(), "source and semantic traversal must agree");
     let mut lifted = Vec::new();
     for node in &mut ast {
         lift(node, &mut lifted);
@@ -89,7 +83,7 @@ fn lift(node: &mut ASTNode, lifted: &mut Vec<ASTNode>) {
                 *node = node.clone().with_span(span.clone());
             }
             return;
-        }
+        },
         ASTNode::Struct(s) => (&s.name, s.generic_params.clone(), &mut s.methods),
         ASTNode::ProtoImpl(p) => (&p.target, Vec::new(), &mut p.methods),
         _ => return,
@@ -125,7 +119,7 @@ fn walk_node(node: &mut ASTNode, visit: &mut impl FnMut(&mut Expression)) {
                 }
             }
             walk_nodes(&mut function.body, visit);
-        }
+        },
         ASTNode::Struct(structure) => {
             for method in &mut structure.methods {
                 for parameter in &mut method.parameters {
@@ -135,7 +129,7 @@ fn walk_node(node: &mut ASTNode, visit: &mut impl FnMut(&mut Expression)) {
                 }
                 walk_nodes(&mut method.body, visit);
             }
-        }
+        },
         ASTNode::ProtoImpl(implementation) => {
             for method in &mut implementation.methods {
                 for parameter in &mut method.parameters {
@@ -145,19 +139,19 @@ fn walk_node(node: &mut ASTNode, visit: &mut impl FnMut(&mut Expression)) {
                 }
                 walk_nodes(&mut method.body, visit);
             }
-        }
+        },
         ASTNode::Statement(statement) => walk_statement(statement, visit),
         ASTNode::Variable(variable) => {
             if let Some(initializer) = &mut variable.initial_value {
                 walk_expression(initializer, visit);
             }
-        }
+        },
         ASTNode::Expression(expression) => walk_expression(expression, visit),
         ASTNode::ExternFunction(_)
         | ASTNode::Program(_)
         | ASTNode::TypeAlias(_)
         | ASTNode::Enum(_)
-        | ASTNode::Variant(_) => {}
+        | ASTNode::Variant(_) => {},
     }
 }
 
@@ -169,13 +163,8 @@ fn walk_statement(statement: &mut StatementNode, visit: &mut impl FnMut(&mut Exp
             for argument in args {
                 walk_expression(argument, visit);
             }
-        }
-        StatementNode::If {
-            condition,
-            body,
-            else_if_blocks,
-            else_block,
-        } => {
+        },
+        StatementNode::If { condition, body, else_if_blocks, else_block } => {
             walk_expression(condition, visit);
             walk_nodes(body, visit);
             if let Some(blocks) = else_if_blocks {
@@ -187,46 +176,39 @@ fn walk_statement(statement: &mut StatementNode, visit: &mut impl FnMut(&mut Exp
             if let Some(body) = else_block {
                 walk_nodes(body, visit);
             }
-        }
-        StatementNode::For {
-            initialization,
-            condition,
-            increment,
-            body,
-        } => {
+        },
+        StatementNode::For { initialization, condition, increment, body } => {
             walk_node(initialization, visit);
             walk_expression(condition, visit);
             walk_expression(increment, visit);
             walk_nodes(body, visit);
-        }
+        },
         StatementNode::While { condition, body } => {
             walk_expression(condition, visit);
             walk_nodes(body, visit);
-        }
+        },
         StatementNode::Match { value, arms } => {
             walk_expression(value, visit);
             for arm in arms {
                 walk_nodes(&mut arm.body, visit);
             }
-        }
+        },
         StatementNode::Assign { value, .. } => walk_expression(value, visit),
-        StatementNode::AsmBlock {
-            inputs, outputs, ..
-        } => {
+        StatementNode::AsmBlock { inputs, outputs, .. } => {
             for (_, expression) in inputs.iter_mut().chain(outputs.iter_mut()) {
                 walk_expression(expression, visit);
             }
-        }
+        },
         StatementNode::Return(Some(expression)) | StatementNode::Expression(expression) => {
             walk_expression(expression, visit)
-        }
+        },
         StatementNode::Print(_)
         | StatementNode::Println(_)
         | StatementNode::Variable(_)
         | StatementNode::Import(_)
         | StatementNode::Break
         | StatementNode::Continue
-        | StatementNode::Return(None) => {}
+        | StatementNode::Return(None) => {},
     }
 }
 
@@ -241,18 +223,18 @@ fn walk_expression(expression: &mut Expression, visit: &mut impl FnMut(&mut Expr
             for (_, value) in fields {
                 walk_expression(value, visit);
             }
-        }
+        },
         Expression::FunctionCall { args, .. } => {
             for argument in args {
                 walk_expression(argument, visit);
             }
-        }
+        },
         Expression::MethodCall { object, args, .. } => {
             walk_expression(object, visit);
             for argument in args {
                 walk_expression(argument, visit);
             }
-        }
+        },
         Expression::Deref(inner)
         | Expression::AddressOf(inner)
         | Expression::Await(inner)
@@ -262,35 +244,23 @@ fn walk_expression(expression: &mut Expression, visit: &mut impl FnMut(&mut Expr
         | Expression::FieldAccess { object: inner, .. }
         | Expression::IncDec { target: inner, .. } => walk_expression(inner, visit),
         Expression::BinaryExpression { left, right, .. }
-        | Expression::IndexAccess {
-            target: left,
-            index: right,
-        }
-        | Expression::AssignOperation {
-            target: left,
-            value: right,
-            ..
-        }
-        | Expression::Assignment {
-            target: left,
-            value: right,
-        } => {
+        | Expression::IndexAccess { target: left, index: right }
+        | Expression::AssignOperation { target: left, value: right, .. }
+        | Expression::Assignment { target: left, value: right } => {
             walk_expression(left, visit);
             walk_expression(right, visit);
-        }
+        },
         Expression::ArrayLiteral(values) => {
             for value in values {
                 walk_expression(value, visit);
             }
-        }
-        Expression::AsmBlock {
-            inputs, outputs, ..
-        } => {
+        },
+        Expression::AsmBlock { inputs, outputs, .. } => {
             for (_, expression) in inputs.iter_mut().chain(outputs.iter_mut()) {
                 walk_expression(expression, visit);
             }
-        }
-        Expression::Null | Expression::Literal(_) | Expression::Variable(_) => {}
+        },
+        Expression::Null | Expression::Literal(_) | Expression::Variable(_) => {},
     }
     visit(expression);
 }

@@ -32,10 +32,7 @@ pub fn get_os_pretty_name() -> String {
         if let Ok(content) = fs::read_to_string("/etc/os-release") {
             for line in content.lines() {
                 if line.starts_with("PRETTY_NAME=") {
-                    return line
-                        .trim_start_matches("PRETTY_NAME=")
-                        .trim_matches('"')
-                        .to_string();
+                    return line.trim_start_matches("PRETTY_NAME=").trim_matches('"').to_string();
                 }
             }
         }

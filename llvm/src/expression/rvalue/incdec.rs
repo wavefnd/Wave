@@ -24,9 +24,7 @@ use inkwell::values::{BasicValue, BasicValueEnum};
 use parser::ast::{Expression, IncDecKind, WaveType};
 
 fn normalize_struct_name(raw: &str) -> &str {
-    raw.strip_prefix("struct.")
-        .unwrap_or(raw)
-        .trim_start_matches('%')
+    raw.strip_prefix("struct.").unwrap_or(raw).trim_start_matches('%')
 }
 
 fn resolve_struct_key<'ctx, 'a>(
@@ -60,7 +58,7 @@ fn wave_type_of_lvalue<'ctx, 'a>(env: &ExprGenEnv<'ctx, 'a>, e: &Expression) -> 
         Expression::Grouped(inner) => wave_type_of_lvalue(env, inner),
         Expression::AddressOf(inner) => {
             wave_type_of_lvalue(env, inner).map(|t| WaveType::Pointer(Box::new(t)))
-        }
+        },
         Expression::Deref(inner) => {
             let inner_ty = wave_type_of_lvalue(env, inner)?;
             match inner_ty {
@@ -68,7 +66,7 @@ fn wave_type_of_lvalue<'ctx, 'a>(env: &ExprGenEnv<'ctx, 'a>, e: &Expression) -> 
                 WaveType::String => Some(WaveType::Byte),
                 _ => None,
             }
-        }
+        },
         Expression::IndexAccess { target, .. } => {
             let t = wave_type_of_lvalue(env, target)?;
             match t {
@@ -77,7 +75,7 @@ fn wave_type_of_lvalue<'ctx, 'a>(env: &ExprGenEnv<'ctx, 'a>, e: &Expression) -> 
                 WaveType::String => Some(WaveType::Byte),
                 _ => None,
             }
-        }
+        },
         _ => None,
     }
 }
@@ -89,13 +87,13 @@ fn infer_lvalue_value_type<'ctx, 'a>(
     match target {
         Expression::Grouped(inner) | Expression::AddressOf(inner) => {
             infer_lvalue_value_type(env, inner)
-        }
+        },
 
         Expression::Variable(_) | Expression::Deref(_) | Expression::IndexAccess { .. } => {
             let wt = wave_type_of_lvalue(env, target)
                 .unwrap_or_else(|| panic!("Cannot infer lvalue type: {:?}", target));
             wave_to_basic(env, &wt)
-        }
+        },
 
         Expression::FieldAccess { object, field } => {
             let struct_name_opt = wave_type_of_lvalue(env, object).and_then(|wt| match wt {
@@ -121,10 +119,7 @@ fn infer_lvalue_value_type<'ctx, 'a>(
                     .unwrap_or_else(|| panic!("Unknown field '{}.{}'", struct_name, field));
 
                 return st.get_field_type_at_index(field_index).unwrap_or_else(|| {
-                    panic!(
-                        "Invalid field index {} for struct {}",
-                        field_index, struct_name
-                    )
+                    panic!("Invalid field index {} for struct {}", field_index, struct_name)
                 });
             }
 
@@ -147,12 +142,9 @@ fn infer_lvalue_value_type<'ctx, 'a>(
                 .unwrap_or_else(|| panic!("Unknown field '{}.{}'", struct_key, field));
 
             st.get_field_type_at_index(field_index).unwrap_or_else(|| {
-                panic!(
-                    "Invalid field index {} for struct {}",
-                    field_index, struct_key
-                )
+                panic!("Invalid field index {} for struct {}", field_index, struct_key)
             })
-        }
+        },
 
         _ => panic!("Expression is not an assignable lvalue: {:?}", target),
     }
@@ -180,11 +172,8 @@ pub(crate) fn gen<'ctx, 'a>(
     let ptr = generate_address_ir(env, target);
 
     let element_type = infer_lvalue_value_type(env, target);
-    let old_val = env
-        .builder
-        .build_load(element_type, ptr, "incdec_old")
-        .unwrap()
-        .as_basic_value_enum();
+    let old_val =
+        env.builder.build_load(element_type, ptr, "incdec_old").unwrap().as_basic_value_enum();
 
     let new_val: BasicValueEnum<'ctx> = match old_val {
         BasicValueEnum::IntValue(iv) => {
@@ -196,35 +185,35 @@ pub(crate) fn gen<'ctx, 'a>(
             let nv = match kind {
                 IncDecKind::PreInc | IncDecKind::PostInc => {
                     env.builder.build_int_add(iv, one, "inc").unwrap()
-                }
+                },
                 IncDecKind::PreDec | IncDecKind::PostDec => {
                     env.builder.build_int_sub(iv, one, "dec").unwrap()
-                }
+                },
             };
             nv.as_basic_value_enum()
-        }
+        },
 
         BasicValueEnum::FloatValue(fv) => {
             let one = fv.get_type().const_float(1.0);
             let nv = match kind {
                 IncDecKind::PreInc | IncDecKind::PostInc => {
                     env.builder.build_float_add(fv, one, "finc").unwrap()
-                }
+                },
                 IncDecKind::PreDec | IncDecKind::PostDec => {
                     env.builder.build_float_sub(fv, one, "fdec").unwrap()
-                }
+                },
             };
             nv.as_basic_value_enum()
-        }
+        },
 
         BasicValueEnum::PointerValue(pv) => {
             let idx = match kind {
                 IncDecKind::PreInc | IncDecKind::PostInc => {
                     env.context.i64_type().const_int(1, true)
-                }
+                },
                 IncDecKind::PreDec | IncDecKind::PostDec => {
                     env.context.i64_type().const_int((-1i64) as u64, true)
-                }
+                },
             };
 
             let pointee_ty = infer_ptr_pointee_type(env, target);
@@ -232,12 +221,10 @@ pub(crate) fn gen<'ctx, 'a>(
             // source pointer and stepped result to satisfy LLVM's inbounds GEP
             // contract for the same allocation.
             let gep = unsafe {
-                env.builder
-                    .build_in_bounds_gep(pointee_ty, pv, &[idx], "pincdec")
-                    .unwrap()
+                env.builder.build_in_bounds_gep(pointee_ty, pv, &[idx], "pincdec").unwrap()
             };
             gep.as_basic_value_enum()
-        }
+        },
 
         _ => panic!("Unsupported type for ++/--: {:?}", old_val),
     };

@@ -119,16 +119,16 @@ pub fn resolve_target_options(
             Some("lp64") => {
                 enabled.insert("f", false);
                 enabled.insert("d", false);
-            }
+            },
             Some("lp64f") => {
                 enabled.insert("f", true);
                 enabled.insert("d", false);
-            }
+            },
             Some("lp64d") => {
                 enabled.insert("f", true);
                 enabled.insert("d", true);
-            }
-            _ => {}
+            },
+            _ => {},
         }
     }
 
@@ -139,16 +139,16 @@ pub fn resolve_target_options(
             Some("lp64s") => {
                 enabled.insert("f", false);
                 enabled.insert("d", false);
-            }
+            },
             Some("lp64f") => {
                 enabled.insert("f", true);
                 enabled.insert("d", false);
-            }
+            },
             Some("lp64d") => {
                 enabled.insert("f", true);
                 enabled.insert("d", true);
-            }
-            _ => {}
+            },
+            _ => {},
         }
     }
 
@@ -312,10 +312,8 @@ pub fn resolve_target_options(
     // RISC-V passes every supported feature with an explicit sign. Omitting a
     // disabled F/D feature can let LLVM's CPU defaults silently contradict the
     // effective ABI.
-    let render_all_features = matches!(
-        spec.architecture,
-        Architecture::Riscv64 | Architecture::LoongArch64
-    );
+    let render_all_features =
+        matches!(spec.architecture, Architecture::Riscv64 | Architecture::LoongArch64);
     let features = spec
         .features
         .iter()
@@ -325,22 +323,13 @@ pub fn resolve_target_options(
                 || spec.default_features.contains(name)
         })
         .map(|name| {
-            let sign = if enabled.get(name).copied().unwrap_or(false) {
-                '+'
-            } else {
-                '-'
-            };
+            let sign = if enabled.get(name).copied().unwrap_or(false) { '+' } else { '-' };
             format!("{}{}", sign, name)
         })
         .collect::<Vec<_>>()
         .join(",");
 
-    Ok(EffectiveTargetOptions {
-        cpu: cpu.to_string(),
-        features,
-        abi: effective_abi,
-        isa,
-    })
+    Ok(EffectiveTargetOptions { cpu: cpu.to_string(), features, abi: effective_abi, isa })
 }
 
 #[cfg(any(feature = "llvm-target-all", feature = "llvm-target-x86"))]
@@ -678,11 +667,7 @@ pub fn supported_target_specs() -> Vec<&'static TargetSpec> {
     specs.push(&LINUX_LOONGARCH64);
 
     #[cfg(any(feature = "llvm-target-all", feature = "llvm-target-wasm"))]
-    specs.extend([
-        &WASM32_UNKNOWN_UNKNOWN,
-        &WASM32_WASIP1,
-        &WASM64_UNKNOWN_UNKNOWN,
-    ]);
+    specs.extend([&WASM32_UNKNOWN_UNKNOWN, &WASM32_WASIP1, &WASM64_UNKNOWN_UNKNOWN]);
 
     specs.sort_unstable_by_key(|spec| spec.triple);
     specs
@@ -690,9 +675,7 @@ pub fn supported_target_specs() -> Vec<&'static TargetSpec> {
 
 /// Performs an exact lookup in the compiled target registry.
 pub fn target_spec_for_triple(triple: &str) -> Option<&'static TargetSpec> {
-    supported_target_specs()
-        .into_iter()
-        .find(|spec| spec.triple == triple)
+    supported_target_specs().into_iter().find(|spec| spec.triple == triple)
 }
 
 /// Returns the LLVM triple spelling whose environment encodes the selected
@@ -725,7 +708,7 @@ impl CodegenTarget {
             | Self::FreestandingArm64 => Architecture::Aarch64,
             Self::LinuxRISCV64 | Self::FreeBsdRISCV64 | Self::FreestandingRISCV64 => {
                 Architecture::Riscv64
-            }
+            },
             Self::LinuxLoongArch64 => Architecture::LoongArch64,
             Self::Wasm32Unknown | Self::Wasm32WasiP1 => Architecture::Wasm32,
             Self::Wasm64Unknown => Architecture::Wasm64,
@@ -775,15 +758,9 @@ pub fn require_supported_target_from_triple(triple: &TargetTriple) -> CodegenTar
     }
 
     let raw = triple.as_str().to_string_lossy();
-    let supported = supported_target_specs()
-        .into_iter()
-        .map(|spec| spec.triple)
-        .collect::<Vec<_>>()
-        .join(", ");
-    panic!(
-        "unsupported target triple '{}': Wave currently supports {}",
-        raw, supported
-    );
+    let supported =
+        supported_target_specs().into_iter().map(|spec| spec.triple).collect::<Vec<_>>().join(", ");
+    panic!("unsupported target triple '{}': Wave currently supports {}", raw, supported);
 }
 
 pub fn require_supported_target_from_module(module: &Module<'_>) -> CodegenTarget {
@@ -793,15 +770,9 @@ pub fn require_supported_target_from_module(module: &Module<'_>) -> CodegenTarge
 
     let triple = module.get_triple();
     let raw = triple.as_str().to_string_lossy();
-    let supported = supported_target_specs()
-        .into_iter()
-        .map(|spec| spec.triple)
-        .collect::<Vec<_>>()
-        .join(", ");
-    panic!(
-        "unsupported target triple '{}': Wave currently supports {}",
-        raw, supported
-    );
+    let supported =
+        supported_target_specs().into_iter().map(|spec| spec.triple).collect::<Vec<_>>().join(", ");
+    panic!("unsupported target triple '{}': Wave currently supports {}", raw, supported);
 }
 
 #[cfg(test)]
@@ -815,10 +786,7 @@ mod tests {
 
         for (index, spec) in specs.iter().enumerate() {
             assert_eq!(target_spec_for_triple(spec.triple), Some(*spec));
-            assert_eq!(
-                CodegenTarget::from_triple_str(spec.triple),
-                Some(spec.codegen)
-            );
+            assert_eq!(CodegenTarget::from_triple_str(spec.triple), Some(spec.codegen));
             assert!(!spec.architecture.name().is_empty());
             assert!(!spec.os.is_empty());
             assert!(!spec.object_format.is_empty());
@@ -913,10 +881,7 @@ mod tests {
         for abi in ["lp64s", "lp64f"] {
             let error = resolve_target_options(&LINUX_LOONGARCH64, None, Some("+lsx"), Some(abi))
                 .unwrap_err();
-            assert!(
-                error.contains("feature 'lsx' requires feature 'd'"),
-                "{error}"
-            );
+            assert!(error.contains("feature 'lsx' requires feature 'd'"), "{error}");
         }
 
         let error =

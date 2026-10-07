@@ -18,10 +18,7 @@ pub struct ConstInt {
 
 impl ConstInt {
     pub fn zero() -> Self {
-        Self {
-            negative: false,
-            words: Box::new([0; WORDS]),
-        }
+        Self { negative: false, words: Box::new([0; WORDS]) }
     }
 
     pub fn from_u64(value: u64) -> Self {
@@ -57,6 +54,7 @@ impl ConstInt {
     pub fn is_zero(&self) -> bool {
         self.words.iter().all(|&w| w == 0)
     }
+
     pub fn is_negative(&self) -> bool {
         self.negative
     }
@@ -70,26 +68,32 @@ impl ConstInt {
         }
         words
     }
+
     pub fn bits(&self) -> usize {
         self.words
             .iter()
             .rposition(|&w| w != 0)
             .map_or(0, |i| i * 64 + 64 - self.words[i].leading_zeros() as usize)
     }
+
     fn bit(&self, index: usize) -> bool {
         index < CAPACITY && self.words[index / 64] & (1 << (index % 64)) != 0
     }
+
     fn canonical(mut self) -> Self {
         self.negative &= !self.is_zero();
         self
     }
+
     pub fn negated(mut self) -> Self {
         self.negative = !self.negative && !self.is_zero();
         self
     }
+
     fn magnitude_cmp(&self, other: &Self) -> Ordering {
         self.words.iter().rev().cmp(other.words.iter().rev())
     }
+
     fn magnitude_add(&self, other: &Self) -> Option<Self> {
         let mut result = Self::zero();
         let mut carry = 0u128;
@@ -100,6 +104,7 @@ impl ConstInt {
         }
         (carry == 0).then_some(result)
     }
+
     fn magnitude_sub(&self, other: &Self) -> Self {
         debug_assert!(self.magnitude_cmp(other) != Ordering::Less);
         let mut result = Self::zero();
@@ -113,6 +118,7 @@ impl ConstInt {
         debug_assert!(!borrow);
         result
     }
+
     pub fn checked_add(&self, other: &Self) -> Option<Self> {
         let (mut result, negative) = if self.negative == other.negative {
             (self.magnitude_add(other)?, self.negative)
@@ -124,9 +130,11 @@ impl ConstInt {
         result.negative = negative;
         Some(result.canonical())
     }
+
     pub fn checked_sub(&self, other: &Self) -> Option<Self> {
         self.checked_add(&other.clone().negated())
     }
+
     pub fn checked_mul(&self, other: &Self) -> Option<Self> {
         let mut result = Self::zero();
         let right_words = other.bits().div_ceil(64);
@@ -177,6 +185,7 @@ impl ConstInt {
         remainder.negative = self.negative;
         Some((quotient.canonical(), remainder.canonical()))
     }
+
     pub fn checked_shl(&self, shift: usize) -> Option<Self> {
         if self.is_zero() {
             return Some(Self::zero());
@@ -195,6 +204,7 @@ impl ConstInt {
         result.negative = self.negative;
         Some(result)
     }
+
     fn magnitude_shr(&self, shift: usize) -> Self {
         let mut result = Self::zero();
         if shift >= CAPACITY {
@@ -218,6 +228,7 @@ impl ConstInt {
         result.negative = self.negative;
         result.canonical()
     }
+
     fn twos_complement(&self) -> [u64; WORDS + 1] {
         let mut words = [0; WORDS + 1];
         words[..WORDS].copy_from_slice(self.words.as_ref());
@@ -226,6 +237,7 @@ impl ConstInt {
         }
         words
     }
+
     fn from_twos_complement(mut words: [u64; WORDS + 1]) -> Option<Self> {
         let negative = words[WORDS] >> 63 != 0;
         if negative {
@@ -239,6 +251,7 @@ impl ConstInt {
         result.negative = negative;
         Some(result.canonical())
     }
+
     fn bitwise(&self, other: &Self, op: impl Fn(u64, u64) -> u64) -> Option<Self> {
         let mut words = self.twos_complement();
         for (a, b) in words.iter_mut().zip(other.twos_complement()) {
@@ -246,15 +259,19 @@ impl ConstInt {
         }
         Self::from_twos_complement(words)
     }
+
     pub fn bitand(&self, other: &Self) -> Option<Self> {
         self.bitwise(other, |a, b| a & b)
     }
+
     pub fn bitor(&self, other: &Self) -> Option<Self> {
         self.bitwise(other, |a, b| a | b)
     }
+
     pub fn bitxor(&self, other: &Self) -> Option<Self> {
         self.bitwise(other, |a, b| a ^ b)
     }
+
     pub fn checked_not(&self) -> Option<Self> {
         Self::from_twos_complement(self.twos_complement().map(|w| !w))
     }
@@ -274,9 +291,11 @@ impl ConstInt {
         words[bits.div_ceil(64)..].fill(fill);
         Self::from_twos_complement(words).unwrap()
     }
+
     pub fn fits(&self, bits: u16, signed: bool) -> bool {
         self == &self.normalize(bits, signed)
     }
+
     pub fn to_usize(&self) -> Option<usize> {
         if self.negative || self.bits() > usize::BITS as usize {
             return None;
@@ -303,6 +322,7 @@ impl ConstInt {
         result.negative = raw >> 63 != 0;
         Some(result.canonical())
     }
+
     fn rounded_significand(&self, precision: usize) -> (u64, i32) {
         let shift = self.bits().saturating_sub(precision);
         let mut significand = self.magnitude_shr(shift).words[0];
@@ -315,6 +335,7 @@ impl ConstInt {
         }
         (significand, shift as i32)
     }
+
     pub fn to_f64(&self) -> f64 {
         let (significand, shift) = self.rounded_significand(53);
         let value = significand as f64 * 2f64.powi(shift);
@@ -324,6 +345,7 @@ impl ConstInt {
             value
         }
     }
+
     pub fn to_f32(&self) -> f32 {
         let (significand, shift) = self.rounded_significand(24);
         let value = significand as f32 * 2f32.powi(shift);
@@ -390,11 +412,7 @@ mod tests {
             for shift in [0, 1, 7, 63, 64, 127, 1024, usize::MAX] {
                 assert_eq!(
                     x.shifted_right(shift),
-                    int(if shift < 128 {
-                        a >> shift
-                    } else {
-                        -((a < 0) as i128)
-                    })
+                    int(if shift < 128 { a >> shift } else { -((a < 0) as i128) })
                 );
             }
             for b in -32i128..=32 {
@@ -424,10 +442,7 @@ mod tests {
                 value
             }
         }
-        for (index, line) in include_str!("../tests/fixtures/const_int.tsv")
-            .lines()
-            .enumerate()
-        {
+        for (index, line) in include_str!("../tests/fixtures/const_int.tsv").lines().enumerate() {
             if line.starts_with('#') {
                 continue;
             }
@@ -479,16 +494,7 @@ mod tests {
     }
     #[test]
     fn floating_conversions_round_once_and_decode_exactly() {
-        for value in [
-            i128::MIN,
-            i128::MAX,
-            -16777219,
-            -1,
-            0,
-            1,
-            16777217,
-            16777219,
-        ] {
+        for value in [i128::MIN, i128::MAX, -16777219, -1, 0, 1, 16777217, 16777219] {
             assert_eq!(int(value).to_f64(), value as f64);
             assert_eq!(int(value).to_f32(), value as f32);
         }
@@ -501,14 +507,8 @@ mod tests {
             "340282356779733661637539395458142568448",
         ] {
             let n = ConstInt::from_digits(digits, 10).unwrap();
-            assert_eq!(
-                n.to_f64().to_bits(),
-                digits.parse::<f64>().unwrap().to_bits()
-            );
-            assert_eq!(
-                n.to_f32().to_bits(),
-                digits.parse::<f32>().unwrap().to_bits()
-            );
+            assert_eq!(n.to_f64().to_bits(), digits.parse::<f64>().unwrap().to_bits());
+            assert_eq!(n.to_f32().to_bits(), digits.parse::<f32>().unwrap().to_bits());
             assert_eq!(n.clone().negated().to_f32(), -n.to_f32());
         }
         for value in [

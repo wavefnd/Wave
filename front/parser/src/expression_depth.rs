@@ -52,10 +52,7 @@ fn check_expression(expr: &Expression, base: usize) -> Result<(), ParseError> {
             pending.push((value, depth, Some(span)));
             continue;
         }
-        if matches!(
-            expr,
-            Expression::Literal(_) | Expression::Variable(_) | Expression::Null
-        ) {
+        if matches!(expr, Expression::Literal(_) | Expression::Variable(_) | Expression::Null) {
             continue;
         }
         let depth = depth + 1;
@@ -107,7 +104,7 @@ pub fn validate(nodes: &[ASTNode]) -> Result<(), SemanticDiagnostic> {
                             help: HELP.into(),
                         });
                     }
-                }
+                },
                 Work::Function(function) => {
                     for param in &function.parameters {
                         if let Some(value) = &param.initial_value {
@@ -115,7 +112,7 @@ pub fn validate(nodes: &[ASTNode]) -> Result<(), SemanticDiagnostic> {
                         }
                     }
                     pending.extend(function.body.iter().map(Work::Node));
-                }
+                },
                 Work::Node(node) => match node {
                     ASTNode::Located { value, .. } => pending.push(Work::Node(value)),
                     ASTNode::Function(f) => pending.push(Work::Function(f)),
@@ -126,28 +123,23 @@ pub fn validate(nodes: &[ASTNode]) -> Result<(), SemanticDiagnostic> {
                         if let Some(e) = &v.initial_value {
                             pending.push(Work::Expression(e));
                         }
-                    }
+                    },
                     ASTNode::Expression(e) => pending.push(Work::Expression(e)),
-                    ASTNode::ExternFunction(_) => {}
+                    ASTNode::ExternFunction(_) => {},
                     ASTNode::Program(p) => {
                         if let Some(e) = &p.initial_value {
                             pending.push(Work::Expression(e));
                         }
-                    }
-                    ASTNode::TypeAlias(_) | ASTNode::Enum(_) | ASTNode::Variant(_) => {}
+                    },
+                    ASTNode::TypeAlias(_) | ASTNode::Enum(_) | ASTNode::Variant(_) => {},
                 },
                 Work::Statement(statement) => match statement {
                     StatementNode::PrintFormat { args, .. }
                     | StatementNode::PrintlnFormat { args, .. }
                     | StatementNode::Input { args, .. } => {
                         pending.extend(args.iter().map(Work::Expression))
-                    }
-                    StatementNode::If {
-                        condition,
-                        body,
-                        else_if_blocks,
-                        else_block,
-                    } => {
+                    },
+                    StatementNode::If { condition, body, else_if_blocks, else_block } => {
                         pending.push(Work::Expression(condition));
                         pending.extend(body.iter().map(Work::Node));
                         if let Some(blocks) = else_if_blocks {
@@ -159,38 +151,28 @@ pub fn validate(nodes: &[ASTNode]) -> Result<(), SemanticDiagnostic> {
                         if let Some(body) = else_block {
                             pending.extend(body.iter().map(Work::Node));
                         }
-                    }
-                    StatementNode::For {
-                        initialization,
-                        condition,
-                        increment,
-                        body,
-                    } => {
+                    },
+                    StatementNode::For { initialization, condition, increment, body } => {
                         pending.push(Work::Node(initialization));
                         pending.push(Work::Expression(condition));
                         pending.push(Work::Expression(increment));
                         pending.extend(body.iter().map(Work::Node));
-                    }
+                    },
                     StatementNode::While { condition, body } => {
                         pending.push(Work::Expression(condition));
                         pending.extend(body.iter().map(Work::Node));
-                    }
+                    },
                     StatementNode::Match { value, arms } => {
                         pending.push(Work::Expression(value));
                         for arm in arms {
                             pending.extend(arm.body.iter().map(Work::Node));
                         }
-                    }
+                    },
                     StatementNode::Assign { value, .. }
                     | StatementNode::Expression(value)
                     | StatementNode::Return(Some(value)) => pending.push(Work::Expression(value)),
-                    StatementNode::AsmBlock {
-                        inputs, outputs, ..
-                    } => pending.extend(
-                        inputs
-                            .iter()
-                            .chain(outputs.iter())
-                            .map(|(_, e)| Work::Expression(e)),
+                    StatementNode::AsmBlock { inputs, outputs, .. } => pending.extend(
+                        inputs.iter().chain(outputs.iter()).map(|(_, e)| Work::Expression(e)),
                     ),
                     StatementNode::Print(_)
                     | StatementNode::Println(_)
@@ -198,7 +180,7 @@ pub fn validate(nodes: &[ASTNode]) -> Result<(), SemanticDiagnostic> {
                     | StatementNode::Import(_)
                     | StatementNode::Break
                     | StatementNode::Continue
-                    | StatementNode::Return(None) => {}
+                    | StatementNode::Return(None) => {},
                 },
             }
         }

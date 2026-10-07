@@ -29,6 +29,7 @@ pub(super) fn rewrite_expression(
         other => Ok(other),
     }
 }
+
 fn rewrite_located(
     expression: Expression,
     subst: &HashMap<String, WaveType>,
@@ -38,11 +39,7 @@ fn rewrite_located(
         unreachable!("expression dispatch")
     };
 
-    let span = if subst.is_empty() {
-        span
-    } else {
-        span.generated("generic specialization")
-    };
+    let span = if subst.is_empty() { span } else { span.generated("generic specialization") };
     Ok(rewrite_expression(*value, subst, env)?.with_span(Some(span)))
 }
 
@@ -51,12 +48,7 @@ fn rewrite_function_call(
     subst: &HashMap<String, WaveType>,
     env: &mut GenericEnv,
 ) -> Result<Expression, String> {
-    let Expression::FunctionCall {
-        name,
-        type_args,
-        args,
-    } = expression
-    else {
+    let Expression::FunctionCall { name, type_args, args } = expression else {
         unreachable!("expression dispatch")
     };
 
@@ -65,16 +57,9 @@ fn rewrite_function_call(
 
     if type_args.is_empty() {
         if env.function_templates.contains_key(&name) {
-            return Err(format!(
-                "generic function '{}' requires explicit type arguments",
-                name
-            ));
+            return Err(format!("generic function '{}' requires explicit type arguments", name));
         }
-        return Ok(Expression::FunctionCall {
-            name,
-            type_args,
-            args,
-        });
+        return Ok(Expression::FunctionCall { name, type_args, args });
     }
 
     let concrete_args: Vec<WaveType> = type_args
@@ -84,25 +69,14 @@ fn rewrite_function_call(
 
     if crate::async_intrinsics::is_intrinsic(&name) || crate::layout_intrinsics::is_intrinsic(&name)
     {
-        return Ok(Expression::FunctionCall {
-            name,
-            type_args: concrete_args,
-            args,
-        });
+        return Ok(Expression::FunctionCall { name, type_args: concrete_args, args });
     }
     if !env.function_templates.contains_key(&name) {
-        return Err(format!(
-            "type arguments provided for non-generic function '{}'",
-            name
-        ));
+        return Err(format!("type arguments provided for non-generic function '{}'", name));
     }
 
     let instantiated = ensure_function_instance(&name, &concrete_args, env)?;
-    Ok(Expression::FunctionCall {
-        name: instantiated,
-        type_args: Vec::new(),
-        args,
-    })
+    Ok(Expression::FunctionCall { name: instantiated, type_args: Vec::new(), args })
 }
 
 fn rewrite_method_call(
@@ -110,13 +84,7 @@ fn rewrite_method_call(
     subst: &HashMap<String, WaveType>,
     env: &mut GenericEnv,
 ) -> Result<Expression, String> {
-    let Expression::MethodCall {
-        object,
-        name,
-        args,
-        type_args,
-    } = expression
-    else {
+    let Expression::MethodCall { object, name, args, type_args } = expression else {
         unreachable!("expression dispatch")
     };
     Ok(Expression::MethodCall {
@@ -144,10 +112,7 @@ fn rewrite_struct_literal(
     for (fname, value) in fields {
         rewritten_fields.push((fname, rewrite_expression(value, subst, env)?));
     }
-    Ok(Expression::StructLiteral {
-        name: rewritten_name,
-        fields: rewritten_fields,
-    })
+    Ok(Expression::StructLiteral { name: rewritten_name, fields: rewritten_fields })
 }
 
 fn rewrite_deref(
@@ -155,12 +120,8 @@ fn rewrite_deref(
     subst: &HashMap<String, WaveType>,
     env: &mut GenericEnv,
 ) -> Result<Expression, String> {
-    let Expression::Deref(inner) = expression else {
-        unreachable!("expression dispatch")
-    };
-    Ok(Expression::Deref(Box::new(rewrite_expression(
-        *inner, subst, env,
-    )?)))
+    let Expression::Deref(inner) = expression else { unreachable!("expression dispatch") };
+    Ok(Expression::Deref(Box::new(rewrite_expression(*inner, subst, env)?)))
 }
 
 fn rewrite_address_of(
@@ -168,12 +129,8 @@ fn rewrite_address_of(
     subst: &HashMap<String, WaveType>,
     env: &mut GenericEnv,
 ) -> Result<Expression, String> {
-    let Expression::AddressOf(inner) = expression else {
-        unreachable!("expression dispatch")
-    };
-    Ok(Expression::AddressOf(Box::new(rewrite_expression(
-        *inner, subst, env,
-    )?)))
+    let Expression::AddressOf(inner) = expression else { unreachable!("expression dispatch") };
+    Ok(Expression::AddressOf(Box::new(rewrite_expression(*inner, subst, env)?)))
 }
 
 fn rewrite_binary_expression(
@@ -181,12 +138,7 @@ fn rewrite_binary_expression(
     subst: &HashMap<String, WaveType>,
     env: &mut GenericEnv,
 ) -> Result<Expression, String> {
-    let Expression::BinaryExpression {
-        left,
-        operator,
-        right,
-    } = expression
-    else {
+    let Expression::BinaryExpression { left, operator, right } = expression else {
         unreachable!("expression dispatch")
     };
     Ok(Expression::BinaryExpression {
@@ -215,12 +167,8 @@ fn rewrite_array_literal(
     subst: &HashMap<String, WaveType>,
     env: &mut GenericEnv,
 ) -> Result<Expression, String> {
-    let Expression::ArrayLiteral(items) = expression else {
-        unreachable!("expression dispatch")
-    };
-    Ok(Expression::ArrayLiteral(rewrite_expr_list(
-        items, subst, env,
-    )?))
+    let Expression::ArrayLiteral(items) = expression else { unreachable!("expression dispatch") };
+    Ok(Expression::ArrayLiteral(rewrite_expr_list(items, subst, env)?))
 }
 
 fn rewrite_await(
@@ -228,12 +176,8 @@ fn rewrite_await(
     subst: &HashMap<String, WaveType>,
     env: &mut GenericEnv,
 ) -> Result<Expression, String> {
-    let Expression::Await(inner) = expression else {
-        unreachable!("expression dispatch")
-    };
-    Ok(Expression::Await(Box::new(rewrite_expression(
-        *inner, subst, env,
-    )?)))
+    let Expression::Await(inner) = expression else { unreachable!("expression dispatch") };
+    Ok(Expression::Await(Box::new(rewrite_expression(*inner, subst, env)?)))
 }
 
 fn rewrite_grouped(
@@ -241,12 +185,8 @@ fn rewrite_grouped(
     subst: &HashMap<String, WaveType>,
     env: &mut GenericEnv,
 ) -> Result<Expression, String> {
-    let Expression::Grouped(inner) = expression else {
-        unreachable!("expression dispatch")
-    };
-    Ok(Expression::Grouped(Box::new(rewrite_expression(
-        *inner, subst, env,
-    )?)))
+    let Expression::Grouped(inner) = expression else { unreachable!("expression dispatch") };
+    Ok(Expression::Grouped(Box::new(rewrite_expression(*inner, subst, env)?)))
 }
 
 fn rewrite_assign_operation(
@@ -254,12 +194,7 @@ fn rewrite_assign_operation(
     subst: &HashMap<String, WaveType>,
     env: &mut GenericEnv,
 ) -> Result<Expression, String> {
-    let Expression::AssignOperation {
-        target,
-        operator,
-        value,
-    } = expression
-    else {
+    let Expression::AssignOperation { target, operator, value } = expression else {
         unreachable!("expression dispatch")
     };
     Ok(Expression::AssignOperation {
@@ -288,13 +223,7 @@ fn rewrite_asm_block(
     subst: &HashMap<String, WaveType>,
     env: &mut GenericEnv,
 ) -> Result<Expression, String> {
-    let Expression::AsmBlock {
-        instructions,
-        inputs,
-        outputs,
-        clobbers,
-    } = expression
-    else {
+    let Expression::AsmBlock { instructions, inputs, outputs, clobbers } = expression else {
         unreachable!("expression dispatch")
     };
     Ok(Expression::AsmBlock {
@@ -333,10 +262,7 @@ fn rewrite_unary(
     let Expression::Unary { operator, expr } = expression else {
         unreachable!("expression dispatch")
     };
-    Ok(Expression::Unary {
-        operator,
-        expr: Box::new(rewrite_expression(*expr, subst, env)?),
-    })
+    Ok(Expression::Unary { operator, expr: Box::new(rewrite_expression(*expr, subst, env)?) })
 }
 
 fn rewrite_cast(
@@ -361,8 +287,5 @@ fn rewrite_inc_dec(
     let Expression::IncDec { kind, target } = expression else {
         unreachable!("expression dispatch")
     };
-    Ok(Expression::IncDec {
-        kind,
-        target: Box::new(rewrite_expression(*target, subst, env)?),
-    })
+    Ok(Expression::IncDec { kind, target: Box::new(rewrite_expression(*target, subst, env)?) })
 }

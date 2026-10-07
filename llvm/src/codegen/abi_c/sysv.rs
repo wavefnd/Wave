@@ -24,32 +24,17 @@ pub(super) fn classify_param_x86_64_sysv<'ctx>(
     let size = td.get_store_size(&t) as u64;
 
     // large aggregates => byval
-    if matches!(
-        t,
-        BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_)
-    ) && size > 16
-    {
+    if matches!(t, BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_)) && size > 16 {
         let align = td.get_abi_alignment(&t) as u32;
-        return ParamLowering::ByVal {
-            ty: t.as_any_type_enum(),
-            align,
-        };
+        return ParamLowering::ByVal { ty: t.as_any_type_enum(), align };
     }
 
-    if matches!(
-        t,
-        BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_)
-    ) && size == 0
-    {
+    if matches!(t, BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_)) && size == 0 {
         return ParamLowering::Ignore;
     }
 
     // small aggregates: try integer-only or homogeneous float
-    if matches!(
-        t,
-        BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_)
-    ) && size <= 16
-    {
+    if matches!(t, BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_)) && size <= 16 {
         let mut leaves = vec![];
         flatten_leaf_types(t, &mut leaves);
 
@@ -93,11 +78,8 @@ pub(super) fn classify_param_x86_64_sysv<'ctx>(
                     ]),
                     _ => {
                         let align = td.get_abi_alignment(&t) as u32;
-                        ParamLowering::ByVal {
-                            ty: t.as_any_type_enum(),
-                            align,
-                        }
-                    }
+                        ParamLowering::ByVal { ty: t.as_any_type_enum(), align }
+                    },
                 };
             } else if fsz == 8 {
                 let f = context.f64_type();
@@ -106,11 +88,8 @@ pub(super) fn classify_param_x86_64_sysv<'ctx>(
                     2 => ParamLowering::Split(vec![f.as_basic_type_enum(), f.as_basic_type_enum()]),
                     _ => {
                         let align = td.get_abi_alignment(&t) as u32;
-                        ParamLowering::ByVal {
-                            ty: t.as_any_type_enum(),
-                            align,
-                        }
-                    }
+                        ParamLowering::ByVal { ty: t.as_any_type_enum(), align }
+                    },
                 };
             }
         }
@@ -119,11 +98,11 @@ pub(super) fn classify_param_x86_64_sysv<'ctx>(
         let mut all_intlike = true;
         for lt in &leaves {
             match lt {
-                BasicTypeEnum::IntType(_) | BasicTypeEnum::PointerType(_) => {}
+                BasicTypeEnum::IntType(_) | BasicTypeEnum::PointerType(_) => {},
                 _ => {
                     all_intlike = false;
                     break;
-                }
+                },
             }
         }
         if all_intlike {
@@ -158,9 +137,7 @@ pub(super) fn classify_param_x86_64_sysv<'ctx>(
                     }
                     let bytes = (size - offset).min(8);
                     let ty = if integer {
-                        context
-                            .custom_width_int_type(bytes as u32 * 8)
-                            .as_basic_type_enum()
+                        context.custom_width_int_type(bytes as u32 * 8).as_basic_type_enum()
                     } else if bytes <= 4 {
                         context.f32_type().as_basic_type_enum()
                     } else {
@@ -192,7 +169,7 @@ fn sysv_eightbyte_classes(
                     classes,
                 );
             }
-        }
+        },
         BasicTypeEnum::ArrayType(array) => {
             let element = array.get_element_type();
             for index in 0..array.len() {
@@ -203,21 +180,18 @@ fn sysv_eightbyte_classes(
                     classes,
                 );
             }
-        }
+        },
         _ => {
             let end = offset + td.get_store_size(&ty);
             for byte in offset..end {
                 let class = &mut classes[(byte / 8) as usize];
-                if matches!(
-                    ty,
-                    BasicTypeEnum::FloatType(_) | BasicTypeEnum::VectorType(_)
-                ) {
+                if matches!(ty, BasicTypeEnum::FloatType(_) | BasicTypeEnum::VectorType(_)) {
                     class.1 = true;
                 } else {
                     class.0 = true;
                 }
             }
-        }
+        },
     }
 }
 
@@ -240,20 +214,17 @@ pub(super) fn classify_param_sysv_with_registers<'ctx>(
     let lowering = classify_param_x86_64_sysv(context, td, ty);
     let (gp, sse) = match &lowering {
         ParamLowering::Direct(ty) => sysv_registers(*ty),
-        ParamLowering::Split(parts) => parts
-            .iter()
-            .map(|ty| sysv_registers(*ty))
-            .fold((0, 0), |a, b| (a.0 + b.0, a.1 + b.1)),
+        ParamLowering::Split(parts) => {
+            parts.iter().map(|ty| sysv_registers(*ty)).fold((0, 0), |a, b| (a.0 + b.0, a.1 + b.1))
+        },
         ParamLowering::CoerceAndExpand(parts) => parts
             .iter()
             .map(|part| sysv_registers(part.ty))
             .fold((0, 0), |a, b| (a.0 + b.0, a.1 + b.1)),
         _ => (0, 0),
     };
-    if matches!(
-        ty,
-        BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_)
-    ) && (gp > *gp_left || sse > *sse_left)
+    if matches!(ty, BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_))
+        && (gp > *gp_left || sse > *sse_left)
     {
         // Roll back the entire aggregate so later arguments can use the
         // remaining registers. A byval stack slot consumes neither budget.
@@ -277,17 +248,11 @@ pub(super) fn classify_ret_x86_64_sysv<'ctx>(
     };
 
     let size = td.get_store_size(&t) as u64;
-    let is_agg = matches!(
-        t,
-        BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_)
-    );
+    let is_agg = matches!(t, BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_));
 
     if is_agg && size > 16 {
         let align = td.get_abi_alignment(&t) as u32;
-        return RetLowering::SRet {
-            ty: t.as_any_type_enum(),
-            align,
-        };
+        return RetLowering::SRet { ty: t.as_any_type_enum(), align };
     }
 
     if is_agg && size == 0 {
@@ -308,11 +273,11 @@ pub(super) fn classify_ret_x86_64_sysv<'ctx>(
         let mut all_intlike = true;
         for lt in &leaves {
             match lt {
-                BasicTypeEnum::IntType(_) | BasicTypeEnum::PointerType(_) => {}
+                BasicTypeEnum::IntType(_) | BasicTypeEnum::PointerType(_) => {},
                 _ => {
                     all_intlike = false;
                     break;
-                }
+                },
             }
         }
         if all_intlike {
@@ -363,7 +328,7 @@ pub(super) fn classify_ret_x86_64_sysv<'ctx>(
                             )
                             .as_basic_type_enum();
                         RetLowering::Direct(tuple)
-                    }
+                    },
                     4 => {
                         let tuple = context
                             .struct_type(
@@ -375,14 +340,11 @@ pub(super) fn classify_ret_x86_64_sysv<'ctx>(
                             )
                             .as_basic_type_enum();
                         RetLowering::Direct(tuple)
-                    }
+                    },
                     _ => {
                         let align = td.get_abi_alignment(&t) as u32;
-                        RetLowering::SRet {
-                            ty: t.as_any_type_enum(),
-                            align,
-                        }
-                    }
+                        RetLowering::SRet { ty: t.as_any_type_enum(), align }
+                    },
                 };
             }
             if float_kind == Some(8) {
@@ -394,14 +356,11 @@ pub(super) fn classify_ret_x86_64_sysv<'ctx>(
                             .struct_type(&[f.as_basic_type_enum(), f.as_basic_type_enum()], false)
                             .as_basic_type_enum();
                         RetLowering::Direct(tuple)
-                    }
+                    },
                     _ => {
                         let align = td.get_abi_alignment(&t) as u32;
-                        RetLowering::SRet {
-                            ty: t.as_any_type_enum(),
-                            align,
-                        }
-                    }
+                        RetLowering::SRet { ty: t.as_any_type_enum(), align }
+                    },
                 };
             }
         }

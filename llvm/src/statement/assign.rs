@@ -50,9 +50,8 @@ pub(super) fn gen_assign_ir<'ctx>(
     }
 
     let (dst_ptr, dst_mutability, dst_wave_ty) = {
-        let info = variables
-            .get(variable)
-            .unwrap_or_else(|| panic!("Variable {} not declared", variable));
+        let info =
+            variables.get(variable).unwrap_or_else(|| panic!("Variable {} not declared", variable));
         (info.ptr, info.mutability.clone(), info.ty.clone())
     };
 

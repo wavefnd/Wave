@@ -1,0 +1,48 @@
+# Shared editor settings. Language formatters remain authoritative for syntax.
+# Modern K&R:
+# - Opening braces stay on the same line.
+# - Block bodies stay expanded and readable.
+# - Keep exactly one blank line between function and method definitions.
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+indent_style = space
+indent_size = 4
+tab_width = 4
+trim_trailing_whitespace = true
+
+# Soft guide only. Language formatters remain responsible for wrapping.
+max_line_length = 100
+
+[*.rs]
+# Rust source layout.
+indent_style = space
+indent_size = 4
+tab_width = 4
+
+# Keep function/method definitions visually separated by one blank line.
+blank_lines_around_function = 1
+blank_lines_around_method = 1
+
+[*.{yml,yaml,json}]
+indent_size = 2
+
+[*.md]
+# Preserve Markdown's two-space hard line breaks.
+trim_trailing_whitespace = false
+
+[{Makefile,makefile,GNUmakefile,*.mk}]
+indent_style = tab
+indent_size = tab
+
+[tests/fixtures/**]
+# Fixture bytes may deliberately exercise whitespace and missing final newlines.
+trim_trailing_whitespace = false
+insert_final_newline = false
+charset = unset
+end_of_line = unset
+max_line_length = off

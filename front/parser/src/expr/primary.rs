@@ -97,12 +97,7 @@ where
         tokens.next();
         Ok(())
     } else {
-        Err(ParseError::expected_at(
-            tokens.peek().copied(),
-            anchor,
-            expected,
-            context,
-        ))
+        Err(ParseError::expected_at(tokens.peek().copied(), anchor, expected, context))
     }
 }
 
@@ -115,20 +110,12 @@ where
     T: Iterator<Item = &'a Token> + Clone,
 {
     match tokens.peek().copied() {
-        Some(Token {
-            token_type: TokenType::Identifier(name),
-            ..
-        }) => {
+        Some(Token { token_type: TokenType::Identifier(name), .. }) => {
             let name = name.clone();
             tokens.next();
             Ok(name)
-        }
-        found => Err(ParseError::expected_at(
-            found,
-            anchor,
-            "identifier",
-            context,
-        )),
+        },
+        found => Err(ParseError::expected_at(found, anchor, "identifier", context)),
     }
 }
 
@@ -144,16 +131,8 @@ where
     let _nesting = crate::expression_depth::Nesting::enter(tokens.peek().copied())?;
     let opener = tokens.next();
     let mut args = Vec::new();
-    if tokens
-        .peek()
-        .is_none_or(|token| token.token_type == TokenType::Eof)
-    {
-        return Err(ParseError::expected_at(
-            tokens.peek().copied(),
-            opener,
-            spelling,
-            context,
-        ));
+    if tokens.peek().is_none_or(|token| token.token_type == TokenType::Eof) {
+        return Err(ParseError::expected_at(tokens.peek().copied(), opener, spelling, context));
     }
     if tokens.peek().is_some_and(|token| token.token_type == close) {
         tokens.next();
@@ -161,10 +140,7 @@ where
     }
     loop {
         args.push(parse_expression(tokens)?);
-        if tokens
-            .peek()
-            .is_some_and(|token| token.token_type == TokenType::Comma)
-        {
+        if tokens.peek().is_some_and(|token| token.token_type == TokenType::Comma) {
             tokens.next();
         } else {
             expect_token(tokens, opener, close, spelling, context)?;
@@ -182,10 +158,7 @@ where
     let _nesting = crate::expression_depth::Nesting::enter(tokens.peek().copied())?;
     let opener = tokens.next();
     let mut fields = Vec::new();
-    while !tokens
-        .peek()
-        .is_some_and(|token| token.token_type == TokenType::Rbrace)
-    {
+    while !tokens.peek().is_some_and(|token| token.token_type == TokenType::Rbrace) {
         let name = struct_field_name(tokens, opener)?;
         fields.push((name, parse_expression(tokens)?));
         if finish_struct_field(tokens, opener)? {
@@ -205,10 +178,7 @@ fn struct_field_name<'a, T>(
 where
     T: Iterator<Item = &'a Token> + Clone,
 {
-    if tokens
-        .peek()
-        .is_none_or(|token| token.token_type == TokenType::Eof)
-    {
+    if tokens.peek().is_none_or(|token| token.token_type == TokenType::Eof) {
         return Err(ParseError::expected_at(
             tokens.peek().copied(),
             opener,
@@ -217,13 +187,7 @@ where
         ));
     }
     let name = identifier(tokens, opener, "struct literal field")?;
-    expect_token(
-        tokens,
-        opener,
-        TokenType::Colon,
-        "':'",
-        "struct literal field",
-    )?;
+    expect_token(tokens, opener, TokenType::Colon, "':'", "struct literal field")?;
     Ok(name)
 }
 
@@ -238,7 +202,7 @@ where
         Some(TokenType::Comma) => {
             tokens.next();
             Ok(false)
-        }
+        },
         Some(TokenType::Rbrace) => Ok(true),
         _ => Err(ParseError::expected_at(
             tokens.peek().copied(),
@@ -294,11 +258,7 @@ where
     let (name, type_args) = parse_expression_name(tokens, name)?;
     match tokens.peek().map(|token| &token.token_type) {
         Some(TokenType::Lparen) => argument_list(tokens, TokenType::Rparen, "')'", "function call")
-            .map(|args| Expression::FunctionCall {
-                name,
-                type_args,
-                args,
-            }),
+            .map(|args| Expression::FunctionCall { name, type_args, args }),
         Some(TokenType::Lbrace) => parse_struct_literal_fields(tokens)
             .map(|fields| Expression::StructLiteral { name, fields }),
         _ => Ok(Expression::Variable(name)),
@@ -314,10 +274,7 @@ where
 {
     let mut name = name.to_owned();
     tokens.next();
-    while tokens
-        .peek()
-        .is_some_and(|token| token.token_type == TokenType::DoubleColon)
-    {
+    while tokens.peek().is_some_and(|token| token.token_type == TokenType::DoubleColon) {
         let separator = tokens.next();
         let segment = identifier(tokens, separator, "qualified name")?;
         name.push_str("::");
@@ -377,12 +334,7 @@ where
     let _nesting = crate::expression_depth::Nesting::enter(Some(token))?;
     tokens.next();
     let (instructions, inputs, outputs, clobbers) = parse_asm_body(tokens)?;
-    Ok(Expression::AsmBlock {
-        instructions,
-        inputs,
-        outputs,
-        clobbers,
-    })
+    Ok(Expression::AsmBlock { instructions, inputs, outputs, clobbers })
 }
 
 fn parse_literal<'a, T>(tokens: &mut Peekable<T>, token: &Token) -> Result<Expression, ParseError>
@@ -393,27 +345,27 @@ where
         TokenType::IntLiteral(s) => {
             tokens.next();
             Ok(Expression::Literal(Literal::Int(s.clone())))
-        }
+        },
         TokenType::Float(value) => {
             tokens.next();
             Ok(Expression::Literal(Literal::Float(*value)))
-        }
+        },
         TokenType::CharLiteral(c) => {
             tokens.next();
             Ok(Expression::Literal(Literal::Char(*c)))
-        }
+        },
         TokenType::BoolLiteral(b) => {
             tokens.next();
             Ok(Expression::Literal(Literal::Bool(*b)))
-        }
+        },
         TokenType::String(s) => {
             tokens.next();
             Ok(Expression::Literal(Literal::String(s.clone())))
-        }
+        },
         TokenType::Null => {
             tokens.next();
             Ok(Expression::Null)
-        }
+        },
         _ => Err(ParseError::expected_at(
             Some(token),
             Some(token),
@@ -430,12 +382,6 @@ where
     let _nesting = crate::expression_depth::Nesting::enter(Some(token))?;
     let opener = tokens.next();
     let inner = parse_expression(tokens)?;
-    expect_token(
-        tokens,
-        opener,
-        TokenType::Rparen,
-        "')'",
-        "grouped expression",
-    )?;
+    expect_token(tokens, opener, TokenType::Rparen, "')'", "grouped expression")?;
     Ok(Expression::Grouped(Box::new(inner)))
 }

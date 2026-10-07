@@ -9,19 +9,14 @@ enum Action {
     Convert,
     Unary,
     Binary,
+    WideShift,
     Assign,
     Call,
     LogicalLeft,
-    LogicalRight {
-        lhs: ValueId,
-        lhs_block: BlockId,
-        end: BlockId,
-    },
+    LogicalRight { lhs: ValueId, lhs_block: BlockId, end: BlockId },
 }
 fn pop(values: &mut Vec<Value>) -> Result<Value> {
-    values
-        .pop()
-        .ok_or_else(|| ice("expression value stack underflow"))
+    values.pop().ok_or_else(|| ice("expression value stack underflow"))
 }
 
 impl Lowerer<'_> {
@@ -46,6 +41,7 @@ impl Lowerer<'_> {
         }
         pop(&mut values)
     }
+
     fn step<'e>(
         &mut self,
         expr: &'e Expression,
@@ -64,7 +60,7 @@ impl Lowerer<'_> {
                 match expr.unspanned() {
                     Expression::Literal(literal) => {
                         values.push(self.literal(literal, &fact.evaluation_type)?)
-                    }
+                    },
                     Expression::Variable(name) => {
                         let slot = self.slot(name)?;
                         let value = self.value(slot.ty.clone());
@@ -75,10 +71,10 @@ impl Lowerer<'_> {
                             align: 1,
                         });
                         values.push(value);
-                    }
+                    },
                     Expression::Cast { expr, .. } | Expression::Grouped(expr) => {
                         pending.push((expr, Action::Enter))
-                    }
+                    },
                     Expression::Assignment { target, value }
                     | Expression::AssignOperation {
                         target,
@@ -90,33 +86,36 @@ impl Lowerer<'_> {
                         }
                         pending.push((expr, Action::Assign));
                         pending.push((value, Action::Enter));
-                    }
+                    },
                     Expression::FunctionCall { args, .. } => {
                         pending.push((expr, Action::Call));
                         for arg in args.iter().rev() {
                             pending.push((arg, Action::Enter));
                         }
-                    }
+                    },
                     Expression::Unary { expr: operand, .. } => {
                         pending.push((expr, Action::Unary));
                         pending.push((operand, Action::Enter));
-                    }
-                    Expression::BinaryExpression {
-                        left,
-                        operator,
-                        right,
-                    } => {
+                    },
+                    Expression::BinaryExpression { left, operator, right } => {
                         if matches!(operator, Operator::LogicalAnd | Operator::LogicalOr) {
                             pending.push((expr, Action::LogicalLeft));
+                        } else if fact
+                            .shift_count_type
+                            .as_ref()
+                            .and_then(hir::conversions::integer_width)
+                            .is_some_and(|bits| bits > 128)
+                        {
+                            pending.push((expr, Action::WideShift));
                         } else {
                             pending.push((expr, Action::Binary));
                             pending.push((right, Action::Enter));
                         }
                         pending.push((left, Action::Enter));
-                    }
+                    },
                     _ => return Err(unsupported("this expression")),
                 }
-            }
+            },
             Action::Convert => {
                 let mut value = pop(values)?;
                 if value.ty != ty {
@@ -132,14 +131,12 @@ impl Lowerer<'_> {
                     })?;
                 }
                 values.push(value);
-            }
+            },
             Action::Unary => {
-                let Expression::Unary { operator, .. } = expr.unspanned() else {
-                    unreachable!()
-                };
+                let Expression::Unary { operator, .. } = expr.unspanned() else { unreachable!() };
                 let operand = pop(values)?;
                 values.push(self.unary_value(operator, operand, fact)?);
-            }
+            },
             Action::Binary => {
                 let Expression::BinaryExpression { operator, .. } = expr.unspanned() else {
                     unreachable!()
@@ -150,21 +147,34 @@ impl Lowerer<'_> {
                     .computation_type
                     .as_ref()
                     .ok_or_else(|| ice("missing computation type"))?;
-                values.push(self.binary_values(lhs, operator, rhs, computation, &ty)?);
-            }
+                values.push(if let Some(count_type) = &fact.shift_count_type {
+                    self.checked_shift(lhs, operator, rhs, computation, count_type)?
+                } else {
+                    self.binary_values(lhs, operator, rhs, computation, &ty)?
+                });
+            },
+            Action::WideShift => {
+                let Expression::BinaryExpression { operator, right, .. } = expr.unspanned() else {
+                    unreachable!()
+                };
+                let lhs = pop(values)?;
+                let computation = fact
+                    .computation_type
+                    .as_ref()
+                    .ok_or_else(|| ice("missing shift computation type"))?;
+                values.push(self.wide_constant_shift(lhs, operator, right, computation)?);
+            },
             Action::Assign => {
                 let (Expression::Assignment { target, .. }
                 | Expression::AssignOperation { target, .. }) = expr.unspanned()
                 else {
                     unreachable!()
                 };
-                let Expression::Variable(name) = target.unspanned() else {
-                    unreachable!()
-                };
+                let Expression::Variable(name) = target.unspanned() else { unreachable!() };
                 let value = pop(values)?;
                 self.store(&self.slot(name)?, value.clone())?;
                 values.push(value);
-            }
+            },
             Action::Call => {
                 let Expression::FunctionCall { name, args, .. } = expr.unspanned() else {
                     unreachable!()
@@ -178,12 +188,9 @@ impl Lowerer<'_> {
                     self.call_values(name, args)?
                         .ok_or_else(|| unsupported("void calls in value expressions"))?,
                 );
-            }
+            },
             Action::LogicalLeft => {
-                let Expression::BinaryExpression {
-                    operator, right, ..
-                } = expr.unspanned()
-                else {
+                let Expression::BinaryExpression { operator, right, .. } = expr.unspanned() else {
                     unreachable!()
                 };
                 let lhs = pop(values)?;
@@ -193,32 +200,14 @@ impl Lowerer<'_> {
                 let lhs_block = BlockId(self.block as u32);
                 let rhs = self.new_block("logical.rhs");
                 let end = self.new_block("logical.end");
-                let (then_bb, else_bb) = if matches!(operator, Operator::LogicalAnd) {
-                    (rhs, end)
-                } else {
-                    (end, rhs)
-                };
-                self.terminate(Terminator::CBr {
-                    cond: lhs.id,
-                    then_bb,
-                    else_bb,
-                });
+                let (then_bb, else_bb) =
+                    if matches!(operator, Operator::LogicalAnd) { (rhs, end) } else { (end, rhs) };
+                self.terminate(Terminator::CBr { cond: lhs.id, then_bb, else_bb });
                 self.switch(rhs);
-                pending.push((
-                    expr,
-                    Action::LogicalRight {
-                        lhs: lhs.id,
-                        lhs_block,
-                        end,
-                    },
-                ));
+                pending.push((expr, Action::LogicalRight { lhs: lhs.id, lhs_block, end }));
                 pending.push((right, Action::Enter));
-            }
-            Action::LogicalRight {
-                lhs,
-                lhs_block,
-                end,
-            } => {
+            },
+            Action::LogicalRight { lhs, lhs_block, end } => {
                 let rhs = pop(values)?;
                 if rhs.ty != Type::Bool {
                     return Err(ice("logical operand missing HIR bool conversion"));
@@ -233,7 +222,7 @@ impl Lowerer<'_> {
                     incomings: vec![(lhs, lhs_block), (rhs.id, rhs_exit)],
                 });
                 values.push(value);
-            }
+            },
         }
         Ok(())
     }

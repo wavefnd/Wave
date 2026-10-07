@@ -88,13 +88,9 @@ where
 fn apply_prefix(token: &Token, inner: Expression) -> Result<Expression, ParseError> {
     Ok(match token.token_type {
         TokenType::Await => Expression::Await(Box::new(inner)),
-        TokenType::Not => Expression::Unary {
-            operator: Operator::Not,
-            expr: Box::new(inner),
-        },
-        TokenType::BitwiseNot => Expression::Unary {
-            operator: Operator::BitwiseNot,
-            expr: Box::new(inner),
+        TokenType::Not => Expression::Unary { operator: Operator::Not, expr: Box::new(inner) },
+        TokenType::BitwiseNot => {
+            Expression::Unary { operator: Operator::BitwiseNot, expr: Box::new(inner) }
         },
         TokenType::AddressOf => Expression::AddressOf(Box::new(inner)),
         TokenType::Deref => Expression::Deref(Box::new(inner)),
@@ -115,18 +111,13 @@ fn apply_prefix(token: &Token, inner: Expression) -> Result<Expression, ParseErr
                 },
                 target: Box::new(inner),
             }
-        }
+        },
         TokenType::Minus => match inner.into_unspanned() {
             Expression::Literal(Literal::Int(s)) => Expression::Literal(Literal::Int(
-                s.strip_prefix('-')
-                    .map(str::to_string)
-                    .unwrap_or_else(|| format!("-{s}")),
+                s.strip_prefix('-').map(str::to_string).unwrap_or_else(|| format!("-{s}")),
             )),
             Expression::Literal(Literal::Float(f)) => Expression::Literal(Literal::Float(-f)),
-            other => Expression::Unary {
-                operator: Operator::Neg,
-                expr: Box::new(other),
-            },
+            other => Expression::Unary { operator: Operator::Neg, expr: Box::new(other) },
         },
         TokenType::Plus => inner,
         _ => unreachable!("prefix operator was checked"),

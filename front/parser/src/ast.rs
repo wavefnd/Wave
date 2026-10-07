@@ -44,10 +44,7 @@ pub enum WaveType {
 
 #[derive(Debug, Clone)]
 pub enum ASTNode {
-    Located {
-        value: Box<ASTNode>,
-        span: error::SourceSpan,
-    },
+    Located { value: Box<ASTNode>, span: error::SourceSpan },
     Function(FunctionNode),
     ExternFunction(ExternFunctionNode),
     Program(ParameterNode),
@@ -301,19 +298,12 @@ pub enum AssignOperator {
 
 #[derive(Debug, Clone)]
 pub enum MatchPattern {
-    Located {
-        value: Box<MatchPattern>,
-        span: error::SourceSpan,
-    },
+    Located { value: Box<MatchPattern>, span: error::SourceSpan },
     Int(String),
     Ident(String),
     Binding(String),
     Wildcard,
-    Variant {
-        variant_type: String,
-        case_name: String,
-        payloads: Vec<MatchPattern>,
-    },
+    Variant { variant_type: String, case_name: String, payloads: Vec<MatchPattern> },
 }
 
 #[derive(Debug, Clone)]
@@ -415,15 +405,10 @@ impl Expression {
         match self.unspanned() {
             Self::Literal(Literal::Int(_)) => true,
             Self::Grouped(inner) => inner.is_contextual_integer(),
-            Self::Unary {
-                operator: Operator::Neg | Operator::BitwiseNot,
-                expr,
-            } => expr.is_contextual_integer(),
-            Self::BinaryExpression {
-                left,
-                operator,
-                right,
-            } => {
+            Self::Unary { operator: Operator::Neg | Operator::BitwiseNot, expr } => {
+                expr.is_contextual_integer()
+            },
+            Self::BinaryExpression { left, operator, right } => {
                 matches!(
                     operator,
                     Operator::Add
@@ -438,7 +423,7 @@ impl Expression {
                         | Operator::BitwiseXor
                 ) && left.is_contextual_integer()
                     && right.is_contextual_integer()
-            }
+            },
             _ => false,
         }
     }
@@ -452,7 +437,7 @@ impl Expression {
                 } else {
                     None
                 }
-            }
+            },
             _ => None,
         }
     }
@@ -465,27 +450,27 @@ impl ASTNode {
             other => other,
         }
     }
+
     pub fn into_unspanned(self) -> Self {
         match self {
             Self::Located { value, .. } => value.into_unspanned(),
             other => other,
         }
     }
+
     pub fn span(&self) -> Option<&error::SourceSpan> {
         match self {
             Self::Located { span, .. } => Some(span),
             _ => None,
         }
     }
+
     pub fn with_span(self, span: Option<error::SourceSpan>) -> Self {
         if self.span() == span.as_ref() {
             return self;
         }
         match span {
-            Some(span) => Self::Located {
-                value: Box::new(self),
-                span,
-            },
+            Some(span) => Self::Located { value: Box::new(self), span },
             None => self,
         }
     }
@@ -498,27 +483,27 @@ impl Expression {
             other => other,
         }
     }
+
     pub fn into_unspanned(self) -> Self {
         match self {
             Self::Located { value, .. } => value.into_unspanned(),
             other => other,
         }
     }
+
     pub fn span(&self) -> Option<&error::SourceSpan> {
         match self {
             Self::Located { span, .. } => Some(span),
             _ => None,
         }
     }
+
     pub fn with_span(self, span: Option<error::SourceSpan>) -> Self {
         if self.span() == span.as_ref() {
             return self;
         }
         match span {
-            Some(span) => Self::Located {
-                value: Box::new(self),
-                span,
-            },
+            Some(span) => Self::Located { value: Box::new(self), span },
             None => self,
         }
     }
@@ -531,27 +516,27 @@ impl MatchPattern {
             other => other,
         }
     }
+
     pub fn into_unspanned(self) -> Self {
         match self {
             Self::Located { value, .. } => value.into_unspanned(),
             other => other,
         }
     }
+
     pub fn span(&self) -> Option<&error::SourceSpan> {
         match self {
             Self::Located { span, .. } => Some(span),
             _ => None,
         }
     }
+
     pub fn with_span(self, span: Option<error::SourceSpan>) -> Self {
         if self.span() == span.as_ref() {
             return self;
         }
         match span {
-            Some(span) => Self::Located {
-                value: Box::new(self),
-                span,
-            },
+            Some(span) => Self::Located { value: Box::new(self), span },
             None => self,
         }
     }
@@ -559,16 +544,9 @@ impl MatchPattern {
 
 impl Expression {
     pub fn binary(left: Expression, operator: Operator, right: Expression) -> Self {
-        let span = left
-            .span()
-            .zip(right.span())
-            .map(|(first, last)| first.through(last));
-        Self::BinaryExpression {
-            left: Box::new(left),
-            operator,
-            right: Box::new(right),
-        }
-        .with_span(span)
+        let span = left.span().zip(right.span()).map(|(first, last)| first.through(last));
+        Self::BinaryExpression { left: Box::new(left), operator, right: Box::new(right) }
+            .with_span(span)
     }
 }
 

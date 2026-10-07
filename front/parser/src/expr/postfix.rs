@@ -40,10 +40,7 @@ where
         match tokens.peek().map(|t| &t.token_type) {
             Some(TokenType::Dot) => {
                 let dot = tokens.next();
-                focus = tokens
-                    .peek()
-                    .and_then(|token| token.span.clone())
-                    .map(Box::new);
+                focus = tokens.peek().and_then(|token| token.span.clone()).map(Box::new);
                 let name = identifier(tokens, dot, "member access")?;
                 let mut type_args = Vec::new();
                 if peek_is_generic_call(tokens) {
@@ -59,10 +56,7 @@ where
                         );
                     }
                 }
-                if tokens
-                    .peek()
-                    .is_some_and(|token| token.token_type == TokenType::Lparen)
-                {
+                if tokens.peek().is_some_and(|token| token.token_type == TokenType::Lparen) {
                     let args = argument_list(tokens, TokenType::Rparen, "')'", "method call")?;
                     let base_expr = expr;
                     expr = Expression::MethodCall {
@@ -74,12 +68,9 @@ where
                 } else {
                     // ----- FieldAccess -----
                     let base_expr = expr;
-                    expr = Expression::FieldAccess {
-                        object: Box::new(base_expr),
-                        field: name,
-                    };
+                    expr = Expression::FieldAccess { object: Box::new(base_expr), field: name };
                 }
-            }
+            },
 
             Some(TokenType::Lbrack) => {
                 let _nesting = crate::expression_depth::Nesting::enter(tokens.peek().copied())?;
@@ -92,7 +83,7 @@ where
                     target: Box::new(base_expr),
                     index: Box::new(index_expr),
                 };
-            }
+            },
 
             Some(TokenType::Increment) => {
                 let operator = tokens.next(); // consume '++'
@@ -107,13 +98,10 @@ where
                 }
 
                 let base = expr;
-                expr = Expression::IncDec {
-                    kind: IncDecKind::PostInc,
-                    target: Box::new(base),
-                };
+                expr = Expression::IncDec { kind: IncDecKind::PostInc, target: Box::new(base) };
 
                 return crate::expression_depth::parsed(expr, operator);
-            }
+            },
 
             Some(TokenType::Decrement) => {
                 let operator = tokens.next(); // consume '--'
@@ -128,24 +116,20 @@ where
                 }
 
                 let base = expr;
-                expr = Expression::IncDec {
-                    kind: IncDecKind::PostDec,
-                    target: Box::new(base),
-                };
+                expr = Expression::IncDec { kind: IncDecKind::PostDec, target: Box::new(base) };
 
                 return crate::expression_depth::parsed(expr, operator);
-            }
+            },
 
             _ => break,
         }
-        let span = first
-            .as_ref()
-            .zip(lexer::consumed_span(before.clone(), tokens))
-            .map(|(first, last)| {
+        let span = first.as_ref().zip(lexer::consumed_span(before.clone(), tokens)).map(
+            |(first, last)| {
                 let mut span = first.through(&last);
                 span.focus = focus;
                 span
-            });
+            },
+        );
         expr = crate::expression_depth::parsed(expr.with_span(span), tokens.peek().copied())?;
     }
 

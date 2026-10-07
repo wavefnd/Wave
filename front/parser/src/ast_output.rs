@@ -34,6 +34,7 @@ fn record(kind: &str, fields: Vec<(&str, Value)>) -> Value {
     result.extend(fields.into_iter().map(|(k, v)| (k.into(), v)));
     Value::Object(result)
 }
+
 fn put(value: &mut Value, key: &str, item: Value) {
     if let Value::Object(fields) = value {
         if let Some((_, existing)) = fields.iter_mut().find(|(k, _)| k == key) {
@@ -106,10 +107,7 @@ pub fn dump(
         line: e.span.as_ref().map_or(1, |s| s.line),
         column: e.span.as_ref().map_or(1, |s| s.column),
     })?;
-    let cx = Context {
-        source,
-        expressions: None,
-    };
+    let cx = Context { source, expressions: None };
     let value = Value::Object(vec![
         ("schema_version".into(), Value::integer(1)),
         ("stage".into(), Value::String("parsed".into())),
@@ -120,10 +118,7 @@ pub fn dump(
                 ("path", Value::string(file)),
             ])]),
         ),
-        (
-            "nodes".into(),
-            Value::Array(nodes.iter().map(|node| node.data(&cx)).collect()),
-        ),
+        ("nodes".into(), Value::Array(nodes.iter().map(|node| node.data(&cx)).collect())),
     ]);
     let text = match format {
         AstFormat::Wson => wson::dumps_with_depth_limit(&value, wson::Format::Wson, true, 512)?,
@@ -131,17 +126,16 @@ pub fn dump(
         AstFormat::Sexpr => {
             wson::dumps_with_depth_limit(&value, wson::Format::Json, false, 512)?;
             sexpr(&value, 0)
-        }
+        },
     };
     Ok(text + "\n")
 }
+
 fn sexpr(value: &Value, depth: usize) -> String {
     let indent = "  ".repeat(depth + 1);
     match value {
         Value::Object(fields) => {
-            let tag = value
-                .get_str("kind")
-                .unwrap_or(if depth == 0 { "ast" } else { "record" });
+            let tag = value.get_str("kind").unwrap_or(if depth == 0 { "ast" } else { "record" });
             let mut out = format!("({tag}");
             for (key, v) in fields {
                 if key != "kind" {
@@ -150,7 +144,7 @@ fn sexpr(value: &Value, depth: usize) -> String {
             }
             out.push(')');
             out
-        }
+        },
         Value::Array(values) => {
             let mut out = String::from("(list");
             for item in values {
@@ -158,7 +152,7 @@ fn sexpr(value: &Value, depth: usize) -> String {
             }
             out.push(')');
             out
-        }
+        },
         Value::String(s) => wson::quote(s),
         Value::Number(n) => n.as_str().into(),
         Value::Bool(b) => b.to_string(),
@@ -181,10 +175,9 @@ impl Data for WaveType {
             Self::String => record("string_type", vec![]),
             Self::Pointer(p0) => record("pointer_type", vec![("pointee", p0.data(cx))]),
             Self::Future(p0) => record("future_type", vec![("result", p0.data(cx))]),
-            Self::Array(p0, p1) => record(
-                "array_type",
-                vec![("element", p0.data(cx)), ("length", p1.data(cx))],
-            ),
+            Self::Array(p0, p1) => {
+                record("array_type", vec![("element", p0.data(cx)), ("length", p1.data(cx))])
+            },
             Self::Void => record("void_type", vec![]),
             Self::Never => record("never_type", vec![]),
             Self::Struct(p0) => record("struct_type", vec![("name", p0.data(cx))]),
@@ -199,7 +192,7 @@ impl Data for ASTNode {
                 let mut node = value.data(cx);
                 put(&mut node, "span", span.data(cx));
                 node
-            }
+            },
             Self::Function(p0) => p0.data(cx),
             Self::ExternFunction(p0) => p0.data(cx),
             Self::Program(p0) => p0.data(cx),
@@ -330,10 +323,7 @@ impl Data for ProtoImplNode {
     fn data(&self, cx: &Context) -> Value {
         record(
             "proto_impl",
-            vec![
-                ("target", self.target.data(cx)),
-                ("methods", self.methods.data(cx)),
-            ],
+            vec![("target", self.target.data(cx)), ("methods", self.methods.data(cx))],
         )
     }
 }
@@ -406,17 +396,12 @@ impl Data for Expression {
         // Convert bottom-up: a bounded source tree must not multiply native
         // stack frames for location wrappers and wire-format containers.
         let values = RefCell::new(HashMap::new());
-        let nested = Context {
-            source: cx.source,
-            expressions: Some(&values),
-        };
+        let nested = Context { source: cx.source, expressions: Some(&values) };
         let mut pending = vec![(self, false)];
         while let Some((expression, ready)) = pending.pop() {
             if ready {
                 let value = expression_record(expression, &nested);
-                values
-                    .borrow_mut()
-                    .insert(expression as *const Expression, value);
+                values.borrow_mut().insert(expression as *const Expression, value);
             } else {
                 pending.push((expression, true));
                 crate::ast::visit::walk_expression_children(expression, &mut |child| {
@@ -443,16 +428,11 @@ fn expression_record(expression: &Expression, cx: &Context) -> Value {
                 }
             }
             node
-        }
-        Expression::StructLiteral { name, fields } => record(
-            "struct_literal",
-            vec![("name", name.data(cx)), ("fields", fields.data(cx))],
-        ),
-        Expression::FunctionCall {
-            name,
-            type_args,
-            args,
-        } => record(
+        },
+        Expression::StructLiteral { name, fields } => {
+            record("struct_literal", vec![("name", name.data(cx)), ("fields", fields.data(cx))])
+        },
+        Expression::FunctionCall { name, type_args, args } => record(
             "function_call",
             vec![
                 ("name", name.data(cx)),
@@ -460,12 +440,7 @@ fn expression_record(expression: &Expression, cx: &Context) -> Value {
                 ("args", args.data(cx)),
             ],
         ),
-        Expression::MethodCall {
-            object,
-            name,
-            type_args,
-            args,
-        } => record(
+        Expression::MethodCall { object, name, type_args, args } => record(
             "method_call",
             vec![
                 ("object", object.data(cx)),
@@ -480,11 +455,7 @@ fn expression_record(expression: &Expression, cx: &Context) -> Value {
         Expression::Variable(p0) => record("variable", vec![("name", p0.data(cx))]),
         Expression::Deref(p0) => record("deref", vec![("operand", p0.data(cx))]),
         Expression::AddressOf(p0) => record("address_of", vec![("operand", p0.data(cx))]),
-        Expression::BinaryExpression {
-            left,
-            operator,
-            right,
-        } => record(
+        Expression::BinaryExpression { left, operator, right } => record(
             "binary_expression",
             vec![
                 ("left", left.data(cx)),
@@ -492,17 +463,12 @@ fn expression_record(expression: &Expression, cx: &Context) -> Value {
                 ("right", right.data(cx)),
             ],
         ),
-        Expression::IndexAccess { target, index } => record(
-            "index_access",
-            vec![("target", target.data(cx)), ("index", index.data(cx))],
-        ),
+        Expression::IndexAccess { target, index } => {
+            record("index_access", vec![("target", target.data(cx)), ("index", index.data(cx))])
+        },
         Expression::ArrayLiteral(p0) => record("array_literal", vec![("elements", p0.data(cx))]),
         Expression::Grouped(p0) => record("grouped", vec![("expression", p0.data(cx))]),
-        Expression::AssignOperation {
-            target,
-            operator,
-            value,
-        } => record(
+        Expression::AssignOperation { target, operator, value } => record(
             "assign_operation",
             vec![
                 ("target", target.data(cx)),
@@ -510,16 +476,10 @@ fn expression_record(expression: &Expression, cx: &Context) -> Value {
                 ("value", value.data(cx)),
             ],
         ),
-        Expression::Assignment { target, value } => record(
-            "assignment",
-            vec![("target", target.data(cx)), ("value", value.data(cx))],
-        ),
-        Expression::AsmBlock {
-            instructions,
-            inputs,
-            outputs,
-            clobbers,
-        } => record(
+        Expression::Assignment { target, value } => {
+            record("assignment", vec![("target", target.data(cx)), ("value", value.data(cx))])
+        },
+        Expression::AsmBlock { instructions, inputs, outputs, clobbers } => record(
             "asm_block",
             vec![
                 ("instructions", instructions.data(cx)),
@@ -528,25 +488,18 @@ fn expression_record(expression: &Expression, cx: &Context) -> Value {
                 ("clobbers", clobbers.data(cx)),
             ],
         ),
-        Expression::FieldAccess { object, field } => record(
-            "field_access",
-            vec![("object", object.data(cx)), ("field", field.data(cx))],
-        ),
-        Expression::Unary { operator, expr } => record(
-            "unary",
-            vec![("operator", operator.data(cx)), ("expr", expr.data(cx))],
-        ),
-        Expression::Cast { expr, target_type } => record(
-            "cast",
-            vec![
-                ("expr", expr.data(cx)),
-                ("target_type", target_type.data(cx)),
-            ],
-        ),
-        Expression::IncDec { kind, target } => record(
-            "inc_dec",
-            vec![("kind", kind.data(cx)), ("target", target.data(cx))],
-        ),
+        Expression::FieldAccess { object, field } => {
+            record("field_access", vec![("object", object.data(cx)), ("field", field.data(cx))])
+        },
+        Expression::Unary { operator, expr } => {
+            record("unary", vec![("operator", operator.data(cx)), ("expr", expr.data(cx))])
+        },
+        Expression::Cast { expr, target_type } => {
+            record("cast", vec![("expr", expr.data(cx)), ("target_type", target_type.data(cx))])
+        },
+        Expression::IncDec { kind, target } => {
+            record("inc_dec", vec![("kind", kind.data(cx)), ("target", target.data(cx))])
+        },
     }
 }
 
@@ -610,16 +563,12 @@ impl Data for MatchPattern {
                 let mut node = value.data(cx);
                 put(&mut node, "span", span.data(cx));
                 node
-            }
+            },
             Self::Int(p0) => record("int", vec![("value", p0.data(cx))]),
             Self::Ident(p0) => record("ident", vec![("name", p0.data(cx))]),
             Self::Binding(p0) => record("binding", vec![("name", p0.data(cx))]),
             Self::Wildcard => record("wildcard", vec![]),
-            Self::Variant {
-                variant_type,
-                case_name,
-                payloads,
-            } => record(
+            Self::Variant { variant_type, case_name, payloads } => record(
                 "variant",
                 vec![
                     ("variant_type", variant_type.data(cx)),
@@ -646,26 +595,18 @@ impl Data for StatementNode {
     fn data(&self, cx: &Context) -> Value {
         match self {
             Self::Print(p0) => record("print", vec![("bytes", p0.data(cx))]),
-            Self::PrintFormat { format, args } => record(
-                "print_format",
-                vec![("format", format.data(cx)), ("args", args.data(cx))],
-            ),
+            Self::PrintFormat { format, args } => {
+                record("print_format", vec![("format", format.data(cx)), ("args", args.data(cx))])
+            },
             Self::Println(p0) => record("println", vec![("bytes", p0.data(cx))]),
-            Self::PrintlnFormat { format, args } => record(
-                "println_format",
-                vec![("format", format.data(cx)), ("args", args.data(cx))],
-            ),
-            Self::Input { format, args } => record(
-                "input",
-                vec![("format", format.data(cx)), ("args", args.data(cx))],
-            ),
+            Self::PrintlnFormat { format, args } => {
+                record("println_format", vec![("format", format.data(cx)), ("args", args.data(cx))])
+            },
+            Self::Input { format, args } => {
+                record("input", vec![("format", format.data(cx)), ("args", args.data(cx))])
+            },
             Self::Variable(p0) => record("variable", vec![("name", p0.data(cx))]),
-            Self::If {
-                condition,
-                body,
-                else_if_blocks,
-                else_block,
-            } => record(
+            Self::If { condition, body, else_if_blocks, else_block } => record(
                 "if",
                 vec![
                     ("condition", condition.data(cx)),
@@ -674,12 +615,7 @@ impl Data for StatementNode {
                     ("else_block", else_block.data(cx)),
                 ],
             ),
-            Self::For {
-                initialization,
-                condition,
-                increment,
-                body,
-            } => record(
+            Self::For { initialization, condition, increment, body } => record(
                 "for",
                 vec![
                     ("initialization", initialization.data(cx)),
@@ -688,25 +624,17 @@ impl Data for StatementNode {
                     ("body", body.data(cx)),
                 ],
             ),
-            Self::While { condition, body } => record(
-                "while",
-                vec![("condition", condition.data(cx)), ("body", body.data(cx))],
-            ),
-            Self::Match { value, arms } => record(
-                "match",
-                vec![("value", value.data(cx)), ("arms", arms.data(cx))],
-            ),
+            Self::While { condition, body } => {
+                record("while", vec![("condition", condition.data(cx)), ("body", body.data(cx))])
+            },
+            Self::Match { value, arms } => {
+                record("match", vec![("value", value.data(cx)), ("arms", arms.data(cx))])
+            },
             Self::Import(p0) => p0.data(cx),
-            Self::Assign { variable, value } => record(
-                "assign",
-                vec![("variable", variable.data(cx)), ("value", value.data(cx))],
-            ),
-            Self::AsmBlock {
-                instructions,
-                inputs,
-                outputs,
-                clobbers,
-            } => record(
+            Self::Assign { variable, value } => {
+                record("assign", vec![("variable", variable.data(cx)), ("value", value.data(cx))])
+            },
+            Self::AsmBlock { instructions, inputs, outputs, clobbers } => record(
                 "asm_block",
                 vec![
                     ("instructions", instructions.data(cx)),

@@ -22,12 +22,7 @@ struct Parser<'a> {
 
 impl<'a> Parser<'a> {
     fn new(s: &'a [u8], format: Format) -> Self {
-        Self {
-            s,
-            i: 0,
-            depth: 0,
-            format,
-        }
+        Self { s, i: 0, depth: 0, format }
     }
 
     fn eof(&self) -> bool {
@@ -91,15 +86,15 @@ impl<'a> Parser<'a> {
             b'n' => {
                 self.consume_bytes(b"null")?;
                 Ok(Value::Null)
-            }
+            },
             b't' => {
                 self.consume_bytes(b"true")?;
                 Ok(Value::Bool(true))
-            }
+            },
             b'f' => {
                 self.consume_bytes(b"false")?;
                 Ok(Value::Bool(false))
-            }
+            },
             b'"' => Ok(Value::String(self.parse_string()?)),
             b'[' => Ok(Value::Array(self.parse_array()?)),
             b'{' => Ok(Value::Object(self.parse_object()?)),
@@ -150,16 +145,16 @@ impl<'a> Parser<'a> {
                                         return Err("invalid low surrogate".into());
                                     }
                                     0x10000 + ((first - 0xd800) << 10) + (low - 0xdc00)
-                                }
+                                },
                                 0xdc00..=0xdfff => return Err("lone low surrogate".into()),
                                 other => other,
                             };
                             char::from_u32(scalar).ok_or("invalid Unicode scalar")?
-                        }
+                        },
                         _ => return Err("invalid escape".into()),
                     };
                     out.extend_from_slice(ch.encode_utf8(&mut [0; 4]).as_bytes());
-                }
+                },
                 0..=0x1f => return Err("unescaped control byte in string".into()),
                 _ => out.push(c),
             }
@@ -195,7 +190,7 @@ impl<'a> Parser<'a> {
                 while matches!(self.peek(), Some(b'0'..=b'9')) {
                     self.i += 1;
                 }
-            }
+            },
             _ => return Err("invalid number".into()),
         }
 
@@ -240,9 +235,7 @@ impl<'a> Parser<'a> {
             }
             self.i += 1;
         }
-        let raw = std::str::from_utf8(&self.s[start..self.i])
-            .map_err(|_| "invalid UTF-8")?
-            .trim();
+        let raw = std::str::from_utf8(&self.s[start..self.i]).map_err(|_| "invalid UTF-8")?.trim();
         if raw.eq_ignore_ascii_case("null") {
             return Ok(Value::Null);
         }
@@ -260,16 +253,11 @@ impl<'a> Parser<'a> {
         }
         let parts: Vec<_> = raw.split('.').collect();
         if parts.len() >= 3
-            && parts
-                .iter()
-                .all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
+            && parts.iter().all(|p| !p.is_empty() && p.bytes().all(|b| b.is_ascii_digit()))
         {
             return parts
                 .iter()
-                .map(|s| {
-                    s.parse::<u32>()
-                        .map_err(|_| "version component exceeds u32".into())
-                })
+                .map(|s| s.parse::<u32>().map_err(|_| "version component exceeds u32".into()))
                 .collect::<Result<Vec<_>, String>>()
                 .map(Value::Version);
         }
@@ -312,7 +300,7 @@ impl<'a> Parser<'a> {
                         break;
                     }
                     continue;
-                }
+                },
                 b']' => break,
                 _ => return Err("expected ',' or ']'".into()),
             }
@@ -353,9 +341,7 @@ impl<'a> Parser<'a> {
                 if self.i == start {
                     return Err("object key must be a string or identifier".into());
                 }
-                std::str::from_utf8(&self.s[start..self.i])
-                    .unwrap()
-                    .to_owned()
+                std::str::from_utf8(&self.s[start..self.i]).unwrap().to_owned()
             } else {
                 return Err("object key must be string".into());
             };
@@ -379,7 +365,7 @@ impl<'a> Parser<'a> {
                         break;
                     }
                     continue;
-                }
+                },
                 b'}' => break,
                 _ => return Err("expected ',' or '}'".into()),
             }

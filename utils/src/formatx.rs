@@ -69,10 +69,7 @@ pub fn parse_placeholders(input: &str) -> Vec<Placeholder> {
 pub fn count_placeholders(input: impl AsRef<[u8]>) -> usize {
     format_fragments(input.as_ref())
         .map(|parts| {
-            parts
-                .into_iter()
-                .filter(|p| matches!(p, FormatFragment::Placeholder(_)))
-                .count()
+            parts.into_iter().filter(|p| matches!(p, FormatFragment::Placeholder(_))).count()
         })
         .unwrap_or(0)
 }

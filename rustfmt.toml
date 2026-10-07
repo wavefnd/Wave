@@ -1,0 +1,13 @@
+edition = "2021"
+style_edition = "2021"
+
+hard_tabs = false
+max_width = 100
+newline_style = "Unix"
+tab_spaces = 4
+
+use_small_heuristics = "Max"
+
+match_block_trailing_comma = true
+use_field_init_shorthand = true
+use_try_shorthand = true

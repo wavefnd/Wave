@@ -32,14 +32,8 @@ use parser::ast::{Expression, Literal, WaveType};
 use std::collections::HashMap;
 
 enum AsmOutPlace<'ctx> {
-    VarAlloca {
-        ptr: PointerValue<'ctx>,
-        elem_ty: BasicTypeEnum<'ctx>,
-    },
-    MemPtr {
-        ptr: PointerValue<'ctx>,
-        elem_ty: BasicTypeEnum<'ctx>,
-    },
+    VarAlloca { ptr: PointerValue<'ctx>, elem_ty: BasicTypeEnum<'ctx> },
+    MemPtr { ptr: PointerValue<'ctx>, elem_ty: BasicTypeEnum<'ctx> },
 }
 
 fn llvm_type_of_wave<'ctx>(
@@ -175,9 +169,8 @@ pub(super) fn gen_asm_stmt_ir<'ctx>(
         false,
     );
 
-    let call = builder
-        .build_indirect_call(fn_type, inline_asm, &operand_vals, "inline_asm")
-        .unwrap();
+    let call =
+        builder.build_indirect_call(fn_type, inline_asm, &operand_vals, "inline_asm").unwrap();
 
     if plan.noreturn {
         builder.build_unreachable().unwrap();
@@ -192,7 +185,7 @@ pub(super) fn gen_asm_stmt_ir<'ctx>(
         ValueKind::Basic(v) => v,
         ValueKind::Instruction(_) => {
             panic!("asm stmt expected return value but got instruction-only result");
-        }
+        },
     };
 
     if out_places.len() == 1 {
@@ -202,9 +195,7 @@ pub(super) fn gen_asm_stmt_ir<'ctx>(
 
     let struct_val = ret_val.into_struct_value();
     for (idx, place) in out_places.iter().enumerate() {
-        let elem = builder
-            .build_extract_value(struct_val, idx as u32, "asm_out_elem")
-            .unwrap();
+        let elem = builder.build_extract_value(struct_val, idx as u32, "asm_out_elem").unwrap();
         store_asm_out_place(context, builder, place, elem, "asm_out");
     }
 }
@@ -219,8 +210,8 @@ fn infer_signedness<'ctx>(
             WaveType::Int(_) => return Some(true),
             WaveType::Uint(_) | WaveType::Byte | WaveType::Char | WaveType::Bool => {
                 return Some(false)
-            }
-            _ => {}
+            },
+            _ => {},
         }
     }
     match expr {
@@ -248,14 +239,14 @@ fn infer_signedness<'ctx>(
             } else {
                 None
             }
-        }
+        },
         Expression::Literal(Literal::Int(s)) => {
             if s.trim_start().starts_with('-') {
                 Some(true)
             } else {
                 None
             }
-        }
+        },
         _ => None,
     }
 }
@@ -269,18 +260,11 @@ fn resolve_out_place_and_type<'ctx>(
 ) -> (AsmOutPlace<'ctx>, BasicTypeEnum<'ctx>) {
     match target {
         Expression::Variable(name) => {
-            let info = variables
-                .get(name)
-                .unwrap_or_else(|| panic!("Output var '{}' not found", name));
+            let info =
+                variables.get(name).unwrap_or_else(|| panic!("Output var '{}' not found", name));
             let elem_ty = llvm_type_of_wave(context, &info.ty, struct_types);
-            (
-                AsmOutPlace::VarAlloca {
-                    ptr: info.ptr,
-                    elem_ty,
-                },
-                elem_ty,
-            )
-        }
+            (AsmOutPlace::VarAlloca { ptr: info.ptr, elem_ty }, elem_ty)
+        },
 
         Expression::Deref(inner) => {
             match inner.as_ref() {
@@ -305,27 +289,18 @@ fn resolve_out_place_and_type<'ctx>(
                     let elem_ty = match &info.ty {
                         WaveType::Pointer(inner_ty) => {
                             llvm_type_of_wave(context, inner_ty, struct_types)
-                        }
+                        },
                         WaveType::String => context.i8_type().as_basic_type_enum(),
                         other => panic!("out(*{}) requires pointer/string, got {:?}", name, other),
                     };
 
-                    (
-                        AsmOutPlace::MemPtr {
-                            ptr: dst_ptr,
-                            elem_ty,
-                        },
-                        elem_ty,
-                    )
-                }
+                    (AsmOutPlace::MemPtr { ptr: dst_ptr, elem_ty }, elem_ty)
+                },
                 other => panic!("Unsupported deref out target: {:?}", other),
             }
-        }
+        },
 
-        other => panic!(
-            "out(...) target must be variable or deref var for now: {:?}",
-            other
-        ),
+        other => panic!("out(...) target must be variable or deref var for now: {:?}", other),
     }
 }
 
@@ -340,11 +315,11 @@ fn store_asm_out_place<'ctx>(
         AsmOutPlace::VarAlloca { ptr, elem_ty } => {
             let v = coerce_basic_value_for_store(context, builder, value, *elem_ty, name);
             builder.build_store(*ptr, v).unwrap();
-        }
+        },
         AsmOutPlace::MemPtr { ptr, elem_ty } => {
             let v = coerce_basic_value_for_store(context, builder, value, *elem_ty, name);
             builder.build_store(*ptr, v).unwrap();
-        }
+        },
     }
 }
 
@@ -463,8 +438,5 @@ fn coerce_basic_value_for_store<'ctx>(
         );
     }
 
-    panic!(
-        "Unsupported destination type for asm output '{}': {:?}",
-        name, dst_ty
-    );
+    panic!("Unsupported destination type for asm output '{}': {:?}", name, dst_ty);
 }

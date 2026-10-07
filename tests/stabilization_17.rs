@@ -17,6 +17,7 @@ impl Case {
         fs::create_dir_all(&p).unwrap();
         Self(p)
     }
+
     fn command(&self) -> Command {
         let mut c = Command::new(env!("CARGO_BIN_EXE_wavec"));
         c.current_dir(&self.0)
@@ -24,15 +25,18 @@ impl Case {
             .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("std"));
         c
     }
+
     fn source(&self, source: &str) {
         fs::write(self.0.join("case.wave"), source).unwrap();
     }
+
     fn build(&self, opt: &str) -> Output {
         self.command()
             .args(["build", "case.wave", opt, "--emit=ir,bin", "-o", "case.exe"])
             .output()
             .unwrap()
     }
+
     fn run(&self, source: &str) {
         self.source(source);
         for opt in ["-O0", "-O2"] {
@@ -55,6 +59,7 @@ fn ok(o: Output) {
         String::from_utf8_lossy(&o.stderr)
     );
 }
+
 fn native() -> bool {
     let o = Command::new(env!("CARGO_BIN_EXE_wavec"))
         .args(["print", "default-target"])
@@ -92,10 +97,7 @@ fn declaration_diagnostics_preserve_the_offending_token() {
                 .output()
                 .unwrap();
             let err = String::from_utf8_lossy(&o.stderr);
-            assert!(
-                !o.status.success() && o.stdout.is_empty(),
-                "{source}: {o:?}"
-            );
+            assert!(!o.status.success() && o.stdout.is_empty(), "{source}: {o:?}");
             assert!(err.contains(message), "{source}: {err}");
             if format == "json" {
                 let json = utils::wson::parse_json(err.trim()).unwrap();
@@ -124,12 +126,7 @@ fn cli_rejects_invalid_debug_modes_and_empty_dependency_roots() {
         vec!["--dep-root", ""],
         vec!["--dep-root", "  "],
     ] {
-        let o = case
-            .command()
-            .args(args)
-            .args(["check", "case.wave"])
-            .output()
-            .unwrap();
+        let o = case.command().args(args).args(["check", "case.wave"]).output().unwrap();
         assert_eq!(o.status.code(), Some(2), "{o:?}");
     }
     for args in [
@@ -139,12 +136,7 @@ fn cli_rejects_invalid_debug_modes_and_empty_dependency_roots() {
         vec!["--dep-root", "relative"],
         vec!["--dep-root=/tmp"],
     ] {
-        ok(case
-            .command()
-            .args(args)
-            .args(["check", "case.wave"])
-            .output()
-            .unwrap());
+        ok(case.command().args(args).args(["check", "case.wave"]).output().unwrap());
     }
 }
 #[test]
@@ -175,16 +167,13 @@ fn numeric_constants_reject_invalid_shifts_and_casts() {
         utils::wson::parse_json(String::from_utf8_lossy(&o.stderr).trim()).unwrap();
     }
 }
+
 fn environment_fixture(provider: &str, fixture: &str) -> String {
     // Git's Windows checkout uses CRLF; never silently leave the real import
     // beside the mock declaration when replacing the provider boundary.
     let provider = provider.replace("\r\n", "\n").replace('\r', "\n");
     let import = "import(\"std::sys::env\")::{\n    env_read,\n};";
-    assert_eq!(
-        provider.matches(import).count(),
-        1,
-        "env_read provider import changed"
-    );
+    assert_eq!(provider.matches(import).count(), 1, "env_read provider import changed");
     format!("{}\n{fixture}", provider.replacen(import, "", 1))
 }
 
@@ -199,15 +188,8 @@ fn environment_fixture_replaces_the_provider_for_all_line_endings() {
     let fixture =
         fs::read_to_string(root.join("tests/fixtures/stabilization_17/environment.wave")).unwrap();
     for newline in ["\n", "\r\n", "\r"] {
-        case.source(&environment_fixture(
-            &provider.replace('\n', newline),
-            &fixture,
-        ));
-        ok(case
-            .command()
-            .args(["check", "case.wave"])
-            .output()
-            .unwrap());
+        case.source(&environment_fixture(&provider.replace('\n', newline), &fixture));
+        ok(case.command().args(["check", "case.wave"]).output().unwrap());
     }
 }
 
@@ -314,14 +296,7 @@ fn webassembly_checked_numeric_runtime() {
                 link.arg("-mwasm64");
             }
             link.arg("--no-entry");
-            for name in [
-                "shift",
-                "signed_shift",
-                "signed_cast",
-                "unsigned_cast",
-                "truth",
-                "wide",
-            ] {
+            for name in ["shift", "signed_shift", "signed_cast", "unsigned_cast", "truth", "wide"] {
                 link.arg(format!("--export={name}"));
             }
             ok(link.arg(object).arg("-o").arg(&module).output().unwrap());
@@ -349,11 +324,7 @@ fn darwin_syscall_secondary_return_does_not_preserve_the_third_argument() {
     for count in 3..=6 {
         let mut args = vec![54, 1, 2, 7];
         args.extend(4..=count);
-        let args = args
-            .iter()
-            .map(ToString::to_string)
-            .collect::<Vec<_>>()
-            .join(", ");
+        let args = args.iter().map(ToString::to_string).collect::<Vec<_>>().join(", ");
         body.push_str(&format!("if (syscall{count}({args}) != 7 || syscall{count}({args}) != 7) {{ return {count}; }}\n"));
     }
     body.push_str("return 0; }");

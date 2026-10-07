@@ -48,11 +48,7 @@ impl IntegerLiteral {
             Some(b"0b" | b"0B") => (2, &unsigned[2..]),
             _ => (10, unsigned),
         };
-        Some(Self {
-            negative,
-            radix,
-            digits: digits(raw_digits, radix)?,
-        })
+        Some(Self { negative, radix, digits: digits(raw_digits, radix)? })
     }
 
     pub fn is_zero(&self) -> bool {
@@ -150,18 +146,13 @@ impl IntegerLiteral {
         }
         let text: String = decimal.iter().rev().map(|d| char::from(b'0' + d)).collect();
         let value: f64 = text.parse().ok()?;
-        value
-            .is_finite()
-            .then_some(if self.negative { -value } else { value })
+        value.is_finite().then_some(if self.negative { -value } else { value })
     }
 }
 
 /// Parse a finite decimal float, validating separators before normalization.
 pub fn parse_float(raw: &str) -> Option<f64> {
-    let unsigned = raw
-        .strip_prefix('-')
-        .or_else(|| raw.strip_prefix('+'))
-        .unwrap_or(raw);
+    let unsigned = raw.strip_prefix('-').or_else(|| raw.strip_prefix('+')).unwrap_or(raw);
     let mut exponent_parts = unsigned.split(['e', 'E']);
     let mantissa = exponent_parts.next()?;
     let exponent = exponent_parts.next();
@@ -169,12 +160,7 @@ pub fn parse_float(raw: &str) -> Option<f64> {
         return None;
     }
     if let Some(exp) = exponent {
-        digits(
-            exp.strip_prefix('-')
-                .or_else(|| exp.strip_prefix('+'))
-                .unwrap_or(exp),
-            10,
-        )?;
+        digits(exp.strip_prefix('-').or_else(|| exp.strip_prefix('+')).unwrap_or(exp), 10)?;
     }
     let mut fraction_parts = mantissa.split('.');
     digits(fraction_parts.next()?, 10)?;

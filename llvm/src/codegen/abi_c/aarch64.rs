@@ -26,9 +26,7 @@ fn is_homogeneous_float_aggregate<'ctx>(td: &TargetData, t: BasicTypeEnum<'ctx>)
     let Some(first_size) = is_float_ty(td, leaves[0]) else {
         return false;
     };
-    leaves
-        .iter()
-        .all(|leaf| is_float_ty(td, *leaf) == Some(first_size))
+    leaves.iter().all(|leaf| is_float_ty(td, *leaf) == Some(first_size))
 }
 
 pub(super) fn classify_param_arm64<'ctx>(
@@ -38,10 +36,7 @@ pub(super) fn classify_param_arm64<'ctx>(
     allow_hfa: bool,
 ) -> ParamLowering<'ctx> {
     let size = td.get_store_size(&t) as u64;
-    let is_agg = matches!(
-        t,
-        BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_)
-    );
+    let is_agg = matches!(t, BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_));
 
     // AAPCS64 stage B checks HFAs before the general >16-byte rule. Four
     // doubles still travel in FP registers (or together on stack when exhausted).
@@ -49,17 +44,12 @@ pub(super) fn classify_param_arm64<'ctx>(
         let mut leaves = Vec::new();
         flatten_leaf_types(t, &mut leaves);
         return ParamLowering::Direct(
-            leaves[0]
-                .into_float_type()
-                .array_type(leaves.len() as u32)
-                .as_basic_type_enum(),
+            leaves[0].into_float_type().array_type(leaves.len() as u32).as_basic_type_enum(),
         );
     }
 
     if is_agg && size > 16 {
-        return ParamLowering::Indirect {
-            ty: t.as_any_type_enum(),
-        };
+        return ParamLowering::Indirect { ty: t.as_any_type_enum() };
     }
 
     if is_agg && size == 0 {
@@ -99,10 +89,7 @@ pub(super) fn classify_ret_arm64<'ctx>(
         return RetLowering::Void;
     };
     let size = td.get_store_size(&t) as u64;
-    let is_agg = matches!(
-        t,
-        BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_)
-    );
+    let is_agg = matches!(t, BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_));
 
     // HFA results use v0-v3 even when their total size exceeds 16 bytes.
     if is_agg && is_homogeneous_float_aggregate(td, t) {
@@ -111,10 +98,7 @@ pub(super) fn classify_ret_arm64<'ctx>(
 
     if is_agg && size > 16 {
         let align = td.get_abi_alignment(&t) as u32;
-        return RetLowering::SRet {
-            ty: t.as_any_type_enum(),
-            align,
-        };
+        return RetLowering::SRet { ty: t.as_any_type_enum(), align };
     }
 
     if is_agg && size == 0 {
@@ -124,9 +108,7 @@ pub(super) fn classify_ret_arm64<'ctx>(
     if is_agg {
         if size <= 8 {
             return RetLowering::Direct(
-                context
-                    .custom_width_int_type((size * 8) as u32)
-                    .as_basic_type_enum(),
+                context.custom_width_int_type((size * 8) as u32).as_basic_type_enum(),
             );
         }
 

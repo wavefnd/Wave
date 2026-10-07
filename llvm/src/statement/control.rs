@@ -47,17 +47,13 @@ fn truthy_to_i1<'ctx>(
                 iv
             } else {
                 let zero = iv.get_type().const_zero();
-                builder
-                    .build_int_compare(IntPredicate::NE, iv, zero, name)
-                    .unwrap()
+                builder.build_int_compare(IntPredicate::NE, iv, zero, name).unwrap()
             }
-        }
+        },
         BasicValueEnum::FloatValue(fv) => {
             let zero = fv.get_type().const_float(0.0);
-            builder
-                .build_float_compare(FloatPredicate::ONE, fv, zero, name)
-                .unwrap()
-        }
+            builder.build_float_compare(FloatPredicate::ONE, fv, zero, name).unwrap()
+        },
         BasicValueEnum::PointerValue(pv) => builder.build_is_not_null(pv, name).unwrap(),
         _ => panic!("Unsupported condition type"),
     }
@@ -78,25 +74,16 @@ fn node_breaks_current_loop(node: &ASTNode) -> bool {
 
     match statement {
         StatementNode::Break => true,
-        StatementNode::If {
-            body,
-            else_if_blocks,
-            else_block,
-            ..
-        } => {
+        StatementNode::If { body, else_if_blocks, else_block, .. } => {
             block_breaks_current_loop(body)
                 || else_if_blocks.as_ref().is_some_and(|blocks| {
-                    blocks
-                        .iter()
-                        .any(|(_, block)| block_breaks_current_loop(block))
+                    blocks.iter().any(|(_, block)| block_breaks_current_loop(block))
                 })
-                || else_block
-                    .as_ref()
-                    .is_some_and(|block| block_breaks_current_loop(block))
-        }
+                || else_block.as_ref().is_some_and(|block| block_breaks_current_loop(block))
+        },
         StatementNode::Match { arms, .. } => {
             arms.iter().any(|arm| block_breaks_current_loop(&arm.body))
-        }
+        },
         StatementNode::While { .. } | StatementNode::For { .. } => false,
         _ => false,
     }
@@ -107,14 +94,10 @@ fn eval_match_case_const<'ctx>(
     pattern: &MatchPattern,
     program: &TypedProgram,
 ) -> inkwell::values::IntValue<'ctx> {
-    let raw = program
-        .integer_pattern_of(pattern)
-        .expect("validated integer pattern");
+    let raw = program.integer_pattern_of(pattern).expect("validated integer pattern");
     let (negative, radix, digits) =
         crate::codegen::number::parse_integer(raw).expect("validated match value");
-    let value = discr_ty
-        .const_int_from_string(&digits, radix)
-        .expect("validated case width");
+    let value = discr_ty.const_int_from_string(&digits, radix).expect("validated case width");
     if negative {
         value.const_neg()
     } else {
@@ -142,11 +125,7 @@ fn gen_variant_pattern_test<'ctx>(
         MatchPattern::Wildcard => (context.bool_type().const_int(1, false), Vec::new()),
         MatchPattern::Binding(name) => (
             context.bool_type().const_int(1, false),
-            vec![VariantBinding {
-                name: name.clone(),
-                ptr: value_ptr,
-                ty: value_type.clone(),
-            }],
+            vec![VariantBinding { name: name.clone(), ptr: value_ptr, ty: value_type.clone() }],
         ),
         MatchPattern::Variant { payloads, .. } => {
             let metadata = program.variant_pattern_of(pattern).unwrap_or_else(|| {
@@ -162,16 +141,10 @@ fn gen_variant_pattern_test<'ctx>(
                 .build_struct_gep(variant_ty, value_ptr, 0, "variant.match.tag.ptr")
                 .unwrap();
             let tag = builder
-                .build_load(
-                    context.i32_type().as_basic_type_enum(),
-                    tag_ptr,
-                    "variant.match.tag",
-                )
+                .build_load(context.i32_type().as_basic_type_enum(), tag_ptr, "variant.match.tag")
                 .unwrap()
                 .into_int_value();
-            let expected_tag = context
-                .i32_type()
-                .const_int(metadata.discriminant as u64, false);
+            let expected_tag = context.i32_type().const_int(metadata.discriminant as u64, false);
             let mut condition = builder
                 .build_int_compare(IntPredicate::EQ, tag, expected_tag, "variant.match.case")
                 .unwrap();
@@ -204,16 +177,15 @@ fn gen_variant_pattern_test<'ctx>(
                     payload_wave_type,
                     struct_types,
                 );
-                condition = builder
-                    .build_and(condition, nested_condition, "variant.match.and")
-                    .unwrap();
+                condition =
+                    builder.build_and(condition, nested_condition, "variant.match.and").unwrap();
                 bindings.append(&mut nested_bindings);
             }
             (condition, bindings)
-        }
+        },
         MatchPattern::Int(_) | MatchPattern::Ident(_) => {
             panic!("integer pattern reached variant LLVM lowering")
-        }
+        },
     }
 }
 
@@ -241,9 +213,8 @@ fn gen_variant_match_ir<'ctx>(
     let WaveType::Variant(name) = value_type else {
         panic!("variant match lowering received a non-variant value type");
     };
-    let variant_ty = *struct_types
-        .get(name)
-        .unwrap_or_else(|| panic!("variant type '{}' not found", name));
+    let variant_ty =
+        *struct_types.get(name).unwrap_or_else(|| panic!("variant type '{}' not found", name));
     let value = generate_expression_ir(
         program,
         context,
@@ -258,9 +229,7 @@ fn gen_variant_match_ir<'ctx>(
         target_data,
         extern_c_info,
     );
-    let value_ptr = builder
-        .build_alloca(variant_ty, "variant.match.value")
-        .unwrap();
+    let value_ptr = builder.build_alloca(variant_ty, "variant.match.value").unwrap();
     builder.build_store(value_ptr, value).unwrap();
 
     let current_fn = builder.get_insert_block().unwrap().get_parent().unwrap();
@@ -291,20 +260,14 @@ fn gen_variant_match_ir<'ctx>(
         let body_block =
             context.append_basic_block(current_fn, &format!("variant.match.arm.{index}"));
         let next_block = test_blocks.get(index + 1).copied().unwrap_or(fail_block);
-        builder
-            .build_conditional_branch(condition, body_block, next_block)
-            .unwrap();
+        builder.build_conditional_branch(condition, body_block, next_block).unwrap();
 
         builder.position_at_end(body_block);
         *variables = outer_variables.clone();
         for binding in bindings {
             variables.insert(
                 binding.name,
-                VariableInfo {
-                    ptr: binding.ptr,
-                    mutability: Mutability::Var,
-                    ty: binding.ty,
-                },
+                VariableInfo { ptr: binding.ptr, mutability: Mutability::Var, ty: binding.ty },
             );
         }
         for statement in &arm.body {
@@ -327,10 +290,7 @@ fn gen_variant_match_ir<'ctx>(
                 program,
             );
         }
-        if builder
-            .get_insert_block()
-            .is_some_and(|block| block.get_terminator().is_none())
-        {
+        if builder.get_insert_block().is_some_and(|block| block.get_terminator().is_none()) {
             all_arms_terminate = false;
             builder.build_unconditional_branch(merge_block).unwrap();
         }
@@ -389,9 +349,7 @@ pub(super) fn gen_if_ir<'ctx>(
     let merge_block = context.append_basic_block(current_fn, "merge");
     let mut merge_reachable = false;
 
-    builder
-        .build_conditional_branch(cond_i1, then_block, else_block_bb)
-        .unwrap();
+    builder.build_conditional_branch(cond_i1, then_block, else_block_bb).unwrap();
 
     builder.position_at_end(then_block);
     let mut scope_variables = variables.clone();
@@ -448,9 +406,7 @@ pub(super) fn gen_if_ir<'ctx>(
             let then_bb = context.append_basic_block(current_fn, "else_if_then");
             let next_check_bb = context.append_basic_block(current_fn, "next_else_if");
 
-            builder
-                .build_conditional_branch(c_i1, then_bb, next_check_bb)
-                .unwrap();
+            builder.build_conditional_branch(c_i1, then_bb, next_check_bb).unwrap();
 
             builder.position_at_end(then_bb);
             let mut scope_variables = variables.clone();
@@ -608,9 +564,7 @@ pub(super) fn gen_while_ir<'ctx>(
     );
 
     let cond_bool = truthy_to_i1(context, builder, cond_val, "while_cond");
-    builder
-        .build_conditional_branch(cond_bool, body_block, merge_block)
-        .unwrap();
+    builder.build_conditional_branch(cond_bool, body_block, merge_block).unwrap();
 
     builder.position_at_end(body_block);
     let mut scope_variables = variables.clone();
@@ -713,10 +667,7 @@ pub(super) fn gen_match_ir<'ctx>(
 
     let discr = match discr_any {
         BasicValueEnum::IntValue(iv) => iv,
-        other => panic!(
-            "match value must be integer/enum type, got {:?}",
-            other.get_type()
-        ),
+        other => panic!("match value must be integer/enum type, got {:?}", other.get_type()),
     };
     let discr_ty = discr.get_type();
 
@@ -735,7 +686,7 @@ pub(super) fn gen_match_ir<'ctx>(
                     panic!("duplicate wildcard match arm (`_`)");
                 }
                 default_arm = Some(arm);
-            }
+            },
             pat @ (MatchPattern::Int(_) | MatchPattern::Ident(_)) => {
                 let case_value = eval_match_case_const(discr_ty, pat, program);
                 let case_key = case_value.print_to_string().to_string();
@@ -746,10 +697,10 @@ pub(super) fn gen_match_ir<'ctx>(
                 let case_block =
                     context.append_basic_block(current_fn, &format!("match.case.{}", idx));
                 case_entries.push((case_value, case_block, arm));
-            }
+            },
             MatchPattern::Binding(_) | MatchPattern::Variant { .. } => {
                 panic!("variant pattern reached LLVM before variant lowering");
-            }
+            },
         }
     }
 
@@ -763,9 +714,7 @@ pub(super) fn gen_match_ir<'ctx>(
     let switch_cases: Vec<(inkwell::values::IntValue<'ctx>, BasicBlock<'ctx>)> =
         case_entries.iter().map(|(v, bb, _)| (*v, *bb)).collect();
 
-    builder
-        .build_switch(discr, default_block, &switch_cases)
-        .unwrap();
+    builder.build_switch(discr, default_block, &switch_cases).unwrap();
 
     for (_, case_block, arm) in case_entries {
         builder.position_at_end(case_block);
@@ -905,9 +854,7 @@ pub(super) fn gen_for_ir<'ctx>(
     );
 
     let cond_bool = truthy_to_i1(context, builder, cond_val, "for_cond");
-    builder
-        .build_conditional_branch(cond_bool, body_block, merge_block)
-        .unwrap();
+    builder.build_conditional_branch(cond_bool, body_block, merge_block).unwrap();
 
     builder.position_at_end(body_block);
     let mut scope_variables = variables.clone();
@@ -1009,7 +956,7 @@ pub(super) fn gen_return_ir<'ctx>(
     match (expected_ret, expr_opt) {
         (None, None) => {
             builder.build_return(None).unwrap();
-        }
+        },
 
         (None, Some(expression)) => {
             generate_expression_ir(
@@ -1027,7 +974,7 @@ pub(super) fn gen_return_ir<'ctx>(
                 extern_c_info,
             );
             builder.build_return(None).unwrap();
-        }
+        },
 
         (Some(ret_ty), None) => {
             let is_i32_main = current_function.get_name().to_str().ok() == Some("main")
@@ -1039,7 +986,7 @@ pub(super) fn gen_return_ir<'ctx>(
             } else {
                 panic!("Non-void function must return a value");
             }
-        }
+        },
 
         (Some(ret_ty), Some(expr)) => {
             let mut v = generate_expression_ir(
@@ -1070,6 +1017,6 @@ pub(super) fn gen_return_ir<'ctx>(
             }
 
             builder.build_return(Some(&v)).unwrap();
-        }
+        },
     }
 }

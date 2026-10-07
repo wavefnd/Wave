@@ -130,10 +130,7 @@ pub(crate) fn instruction_text(line: &str, hash_is_comment: bool) -> String {
     // Callers choose the rule before labels and mnemonics are normalized.
     let without_slash_comment = line.split_once("//").map(|(code, _)| code).unwrap_or(line);
     let line = if hash_is_comment {
-        without_slash_comment
-            .split_once('#')
-            .map(|(code, _)| code)
-            .unwrap_or(without_slash_comment)
+        without_slash_comment.split_once('#').map(|(code, _)| code).unwrap_or(without_slash_comment)
     } else {
         without_slash_comment
     };
@@ -142,9 +139,7 @@ pub(crate) fn instruction_text(line: &str, hash_is_comment: bool) -> String {
     while let Some((label, rest)) = code.split_once(':') {
         let label = label.trim();
         if label.is_empty()
-            || !label
-                .chars()
-                .all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.')
+            || !label.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '.')
         {
             break;
         }
@@ -154,9 +149,7 @@ pub(crate) fn instruction_text(line: &str, hash_is_comment: bool) -> String {
 }
 
 pub(crate) fn mnemonic(code: &str) -> &str {
-    code.split(|c: char| c.is_ascii_whitespace() || c == ';')
-        .next()
-        .unwrap_or("")
+    code.split(|c: char| c.is_ascii_whitespace() || c == ';').next().unwrap_or("")
 }
 
 pub(crate) fn stack_analysis(architecture: Architecture, line: &str) -> StackAnalysis {
@@ -177,35 +170,17 @@ mod tests {
 
     #[test]
     fn register_aliases_and_widths_are_architecture_local() {
-        assert_eq!(
-            register_group(Architecture::X86_64, "%eax").as_deref(),
-            None
-        );
-        assert_eq!(
-            register_group(Architecture::X86_64, "eax").as_deref(),
-            Some("rax")
-        );
+        assert_eq!(register_group(Architecture::X86_64, "%eax").as_deref(), None);
+        assert_eq!(register_group(Architecture::X86_64, "eax").as_deref(), Some("rax"));
         assert_eq!(register_width_bits(Architecture::X86_64, "r8d"), Some(32));
 
-        assert_eq!(
-            register_group(Architecture::Aarch64, "fp").as_deref(),
-            Some("x29")
-        );
+        assert_eq!(register_group(Architecture::Aarch64, "fp").as_deref(), Some("x29"));
         assert_eq!(register_width_bits(Architecture::Aarch64, "w30"), Some(32));
 
-        assert_eq!(
-            register_group(Architecture::Riscv64, "a7").as_deref(),
-            Some("x17")
-        );
-        assert_eq!(
-            register_group(Architecture::Riscv64, "fp").as_deref(),
-            Some("x8")
-        );
+        assert_eq!(register_group(Architecture::Riscv64, "a7").as_deref(), Some("x17"));
+        assert_eq!(register_group(Architecture::Riscv64, "fp").as_deref(), Some("x8"));
         assert_eq!(register_width_bits(Architecture::Riscv64, "x31"), Some(64));
-        assert_eq!(
-            operand_register_group(Architecture::Riscv64, "fa0").as_deref(),
-            Some("f10")
-        );
+        assert_eq!(operand_register_group(Architecture::Riscv64, "fa0").as_deref(), Some("f10"));
         for reserved in ["zero", "x0", "sp", "x2", "gp", "x3", "tp", "x4"] {
             assert_eq!(
                 operand_register_group(Architecture::Riscv64, reserved),
@@ -215,18 +190,9 @@ mod tests {
             );
         }
 
-        assert_eq!(
-            register_group(Architecture::LoongArch64, "a0").as_deref(),
-            Some("r4")
-        );
-        assert_eq!(
-            register_group(Architecture::LoongArch64, "fp").as_deref(),
-            Some("r22")
-        );
-        assert_eq!(
-            operand_register_group(Architecture::LoongArch64, "fa0").as_deref(),
-            Some("f0")
-        );
+        assert_eq!(register_group(Architecture::LoongArch64, "a0").as_deref(), Some("r4"));
+        assert_eq!(register_group(Architecture::LoongArch64, "fp").as_deref(), Some("r22"));
+        assert_eq!(operand_register_group(Architecture::LoongArch64, "fa0").as_deref(), Some("f0"));
         for reserved in ["zero", "r0", "tp", "r2", "sp", "r3", "r21"] {
             assert_eq!(
                 operand_register_group(Architecture::LoongArch64, reserved),
@@ -265,13 +231,7 @@ mod tests {
 
     #[test]
     fn architecture_comment_rules_preserve_aarch64_immediates() {
-        assert_eq!(
-            instruction_text("add x0, x0, #1 // note", false),
-            "add x0, x0, #1"
-        );
-        assert_eq!(
-            instruction_text("addi a0, a0, 1 # note", true),
-            "addi a0, a0, 1"
-        );
+        assert_eq!(instruction_text("add x0, x0, #1 // note", false), "add x0, x0, #1");
+        assert_eq!(instruction_text("addi a0, a0, 1 # note", true), "addi a0, a0, 1");
     }
 }

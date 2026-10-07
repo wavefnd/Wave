@@ -14,9 +14,7 @@ fn copy_std(source: &Path, destination: &Path) {
         } else if entry.path().extension().is_some_and(|e| e == "wave") {
             fs::write(
                 to,
-                fs::read_to_string(entry.path())
-                    .unwrap()
-                    .replace("\"std::", "\"checkout_std::"),
+                fs::read_to_string(entry.path()).unwrap().replace("\"std::", "\"checkout_std::"),
             )
             .unwrap();
         } else {
@@ -41,9 +39,7 @@ fn checked_typed_memory_and_sleb128_preserve_data_and_failure_state() {
         let source = dir.join(format!("{name}.wave"));
         fs::write(
             &source,
-            fs::read_to_string(root.join(fixture))
-                .unwrap()
-                .replace("\"std::", "\"checkout_std::"),
+            fs::read_to_string(root.join(fixture)).unwrap().replace("\"std::", "\"checkout_std::"),
         )
         .unwrap();
         for opt in ["-O0", "-O2"] {
@@ -105,15 +101,7 @@ fn run_cross_fixture(
             Command::new(env!("CARGO_BIN_EXE_wavec"))
                 .arg("build")
                 .arg(source)
-                .args([
-                    "--dep",
-                    dep,
-                    opt,
-                    "--target",
-                    target,
-                    "--emit=obj",
-                    "--out-dir",
-                ])
+                .args(["--dep", dep, opt, "--target", target, "--emit=obj", "--out-dir"])
                 .arg(&out),
         );
         let object = out.join(format!("{name}.o"));

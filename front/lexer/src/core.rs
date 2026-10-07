@@ -29,23 +29,13 @@ pub struct Token {
 
 impl Token {
     pub fn new(token_type: TokenType, lexeme: String, line: usize) -> Self {
-        Token {
-            token_type,
-            lexeme,
-            line,
-            span: None,
-        }
+        Token { token_type, lexeme, line, span: None }
     }
 }
 
 impl Default for Token {
     fn default() -> Self {
-        Token {
-            token_type: TokenType::Eof,
-            lexeme: String::new(),
-            line: 0,
-            span: None,
-        }
+        Token { token_type: TokenType::Eof, lexeme: String::new(), line: 0, span: None }
     }
 }
 
@@ -64,13 +54,7 @@ impl<'a> Lexer<'a> {
     }
 
     pub fn new_with_file(source: &'a str, file: impl Into<String>) -> Lexer<'a> {
-        Lexer {
-            source,
-            file: file.into(),
-            current: 0,
-            line: 1,
-            line_start: 0,
-        }
+        Lexer { source, file: file.into(), current: 0, line: 1, line_start: 0 }
     }
 
     pub fn tokenize(&mut self) -> Result<Vec<Token>, WaveError> {
@@ -107,10 +91,8 @@ impl<'a> Lexer<'a> {
         column: usize,
     ) -> WaveError {
         let lines = error::span::source_lines(self.source);
-        let (line_start, line_text) = lines
-            .get(line.saturating_sub(1))
-            .copied()
-            .unwrap_or((self.source.len(), ""));
+        let (line_start, line_text) =
+            lines.get(line.saturating_sub(1)).copied().unwrap_or((self.source.len(), ""));
         let start = line_start
             + line_text
                 .char_indices()

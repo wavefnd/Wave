@@ -3,9 +3,7 @@ use lexer::Lexer;
 use parser::{parse_syntax_only, parse_syntax_with_spans, ParseError};
 
 fn diagnostic(source: &str) -> ParseError {
-    let tokens = Lexer::new_with_file(source, "control.wave")
-        .tokenize()
-        .unwrap();
+    let tokens = Lexer::new_with_file(source, "control.wave").tokenize().unwrap();
     parse_syntax_with_spans(&tokens).unwrap_err()
 }
 
@@ -17,34 +15,18 @@ fn missing_header_delimiters_identify_the_unexpected_token() {
         ("if (true) @return;", "'{'", "if header"),
         ("if (true) {} else if @false) {}", "'('", "else if header"),
         ("if (true) {} else if (false @{ }", "')'", "else if header"),
-        (
-            "if (true) {} else if (false) @return;",
-            "'{'",
-            "else if header",
-        ),
+        ("if (true) {} else if (false) @return;", "'{'", "else if header"),
         ("if (true) {} else @return;", "'{'", "else header"),
         ("while @true) {}", "'('", "while header"),
         ("while (true @{ }", "')'", "while header"),
         ("while (true) @return;", "'{'", "while header"),
         ("for @i = 0; i < 2; i = i + 1) {}", "'('", "for header"),
         ("for (i = 0 @i < 2; i = i + 1) {}", "';'", "for initializer"),
-        (
-            "for (var i: i32 = 0 @i < 2; i = i + 1) {}",
-            "';'",
-            "for initializer",
-        ),
-        (
-            "for (i: i32 = 0 @i < 2; i = i + 1) {}",
-            "';'",
-            "for initializer",
-        ),
+        ("for (var i: i32 = 0 @i < 2; i = i + 1) {}", "';'", "for initializer"),
+        ("for (i: i32 = 0 @i < 2; i = i + 1) {}", "';'", "for initializer"),
         ("for (i = 0; i < 2 @i = i + 1) {}", "';'", "for condition"),
         ("for (i = 0; i < 2; i = i + 1 @{ }", "')'", "for increment"),
-        (
-            "for (i = 0; i < 2; i = i + 1) @return;",
-            "'{'",
-            "for header",
-        ),
+        ("for (i = 0; i < 2; i = i + 1) @return;", "'{'", "for header"),
     ];
     for (body, expected, context) in cases {
         // Unicode and CRLF ensure byte offsets and source columns are not conflated.
@@ -60,10 +42,7 @@ fn missing_header_delimiters_identify_the_unexpected_token() {
             error.column(),
             source[..start].rsplit('\n').next().unwrap().chars().count() + 1
         );
-        assert!(error
-            .found()
-            .unwrap()
-            .contains(&source[start..error.span().unwrap().end]));
+        assert!(error.found().unwrap().contains(&source[start..error.span().unwrap().end]));
         let tokens = Lexer::new(&source).tokenize().unwrap();
         let without_spans = parse_syntax_only(&tokens).unwrap_err();
         assert_eq!(without_spans.message(), error.message());
@@ -86,11 +65,7 @@ fn header_errors_survive_nested_blocks_exports_and_methods() {
         "proto S { fun f() { for (i = 0 i < 2; i = i + 1) {} } }",
     ] {
         let error = diagnostic(source);
-        assert_eq!(
-            error.context(),
-            Some("for initializer"),
-            "{source}: {error:?}"
-        );
+        assert_eq!(error.context(), Some("for initializer"), "{source}: {error:?}");
         assert_eq!(error.expected(), ["';'"]);
         assert_eq!(error.span().unwrap().start, source.find("i < 2").unwrap());
     }

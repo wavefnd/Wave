@@ -83,7 +83,7 @@ impl<'a> Lexer<'a> {
                             span: None,
                         });
                     }
-                }
+                },
                 '-' => {
                     if self.match_next('-') {
                         return Ok(Token {
@@ -114,7 +114,7 @@ impl<'a> Lexer<'a> {
                             span: None,
                         });
                     }
-                }
+                },
                 '*' => {
                     if self.match_next('=') {
                         return Ok(Token {
@@ -131,7 +131,7 @@ impl<'a> Lexer<'a> {
                             span: None,
                         });
                     }
-                }
+                },
                 '.' => {
                     return Ok(Token {
                         token_type: TokenType::Dot,
@@ -139,7 +139,7 @@ impl<'a> Lexer<'a> {
                         line: self.line,
                         span: None,
                     })
-                }
+                },
                 '/' => {
                     if self.match_next('=') {
                         return Ok(Token {
@@ -156,7 +156,7 @@ impl<'a> Lexer<'a> {
                             span: None,
                         });
                     }
-                }
+                },
                 '%' => {
                     if self.match_next('=') {
                         return Ok(Token {
@@ -173,7 +173,7 @@ impl<'a> Lexer<'a> {
                             span: None,
                         });
                     }
-                }
+                },
                 ';' => {
                     return Ok(Token {
                         token_type: TokenType::SemiColon,
@@ -181,7 +181,7 @@ impl<'a> Lexer<'a> {
                         line: self.line,
                         span: None,
                     })
-                }
+                },
                 ':' => {
                     if self.match_next(':') {
                         return Ok(Token {
@@ -197,7 +197,7 @@ impl<'a> Lexer<'a> {
                         line: self.line,
                         span: None,
                     });
-                }
+                },
                 '<' => {
                     if self.match_next('<') {
                         return Ok(Token {
@@ -221,7 +221,7 @@ impl<'a> Lexer<'a> {
                             span: None,
                         });
                     }
-                }
+                },
                 '>' => {
                     if self.match_next('>') {
                         return Ok(Token {
@@ -245,7 +245,7 @@ impl<'a> Lexer<'a> {
                             span: None,
                         });
                     }
-                }
+                },
                 '(' => {
                     return Ok(Token {
                         token_type: TokenType::Lparen,
@@ -253,7 +253,7 @@ impl<'a> Lexer<'a> {
                         line: self.line,
                         span: None,
                     })
-                }
+                },
                 ')' => {
                     return Ok(Token {
                         token_type: TokenType::Rparen,
@@ -261,7 +261,7 @@ impl<'a> Lexer<'a> {
                         line: self.line,
                         span: None,
                     })
-                }
+                },
                 '{' => {
                     return Ok(Token {
                         token_type: TokenType::Lbrace,
@@ -269,7 +269,7 @@ impl<'a> Lexer<'a> {
                         line: self.line,
                         span: None,
                     })
-                }
+                },
                 '}' => {
                     return Ok(Token {
                         token_type: TokenType::Rbrace,
@@ -277,7 +277,7 @@ impl<'a> Lexer<'a> {
                         line: self.line,
                         span: None,
                     })
-                }
+                },
                 '[' => {
                     return Ok(Token {
                         token_type: TokenType::Lbrack,
@@ -285,7 +285,7 @@ impl<'a> Lexer<'a> {
                         line: self.line,
                         span: None,
                     })
-                }
+                },
                 ']' => {
                     return Ok(Token {
                         token_type: TokenType::Rbrack,
@@ -293,7 +293,7 @@ impl<'a> Lexer<'a> {
                         line: self.line,
                         span: None,
                     })
-                }
+                },
                 '=' => {
                     if self.match_next('=') {
                         return Ok(Token {
@@ -310,7 +310,7 @@ impl<'a> Lexer<'a> {
                             span: None,
                         });
                     }
-                }
+                },
                 '&' => {
                     if self.match_next('&') {
                         return Ok(Token {
@@ -327,7 +327,7 @@ impl<'a> Lexer<'a> {
                             span: None,
                         });
                     }
-                }
+                },
                 '|' => {
                     if self.match_next('|') {
                         return Ok(Token {
@@ -344,7 +344,7 @@ impl<'a> Lexer<'a> {
                             span: None,
                         });
                     }
-                }
+                },
                 '!' => {
                     if self.match_next('=') {
                         return Ok(Token {
@@ -375,7 +375,7 @@ impl<'a> Lexer<'a> {
                             span: None,
                         });
                     }
-                }
+                },
                 '^' => {
                     return Ok(Token {
                         token_type: TokenType::Xor,
@@ -383,7 +383,7 @@ impl<'a> Lexer<'a> {
                         line: self.line,
                         span: None,
                     })
-                }
+                },
                 '~' => {
                     if self.match_next('^') {
                         return Ok(Token {
@@ -400,7 +400,7 @@ impl<'a> Lexer<'a> {
                             span: None,
                         });
                     }
-                }
+                },
                 '?' => {
                     if self.match_next('?') {
                         return Ok(Token {
@@ -417,7 +417,7 @@ impl<'a> Lexer<'a> {
                             span: None,
                         });
                     }
-                }
+                },
                 ',' => {
                     return Ok(Token {
                         token_type: TokenType::Comma,
@@ -425,7 +425,7 @@ impl<'a> Lexer<'a> {
                         line: self.line,
                         span: None,
                     })
-                }
+                },
                 '\'' => {
                     let value = self.char_literal()?;
                     return Ok(Token {
@@ -434,7 +434,7 @@ impl<'a> Lexer<'a> {
                         line: self.line,
                         span: None,
                     });
-                }
+                },
                 '"' => {
                     let string_value = self.string()?;
                     return Ok(Token {
@@ -443,12 +443,12 @@ impl<'a> Lexer<'a> {
                         line: self.line,
                         span: None,
                     });
-                }
+                },
 
                 ch if ch.is_alphabetic() || ch == '_' => {
                     let ident = self.identifier(c);
                     return Ok(self.keyword_or_ident_token(ident));
-                }
+                },
 
                 '0'..='9' => {
                     let start = self.current - 1;
@@ -475,7 +475,7 @@ impl<'a> Lexer<'a> {
                         WaveErrorKind::InvalidNumber(raw.to_string()),
                         format!("invalid numeric literal `{raw}`"), self.line, self.column_at(start),
                     ).with_code("E1006").with_help("use binary, octal, decimal or hexadecimal digits; separate digits with a single underscore; floats use decimal fractions or exponents, without suffixes"));
-                }
+                },
 
                 _ => {
                     let (line, column) = (self.line, self.column_at(self.current - c.len_utf8()));
@@ -515,7 +515,7 @@ impl<'a> Lexer<'a> {
                             .with_label("this character is not valid in Wave syntax")
                             .with_help("remove it or replace it with a valid token"));
                     }
-                }
+                },
             }
         }
     }

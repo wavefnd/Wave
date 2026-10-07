@@ -17,6 +17,7 @@ impl Temp {
         fs::create_dir_all(&p).unwrap();
         Self(p)
     }
+
     fn lib(&self, name: &str, machine: u16) -> PathBuf {
         let p = self.0.join(name);
         fs::create_dir_all(p.parent().unwrap()).unwrap();
@@ -34,16 +35,10 @@ fn obj(machine: u16) -> Vec<u8> {
     b[..2].copy_from_slice(&machine.to_le_bytes());
     b
 }
+
 fn member(name: &str, bytes: &[u8]) -> Vec<u8> {
-    let mut b = format!(
-        "{name:<16}{:<12}{:<6}{:<6}{:<8}{:<10}`\n",
-        0,
-        0,
-        0,
-        0,
-        bytes.len()
-    )
-    .into_bytes();
+    let mut b =
+        format!("{name:<16}{:<12}{:<6}{:<6}{:<8}{:<10}`\n", 0, 0, 0, 0, bytes.len()).into_bytes();
     assert_eq!(b.len(), 60);
     b.extend(bytes);
     if b.len() % 2 != 0 {
@@ -55,13 +50,9 @@ fn member(name: &str, bytes: &[u8]) -> Vec<u8> {
 fn rejects_wrong_machine_images_bitcode_and_truncation() {
     assert!(coff::inspect(&obj(0x8664), X64).is_ok());
     assert!(coff::inspect(&obj(0xaa64), ARM).is_ok());
-    for b in [
-        obj(0xaa64),
-        vec![],
-        vec![0x64, 0x86],
-        b"MZfake image".to_vec(),
-        b"BC\xc0\xde".to_vec(),
-    ] {
+    for b in
+        [obj(0xaa64), vec![], vec![0x64, 0x86], b"MZfake image".to_vec(), b"BC\xc0\xde".to_vec()]
+    {
         assert!(coff::inspect(&b, X64).is_err(), "{b:?}");
     }
     let mut b = obj(0x8664);
@@ -104,9 +95,7 @@ fn archives_check_every_member_and_report_long_names() {
     a.extend(member("valid.obj/", &obj(0x8664)));
     assert!(coff::inspect(&a, X64).is_ok());
     a.extend(member("/0", &obj(0xaa64)));
-    assert!(coff::inspect(&a, X64)
-        .unwrap_err()
-        .contains("foreign object.obj"));
+    assert!(coff::inspect(&a, X64).unwrap_err().contains("foreign object.obj"));
     for cut in [9, 20, 67, a.len() - 1] {
         assert!(coff::inspect(&a[..cut], X64).is_err());
     }
@@ -126,14 +115,8 @@ fn sdk_selects_complete_numeric_versions_and_target_architecture() {
     t.lib("SDK/Lib/10.0.11.0/um/arm64/kernel32.lib", 0xaa64);
     t.lib("VC/lib/arm64/vcruntime.lib", 0xaa64);
     let env = sdk::Environment::from([
-        (
-            "WindowsSdkDir".into(),
-            t.0.join("SDK").display().to_string(),
-        ),
-        (
-            "VCToolsInstallDir".into(),
-            t.0.join("VC").display().to_string(),
-        ),
+        ("WindowsSdkDir".into(), t.0.join("SDK").display().to_string()),
+        ("VCToolsInstallDir".into(), t.0.join("VC").display().to_string()),
     ]);
     let p = sdk::discover(ARM, &[], &env);
     assert_eq!(p.len(), 3);
@@ -141,9 +124,7 @@ fn sdk_selects_complete_numeric_versions_and_target_architecture() {
     assert!(sdk::discover(X64, &[], &env).is_empty());
     let mut env = env;
     env.insert("WindowsSDKVersion".into(), "10.0.9.0\\".into());
-    assert!(sdk::discover(ARM, &[], &env)[0]
-        .to_string_lossy()
-        .contains("10.0.9.0"));
+    assert!(sdk::discover(ARM, &[], &env)[0].to_string_lossy().contains("10.0.9.0"));
 }
 #[test]
 fn explicit_paths_precede_environment_and_wrong_architecture_fails_closed() {
@@ -152,20 +133,13 @@ fn explicit_paths_precede_environment_and_wrong_architecture_fails_closed() {
     t.lib("ambient/thing.lib", 0xaa64);
     let env = sdk::Environment::from([("LIB".into(), t.0.join("ambient").display().to_string())]);
     let paths = sdk::discover(X64, &[t.0.join("explicit").display().to_string()], &env);
-    let mut args = paths
-        .iter()
-        .map(|p| format!("/LIBPATH:{}", p.display()))
-        .collect::<Vec<_>>();
+    let mut args = paths.iter().map(|p| format!("/LIBPATH:{}", p.display())).collect::<Vec<_>>();
     args.push("thing.lib".into());
     assert!(sdk::validate_arguments(X64, &args).is_ok());
     args.remove(0);
-    assert!(sdk::validate_arguments(X64, &args)
-        .unwrap_err()
-        .contains("machine"));
+    assert!(sdk::validate_arguments(X64, &args).unwrap_err().contains("machine"));
     args.push("missing.lib".into());
-    assert!(sdk::validate_arguments(X64, &args)
-        .unwrap_err()
-        .contains("missing.lib"));
+    assert!(sdk::validate_arguments(X64, &args).unwrap_err().contains("missing.lib"));
 }
 #[test]
 fn missing_default_libraries_are_actionable_and_nodefaultlib_is_respected() {
@@ -209,45 +183,25 @@ fn rejects_archive_index_offsets_and_truncated_symbol_names() {
     index.extend(b"symbol\0");
     a.extend(member("/", &index));
     a.extend(member("object.obj/", &obj(0x8664)));
-    assert!(coff::inspect(&a, X64)
-        .unwrap_err()
-        .contains("nonexistent member"));
+    assert!(coff::inspect(&a, X64).unwrap_err().contains("nonexistent member"));
 }
 
 #[test]
 fn ordinary_install_roots_and_explicit_sdk_versions_do_not_mix() {
     let t = Temp::new();
     for (part, name) in [("um", "kernel32"), ("ucrt", "ucrt")] {
-        t.lib(
-            &format!("Program Files/Windows Kits/10/Lib/10.0.1/{part}/x64/{name}.lib"),
-            0x8664,
-        );
+        t.lib(&format!("Program Files/Windows Kits/10/Lib/10.0.1/{part}/x64/{name}.lib"), 0x8664);
     }
-    t.lib(
-        "Visual Studio/VC/Tools/MSVC/14.9/lib/x64/vcruntime.lib",
-        0x8664,
-    );
-    t.lib(
-        "Visual Studio/VC/Tools/MSVC/14.10/lib/x64/vcruntime.lib",
-        0x8664,
-    );
+    t.lib("Visual Studio/VC/Tools/MSVC/14.9/lib/x64/vcruntime.lib", 0x8664);
+    t.lib("Visual Studio/VC/Tools/MSVC/14.10/lib/x64/vcruntime.lib", 0x8664);
     let mut env = sdk::Environment::from([
-        (
-            "ProgramFiles(x86)".into(),
-            t.0.join("Program Files").display().to_string(),
-        ),
-        (
-            "VSINSTALLDIR".into(),
-            t.0.join("Visual Studio").display().to_string(),
-        ),
+        ("ProgramFiles(x86)".into(), t.0.join("Program Files").display().to_string()),
+        ("VSINSTALLDIR".into(), t.0.join("Visual Studio").display().to_string()),
     ]);
     let paths = sdk::discover(X64, &[], &env);
     assert_eq!(paths.len(), 3);
     assert!(paths[2].to_string_lossy().contains("14.10"));
-    env.insert(
-        "WindowsSdkDir".into(),
-        t.0.join("missing SDK").display().to_string(),
-    );
+    env.insert("WindowsSdkDir".into(), t.0.join("missing SDK").display().to_string());
     assert_eq!(
         sdk::discover(X64, &[], &env).len(),
         1,
@@ -264,11 +218,7 @@ fn hybrid_archive(native_machine: u16, ec_machine: u16, native_selects_ec: bool)
         + member("/", &[0; 20]).len()
         + member("/<ECSYMBOLS>/", &[0; 8]).len();
     let ec_offset = native_offset + member("native.obj/", &obj(native_machine)).len();
-    let selected = if native_selects_ec {
-        ec_offset
-    } else {
-        native_offset
-    };
+    let selected = if native_selects_ec { ec_offset } else { native_offset };
     let mut first = 1u32.to_be_bytes().to_vec();
     first.extend((selected as u32).to_be_bytes());
     first.extend(b"n\0");
@@ -365,14 +315,8 @@ fn machine_neutral_sdk_alias_objects_cannot_hide_instructions_or_relocations() {
 #[test]
 fn arithmetic_builtins_discovery_keeps_target_and_sdk_order() {
     let t = Temp::new();
-    let x64 = t.lib(
-        "first/lib/clang/21/lib/windows/clang_rt.builtins-x86_64.lib",
-        0x8664,
-    );
-    let arm = t.lib(
-        "second/lib/clang/21/lib/windows/clang_rt.builtins-aarch64.lib",
-        0xaa64,
-    );
+    let x64 = t.lib("first/lib/clang/21/lib/windows/clang_rt.builtins-x86_64.lib", 0x8664);
+    let arm = t.lib("second/lib/clang/21/lib/windows/clang_rt.builtins-aarch64.lib", 0xaa64);
     let roots = vec![t.0.join("first"), t.0.join("second")];
     assert_eq!(llvm::msvc::runtime::find_builtins(X64, &roots), Some(x64));
     assert_eq!(llvm::msvc::runtime::find_builtins(ARM, &roots), Some(arm));

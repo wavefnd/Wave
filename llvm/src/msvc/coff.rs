@@ -9,39 +9,34 @@ fn range(data: &[u8], offset: usize, size: usize) -> Result<&[u8], String> {
         .and_then(|end| data.get(offset..end))
         .ok_or_else(|| format!("truncated COFF input at offset {offset}, length {size}"))
 }
+
 fn u16_at(data: &[u8], offset: usize) -> Result<u16, String> {
-    Ok(u16::from_le_bytes(
-        range(data, offset, 2)?.try_into().unwrap(),
-    ))
+    Ok(u16::from_le_bytes(range(data, offset, 2)?.try_into().unwrap()))
 }
+
 fn u32_at(data: &[u8], offset: usize) -> Result<usize, String> {
     Ok(u32::from_le_bytes(range(data, offset, 4)?.try_into().unwrap()) as usize)
 }
+
 fn table(data: &[u8], start: usize, count: usize, width: usize) -> Result<(), String> {
-    range(
-        data,
-        start,
-        count.checked_mul(width).ok_or("COFF table size overflow")?,
-    )?;
+    range(data, start, count.checked_mul(width).ok_or("COFF table size overflow")?)?;
     Ok(())
 }
+
 fn machine(actual: u16, expected: u16) -> Result<(), String> {
     if actual == expected {
         Ok(())
     } else {
-        Err(format!(
-            "COFF machine 0x{actual:04x} does not match target machine 0x{expected:04x}"
-        ))
+        Err(format!("COFF machine 0x{actual:04x} does not match target machine 0x{expected:04x}"))
     }
 }
+
 fn object(data: &[u8], expected: u16) -> Result<(), String> {
     if data.starts_with(b"BC\xc0\xde") || data.starts_with(&[0xde, 0xc0, 0x17, 0x0b]) {
         return Err("LLVM bitcode inputs are not supported by the MSVC input inspector; emit a target COFF object first".into());
     }
     if data.starts_with(b"MZ") {
-        return Err(
-            "PE images are not relocatable objects; link the import library instead".into(),
-        );
+        return Err("PE images are not relocatable objects; link the import library instead".into());
     }
     range(data, 0, 20)?;
     // VC SDK libraries include machine-neutral debug/weak-alias objects. They
@@ -70,29 +65,17 @@ fn object(data: &[u8], expected: u16) -> Result<(), String> {
         if version < 2 || range(data, 12, 16)? != BIGOBJ {
             return Err("unsupported anonymous COFF object (expected bigobj)".into());
         }
-        (
-            56,
-            u32_at(data, 44)?,
-            u32_at(data, 48)?,
-            u32_at(data, 52)?,
-            20,
-        )
+        (56, u32_at(data, 44)?, u32_at(data, 48)?, u32_at(data, 52)?, 20)
     } else {
         if !neutral {
             machine(u16_at(data, 0)?, expected)?;
         }
         if u16_at(data, 16)? != 0 || u16_at(data, 18)? & 2 != 0 {
             return Err(
-                "expected a relocatable COFF object without an optional image header".into(),
+                "expected a relocatable COFF object without an optional image header".into()
             );
         }
-        (
-            20,
-            u16_at(data, 2)? as usize,
-            u32_at(data, 8)?,
-            u32_at(data, 12)?,
-            18,
-        )
+        (20, u16_at(data, 2)? as usize, u32_at(data, 8)?, u32_at(data, 12)?, 18)
     };
     table(data, header, sections, 40)?;
     for index in 0..sections {
@@ -140,11 +123,7 @@ fn object(data: &[u8], expected: u16) -> Result<(), String> {
     if symbols != 0 {
         table(data, symbols, count, symbol_width)?;
         let strings = symbols
-            .checked_add(
-                count
-                    .checked_mul(symbol_width)
-                    .ok_or("symbol size overflow")?,
-            )
+            .checked_add(count.checked_mul(symbol_width).ok_or("symbol size overflow")?)
             .ok_or("symbol offset overflow")?;
         let size = u32_at(data, strings)?;
         if size < 4 {
@@ -189,9 +168,7 @@ fn inspect_with_policy(data: &[u8], target: &str, lazy_archive: bool) -> Result<
             .trim()
             .parse()
             .map_err(|_| "invalid archive size")?;
-        let name = std::str::from_utf8(&header[..16])
-            .map_err(|_| "invalid archive name")?
-            .trim();
+        let name = std::str::from_utf8(&header[..16]).map_err(|_| "invalid archive name")?.trim();
         let mut payload = range(data, offset + 60, length)?;
         let mut display = name.to_string();
         if name == "/" {
@@ -205,27 +182,19 @@ fn inspect_with_policy(data: &[u8], target: &str, lazy_archive: bool) -> Result<
         } else if name != "/SYM64/" {
             member_offsets.insert(offset);
             if let Some(size) = name.strip_prefix("#1/") {
-                let size: usize = size
-                    .parse()
-                    .map_err(|_| "invalid BSD archive name length")?;
+                let size: usize = size.parse().map_err(|_| "invalid BSD archive name length")?;
                 display = String::from_utf8_lossy(range(payload, 0, size)?)
                     .trim_end_matches('\0')
                     .to_string();
                 payload = &payload[size..];
             } else if let Some(index) = name.strip_prefix('/') {
-                let index: usize = index
-                    .parse()
-                    .map_err(|_| "invalid archive long-name offset")?;
-                let tail = names
-                    .get(index..)
-                    .ok_or("archive long-name offset out of bounds")?;
+                let index: usize = index.parse().map_err(|_| "invalid archive long-name offset")?;
+                let tail = names.get(index..).ok_or("archive long-name offset out of bounds")?;
                 let end = tail
                     .iter()
                     .position(|b| *b == 0 || *b == b'\n')
                     .ok_or("unterminated archive long name")?;
-                display = String::from_utf8_lossy(&tail[..end])
-                    .trim_end_matches('/')
-                    .to_string();
+                display = String::from_utf8_lossy(&tail[..end]).trim_end_matches('/').to_string();
             }
             objects.push((offset, display, payload));
         }
@@ -283,12 +252,7 @@ fn inspect_with_policy(data: &[u8], target: &str, lazy_archive: bool) -> Result<
                 }
                 native_members.insert(second_offsets[member - 1]);
             }
-            if payload[end + 4 + symbols * 2..]
-                .iter()
-                .filter(|b| **b == 0)
-                .count()
-                < symbols
-            {
+            if payload[end + 4 + symbols * 2..].iter().filter(|b| **b == 0).count() < symbols {
                 return Err("truncated archive symbol names".into());
             }
         }
@@ -316,14 +280,7 @@ fn inspect_with_policy(data: &[u8], target: &str, lazy_archive: bool) -> Result<
         // /<ECSYMBOLS>/. SDK hybrid libraries may carry EC-only members. Still
         // validate their structure, and never exempt directly supplied objects,
         // foreign members in ordinary archives, or /WHOLEARCHIVE members.
-        let actual = u16_at(
-            payload,
-            if payload.starts_with(&[0, 0, 255, 255]) {
-                6
-            } else {
-                0
-            },
-        )?;
+        let actual = u16_at(payload, if payload.starts_with(&[0, 0, 255, 255]) { 6 } else { 0 })?;
         let ec_only = lazy_archive
             && expected == 0xaa64
             && matches!(actual, 0xa641 | 0x8664)

@@ -1,9 +1,9 @@
 <div align="center">
   <a href="https://wave-lang.dev/">
-    <img src="https://wave-lang.dev/img/wave-logo.ico" width="128" alt="Wave programming language logo">
+    <img src="https://wave-lang.dev/img/wave.svg" width="128" alt="Wave programming language logo">
   </a>
 
-  <h1>Wave</h1>
+---
 
   <p><strong>A general-purpose programming language built as a modern evolution of C.</strong></p>
   <p>Native compilation and direct control, rebuilt for modern software and tooling.</p>
@@ -97,14 +97,13 @@ which controls the C ABI boundary. `main` is always a private entry point, so
 Linux and macOS:
 
 ```shell
-curl -fsSL https://wave-lang.dev/install.sh | bash -s -- latest
+curl -fsSL https://wave-lang.dev/install.sh | bash
 ```
 
 Windows PowerShell:
 
 ```powershell
-irm https://wave-lang.dev/install.ps1 -OutFile install.ps1
-powershell -ExecutionPolicy Bypass -File .\install.ps1 -Latest
+irm https://wave-lang.dev/install.ps1 -OutFile install.ps1; powershell -ExecutionPolicy Bypass -File .\install.ps1
 ```
 
 See the [installation guide](https://wave-lang.dev/docs/getting-started/install) for platform requirements and release selection.

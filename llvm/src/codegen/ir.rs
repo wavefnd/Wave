@@ -91,14 +91,10 @@ fn reinterpret_abi_value<'ctx>(
     let source = value.get_type();
     let source_size = td.get_store_size(&source);
     let target_size = td.get_store_size(&target);
-    let source_is_aggregate = matches!(
-        source,
-        BasicTypeEnum::ArrayType(_) | BasicTypeEnum::StructType(_)
-    );
-    let target_is_aggregate = matches!(
-        target,
-        BasicTypeEnum::ArrayType(_) | BasicTypeEnum::StructType(_)
-    );
+    let source_is_aggregate =
+        matches!(source, BasicTypeEnum::ArrayType(_) | BasicTypeEnum::StructType(_));
+    let target_is_aggregate =
+        matches!(target, BasicTypeEnum::ArrayType(_) | BasicTypeEnum::StructType(_));
     if source_size != target_size && !(source_is_aggregate || target_is_aggregate) {
         panic!(
             "cannot reinterpret C ABI value '{}' from {} bytes to {} bytes",
@@ -106,19 +102,11 @@ fn reinterpret_abi_value<'ctx>(
         );
     }
 
-    let source_ptr = builder
-        .build_alloca(source, &format!("{}_source", tag))
-        .unwrap();
+    let source_ptr = builder.build_alloca(source, &format!("{}_source", tag)).unwrap();
     builder.build_store(source_ptr, value).unwrap();
-    let target_ptr = builder
-        .build_alloca(target, &format!("{}_target", tag))
-        .unwrap();
-    builder
-        .build_store(target_ptr, target.const_zero())
-        .unwrap();
-    let size = context
-        .i64_type()
-        .const_int(source_size.min(target_size), false);
+    let target_ptr = builder.build_alloca(target, &format!("{}_target", tag)).unwrap();
+    builder.build_store(target_ptr, target.const_zero()).unwrap();
+    let size = context.i64_type().const_int(source_size.min(target_size), false);
     builder
         .build_memcpy(
             target_ptr,
@@ -128,10 +116,7 @@ fn reinterpret_abi_value<'ctx>(
             size,
         )
         .unwrap();
-    builder
-        .build_load(target, target_ptr, &format!("{}_load", tag))
-        .unwrap()
-        .as_basic_value_enum()
+    builder.build_load(target, target_ptr, &format!("{}_load", tag)).unwrap().as_basic_value_enum()
 }
 
 fn rebuild_split_abi_value<'ctx>(
@@ -142,21 +127,15 @@ fn rebuild_split_abi_value<'ctx>(
     target: BasicTypeEnum<'ctx>,
     tag: &str,
 ) -> BasicValueEnum<'ctx> {
-    let target_ptr = builder
-        .build_alloca(target, &format!("{}_target", tag))
-        .unwrap();
+    let target_ptr = builder.build_alloca(target, &format!("{}_target", tag)).unwrap();
     let target_size = td.get_store_size(&target);
-    builder
-        .build_store(target_ptr, target.const_zero())
-        .unwrap();
+    builder.build_store(target_ptr, target.const_zero()).unwrap();
     let mut offset = 0u64;
 
     for (index, part) in parts.iter().enumerate() {
         let part_type = part.get_type();
         let part_size = td.get_store_size(&part_type);
-        let part_ptr = builder
-            .build_alloca(part_type, &format!("{}_part_{}", tag, index))
-            .unwrap();
+        let part_ptr = builder.build_alloca(part_type, &format!("{}_part_{}", tag, index)).unwrap();
         builder.build_store(part_ptr, *part).unwrap();
         let offset_value = context.i64_type().const_int(offset, false);
         // SAFETY: `target_ptr` is an opaque pointer to a live stack allocation;
@@ -187,10 +166,7 @@ fn rebuild_split_abi_value<'ctx>(
         }
         offset += part_size;
     }
-    builder
-        .build_load(target, target_ptr, &format!("{}_load", tag))
-        .unwrap()
-        .as_basic_value_enum()
+    builder.build_load(target, target_ptr, &format!("{}_load", tag)).unwrap().as_basic_value_enum()
 }
 
 fn rebuild_expanded_abi_value<'ctx>(
@@ -204,12 +180,8 @@ fn rebuild_expanded_abi_value<'ctx>(
 ) -> BasicValueEnum<'ctx> {
     assert_eq!(parts.len(), values.len());
     let target_size = td.get_store_size(&target);
-    let target_ptr = builder
-        .build_alloca(target, &format!("{tag}_target"))
-        .unwrap();
-    builder
-        .build_store(target_ptr, target.const_zero())
-        .unwrap();
+    let target_ptr = builder.build_alloca(target, &format!("{tag}_target")).unwrap();
+    builder.build_store(target_ptr, target.const_zero()).unwrap();
 
     for (index, (part, value)) in parts.iter().zip(values).enumerate() {
         let part_size = td.get_store_size(&part.ty);
@@ -217,9 +189,7 @@ fn rebuild_expanded_abi_value<'ctx>(
             part.offset + part_size <= target_size,
             "LoongArch ABI part extends past its aggregate"
         );
-        let part_ptr = builder
-            .build_alloca(part.ty, &format!("{tag}_part_{index}"))
-            .unwrap();
+        let part_ptr = builder.build_alloca(part.ty, &format!("{tag}_part_{index}")).unwrap();
         builder.build_store(part_ptr, *value).unwrap();
         let offset = context.i64_type().const_int(part.offset, false);
         // SAFETY: the classifier obtained this byte offset from TargetData and
@@ -245,10 +215,7 @@ fn rebuild_expanded_abi_value<'ctx>(
             .unwrap();
     }
 
-    builder
-        .build_load(target, target_ptr, &format!("{tag}_load"))
-        .unwrap()
-        .as_basic_value_enum()
+    builder.build_load(target, target_ptr, &format!("{tag}_load")).unwrap().as_basic_value_enum()
 }
 
 fn build_export_c_wrapper<'ctx>(
@@ -275,12 +242,8 @@ fn build_export_c_wrapper<'ctx>(
         };
 
     let mut implementation_args = Vec::<BasicMetadataValueEnum<'ctx>>::new();
-    for (wave_index, (lowering, wave_type)) in export
-        .info
-        .params
-        .iter()
-        .zip(export.wave_param_types.iter())
-        .enumerate()
+    for (wave_index, (lowering, wave_type)) in
+        export.info.params.iter().zip(export.wave_param_types.iter()).enumerate()
     {
         let value = match lowering {
             ParamLowering::Ignore => wave_type.const_zero(),
@@ -298,7 +261,7 @@ fn build_export_c_wrapper<'ctx>(
                     *wave_type,
                     &format!("export_arg_{}", wave_index),
                 )
-            }
+            },
             ParamLowering::Indirect { .. } | ParamLowering::ByVal { .. } => {
                 let pointer = export
                     .wrapper
@@ -310,7 +273,7 @@ fn build_export_c_wrapper<'ctx>(
                     .build_load(*wave_type, pointer, &format!("export_byval_{}", wave_index))
                     .unwrap()
                     .as_basic_value_enum()
-            }
+            },
             ParamLowering::Split(parts) => {
                 let mut incoming = Vec::with_capacity(parts.len());
                 for _ in parts {
@@ -330,7 +293,7 @@ fn build_export_c_wrapper<'ctx>(
                     *wave_type,
                     &format!("export_split_{}", wave_index),
                 )
-            }
+            },
             ParamLowering::CoerceAndExpand(parts) => {
                 let mut incoming = Vec::with_capacity(parts.len());
                 for _ in parts {
@@ -351,52 +314,45 @@ fn build_export_c_wrapper<'ctx>(
                     *wave_type,
                     &format!("export_loong_expand_{}", wave_index),
                 )
-            }
+            },
         };
         implementation_args.push(value.into());
     }
 
     let call = builder
-        .build_call(
-            export.implementation,
-            &implementation_args,
-            "export_implementation",
-        )
+        .build_call(export.implementation, &implementation_args, "export_implementation")
         .unwrap();
 
     match &export.info.ret {
         RetLowering::Void => {
             builder.build_return(None).unwrap();
-        }
+        },
         RetLowering::SRet { .. } => {
             let value = match call.try_as_basic_value() {
                 ValueKind::Basic(value) => value,
                 ValueKind::Instruction(_) => {
                     panic!("C ABI sret wrapper implementation returned void")
-                }
+                },
             };
-            builder
-                .build_store(sret_ptr.expect("missing C ABI sret pointer"), value)
-                .unwrap();
+            builder.build_store(sret_ptr.expect("missing C ABI sret pointer"), value).unwrap();
             builder.build_return(None).unwrap();
-        }
+        },
         RetLowering::Direct(lowered_type) => {
             let value = match call.try_as_basic_value() {
                 ValueKind::Basic(value) => value,
                 ValueKind::Instruction(_) => {
                     panic!("C ABI direct wrapper implementation returned void")
-                }
+                },
             };
-            let wave_type = export
-                .wave_ret_type
-                .expect("direct C ABI wrapper requires a Wave return type");
+            let wave_type =
+                export.wave_ret_type.expect("direct C ABI wrapper requires a Wave return type");
             if value.get_type() != wave_type {
                 panic!("C ABI wrapper implementation return type changed unexpectedly");
             }
             let lowered =
                 reinterpret_abi_value(context, builder, td, value, *lowered_type, "export_return");
             builder.build_return(Some(&lowered)).unwrap();
-        }
+        },
     }
 }
 
@@ -408,7 +364,7 @@ fn is_supported_extern_abi(abi: &str, target: CodegenTarget) -> bool {
     match target {
         CodegenTarget::WindowsX86_64Msvc | CodegenTarget::WindowsArm64Msvc => {
             abi.eq_ignore_ascii_case("c") || abi.eq_ignore_ascii_case("system")
-        }
+        },
         _ => abi.eq_ignore_ascii_case("c"),
     }
 }
@@ -434,13 +390,7 @@ fn target_opt_level_from_flag(opt_flag: &str) -> Result<OptimizationLevel, Codeg
         "-O1" => OptimizationLevel::Less,
         "-O2" | "-Os" | "-Oz" => OptimizationLevel::Default,
         "-O3" => OptimizationLevel::Aggressive,
-        other => {
-            return Err(CodegenError::new(
-                CodegenPhase::Target,
-                "optimization level",
-                other,
-            ))
-        }
+        other => return Err(CodegenError::new(CodegenPhase::Target, "optimization level", other)),
     })
 }
 
@@ -477,12 +427,8 @@ fn reloc_mode_from_backend(
             "pic" | "pie" => RelocMode::PIC,
             "dynamic-no-pic" | "dynamic_no_pic" => RelocMode::DynamicNoPic,
             other => {
-                return Err(CodegenError::new(
-                    CodegenPhase::Target,
-                    "relocation-model",
-                    other,
-                ))
-            }
+                return Err(CodegenError::new(CodegenPhase::Target, "relocation-model", other))
+            },
         });
     }
 
@@ -673,9 +619,7 @@ fn build_wasi_start_wrapper<'ctx>(
         ));
     }
 
-    let exit_type = context
-        .void_type()
-        .fn_type(&[context.i32_type().into()], false);
+    let exit_type = context.void_type().fn_type(&[context.i32_type().into()], false);
     let proc_exit = module.add_function("__wasi_proc_exit", exit_type, None);
     apply_wasm_import_attrs(context, proc_exit, target, "proc_exit");
 
@@ -735,7 +679,7 @@ pub unsafe fn emit_codegen_file(
                     output.display(),
                 ));
             }
-        }
+        },
         CodegenFileKind::Assembly | CodegenFileKind::Object => {
             codegen_trace("emit target machine output");
             let file_type = if matches!(kind, CodegenFileKind::Assembly) {
@@ -753,7 +697,7 @@ pub unsafe fn emit_codegen_file(
                         e,
                     )
                 })?;
-        }
+        },
     }
     codegen_trace("commit output file");
     pending.commit()
@@ -777,37 +721,26 @@ fn build_module(
                 .with_span(e.span)
         })?;
         lowered = hir::TypedProgram::lower(ast).map_err(|e| {
-            CodegenError::new(
-                CodegenPhase::Lowering,
-                "validate async state machine",
-                e.to_string(),
-            )
+            CodegenError::new(CodegenPhase::Lowering, "validate async state machine", e.to_string())
         })?;
         &lowered
     } else {
         program
     };
     program.verify_conversions().map_err(|e| {
-        CodegenError::new(
-            CodegenPhase::Lowering,
-            "HIR conversion verifier (ICE)",
-            e.message,
-        )
-        .with_span(e.span)
+        CodegenError::new(CodegenPhase::Lowering, "HIR conversion verifier (ICE)", e.message)
+            .with_span(e.span)
     })?;
     let ast_nodes = program.syntax();
     let uses_tasks = program.uses_async_runtime();
     for (symbol, span) in program.async_runtime_requirements() {
         let declaration = ast_nodes.iter().find_map(|node| match node {
             ASTNode::Function(function)
-                if function
-                    .export
-                    .as_ref()
-                    .and_then(|export| export.symbol.as_deref())
+                if function.export.as_ref().and_then(|export| export.symbol.as_deref())
                     == Some(symbol) =>
             {
                 Some(function)
-            }
+            },
             _ => None,
         });
         let Some(function) = declaration else {
@@ -908,14 +841,9 @@ fn build_module(
             target_options = target_options.set_abi(abi);
         }
     }
-    let tm = target
-        .create_target_machine_from_options(&triple, target_options)
-        .ok_or_else(|| {
-            CodegenError::new(
-                CodegenPhase::Target,
-                "create target machine",
-                raw_target.as_ref(),
-            )
+    let tm =
+        target.create_target_machine_from_options(&triple, target_options).ok_or_else(|| {
+            CodegenError::new(CodegenPhase::Target, "create target machine", raw_target.as_ref())
         })?;
 
     codegen_trace("set target triple");
@@ -1039,17 +967,17 @@ fn build_module(
                 Ok(val) => {
                     global_consts.insert(v.name.clone(), val);
                     progressed = true;
-                }
+                },
                 Err(ConstEvalError::UnknownIdentifier(_)) => {
                     next_pending.push(v);
-                }
+                },
                 Err(e) => {
                     return Err(CodegenError::new(
                         CodegenPhase::Lowering,
                         "lower program",
                         format!("const '{}' evaluation failed: {}", v.name, e),
                     ));
-                }
+                },
             }
         }
 
@@ -1102,10 +1030,7 @@ fn build_module(
                     e,
                 )
                 .with_span(
-                    program
-                        .expression_id(expr)
-                        .and_then(|id| program.expression_span(id))
-                        .cloned(),
+                    program.expression_id(expr).and_then(|id| program.expression_span(id)).cloned(),
                 )
             })?
         } else {
@@ -1131,10 +1056,8 @@ fn build_module(
     let mut function_nodes = Vec::new();
     for ast in ast_nodes {
         match ast {
-            ASTNode::Function(function) => function_nodes.push(FunctionCodegenEntry {
-                symbol: function.name.clone(),
-                node: function,
-            }),
+            ASTNode::Function(function) => function_nodes
+                .push(FunctionCodegenEntry { symbol: function.name.clone(), node: function }),
             ASTNode::ProtoImpl(implementation) => {
                 for method in &implementation.methods {
                     function_nodes.push(FunctionCodegenEntry {
@@ -1142,7 +1065,7 @@ fn build_module(
                         node: method,
                     });
                 }
-            }
+            },
             ASTNode::Struct(structure) if structure.generic_params.is_empty() => {
                 for method in &structure.methods {
                     function_nodes.push(FunctionCodegenEntry {
@@ -1150,31 +1073,19 @@ fn build_module(
                         node: method,
                     });
                 }
-            }
-            _ => {}
+            },
+            _ => {},
         }
     }
 
     let extern_functions: Vec<&ExternFunctionNode> = ast_nodes
         .iter()
-        .filter_map(|ast| {
-            if let ASTNode::ExternFunction(ext) = ast {
-                Some(ext)
-            } else {
-                None
-            }
-        })
+        .filter_map(|ast| if let ASTNode::ExternFunction(ext) = ast { Some(ext) } else { None })
         .collect();
 
     codegen_trace("declare functions");
     for entry in &function_nodes {
-        let FunctionNode {
-            name,
-            parameters,
-            return_type,
-            export,
-            ..
-        } = entry.node;
+        let FunctionNode { name, parameters, return_type, export, .. } = entry.node;
         let symbol = &entry.symbol;
         if let Some(export) = export {
             if !is_supported_extern_abi(&export.abi, abi_target) {
@@ -1206,7 +1117,7 @@ fn build_module(
             match return_type {
                 None | Some(WaveType::Void | WaveType::Never) => {
                     context.void_type().fn_type(&param_types, false)
-                }
+                },
                 Some(wave_ret_ty) => {
                     let llvm_ret_type = wave_type_to_llvm_type(
                         context,
@@ -1215,7 +1126,7 @@ fn build_module(
                         TypeFlavor::AbiC,
                     );
                     llvm_ret_type.fn_type(&param_types, false)
-                }
+                },
             }
         };
 
@@ -1343,14 +1254,8 @@ fn build_module(
             ));
         }
 
-        let lowered = lower_extern_c(
-            context,
-            td,
-            abi_target,
-            backend.abi.as_deref(),
-            ext,
-            &struct_types,
-        );
+        let lowered =
+            lower_extern_c(context, td, abi_target, backend.abi.as_deref(), ext, &struct_types);
 
         let f = module.add_function(&lowered.llvm_name, lowered.fn_type, None);
         apply_extern_c_attrs(context, f, &lowered.info);
@@ -1367,9 +1272,8 @@ fn build_module(
         if std::env::var_os("WAVE_CODEGEN_TRACE").is_some() {
             eprintln!("[wavec-codegen] lower function body: {}", entry.symbol);
         }
-        let function = *functions
-            .get(&entry.symbol)
-            .expect("validated function lowering invariant");
+        let function =
+            *functions.get(&entry.symbol).expect("validated function lowering invariant");
         let entry_block = context.append_basic_block(function, "entry");
         builder.position_at_end(entry_block);
 
@@ -1382,9 +1286,8 @@ fn build_module(
             let llvm_type =
                 wave_type_to_llvm_type(context, &param.param_type, &struct_types, TypeFlavor::AbiC);
             let alloca = builder.build_alloca(llvm_type, &param.name)?;
-            let param_val = function
-                .get_nth_param(i as u32)
-                .expect("validated function lowering invariant");
+            let param_val =
+                function.get_nth_param(i as u32).expect("validated function lowering invariant");
             builder.build_store(alloca, param_val)?;
 
             variables.insert(
@@ -1398,10 +1301,7 @@ fn build_module(
         }
 
         for stmt in &func_node.body {
-            if builder
-                .get_insert_block()
-                .is_some_and(|block| block.get_terminator().is_some())
-            {
+            if builder.get_insert_block().is_some_and(|block| block.get_terminator().is_some()) {
                 break;
             }
             if let ASTNode::Statement(_) | ASTNode::Variable(_) = stmt {
@@ -1432,9 +1332,8 @@ fn build_module(
             }
         }
 
-        let current_block = builder
-            .get_insert_block()
-            .expect("validated function lowering invariant");
+        let current_block =
+            builder.get_insert_block().expect("validated function lowering invariant");
         if current_block.get_terminator().is_none() {
             let implicit_i32_main = is_implicit_i32_main(&func_node.name, &func_node.return_type);
             let is_void_like = match &func_node.return_type {
@@ -1454,10 +1353,7 @@ fn build_module(
                 return Err(CodegenError::new(
                     CodegenPhase::Lowering,
                     "lower program",
-                    format!(
-                        "Non-void function '{}' is missing a return statement",
-                        func_node.name
-                    ),
+                    format!("Non-void function '{}' is missing a return statement", func_node.name),
                 ));
             }
         }
@@ -1490,10 +1386,7 @@ fn build_module(
         .map_err(|e| CodegenError::new(CodegenPhase::Lowering, "lower arithmetic runtime", e))?;
 
     codegen_trace("finish module");
-    Ok(GeneratedModule {
-        module,
-        target_machine: tm,
-    })
+    Ok(GeneratedModule { module, target_machine: tm })
 }
 
 fn pipeline_from_opt_flag(opt_flag: &str) -> Result<&'static str, CodegenError> {
@@ -1504,13 +1397,7 @@ fn pipeline_from_opt_flag(opt_flag: &str) -> Result<&'static str, CodegenError> 
         "-O3" => "default<O3>",
         "-Os" => "default<Os>",
         "-Oz" => "default<Oz>",
-        other => {
-            return Err(CodegenError::new(
-                CodegenPhase::Optimization,
-                "pass pipeline",
-                other,
-            ))
-        }
+        other => return Err(CodegenError::new(CodegenPhase::Optimization, "pass pipeline", other)),
     })
 }
 
@@ -1559,10 +1446,7 @@ fn add_enum_consts_to_globals(
     global_consts: &mut HashMap<String, BasicValueEnum<'static>>,
 ) {
     let (bits, signed) = repr_bits_signed(&e.repr_type).unwrap_or_else(|| {
-        panic!(
-            "enum '{}' repr type must be an integer type, got {:?}",
-            e.name, e.repr_type
-        )
+        panic!("enum '{}' repr type must be an integer type, got {:?}", e.name, e.repr_type)
     });
 
     if bits > 64 || bits == 0 {

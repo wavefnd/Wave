@@ -4,14 +4,8 @@ use std::process::Command;
 use utils::wson::{self, Value};
 
 fn error() -> WaveError {
-    WaveError::new(
-        WaveErrorKind::UnexpectedEndOfFile,
-        "missing closer",
-        "input.wave",
-        2,
-        1,
-    )
-    .with_label("close the block")
+    WaveError::new(WaveErrorKind::UnexpectedEndOfFile, "missing closer", "input.wave", 2, 1)
+        .with_label("close the block")
 }
 
 #[test]
@@ -22,21 +16,17 @@ fn renderer_fixture() {
     match case.as_str() {
         "batch" => {
             WaveError::display_batch(&[error(), error().with_severity(ErrorSeverity::Warning)])
-        }
+        },
         "empty-batch" => WaveError::display_batch(&[]),
         "single-batch" => WaveError::display_batch(&[error()]),
         "lf" => error().with_source_code("fun main() {\n").display(),
         "cr" => error().with_source_code("fun main() {\r").display(),
         "crlf" => error().with_source_code("fun main() {\r\n").display(),
-        "empty" => WaveError::new(
-            WaveErrorKind::UnexpectedEndOfFile,
-            "expected item",
-            "empty.wave",
-            1,
-            1,
-        )
-        .with_source_code("")
-        .display(),
+        "empty" => {
+            WaveError::new(WaveErrorKind::UnexpectedEndOfFile, "expected item", "empty.wave", 1, 1)
+                .with_source_code("")
+                .display()
+        },
         "invalid-line" => error().with_source_code("only one line").display(),
         _ => panic!("unknown fixture"),
     }
@@ -63,10 +53,7 @@ fn json_preserves_labels_and_escapes_them() {
         &WaveError::new(WaveErrorKind::UnexpectedEndOfFile, "end", "x", 1, 1).to_json(),
     )
     .unwrap();
-    assert!(matches!(
-        value.get("error").unwrap().get("label"),
-        Some(Value::Null)
-    ));
+    assert!(matches!(value.get("error").unwrap().get("label"), Some(Value::Null)));
 }
 
 #[test]
@@ -79,14 +66,8 @@ fn json_batches_contain_only_one_json_record_per_diagnostic() {
             .collect();
         assert_eq!(records.len(), count, "{output}");
         if count == 2 {
-            assert_eq!(
-                records[0].get("error").unwrap().get_str("severity"),
-                Some("error")
-            );
-            assert_eq!(
-                records[1].get("error").unwrap().get_str("severity"),
-                Some("warning")
-            );
+            assert_eq!(records[0].get("error").unwrap().get_str("severity"), Some("error"));
+            assert_eq!(records[1].get("error").unwrap().get_str("severity"), Some("warning"));
         }
     }
 }
@@ -94,10 +75,7 @@ fn json_batches_contain_only_one_json_record_per_diagnostic() {
 #[test]
 fn human_batches_keep_summary_counts() {
     let output = rendered("batch", "human");
-    assert!(
-        output.contains("error: aborting due to 1 previous error"),
-        "{output}"
-    );
+    assert!(output.contains("error: aborting due to 1 previous error"), "{output}");
     assert!(output.contains("warning: 1 warning emitted"), "{output}");
 }
 
@@ -106,10 +84,7 @@ fn eof_carets_render_on_empty_final_source_lines() {
     for case in ["lf", "crlf", "cr", "empty"] {
         let output = rendered(case, "human");
         let lines: Vec<_> = output.lines().collect();
-        let marker = lines
-            .iter()
-            .position(|line| line.contains('^'))
-            .expect("EOF needs a caret");
+        let marker = lines.iter().position(|line| line.contains('^')).expect("EOF needs a caret");
         let source_line = if case == "empty" { "  1 | " } else { "  2 | " };
         assert_eq!(lines[marker - 1], source_line, "{output}");
         assert!(!output.contains('\r'), "{output}");

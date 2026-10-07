@@ -13,7 +13,7 @@ pub(super) fn validate(
         .filter_map(|(index, node)| match node {
             ASTNode::Variable(variable) if variable.mutability == Mutability::Const => {
                 Some((index, variable))
-            }
+            },
             _ => None,
         })
         .collect();
@@ -30,10 +30,7 @@ pub(super) fn validate(
                     if let Some(&dependency) = names.get(name.as_str()) {
                         edges[index].push((
                             dependency,
-                            sources
-                                .expressions
-                                .get(&(expression as *const _ as usize))
-                                .cloned(),
+                            sources.expressions.get(&(expression as *const _ as usize)).cloned(),
                         ));
                     }
                 }
@@ -61,12 +58,9 @@ pub(super) fn validate(
                 0 => {
                     colors[*dependency] = 1;
                     stack.push((*dependency, 0));
-                }
+                },
                 1 => {
-                    let start = stack
-                        .iter()
-                        .position(|(node, _)| node == dependency)
-                        .unwrap();
+                    let start = stack.iter().position(|(node, _)| node == dependency).unwrap();
                     let cycle: Vec<_> = stack[start..]
                         .iter()
                         .map(|(node, _)| *node)
@@ -114,8 +108,8 @@ pub(super) fn validate(
                     );
                     diagnostic.help = "break the constant dependency cycle; noncyclic forward references are allowed".into();
                     return Err(diagnostic);
-                }
-                _ => {}
+                },
+                _ => {},
             }
         }
     }

@@ -41,13 +41,13 @@ impl Case {
         );
         Self { root, home }
     }
+
     fn command(&self) -> Command {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_wavec"));
-        cmd.env("HOME", &self.home)
-            .env("NO_COLOR", "1")
-            .current_dir(&self.root);
+        cmd.env("HOME", &self.home).env("NO_COLOR", "1").current_dir(&self.root);
         cmd
     }
+
     fn run(&self, source: &Path) -> String {
         for opt in ["-O0", "-O2"] {
             success(
@@ -64,10 +64,7 @@ impl Case {
             );
         }
         fs::read_to_string(
-            self.root
-                .join("-O0")
-                .join(source.file_stem().unwrap())
-                .with_extension("ll"),
+            self.root.join("-O0").join(source.file_stem().unwrap()).with_extension("ll"),
         )
         .unwrap()
     }
@@ -86,9 +83,11 @@ fn success(output: Output) {
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
 fn source(relative: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join(relative)
 }
+
 fn shared(number: u32) -> String {
     Case::new(&number.to_string()).run(&source(&format!("tests/cases/shared/test{number}.wave")))
 }
@@ -138,10 +137,7 @@ fn float_inequality_is_unordered_in_all_numeric_paths() {
 #[test]
 fn floating_negation_preserves_sign_and_nan_payloads() {
     let ir = shared(130);
-    assert!(
-        ir.contains("fneg float") && ir.contains("fneg double"),
-        "{ir}"
-    );
+    assert!(ir.contains("fneg float") && ir.contains("fneg double"), "{ir}");
 }
 #[test]
 fn dirname_fallback_preserves_guard_bytes() {

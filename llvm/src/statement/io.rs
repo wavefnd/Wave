@@ -57,17 +57,12 @@ fn printf<'ctx>(
     format: &[u8],
     args: &[BasicMetadataValueEnum<'ctx>],
 ) {
-    let ty = context
-        .i32_type()
-        .fn_type(&[context.ptr_type(AddressSpace::default()).into()], true);
-    let function = module
-        .get_function("printf")
-        .unwrap_or_else(|| module.add_function("printf", ty, None));
+    let ty = context.i32_type().fn_type(&[context.ptr_type(AddressSpace::default()).into()], true);
+    let function =
+        module.get_function("printf").unwrap_or_else(|| module.add_function("printf", ty, None));
     let mut values = vec![c_string(context, module, format).into()];
     values.extend_from_slice(args);
-    builder
-        .build_call(function, &values, "printf_call")
-        .unwrap();
+    builder.build_call(function, &values, "printf_call").unwrap();
 }
 
 fn scanf<'ctx>(
@@ -77,12 +72,9 @@ fn scanf<'ctx>(
     format: &[u8],
     pointer: PointerValue<'ctx>,
 ) -> IntValue<'ctx> {
-    let ty = context
-        .i32_type()
-        .fn_type(&[context.ptr_type(AddressSpace::default()).into()], true);
-    let function = module
-        .get_function("scanf")
-        .unwrap_or_else(|| module.add_function("scanf", ty, None));
+    let ty = context.i32_type().fn_type(&[context.ptr_type(AddressSpace::default()).into()], true);
+    let function =
+        module.get_function("scanf").unwrap_or_else(|| module.add_function("scanf", ty, None));
     builder
         .build_call(
             function,
@@ -105,19 +97,11 @@ fn require_input<'ctx>(
     let function = builder.get_insert_block().unwrap().get_parent().unwrap();
     let success = context.append_basic_block(function, "input.ok");
     let failure = context.append_basic_block(function, "input.fail");
-    builder
-        .build_conditional_branch(ok, success, failure)
-        .unwrap();
+    builder.build_conditional_branch(ok, success, failure).unwrap();
     builder.position_at_end(failure);
-    let ty = context
-        .void_type()
-        .fn_type(&[context.i32_type().into()], false);
-    let exit = module
-        .get_function("exit")
-        .unwrap_or_else(|| module.add_function("exit", ty, None));
-    builder
-        .build_call(exit, &[context.i32_type().const_int(1, false).into()], "")
-        .unwrap();
+    let ty = context.void_type().fn_type(&[context.i32_type().into()], false);
+    let exit = module.get_function("exit").unwrap_or_else(|| module.add_function("exit", ty, None));
+    builder.build_call(exit, &[context.i32_type().const_int(1, false).into()], "").unwrap();
     builder.build_unreachable().unwrap();
     builder.position_at_end(success);
 }
@@ -174,9 +158,8 @@ pub(super) fn gen_print_format_ir<'ctx>(
         match value {
             BasicValueEnum::IntValue(mut integer) => {
                 if spec == "c" {
-                    integer = builder
-                        .build_int_cast(integer, context.i32_type(), "print.char")
-                        .unwrap();
+                    integer =
+                        builder.build_int_cast(integer, context.i32_type(), "print.char").unwrap();
                     values.push(integer.into());
                     formats.push("%c");
                 } else {
@@ -196,10 +179,7 @@ pub(super) fn gen_print_format_ir<'ctx>(
                     let buffer = build_entry_alloca(
                         context,
                         builder,
-                        context
-                            .i8_type()
-                            .array_type(integer_io::output_capacity(bits, hex))
-                            .into(),
+                        context.i8_type().array_type(integer_io::output_capacity(bits, hex)).into(),
                         "print.integer",
                     );
                     let text = builder
@@ -211,34 +191,23 @@ pub(super) fn gen_print_format_ir<'ctx>(
                     values.push(text.into());
                     formats.push("%s");
                 }
-            }
+            },
             BasicValueEnum::FloatValue(number) => {
-                let number = builder
-                    .build_float_cast(number, context.f64_type(), "print.double")
-                    .unwrap();
+                let number =
+                    builder.build_float_cast(number, context.f64_type(), "print.double").unwrap();
                 values.push(number.into());
                 formats.push("%f");
-            }
+            },
             BasicValueEnum::PointerValue(pointer) => {
                 let string = matches!(ty, WaveType::String)
                     || matches!(ty, WaveType::Pointer(ref t) if matches!(t.as_ref(), WaveType::Byte | WaveType::Char));
                 values.push(pointer.into());
-                formats.push(if spec == "s" || spec.is_empty() && string {
-                    "%s"
-                } else {
-                    "%p"
-                });
-            }
+                formats.push(if spec == "s" || spec.is_empty() && string { "%s" } else { "%p" });
+            },
             _ => unreachable!("frontend validates scalar output"),
         }
     }
-    printf(
-        context,
-        builder,
-        module,
-        &wave_format_to_c(format, &formats),
-        &values,
-    );
+    printf(context, builder, module, &wave_format_to_c(format, &formats), &values);
 }
 
 pub(super) fn gen_input_ir<'ctx>(
@@ -293,9 +262,7 @@ pub(super) fn gen_input_ir<'ctx>(
                     context.i32_type().into(),
                     "input.literal.count",
                 );
-                builder
-                    .build_store(count, context.i32_type().const_all_ones())
-                    .unwrap();
+                builder.build_store(count, context.i32_type().const_all_ones()).unwrap();
                 scanf(context, builder, module, &literal, count);
                 let read = builder
                     .build_load(context.i32_type(), count, "input.literal.read")
@@ -310,7 +277,7 @@ pub(super) fn gen_input_ir<'ctx>(
                     )
                     .unwrap();
                 require_input(context, builder, module, ok);
-            }
+            },
             FormatFragment::Placeholder(_) => {
                 let (destination, ty) = destinations.next().expect("validated arity");
                 let ok = match ty {
@@ -329,15 +296,15 @@ pub(super) fn gen_input_ir<'ctx>(
                             .basic()
                             .unwrap()
                             .into_int_value()
-                    }
+                    },
                     WaveType::Char | WaveType::Float(_) => {
                         let (element, format) = match ty {
                             WaveType::Char => {
                                 (context.i8_type().as_basic_type_enum(), b"%c".as_slice())
-                            }
+                            },
                             WaveType::Float(32) => {
                                 (context.f32_type().as_basic_type_enum(), b"%f".as_slice())
-                            }
+                            },
                             _ => (context.f64_type().as_basic_type_enum(), b"%lf".as_slice()),
                         };
                         let temporary =
@@ -352,16 +319,15 @@ pub(super) fn gen_input_ir<'ctx>(
                             )
                             .unwrap();
                         require_input(context, builder, module, ok);
-                        let value = builder
-                            .build_load(element, temporary, "input.scalar.value")
-                            .unwrap();
+                        let value =
+                            builder.build_load(element, temporary, "input.scalar.value").unwrap();
                         builder.build_store(destination, value).unwrap();
                         context.bool_type().const_int(1, false)
-                    }
+                    },
                     _ => unreachable!("frontend validates input destinations"),
                 };
                 require_input(context, builder, module, ok);
-            }
+            },
         }
     }
 }

@@ -39,7 +39,7 @@ fn expand_imports_recursive(
 
                 let expanded = expand_imports_recursive(imported.ast, next_dir, already)?;
                 out.extend(expanded);
-            }
+            },
             other => out.push(other),
         }
     }

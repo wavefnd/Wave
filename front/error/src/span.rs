@@ -19,12 +19,7 @@ impl SourceSpan {
         if self.file != last.file {
             return self.clone();
         }
-        Self {
-            end: last.end,
-            end_line: last.end_line,
-            end_column: last.end_column,
-            ..self.clone()
-        }
+        Self { end: last.end, end_line: last.end_line, end_column: last.end_column, ..self.clone() }
     }
 
     pub fn generated(mut self, reason: impl Into<String>) -> Self {

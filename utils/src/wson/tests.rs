@@ -14,14 +14,9 @@ fn wson_comments_dates_versions_and_order_share_the_value_model() {
     assert_eq!(value.get_str("z"), Some("https://wave/#anchor /* text */"));
     assert_eq!(value.get_num("a"), Some(1.5));
     assert_eq!(value.get("version"), Some(&Value::Version(vec![1, 2, 3])));
-    assert_eq!(
-        loads(&dumps(&value, Format::Wson, true).unwrap()).unwrap(),
-        value
-    );
+    assert_eq!(loads(&dumps(&value, Format::Wson, true).unwrap()).unwrap(), value);
     assert!(dumps(&value, Format::Json, false).is_err());
-    let Value::Object(fields) = value else {
-        panic!("object")
-    };
+    let Value::Object(fields) = value else { panic!("object") };
     assert_eq!(fields[0].0, "z");
     for bad in [
         "{a=2023-02-29}",
@@ -38,13 +33,7 @@ fn wson_comments_dates_versions_and_order_share_the_value_model() {
 #[test]
 fn exact_numbers_never_round_through_f64() {
     let integer = "17976931348623159077293051907890247336179769789423065727343008115";
-    for text in [
-        integer,
-        "18446744073709551615",
-        "-0",
-        "-0.000e+10",
-        "1.230000e-12",
-    ] {
+    for text in [integer, "18446744073709551615", "-0", "-0.000e+10", "1.230000e-12"] {
         let value = parse_json(text).unwrap();
         assert_eq!(dumps(&value, Format::Json, false).unwrap(), text);
     }
@@ -58,14 +47,8 @@ fn exact_numbers_never_round_through_f64() {
 
 #[test]
 fn duplicate_keys_and_depth_are_rejected_on_both_read_and_write() {
-    for (text, format) in [
-        (r#"{"x":1,"\u0078":2}"#, Format::Json),
-        ("{x=1,x=2}", Format::Wson),
-    ] {
-        assert!(parse(text, format)
-            .unwrap_err()
-            .message
-            .contains("duplicate"));
+    for (text, format) in [(r#"{"x":1,"\u0078":2}"#, Format::Json), ("{x=1,x=2}", Format::Wson)] {
+        assert!(parse(text, format).unwrap_err().message.contains("duplicate"));
     }
     assert!(dumps(
         &Value::Object(vec![("x".into(), Value::Null), ("x".into(), Value::Null)]),
@@ -79,26 +62,15 @@ fn duplicate_keys_and_depth_are_rejected_on_both_read_and_write() {
         assert!(dumps(&value, format, false).is_ok());
         assert!(parse(&format!("[{at_limit}]"), format).is_err());
         let mut output = Vec::new();
-        assert!(Value::Array(vec![value])
-            .write_to(&mut output, format, false)
-            .is_err());
+        assert!(Value::Array(vec![value]).write_to(&mut output, format, false).is_err());
         assert!(output.is_empty());
     }
 }
 
 #[test]
 fn json_mode_is_strict_and_errors_keep_physical_positions() {
-    for text in [
-        "{x:1}",
-        "{\"x\"=1}",
-        "[1,]",
-        "{/*comment*/}",
-        "True",
-        "01",
-        "+1",
-        "NaN",
-        "1.2.3",
-    ] {
+    for text in ["{x:1}", "{\"x\"=1}", "[1,]", "{/*comment*/}", "True", "01", "+1", "NaN", "1.2.3"]
+    {
         assert!(parse_json(text).is_err(), "{text}");
     }
     let text = "{\r\n\"한\": 1,\r\"한\":2}";
@@ -148,10 +120,7 @@ fn all_raw_control_bytes_are_rejected_in_values_and_keys() {
     for byte in 0..=31u8 {
         let text = format!("\"{}\"", char::from(byte));
         assert!(parse_json(&text).is_err(), "byte {byte}");
-        assert!(
-            parse_json(&format!("{{{text}:0}}")).is_err(),
-            "key byte {byte}"
-        );
+        assert!(parse_json(&format!("{{{text}:0}}")).is_err(), "key byte {byte}");
         assert!(parse_json(&format!(r#""\u{byte:04x}""#)).is_ok());
     }
 }
@@ -159,18 +128,9 @@ fn all_raw_control_bytes_are_rejected_in_values_and_keys() {
 #[test]
 fn numeric_range_errors_do_not_change_json_types() {
     for text in ["1e9999", "-1e9999", "1.7976931348623159e308"] {
-        assert!(parse_json(text)
-            .unwrap_err()
-            .message
-            .contains("finite f64 range"));
+        assert!(parse_json(text).unwrap_err().message.contains("finite f64 range"));
     }
-    for text in [
-        "1.7976931348623157e308",
-        "-1.7976931348623157e308",
-        "1.5",
-        "-0",
-        "5e-324",
-    ] {
+    for text in ["1.7976931348623157e308", "-1.7976931348623157e308", "1.5", "-0", "5e-324"] {
         let value = parse_json(text).unwrap();
         let output = dumps(&value, Format::Json, false).unwrap();
         assert_eq!(output, text);

@@ -87,11 +87,8 @@ fn integer_extension_for_target(target: CodegenTarget, ty: &WaveType) -> Option<
 }
 
 fn riscv_flen(target: CodegenTarget, abi: Option<&str>) -> u64 {
-    match abi.unwrap_or(if target == CodegenTarget::FreestandingRISCV64 {
-        "lp64"
-    } else {
-        "lp64d"
-    }) {
+    match abi.unwrap_or(if target == CodegenTarget::FreestandingRISCV64 { "lp64" } else { "lp64d" })
+    {
         "lp64" => 0,
         "lp64f" => 4,
         "lp64d" => 8,
@@ -158,10 +155,10 @@ fn classify_ret<'ctx>(
         | CodegenTarget::LinuxRISCV64
         | CodegenTarget::FreestandingRISCV64 => {
             classify_ret_riscv64(context, td, t, riscv_flen(target, target_abi))
-        }
+        },
         CodegenTarget::LinuxLoongArch64 => {
             classify_ret_loongarch64(context, td, t, loongarch_frlen_bytes(target_abi))
-        }
+        },
         CodegenTarget::Wasm32Unknown
         | CodegenTarget::Wasm32WasiP1
         | CodegenTarget::Wasm64Unknown => classify_ret_wasm(td, t),
@@ -176,11 +173,7 @@ pub fn lower_extern_c<'ctx>(
     ext: &ExternFunctionNode,
     struct_types: &HashMap<String, inkwell::types::StructType<'ctx>>,
 ) -> LoweredExtern<'ctx> {
-    let llvm_name = ext
-        .symbol
-        .as_deref()
-        .unwrap_or(ext.name.as_str())
-        .to_string();
+    let llvm_name = ext.symbol.as_deref().unwrap_or(ext.name.as_str()).to_string();
     let info_llvm_name = llvm_name.clone();
 
     // wave types -> layout types
@@ -192,12 +185,7 @@ pub fn lower_extern_c<'ctx>(
 
     let wave_ret_layout: Option<BasicTypeEnum<'ctx>> = match &ext.return_type {
         WaveType::Void | WaveType::Never => None,
-        ty => Some(wave_type_to_llvm_type(
-            context,
-            ty,
-            struct_types,
-            TypeFlavor::AbiC,
-        )),
+        ty => Some(wave_type_to_llvm_type(context, ty, struct_types, TypeFlavor::AbiC)),
     };
 
     let ret = classify_ret(context, td, target, wave_ret_layout, target_abi);
@@ -210,11 +198,7 @@ pub fn lower_extern_c<'ctx>(
             | CodegenTarget::FreestandingRISCV64
     ) {
         let flen = riscv_flen(target, target_abi);
-        let mut gp_left = if matches!(ret, RetLowering::SRet { .. }) {
-            7
-        } else {
-            8
-        };
+        let mut gp_left = if matches!(ret, RetLowering::SRet { .. }) { 7 } else { 8 };
         let mut fp_left = if flen == 0 { 0 } else { 8 };
         for param in wave_param_layout {
             params.push(classify_param_riscv64(
@@ -228,11 +212,7 @@ pub fn lower_extern_c<'ctx>(
         }
     } else if target == CodegenTarget::LinuxLoongArch64 {
         let frlen_bytes = loongarch_frlen_bytes(target_abi);
-        let mut gars_left = if matches!(ret, RetLowering::SRet { .. }) {
-            7
-        } else {
-            8
-        };
+        let mut gars_left = if matches!(ret, RetLowering::SRet { .. }) { 7 } else { 8 };
         let mut fars_left = if frlen_bytes == 0 { 0 } else { 8 };
         for param in wave_param_layout {
             params.push(classify_param_loongarch64(
@@ -251,11 +231,7 @@ pub fn lower_extern_c<'ctx>(
             | CodegenTarget::FreeBsdX86_64
             | CodegenTarget::FreestandingX86_64
     ) {
-        let mut gp_left = if matches!(ret, RetLowering::SRet { .. }) {
-            5
-        } else {
-            6
-        };
+        let mut gp_left = if matches!(ret, RetLowering::SRet { .. }) { 5 } else { 6 };
         let mut sse_left = 8;
         for param in wave_param_layout {
             params.push(classify_param_sysv_with_registers(
@@ -271,11 +247,8 @@ pub fn lower_extern_c<'ctx>(
             params.push(classify_param(context, td, target, param, ext.variadic));
         }
     }
-    let param_extensions = ext
-        .params
-        .iter()
-        .map(|(_, ty)| integer_extension_for_target(target, ty))
-        .collect();
+    let param_extensions =
+        ext.params.iter().map(|(_, ty)| integer_extension_for_target(target, ty)).collect();
 
     // build lowered param list (sret first, then params possibly split)
     let mut llvm_param_types: Vec<BasicMetadataTypeEnum<'ctx>> = vec![];
@@ -288,29 +261,29 @@ pub fn lower_extern_c<'ctx>(
 
     for p in &params {
         match p {
-            ParamLowering::Ignore => {}
+            ParamLowering::Ignore => {},
             ParamLowering::Direct(t) => llvm_param_types.push((*t).into()),
             ParamLowering::Split(parts) => {
                 for pt in parts {
                     llvm_param_types.push((*pt).into());
                 }
-            }
+            },
             ParamLowering::CoerceAndExpand(parts) => {
                 for part in parts {
                     llvm_param_types.push(part.ty.into());
                 }
-            }
+            },
             ParamLowering::Indirect { ty } | ParamLowering::ByVal { ty, .. } => {
                 let ptr = any_ptr_basic(context, ty.clone());
                 llvm_param_types.push(ptr.into());
-            }
+            },
         }
     }
 
     let fn_type = match &ret {
         RetLowering::Void | RetLowering::SRet { .. } => {
             context.void_type().fn_type(&llvm_param_types, ext.variadic)
-        }
+        },
         RetLowering::Direct(t) => t.fn_type(&llvm_param_types, ext.variadic),
     };
 

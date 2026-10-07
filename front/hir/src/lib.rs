@@ -160,12 +160,8 @@ impl TypedProgram {
             expression_ids.insert(address, id);
             expression_spans.push(source_map.expressions.get(&address).cloned());
             expected_types.push(analyzed_expected.get(&address).cloned());
-            expression_types.push(
-                analyzed_types
-                    .get(&address)
-                    .cloned()
-                    .unwrap_or(HirExpressionType::Unknown),
-            );
+            expression_types
+                .push(analyzed_types.get(&address).cloned().unwrap_or(HirExpressionType::Unknown));
             variant_constructions.push(analyzed_variants.get(&address).cloned());
         });
 
@@ -212,29 +208,21 @@ impl TypedProgram {
         program.numeric_expressions = conversions::build(&program);
         program.constant_values = match numeric_checks::validate(&program) {
             Ok(values) => values,
-            Err(diagnostic) => {
-                return Err(HirLoweringError {
-                    syntax: program.syntax,
-                    diagnostic,
-                })
-            }
+            Err(diagnostic) => return Err(HirLoweringError { syntax: program.syntax, diagnostic }),
         };
         Ok(program)
     }
 
     pub fn constant_value_of(&self, expression: &Expression) -> Option<&ConstantValue> {
-        self.expression_id(expression)
-            .and_then(|id| self.constant_values.get(&id))
+        self.expression_id(expression).and_then(|id| self.constant_values.get(&id))
     }
 
     pub fn numeric_expression(&self, id: ExpressionId) -> Option<&NumericExpressionInfo> {
-        self.numeric_expressions
-            .get(id.index())
-            .and_then(Option::as_ref)
+        self.numeric_expressions.get(id.index()).and_then(Option::as_ref)
     }
+
     pub fn numeric_expression_of(&self, expression: &Expression) -> Option<&NumericExpressionInfo> {
-        self.expression_id(expression)
-            .and_then(|id| self.numeric_expression(id))
+        self.expression_id(expression).and_then(|id| self.numeric_expression(id))
     }
     /// Reject missing or inconsistent facts before entering a backend.
     pub fn verify_conversions(&self) -> Result<(), ConversionError> {
@@ -249,10 +237,8 @@ impl TypedProgram {
                     self.type_of(expr),
                     Some(HirExpressionType::IntegerLiteral | HirExpressionType::FloatLiteral)
                 )
-                || (matches!(
-                    self.type_of(expr),
-                    Some(HirExpressionType::AddressedArrayLiteral)
-                ) && matches!(self.expected_type_of(expr), Some(WaveType::Pointer(_))));
+                || (matches!(self.type_of(expr), Some(HirExpressionType::AddressedArrayLiteral))
+                    && matches!(self.expected_type_of(expr), Some(WaveType::Pointer(_))));
             let result = match self.numeric_expression(id) {
                 Some(fact) => conversions::verify_expression(self, expr, fact),
                 None if required => Err("missing required scalar conversion facts".into()),
@@ -324,6 +310,7 @@ impl TypedProgram {
     pub fn node_id(&self, node: &ASTNode) -> Option<NodeId> {
         self.node_ids.get(&(node as *const _ as usize)).copied()
     }
+
     pub fn node_span(&self, id: NodeId) -> Option<&error::SourceSpan> {
         self.node_spans.get(id.index())?.as_ref()
     }
@@ -345,9 +332,7 @@ impl TypedProgram {
     }
 
     pub fn expression_id(&self, expression: &Expression) -> Option<ExpressionId> {
-        self.expression_ids
-            .get(&(expression as *const Expression as usize))
-            .copied()
+        self.expression_ids.get(&(expression as *const Expression as usize)).copied()
     }
 
     pub fn expression_type(&self, id: ExpressionId) -> Option<&HirExpressionType> {
@@ -359,8 +344,7 @@ impl TypedProgram {
     }
 
     pub fn type_of(&self, expression: &Expression) -> Option<&HirExpressionType> {
-        self.expression_id(expression)
-            .and_then(|id| self.expression_type(id))
+        self.expression_id(expression).and_then(|id| self.expression_type(id))
     }
 
     pub fn variant_construction(&self, id: ExpressionId) -> Option<&HirVariantConstruction> {
@@ -376,14 +360,11 @@ impl TypedProgram {
         &self,
         expression: &Expression,
     ) -> Option<&HirVariantConstruction> {
-        self.expression_id(expression)
-            .and_then(|id| self.variant_construction(id))
+        self.expression_id(expression).and_then(|id| self.variant_construction(id))
     }
 
     pub fn pattern_id(&self, pattern: &MatchPattern) -> Option<PatternId> {
-        self.pattern_ids
-            .get(&(pattern as *const MatchPattern as usize))
-            .copied()
+        self.pattern_ids.get(&(pattern as *const MatchPattern as usize)).copied()
     }
 
     /// Validated decimal case value in the integer scrutinee's type.
@@ -403,8 +384,7 @@ impl TypedProgram {
 
     /// Returns resolved variant metadata for a syntax pattern in this program.
     pub fn variant_pattern_of(&self, pattern: &MatchPattern) -> Option<&HirVariantPattern> {
-        self.pattern_id(pattern)
-            .and_then(|id| self.variant_pattern(id))
+        self.pattern_id(pattern).and_then(|id| self.variant_pattern(id))
     }
 }
 
@@ -437,17 +417,14 @@ fn collect_named_types(nodes: &[ASTNode]) -> HashMap<String, WaveType> {
         match node.unspanned() {
             ASTNode::TypeAlias(alias) => {
                 named.insert(alias.name.clone(), alias.target.clone());
-            }
+            },
             ASTNode::Enum(enumeration) => {
                 named.insert(enumeration.name.clone(), enumeration.repr_type.clone());
-            }
+            },
             ASTNode::Variant(variant) => {
-                named.insert(
-                    variant.name.clone(),
-                    WaveType::Variant(variant.name.clone()),
-                );
-            }
-            _ => {}
+                named.insert(variant.name.clone(), WaveType::Variant(variant.name.clone()));
+            },
+            _ => {},
         }
     }
     named
@@ -463,13 +440,13 @@ fn canonical_type(
         WaveType::Usz => named.get("usz").cloned().unwrap_or(WaveType::Usz),
         WaveType::Future(inner) => {
             WaveType::Future(Box::new(canonical_type(inner, named, visiting)))
-        }
+        },
         WaveType::Pointer(inner) => {
             WaveType::Pointer(Box::new(canonical_type(inner, named, visiting)))
-        }
+        },
         WaveType::Array(inner, length) => {
             WaveType::Array(Box::new(canonical_type(inner, named, visiting)), *length)
-        }
+        },
         WaveType::Struct(name) => canonical_named_type(name, named, visiting)
             .unwrap_or_else(|| WaveType::Struct(name.clone())),
         WaveType::Variant(name) => canonical_variant_application(name, named, visiting)
@@ -540,7 +517,7 @@ fn display_wave_type(ty: &WaveType) -> String {
         WaveType::Pointer(inner) => format!("ptr<{}>", display_wave_type(inner)),
         WaveType::Array(inner, length) => {
             format!("array<{},{}>", display_wave_type(inner), length)
-        }
+        },
         WaveType::Void => "void".to_string(),
         WaveType::Never => "!".to_string(),
         WaveType::Struct(name) | WaveType::Variant(name) => name.clone(),
@@ -578,7 +555,7 @@ fn canonicalize_node_types(node: &mut ASTNode, named: &HashMap<String, WaveType>
                 canonicalize_type(parameter_type, named);
             }
             canonicalize_type(&mut function.return_type, named);
-        }
+        },
         ASTNode::Program(parameter) => canonicalize_type(&mut parameter.param_type, named),
         ASTNode::Statement(statement) => canonicalize_statement_types(statement, named),
         ASTNode::Variable(variable) => {
@@ -586,7 +563,7 @@ fn canonicalize_node_types(node: &mut ASTNode, named: &HashMap<String, WaveType>
             if let Some(initializer) = &mut variable.initial_value {
                 canonicalize_expression_types(initializer, named);
             }
-        }
+        },
         ASTNode::Expression(expression) => canonicalize_expression_types(expression, named),
         ASTNode::Struct(structure) => {
             for (_, field_type) in &mut structure.fields {
@@ -595,12 +572,12 @@ fn canonicalize_node_types(node: &mut ASTNode, named: &HashMap<String, WaveType>
             for method in &mut structure.methods {
                 canonicalize_function_types(method, named);
             }
-        }
+        },
         ASTNode::ProtoImpl(implementation) => {
             for method in &mut implementation.methods {
                 canonicalize_function_types(method, named);
             }
-        }
+        },
         ASTNode::TypeAlias(alias) => canonicalize_type(&mut alias.target, named),
         ASTNode::Enum(enumeration) => canonicalize_type(&mut enumeration.repr_type, named),
         ASTNode::Variant(variant) => {
@@ -609,7 +586,7 @@ fn canonicalize_node_types(node: &mut ASTNode, named: &HashMap<String, WaveType>
                     canonicalize_type(payload_type, named);
                 }
             }
-        }
+        },
     }
 }
 
@@ -621,13 +598,8 @@ fn canonicalize_statement_types(statement: &mut StatementNode, named: &HashMap<S
             for argument in args {
                 canonicalize_expression_types(argument, named);
             }
-        }
-        StatementNode::If {
-            condition,
-            body,
-            else_if_blocks,
-            else_block,
-        } => {
+        },
+        StatementNode::If { condition, body, else_if_blocks, else_block } => {
             canonicalize_expression_types(condition, named);
             for node in body {
                 canonicalize_node_types(node, named);
@@ -645,26 +617,21 @@ fn canonicalize_statement_types(statement: &mut StatementNode, named: &HashMap<S
                     canonicalize_node_types(node, named);
                 }
             }
-        }
-        StatementNode::For {
-            initialization,
-            condition,
-            increment,
-            body,
-        } => {
+        },
+        StatementNode::For { initialization, condition, increment, body } => {
             canonicalize_node_types(initialization, named);
             canonicalize_expression_types(condition, named);
             canonicalize_expression_types(increment, named);
             for node in body {
                 canonicalize_node_types(node, named);
             }
-        }
+        },
         StatementNode::While { condition, body } => {
             canonicalize_expression_types(condition, named);
             for node in body {
                 canonicalize_node_types(node, named);
             }
-        }
+        },
         StatementNode::Match { value, arms } => {
             canonicalize_expression_types(value, named);
             for arm in arms {
@@ -672,25 +639,23 @@ fn canonicalize_statement_types(statement: &mut StatementNode, named: &HashMap<S
                     canonicalize_node_types(node, named);
                 }
             }
-        }
+        },
         StatementNode::Assign { value, .. } => canonicalize_expression_types(value, named),
-        StatementNode::AsmBlock {
-            inputs, outputs, ..
-        } => {
+        StatementNode::AsmBlock { inputs, outputs, .. } => {
             for (_, expression) in inputs.iter_mut().chain(outputs.iter_mut()) {
                 canonicalize_expression_types(expression, named);
             }
-        }
+        },
         StatementNode::Return(Some(expression)) | StatementNode::Expression(expression) => {
             canonicalize_expression_types(expression, named);
-        }
+        },
         StatementNode::Print(_)
         | StatementNode::Println(_)
         | StatementNode::Variable(_)
         | StatementNode::Import(_)
         | StatementNode::Break
         | StatementNode::Continue
-        | StatementNode::Return(None) => {}
+        | StatementNode::Return(None) => {},
     }
 }
 
@@ -704,23 +669,16 @@ fn canonicalize_expression_types(expression: &mut Expression, named: &HashMap<St
             for (_, value) in fields {
                 canonicalize_expression_types(value, named);
             }
-        }
-        Expression::FunctionCall {
-            type_args, args, ..
-        } => {
+        },
+        Expression::FunctionCall { type_args, args, .. } => {
             for type_argument in type_args {
                 canonicalize_type(type_argument, named);
             }
             for argument in args {
                 canonicalize_expression_types(argument, named);
             }
-        }
-        Expression::MethodCall {
-            object,
-            args,
-            type_args,
-            ..
-        } => {
+        },
+        Expression::MethodCall { object, args, type_args, .. } => {
             for type_argument in type_args {
                 canonicalize_type(type_argument, named);
             }
@@ -728,7 +686,7 @@ fn canonicalize_expression_types(expression: &mut Expression, named: &HashMap<St
             for argument in args {
                 canonicalize_expression_types(argument, named);
             }
-        }
+        },
         Expression::Deref(inner)
         | Expression::AddressOf(inner)
         | Expression::Await(inner)
@@ -737,41 +695,29 @@ fn canonicalize_expression_types(expression: &mut Expression, named: &HashMap<St
         | Expression::FieldAccess { object: inner, .. }
         | Expression::IncDec { target: inner, .. } => {
             canonicalize_expression_types(inner, named);
-        }
+        },
         Expression::Cast { expr, target_type } => {
             canonicalize_expression_types(expr, named);
             canonicalize_type(target_type, named);
-        }
+        },
         Expression::BinaryExpression { left, right, .. }
-        | Expression::IndexAccess {
-            target: left,
-            index: right,
-        }
-        | Expression::AssignOperation {
-            target: left,
-            value: right,
-            ..
-        }
-        | Expression::Assignment {
-            target: left,
-            value: right,
-        } => {
+        | Expression::IndexAccess { target: left, index: right }
+        | Expression::AssignOperation { target: left, value: right, .. }
+        | Expression::Assignment { target: left, value: right } => {
             canonicalize_expression_types(left, named);
             canonicalize_expression_types(right, named);
-        }
+        },
         Expression::ArrayLiteral(values) => {
             for value in values {
                 canonicalize_expression_types(value, named);
             }
-        }
-        Expression::AsmBlock {
-            inputs, outputs, ..
-        } => {
+        },
+        Expression::AsmBlock { inputs, outputs, .. } => {
             for (_, expression) in inputs.iter_mut().chain(outputs.iter_mut()) {
                 canonicalize_expression_types(expression, named);
             }
-        }
-        Expression::Null | Expression::Literal(_) | Expression::Variable(_) => {}
+        },
+        Expression::Null | Expression::Literal(_) | Expression::Variable(_) => {},
     }
 }
 
@@ -780,18 +726,18 @@ fn walk_patterns_in_nodes(nodes: &[ASTNode], visit: &mut impl FnMut(&MatchPatter
         match node {
             ASTNode::Located { value, .. } => {
                 walk_patterns_in_nodes(std::slice::from_ref(value), visit)
-            }
+            },
             ASTNode::Function(function) => walk_patterns_in_nodes(&function.body, visit),
             ASTNode::Struct(structure) => {
                 for method in &structure.methods {
                     walk_patterns_in_nodes(&method.body, visit);
                 }
-            }
+            },
             ASTNode::ProtoImpl(implementation) => {
                 for method in &implementation.methods {
                     walk_patterns_in_nodes(&method.body, visit);
                 }
-            }
+            },
             ASTNode::Statement(statement) => walk_patterns_in_statement(statement, visit),
             ASTNode::ExternFunction(_)
             | ASTNode::Program(_)
@@ -799,19 +745,14 @@ fn walk_patterns_in_nodes(nodes: &[ASTNode], visit: &mut impl FnMut(&MatchPatter
             | ASTNode::Expression(_)
             | ASTNode::TypeAlias(_)
             | ASTNode::Enum(_)
-            | ASTNode::Variant(_) => {}
+            | ASTNode::Variant(_) => {},
         }
     }
 }
 
 fn walk_patterns_in_statement(statement: &StatementNode, visit: &mut impl FnMut(&MatchPattern)) {
     match statement {
-        StatementNode::If {
-            body,
-            else_if_blocks,
-            else_block,
-            ..
-        } => {
+        StatementNode::If { body, else_if_blocks, else_block, .. } => {
             walk_patterns_in_nodes(body, visit);
             if let Some(blocks) = else_if_blocks {
                 for (_, body) in blocks.iter() {
@@ -821,22 +762,18 @@ fn walk_patterns_in_statement(statement: &StatementNode, visit: &mut impl FnMut(
             if let Some(body) = else_block {
                 walk_patterns_in_nodes(body, visit);
             }
-        }
-        StatementNode::For {
-            initialization,
-            body,
-            ..
-        } => {
+        },
+        StatementNode::For { initialization, body, .. } => {
             walk_patterns_in_nodes(std::slice::from_ref(initialization.as_ref()), visit);
             walk_patterns_in_nodes(body, visit);
-        }
+        },
         StatementNode::While { body, .. } => walk_patterns_in_nodes(body, visit),
         StatementNode::Match { arms, .. } => {
             for arm in arms {
                 walk_pattern(&arm.pattern, visit);
                 walk_patterns_in_nodes(&arm.body, visit);
             }
-        }
+        },
         StatementNode::Print(_)
         | StatementNode::PrintFormat { .. }
         | StatementNode::Println(_)
@@ -849,7 +786,7 @@ fn walk_patterns_in_statement(statement: &StatementNode, visit: &mut impl FnMut(
         | StatementNode::Break
         | StatementNode::Continue
         | StatementNode::Return(_)
-        | StatementNode::Expression(_) => {}
+        | StatementNode::Expression(_) => {},
     }
 }
 

@@ -38,10 +38,7 @@ pub fn parse_generic_param_names(
     tokens: &mut Peekable<Iter<Token>>,
 ) -> Result<Vec<String>, ParseError> {
     skip_ws(tokens);
-    if !tokens
-        .peek()
-        .is_some_and(|t| t.token_type == TokenType::Lchevr)
-    {
+    if !tokens.peek().is_some_and(|t| t.token_type == TokenType::Lchevr) {
         return Ok(vec![]);
     }
     let anchor = tokens.next();
@@ -50,29 +47,20 @@ pub fn parse_generic_param_names(
     let mut seen = HashSet::new();
     loop {
         skip_ws(tokens);
-        if !params.is_empty()
-            && tokens
-                .peek()
-                .is_some_and(|t| t.token_type == TokenType::Rchevr)
-        {
+        if !params.is_empty() && tokens.peek().is_some_and(|t| t.token_type == TokenType::Rchevr) {
             tokens.next();
             break;
         }
         let at = tokens.peek().copied();
         let name = crate::expr::identifier(tokens, anchor, context)?;
         if !seen.insert(name.clone()) {
-            return Err(
-                ParseError::syntax_at(at, format!("duplicate generic parameter '{name}'"))
-                    .with_context(context)
-                    .with_found_token(at),
-            );
+            return Err(ParseError::syntax_at(at, format!("duplicate generic parameter '{name}'"))
+                .with_context(context)
+                .with_found_token(at));
         }
         params.push(name);
         skip_ws(tokens);
-        if tokens
-            .peek()
-            .is_some_and(|t| t.token_type == TokenType::Comma)
-        {
+        if tokens.peek().is_some_and(|t| t.token_type == TokenType::Comma) {
             tokens.next();
         } else {
             crate::expr::expect_token(tokens, anchor, TokenType::Rchevr, "',' or '>'", context)?;
@@ -91,10 +79,7 @@ pub fn parse_parameters(
     let mut names = HashSet::new();
     loop {
         skip_ws(tokens);
-        if tokens
-            .peek()
-            .is_some_and(|t| t.token_type == TokenType::Rparen)
-        {
+        if tokens.peek().is_some_and(|t| t.token_type == TokenType::Rparen) {
             tokens.next();
             break;
         }
@@ -102,30 +87,20 @@ pub fn parse_parameters(
         let at = tokens.peek().copied();
         let name = crate::expr::identifier(tokens, anchor, context)?;
         if !names.insert(name.clone()) {
-            return Err(
-                ParseError::syntax_at(at, format!("duplicate parameter '{name}'"))
-                    .with_context(context),
-            );
+            return Err(ParseError::syntax_at(at, format!("duplicate parameter '{name}'"))
+                .with_context(context));
         }
         crate::expr::expect_token(tokens, anchor, TokenType::Colon, "':'", context)?;
         skip_ws(tokens);
         let param_type = crate::types::parse_type_checked(tokens, "parameter type")?;
         skip_ws(tokens);
-        let initial_value = if tokens
-            .peek()
-            .is_some_and(|t| t.token_type == TokenType::Equal)
-        {
+        let initial_value = if tokens.peek().is_some_and(|t| t.token_type == TokenType::Equal) {
             tokens.next();
             skip_ws(tokens);
             let at = tokens.peek().copied();
             let value = crate::expr::parse_expression(tokens)?;
             if !matches!(value.unspanned(), Expression::Literal(_) | Expression::Null) {
-                return Err(ParseError::expected_at(
-                    at,
-                    anchor,
-                    "literal default value",
-                    context,
-                ));
+                return Err(ParseError::expected_at(at, anchor, "literal default value", context));
             }
             Some(value)
         } else {
@@ -138,10 +113,7 @@ pub fn parse_parameters(
             initial_value,
         });
         skip_ws(tokens);
-        if tokens
-            .peek()
-            .is_some_and(|t| t.token_type == TokenType::Comma)
-        {
+        if tokens.peek().is_some_and(|t| t.token_type == TokenType::Comma) {
             tokens.next();
         } else {
             crate::expr::expect_token(tokens, anchor, TokenType::Rparen, "',' or ')'", context)?;
@@ -171,21 +143,13 @@ pub fn parse_function_with_export(
             .with_help("check parameter syntax, return type arrow, and function body braces")
     };
     let before = tokens.clone();
-    let is_async = tokens
-        .peek()
-        .is_some_and(|t| t.token_type == TokenType::Async);
+    let is_async = tokens.peek().is_some_and(|t| t.token_type == TokenType::Async);
     if is_async {
         tokens.next();
         skip_ws(tokens);
         crate::expr::expect_token(tokens, anchor, TokenType::Fun, "'fun'", "async function")?;
     } else {
-        crate::expr::expect_token(
-            tokens,
-            anchor,
-            TokenType::Fun,
-            "'fun'",
-            "function declaration",
-        )?;
+        crate::expr::expect_token(tokens, anchor, TokenType::Fun, "'fun'", "function declaration")?;
     }
 
     skip_ws(tokens);
@@ -215,11 +179,7 @@ pub fn parse_function_with_export(
 
     skip_ws(tokens);
     let mut return_type_span = None;
-    let return_type = if let Some(Token {
-        token_type: TokenType::Arrow,
-        ..
-    }) = tokens.peek()
-    {
+    let return_type = if let Some(Token { token_type: TokenType::Arrow, .. }) = tokens.peek() {
         tokens.next(); // consume '->'
         let before_type = tokens.clone();
         skip_ws(tokens);
@@ -261,10 +221,7 @@ pub fn parse_export(tokens: &mut Peekable<Iter<Token>>) -> Result<Vec<ASTNode>, 
     };
     let (abi, global_symbol) =
         parse_ffi_header(tokens, "export").ok_or_else(|| invalid(tokens.peek().copied()))?;
-    let export = ExportAttribute {
-        abi,
-        symbol: global_symbol,
-    };
+    let export = ExportAttribute { abi, symbol: global_symbol };
 
     skip_ws(tokens);
 
@@ -284,7 +241,7 @@ pub fn parse_export(tokens: &mut Peekable<Iter<Token>>) -> Result<Vec<ASTNode>, 
                 Some(TokenType::Rbrace) => {
                     tokens.next();
                     break;
-                }
+                },
                 Some(TokenType::Fun | TokenType::Async) => {
                     let node = parse_function_with_export(tokens, Some(export.clone()))?;
                     if let ASTNode::Function(func) = &node {
@@ -294,14 +251,14 @@ pub fn parse_export(tokens: &mut Peekable<Iter<Token>>) -> Result<Vec<ASTNode>, 
                         }
                     }
                     nodes.push(node);
-                }
+                },
                 Some(TokenType::Whitespace) | Some(TokenType::Newline) => {
                     tokens.next();
-                }
+                },
                 other => {
                     println!("Error: Unexpected token in export block: {:?}", other);
                     return Err(invalid(tokens.peek().copied()));
-                }
+                },
             }
         }
 

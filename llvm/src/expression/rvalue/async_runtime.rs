@@ -11,10 +11,7 @@ fn runtime<'ctx>(
     name: &str,
     args: &[BasicMetadataValueEnum<'ctx>],
 ) -> BasicValueEnum<'ctx> {
-    let function = env
-        .module
-        .get_function(name)
-        .expect("async runtime validated before emission");
+    let function = env.module.get_function(name).expect("async runtime validated before emission");
     env.builder
         .build_call(function, args, "task")
         .unwrap()
@@ -22,6 +19,7 @@ fn runtime<'ctx>(
         .basic()
         .unwrap_or_else(|| env.context.i8_type().const_zero().into())
 }
+
 pub(crate) fn gen<'ctx>(
     env: &mut ExprGenEnv<'ctx, '_>,
     name: &str,
@@ -36,11 +34,9 @@ pub(crate) fn gen<'ctx>(
             runtime(
                 env,
                 "__wave_task_alloc",
-                &[i64t
-                    .const_int(env.target_data.get_abi_size(&ty), false)
-                    .into()],
+                &[i64t.const_int(env.target_data.get_abi_size(&ty), false).into()],
             )
-        }
+        },
         "__wave_async_create" => {
             let frame = env.gen(&args[0], None);
             let result = env.gen(&args[1], None);
@@ -60,13 +56,12 @@ pub(crate) fn gen<'ctx>(
                 "__wave_task_new",
                 &[
                     frame.into(),
-                    i64t.const_int(env.target_data.get_abi_size(&ty), false)
-                        .into(),
+                    i64t.const_int(env.target_data.get_abi_size(&ty), false).into(),
                     result.into(),
                     poll.into(),
                 ],
             )
-        }
+        },
         "__wave_async_take" | "__wave_async_block_on" => {
             let Some(WaveType::Future(result)) = env.wave_type(&args[0]) else {
                 unreachable!("typed future operand")
@@ -89,7 +84,7 @@ pub(crate) fn gen<'ctx>(
             };
             runtime(env, "__wave_task_release", &[id.into()]);
             result
-        }
+        },
         "__wave_async_interest" | "__wave_async_sleep" => {
             let values = if name == "__wave_async_sleep" {
                 let ms = env.gen(&args[0], Some(i64t.into()));
@@ -105,7 +100,7 @@ pub(crate) fn gen<'ctx>(
                 vec![fd.into(), flags.into(), ms.into()]
             };
             runtime(env, "__wave_task_interest", &values)
-        }
+        },
         "__wave_async_windows_notify_address" => env
             .module
             .get_function("__wave_task_windows_notify")
@@ -122,46 +117,34 @@ pub(crate) fn gen<'ctx>(
             runtime(
                 env,
                 "__wave_task_io",
-                &[
-                    fd.into(),
-                    buffer.into(),
-                    length.into(),
-                    writing.into(),
-                    timeout.into(),
-                ],
+                &[fd.into(), buffer.into(), length.into(), writing.into(), timeout.into()],
             )
-        }
+        },
         "__wave_async_invoke" => {
             let callback = env.gen(&args[0], None).into_pointer_value();
             let frame = env.gen(&args[1], None);
             let id = env.gen(&args[2], Some(i64t.into()));
-            let ty = env.context.bool_type().fn_type(
-                &[env.context.ptr_type(Default::default()).into(), i64t.into()],
-                false,
-            );
+            let ty = env
+                .context
+                .bool_type()
+                .fn_type(&[env.context.ptr_type(Default::default()).into(), i64t.into()], false);
             env.builder
                 .build_indirect_call(ty, callback, &[frame.into(), id.into()], "resume")
                 .unwrap()
                 .try_as_basic_value()
                 .basic()
                 .unwrap()
-        }
+        },
         "__wave_async_free_slot" => {
-            let Some(WaveType::Pointer(t)) = env.wave_type(&args[0]) else {
-                unreachable!()
-            };
+            let Some(WaveType::Pointer(t)) = env.wave_type(&args[0]) else { unreachable!() };
             let pointer = env.gen(&args[0], None);
             let ty = wave_type_to_llvm_type(env.context, &t, env.struct_types, TypeFlavor::Value);
             runtime(
                 env,
                 "__wave_task_free",
-                &[
-                    pointer.into(),
-                    i64t.const_int(env.target_data.get_abi_size(&ty), false)
-                        .into(),
-                ],
+                &[pointer.into(), i64t.const_int(env.target_data.get_abi_size(&ty), false).into()],
             )
-        }
+        },
         _ => {
             let target = match name {
                 "__wave_async_ready" => "__wave_task_ready",
@@ -175,10 +158,8 @@ pub(crate) fn gen<'ctx>(
                 "__wave_async_close_fd" => "__wave_task_close_fd",
                 _ => unreachable!("known async intrinsic"),
             };
-            let values = args
-                .iter()
-                .map(|a| env.gen(a, Some(i64t.into())).into())
-                .collect::<Vec<_>>();
+            let values =
+                args.iter().map(|a| env.gen(a, Some(i64t.into())).into()).collect::<Vec<_>>();
             let result = runtime(env, target, &values);
             if matches!(name, "__wave_async_ready" | "__wave_async_cancel") {
                 env.builder
@@ -193,6 +174,6 @@ pub(crate) fn gen<'ctx>(
             } else {
                 result
             }
-        }
+        },
     }
 }

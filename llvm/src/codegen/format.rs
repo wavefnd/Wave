@@ -37,7 +37,7 @@ pub fn wave_format_to_c(format: &[u8], arg_formats: &[&str]) -> Vec<u8> {
             FormatFragment::Literal(bytes) => result.extend(escape_percent(bytes)),
             FormatFragment::Placeholder(_) => {
                 result.extend_from_slice(formats.next().expect("validated arity").as_bytes())
-            }
+            },
         }
     }
     assert!(formats.next().is_none(), "validated format arity");

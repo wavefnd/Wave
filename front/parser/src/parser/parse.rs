@@ -77,14 +77,11 @@ impl ParseError {
         expected: &str,
         context: &str,
     ) -> Self {
-        Self::syntax_at(
-            token.or(anchor),
-            format!("expected {expected} in {context}"),
-        )
-        .with_expected(expected)
-        .with_context(context)
-        .with_found("end of file")
-        .with_found_token(token)
+        Self::syntax_at(token.or(anchor), format!("expected {expected} in {context}"))
+            .with_expected(expected)
+            .with_context(context)
+            .with_found("end of file")
+            .with_found_token(token)
     }
 
     pub fn semantic(message: impl Into<String>) -> Self {
@@ -199,10 +196,7 @@ impl ParseError {
             return self;
         }
         // Legacy leaf parsers may already have consumed the EOF sentinel.
-        if let Some(eof) = tokens
-            .last()
-            .filter(|token| token.token_type == TokenType::Eof)
-        {
+        if let Some(eof) = tokens.last().filter(|token| token.token_type == TokenType::Eof) {
             self = self.with_found_token(Some(eof));
         }
         let mut openers: Vec<&Token> = Vec::new();
@@ -221,8 +215,8 @@ impl ParseError {
                     ) {
                         return self;
                     }
-                }
-                _ => {}
+                },
+                _ => {},
             }
         }
         if let Some(opener) = openers.last() {
@@ -234,10 +228,9 @@ impl ParseError {
             };
             let message = format!("unclosed '{open}' opened here; expected '{close}'");
             if let Some(span) = &opener.span {
-                self.diag_mut().related.push(error::RelatedDiagnostic {
-                    message,
-                    span: span.clone(),
-                });
+                self.diag_mut()
+                    .related
+                    .push(error::RelatedDiagnostic { message, span: span.clone() });
             } else {
                 self = self.with_note(format!("{message} (line {})", opener.line));
             }
@@ -327,11 +320,11 @@ fn parse_syntax_impl(tokens: &[Token]) -> Result<Vec<ASTNode>, ParseError> {
             TokenType::Whitespace | TokenType::Newline => {
                 iter.next();
                 continue;
-            }
+            },
             TokenType::Import => {
                 iter.next();
                 nodes.push(parse_import(&mut iter)?);
-            }
+            },
             TokenType::Pub => {
                 let anchor = (*token).clone();
                 iter.next();
@@ -346,7 +339,7 @@ fn parse_syntax_impl(tokens: &[Token]) -> Result<Vec<ASTNode>, ParseError> {
                     Some(TokenType::Import) => {
                         iter.next();
                         Some(parse_import(&mut iter)?)
-                    }
+                    },
                     Some(TokenType::Export) => {
                         iter.next();
                         let mut declarations = parse_export(&mut iter)?;
@@ -355,32 +348,32 @@ fn parse_syntax_impl(tokens: &[Token]) -> Result<Vec<ASTNode>, ParseError> {
                         } else {
                             None
                         }
-                    }
+                    },
                     Some(TokenType::Fun | TokenType::Async) => Some(parse_function(&mut iter)?),
                     Some(TokenType::Struct) => {
                         iter.next();
                         Some(parse_struct(&mut iter)?)
-                    }
+                    },
                     Some(TokenType::Type) => {
                         iter.next();
                         Some(parse_type_alias(&mut iter)?)
-                    }
+                    },
                     Some(TokenType::Enum) => {
                         iter.next();
                         Some(parse_enum(&mut iter)?)
-                    }
+                    },
                     Some(TokenType::Variant) => {
                         iter.next();
                         Some(parse_variant(&mut iter)?)
-                    }
+                    },
                     Some(TokenType::Const) => {
                         iter.next();
                         Some(parse_const(&mut iter)?)
-                    }
+                    },
                     Some(TokenType::Static) => {
                         iter.next();
                         Some(parse_static(&mut iter)?)
-                    }
+                    },
                     _ => None,
                 };
 
@@ -417,7 +410,7 @@ fn parse_syntax_impl(tokens: &[Token]) -> Result<Vec<ASTNode>, ParseError> {
                             .with_help("select the public symbols that this module re-exports"));
                         }
                         import.visibility = Visibility::Public;
-                    }
+                    },
                     ASTNode::Function(function) => {
                         if function.name == "main" {
                             return Err(ParseError::syntax_at(
@@ -429,7 +422,7 @@ fn parse_syntax_impl(tokens: &[Token]) -> Result<Vec<ASTNode>, ParseError> {
                             .with_help("remove `pub`; `main` is a private program entry point"));
                         }
                         function.visibility = Visibility::Public;
-                    }
+                    },
                     ASTNode::Struct(structure) => structure.visibility = Visibility::Public,
                     ASTNode::TypeAlias(alias) => alias.visibility = Visibility::Public,
                     ASTNode::Enum(enumeration) => enumeration.visibility = Visibility::Public,
@@ -438,62 +431,60 @@ fn parse_syntax_impl(tokens: &[Token]) -> Result<Vec<ASTNode>, ParseError> {
                     _ => unreachable!("public parser only constructs importable declarations"),
                 }
                 nodes.push(declaration);
-            }
+            },
             TokenType::Extern => {
                 iter.next();
                 nodes.extend(parse_extern(&mut iter)?);
-            }
+            },
             TokenType::Export => {
                 iter.next();
                 let export_nodes = parse_export(&mut iter)?;
                 nodes.extend(export_nodes);
-            }
+            },
             TokenType::Const => {
                 iter.next();
                 nodes.push(parse_const(&mut iter)?);
-            }
+            },
             TokenType::Static => {
                 iter.next();
                 nodes.push(parse_static(&mut iter)?);
-            }
+            },
             TokenType::Proto => {
                 iter.next();
                 nodes.push(parse_proto(&mut iter)?);
-            }
+            },
             TokenType::Type => {
                 iter.next();
                 nodes.push(parse_type_alias(&mut iter)?);
-            }
+            },
             TokenType::Enum => {
                 iter.next();
                 nodes.push(parse_enum(&mut iter)?);
-            }
+            },
             TokenType::Variant => {
                 iter.next();
                 nodes.push(parse_variant(&mut iter)?);
-            }
+            },
             TokenType::Struct => {
                 iter.next();
                 let struct_node = parse_struct(&mut iter)?;
                 nodes.push(struct_node);
-            }
+            },
             TokenType::Fun | TokenType::Async => {
                 let func = parse_function(&mut iter)?;
                 nodes.push(func);
-            }
+            },
             TokenType::Eof => break,
             _ => {
-                return Err(
-                    ParseError::syntax_at(Some(token), "unexpected token at top level")
-                        .with_context("top-level items")
-                        .with_expected_many([
-                            "import", "extern", "pub", "const", "static", "type", "enum",
-                            "variant", "struct", "proto", "fun", "export",
-                        ])
-                        .with_found_token(Some(token))
-                        .with_help("only declarations are allowed at top level"),
-                );
-            }
+                return Err(ParseError::syntax_at(Some(token), "unexpected token at top level")
+                    .with_context("top-level items")
+                    .with_expected_many([
+                        "import", "extern", "pub", "const", "static", "type", "enum", "variant",
+                        "struct", "proto", "fun", "export",
+                    ])
+                    .with_found_token(Some(token))
+                    .with_help("only declarations are allowed at top level"));
+            },
         }
         for node in &mut nodes[first_node..] {
             let value = std::mem::replace(node, ASTNode::Expression(crate::ast::Expression::Null));
@@ -508,10 +499,7 @@ fn parse_syntax_impl(tokens: &[Token]) -> Result<Vec<ASTNode>, ParseError> {
 fn validate_explicit_variable_types(tokens: &[Token]) -> Result<(), ParseError> {
     let next_significant = |start: usize| {
         (start..tokens.len()).find(|index| {
-            !matches!(
-                tokens[*index].token_type,
-                TokenType::Whitespace | TokenType::Newline
-            )
+            !matches!(tokens[*index].token_type, TokenType::Whitespace | TokenType::Newline)
         })
     };
 

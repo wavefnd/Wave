@@ -28,22 +28,14 @@ fun main() -> i32 {
             .arg(&source)
             .output()
             .unwrap();
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
         let text = fs::read_to_string(root.join(format!("sample.{extension}"))).unwrap();
         if format == "sexpr" {
             assert!(text.starts_with("(ast\n  (schema_version 1)"));
             assert!(text.contains("(function"));
         } else {
-            let value = if format == "json" {
-                wson::parse_json(&text)
-            } else {
-                wson::loads(&text)
-            }
-            .unwrap();
+            let value = if format == "json" { wson::parse_json(&text) } else { wson::loads(&text) }
+                .unwrap();
             assert_eq!(value.get_u64("schema_version"), Some(1));
             assert_eq!(value.get_str("stage"), Some("parsed"));
             assert!(text.contains("340282366920938463463374607431768211456"));
@@ -69,30 +61,19 @@ fn parsed_ast_schema_snapshots_are_deterministic() {
     let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
     let output = std::env::temp_dir().join(format!("wave ast snapshots {}", std::process::id()));
     fs::create_dir_all(&output).unwrap();
-    for (format, extension) in [
-        (None, "ast.wson"),
-        (Some("json"), "ast.json"),
-        (Some("sexpr"), "ast"),
-    ] {
+    for (format, extension) in
+        [(None, "ast.wson"), (Some("json"), "ast.json"), (Some("sexpr"), "ast")]
+    {
         let mut command = Command::new(env!("CARGO_BIN_EXE_wavec"));
         command
             .current_dir(root)
-            .args([
-                "build",
-                "tests/fixtures/ast/parsed.wave",
-                "--emit=ast",
-                "--out-dir",
-            ])
+            .args(["build", "tests/fixtures/ast/parsed.wave", "--emit=ast", "--out-dir"])
             .arg(&output);
         if let Some(format) = format {
             command.args(["--ast-format", format]);
         }
         let result = command.output().unwrap();
-        assert!(
-            result.status.success(),
-            "{}",
-            String::from_utf8_lossy(&result.stderr)
-        );
+        assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stderr));
         let actual = fs::read_to_string(output.join(format!("parsed.{extension}"))).unwrap();
         let expected =
             fs::read_to_string(root.join(format!("tests/fixtures/ast/parsed.{extension}")))

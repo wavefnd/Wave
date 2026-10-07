@@ -112,26 +112,18 @@ fn main() {
         }
     }
 
-    println!(
-        "cargo:rustc-env=WAVE_BUILD_CRT_DIR={}",
-        output_root.display()
-    );
+    println!("cargo:rustc-env=WAVE_BUILD_CRT_DIR={}", output_root.display());
 }
 
 fn build_crt(llvm_mc: &OsString, output_root: &Path, spec: &CrtSpec) {
-    let source_dir = Path::new(spec.source)
-        .parent()
-        .expect("Linux CRT source has an architecture directory");
+    let source_dir =
+        Path::new(spec.source).parent().expect("Linux CRT source has an architecture directory");
     let mut output_dir = output_root.join(spec.target);
     if let Some(abi) = spec.abi {
         output_dir.push(abi);
     }
     fs::create_dir_all(&output_dir).unwrap_or_else(|error| {
-        panic!(
-            "failed to create Linux CRT output directory '{}': {}",
-            output_dir.display(),
-            error
-        )
+        panic!("failed to create Linux CRT output directory '{}': {}", output_dir.display(), error)
     });
 
     for (object_name, source_name) in CRT_OBJECTS {
@@ -139,10 +131,7 @@ fn build_crt(llvm_mc: &OsString, output_root: &Path, spec: &CrtSpec) {
         let output = output_dir.join(object_name);
         let mut command = Command::new(llvm_mc);
         command
-            .arg(format!(
-                "-triple={}",
-                llvm_triple_for_abi(spec.target, spec.abi)
-            ))
+            .arg(format!("-triple={}", llvm_triple_for_abi(spec.target, spec.abi)))
             .arg("-filetype=obj");
         if let Some(attributes) = spec.attributes {
             command.arg(format!("-mattr={attributes}"));
@@ -154,7 +143,7 @@ fn build_crt(llvm_mc: &OsString, output_root: &Path, spec: &CrtSpec) {
         }
         let result = command.arg(&source).arg("-o").arg(&output).output();
         match result {
-            Ok(result) if result.status.success() => {}
+            Ok(result) if result.status.success() => {},
             Ok(result) => panic!(
                 "failed to assemble Linux CRT '{}' for '{}': {}",
                 source.display(),
@@ -202,17 +191,9 @@ fn find_llvm_mc() -> OsString {
         }
     }
 
-    OsString::from(if cfg!(windows) {
-        "llvm-mc.exe"
-    } else {
-        "llvm-mc"
-    })
+    OsString::from(if cfg!(windows) { "llvm-mc.exe" } else { "llvm-mc" })
 }
 
 fn llvm_tool_in(directory: impl AsRef<Path>, name: &str) -> PathBuf {
-    directory.as_ref().join(if cfg!(windows) {
-        format!("{name}.exe")
-    } else {
-        name.to_string()
-    })
+    directory.as_ref().join(if cfg!(windows) { format!("{name}.exe") } else { name.to_string() })
 }

@@ -9,9 +9,7 @@ use parser::{
 fn syntax_error(marked: &str, context: &str, expected: Option<&str>) {
     let start = marked.find('@').unwrap();
     let source = marked.replace('@', "");
-    let tokens = Lexer::new_with_file(&source, "phase1.wave")
-        .tokenize()
-        .unwrap();
+    let tokens = Lexer::new_with_file(&source, "phase1.wave").tokenize().unwrap();
     let error = parse_syntax_with_spans(&tokens).unwrap_err();
     assert_eq!(error.context(), Some(context), "{source}: {error:?}");
     assert_eq!(error.span().unwrap().start, start, "{source}: {error:?}");
@@ -34,9 +32,8 @@ fn local_storage_failures_identify_the_qualifier() {
             Some("var declaration or expression"),
         );
     }
-    let tokens = Lexer::new("const c: i32 = 1; static s: i32 = 2; fun main() {}")
-        .tokenize()
-        .unwrap();
+    let tokens =
+        Lexer::new("const c: i32 = 1; static s: i32 = 2; fun main() {}").tokenize().unwrap();
     TypedProgram::lower(parse_syntax_with_spans(&tokens).unwrap()).unwrap();
 }
 
@@ -50,23 +47,11 @@ fn malformed_match_patterns_and_arms_retain_their_local_cause() {
         ("(x) { 1 @{} }", "'=>'", "match arm"),
         ("(x) { 1 = @{} }", "'=>'", "match arm"),
         ("(x) { 1 => @return; }", "'{'", "match arm body"),
-        (
-            "(x) { V::A(@,) => {} }",
-            "integer literal, case name, or '_'",
-            "match pattern",
-        ),
+        ("(x) { V::A(@,) => {} }", "integer literal, case name, or '_'", "match pattern"),
     ] {
-        syntax_error(
-            &format!("fun f() {{ match {body} }}"),
-            context,
-            Some(expected),
-        );
+        syntax_error(&format!("fun f() {{ match {body} }}"), context, Some(expected));
     }
-    syntax_error(
-        "fun f() { match (x) { _ => {} @_ => {} } }",
-        "match pattern",
-        None,
-    );
+    syntax_error("fun f() { match (x) { _ => {} @_ => {} } }", "match pattern", None);
 }
 
 #[test]
@@ -77,11 +62,7 @@ fn extern_types_preserve_the_type_start_in_single_and_block_forms() {
         ("fun f() -> @array<i32, -1>;", "extern return type"),
     ] {
         syntax_error(&format!("extern(c) {declaration}"), context, Some("type"));
-        syntax_error(
-            &format!("extern(c) {{ {declaration} }}"),
-            context,
-            Some("type"),
-        );
+        syntax_error(&format!("extern(c) {{ {declaration} }}"), context, Some("type"));
     }
 }
 
@@ -103,15 +84,9 @@ fn aliases_are_transparent_for_reads_writes_and_invalid_accesses() {
     let tokens = Lexer::new(source).tokenize().unwrap();
     TypedProgram::lower(parse_syntax_with_spans(&tokens).unwrap()).unwrap();
     for (source, message) in [
-        (
-            "type N = i32; fun f(x: N) { x[0]; }",
-            "index access requires",
-        ),
+        ("type N = i32; fun f(x: N) { x[0]; }", "index access requires"),
         ("type N = i32; fun f(x: N) { deref x; }", "deref expects"),
-        (
-            "struct S { a: i32; } type A = S; fun f(x: A) { x.missing; }",
-            "has no field",
-        ),
+        ("struct S { a: i32; } type A = S; fun f(x: A) { x.missing; }", "has no field"),
     ] {
         let tokens = Lexer::new(source).tokenize().unwrap();
         let error = TypedProgram::lower(parse_syntax_with_spans(&tokens).unwrap()).unwrap_err();
@@ -148,9 +123,7 @@ fn nested_generic_type_grammar_is_exact_and_rejects_malformed_input() {
     );
     assert_eq!(
         token_type_to_wave_type(&parse_type("pkg::Pair<ptr<u8>, array<other::T, 2>>").unwrap()),
-        Some(WaveType::Struct(
-            "pkg::Pair<ptr<u8>, array<other::T, 2>>".into()
-        ))
+        Some(WaveType::Struct("pkg::Pair<ptr<u8>, array<other::T, 2>>".into()))
     );
     assert_eq!(
         split_top_level_generic_args("ptr<array<i32,2>>, pkg::T<u8,u16>"),

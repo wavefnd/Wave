@@ -17,11 +17,10 @@ impl Case {
         fs::create_dir_all(&path).unwrap();
         Self(path)
     }
+
     fn compiler(&self) -> Command {
         let mut cmd = Command::new(env!("CARGO_BIN_EXE_wavec"));
-        cmd.current_dir(&self.0)
-            .arg("--std-root")
-            .arg(root().join("std"));
+        cmd.current_dir(&self.0).arg("--std-root").arg(root().join("std"));
         cmd
     }
 }
@@ -33,12 +32,15 @@ impl Drop for Case {
 fn root() -> PathBuf {
     PathBuf::from(env!("CARGO_MANIFEST_DIR"))
 }
+
 fn fixture(name: &str) -> PathBuf {
     root().join("tests/fixtures/native_providers").join(name)
 }
+
 fn supported(target: &str) -> bool {
     llvm::codegen::target::target_spec_for_triple(target).is_some()
 }
+
 fn checked(cmd: &mut Command, context: &str, dir: &Path) {
     let stdout = dir.join("stdout.log");
     let stderr = dir.join("stderr.log");
@@ -70,24 +72,19 @@ fn checked(cmd: &mut Command, context: &str, dir: &Path) {
         fs::read_to_string(stderr).unwrap()
     );
 }
+
 fn build(case: &Case, source: &Path, target: &str, opt: &str, output: &Path, object: bool) {
     checked(
         case.compiler()
             .arg("build")
             .arg(source)
-            .args([
-                "--target",
-                target,
-                opt,
-                "--emit",
-                if object { "obj" } else { "bin" },
-                "-o",
-            ])
+            .args(["--target", target, opt, "--emit", if object { "obj" } else { "bin" }, "-o"])
             .arg(output),
         &format!("{target} {opt} {} build", source.display()),
         &case.0,
     );
 }
+
 fn host_target() -> String {
     let os = match std::env::consts::OS {
         "macos" => "apple-darwin",
@@ -164,10 +161,7 @@ fn loongarch_attribute_aliases_select_identical_declarations() {
     let source = case.0.join("alias.wave");
     fs::write(&source, "#[target(arch=\" LoOnG64 \")]\nfun alias() -> i32 { return 7; }\n#[target(arch=\"loongarch64\")]\nfun canonical() -> i32 { return alias(); }\nfun main() -> i32 { return canonical(); }\n").unwrap();
     checked(
-        case.compiler()
-            .arg("build")
-            .arg(source)
-            .args(["--target", target, "--emit=check"]),
+        case.compiler().arg("build").arg(source).args(["--target", target, "--emit=check"]),
         target,
         &case.0,
     );
@@ -212,21 +206,11 @@ fn native_provider_fixtures_compile_and_run_on_their_host() {
                 "loongarch64-unknown-linux-gnu",
             ],
         ),
-        (
-            "macos_memory.wave",
-            vec!["x86_64-apple-darwin", "aarch64-apple-darwin"],
-        ),
-        (
-            "macos_event.wave",
-            vec!["x86_64-apple-darwin", "aarch64-apple-darwin"],
-        ),
+        ("macos_memory.wave", vec!["x86_64-apple-darwin", "aarch64-apple-darwin"]),
+        ("macos_event.wave", vec!["x86_64-apple-darwin", "aarch64-apple-darwin"]),
         (
             "random.wave",
-            vec![
-                "x86_64-pc-windows-msvc",
-                "aarch64-pc-windows-msvc",
-                "x86_64-unknown-freebsd",
-            ],
+            vec!["x86_64-pc-windows-msvc", "aarch64-pc-windows-msvc", "x86_64-unknown-freebsd"],
         ),
     ] {
         for target in targets {
@@ -252,11 +236,7 @@ fn native_provider_fixtures_compile_and_run_on_their_host() {
 // Exact OS failures and historical clock values are injected at the OS ABI
 // boundary. The production Wave bodies are copied unchanged except imports
 // and the system calling-convention spelling on the Linux test host.
-#[cfg(all(
-    target_os = "linux",
-    target_arch = "x86_64",
-    feature = "llvm-target-x86"
-))]
+#[cfg(all(target_os = "linux", target_arch = "x86_64", feature = "llvm-target-x86"))]
 #[test]
 fn native_provider_os_boundary_failures() {
     let case = Case::new();
@@ -278,9 +258,7 @@ fn native_provider_os_boundary_failures() {
             let types = unix.find("pub struct UnixListener").unwrap();
             let end_types = unix[types..].find("#[target").unwrap() + types;
             text += &unix[types..end_types];
-            let windows = unix
-                .find("#[target(os=\"windows\")]\nfun _unix_socket")
-                .unwrap();
+            let windows = unix.find("#[target(os=\"windows\")]\nfun _unix_socket").unwrap();
             let start = windows + "#[target(os=\"windows\")]\n".len();
             let end = unix[start..].find('\n').unwrap() + start;
             text += &unix[start..end];
@@ -312,12 +290,10 @@ extern(c) fun net_close(fd: i64) -> i64;
             );
         }
         if name.ends_with("random") {
-            text += &fs::read_to_string(root().join("std/random/fill.wave"))
-                .unwrap()
-                .replace(
-                    "import(\"std::sys::random\")::{sys_random_available, sys_random_read};",
-                    "",
-                );
+            text += &fs::read_to_string(root().join("std/random/fill.wave")).unwrap().replace(
+                "import(\"std::sys::random\")::{sys_random_available, sys_random_read};",
+                "",
+            );
         }
         text += &fs::read_to_string(fixture(&format!("{name}_mock.wave"))).unwrap();
         let source = case.0.join(format!("{name}.wave"));
@@ -334,14 +310,7 @@ extern(c) fun net_close(fd: i64) -> i64;
         );
         for opt in ["-O0", "-O2"] {
             let object = case.0.join("probe.o");
-            build(
-                &case,
-                &source,
-                "x86_64-unknown-linux-gnu",
-                opt,
-                &object,
-                true,
-            );
+            build(&case, &source, "x86_64-unknown-linux-gnu", opt, &object, true);
             let binary = case.0.join("probe");
             checked(
                 Command::new("clang")
@@ -354,11 +323,7 @@ extern(c) fun net_close(fd: i64) -> i64;
                 &format!("{name} {opt} link"),
                 &case.0,
             );
-            checked(
-                &mut Command::new(binary),
-                &format!("{name} {opt} run"),
-                &case.0,
-            );
+            checked(&mut Command::new(binary), &format!("{name} {opt} run"), &case.0);
         }
     }
 }
@@ -403,13 +368,7 @@ fn darwin_bidirectional_c_abi_fixtures() {
                 checked(
                     Command::new("clang")
                         .arg(format!("--target={target}"))
-                        .args([
-                            "-ffreestanding",
-                            "-fno-builtin",
-                            "-fno-stack-protector",
-                            opt,
-                            "-c",
-                        ])
+                        .args(["-ffreestanding", "-fno-builtin", "-fno-stack-protector", opt, "-c"])
                         .arg(source.with_extension("c"))
                         .arg("-o")
                         .arg(&c_object),
@@ -417,30 +376,15 @@ fn darwin_bidirectional_c_abi_fixtures() {
                     &case.0,
                 );
                 let object = case.0.join("wave.o");
-                build(
-                    &case,
-                    &source.with_extension("wave"),
-                    target,
-                    opt,
-                    &object,
-                    true,
-                );
+                build(&case, &source.with_extension("wave"), target, opt, &object, true);
                 if required && target == host_target() {
                     let binary = case.0.join("abi");
                     checked(
-                        Command::new("clang")
-                            .arg(&c_object)
-                            .arg(&object)
-                            .arg("-o")
-                            .arg(&binary),
+                        Command::new("clang").arg(&c_object).arg(&object).arg("-o").arg(&binary),
                         &format!("{context} link"),
                         &case.0,
                     );
-                    checked(
-                        &mut Command::new(binary),
-                        &format!("{context} run"),
-                        &case.0,
-                    );
+                    checked(&mut Command::new(binary), &format!("{context} run"), &case.0);
                 }
             }
         }
@@ -473,24 +417,14 @@ fn full_range_trigonometry_matches_high_precision_references() {
     let rows: Vec<Vec<u64>> = include_str!("fixtures/native_providers/trig_reference.txt")
         .lines()
         .filter(|s| !s.starts_with('#'))
-        .map(|s| {
-            s.split_whitespace()
-                .map(|n| u64::from_str_radix(n, 16).unwrap())
-                .collect()
-        })
+        .map(|s| s.split_whitespace().map(|n| u64::from_str_radix(n, 16).unwrap()).collect())
         .collect();
     let mut source = String::from("import(\"std::math::trig\")::{SinCosF64, SinCosF32, sin_cos_f64, sin_cos_f32, sin_f64, cos_f64, tan_f64, sin_f32, cos_f32, tan_f32, wrap_angle_pi_f64, MATH_PI_F64};\nimport(\"std::math::float\")::{abs_f64, float_from_bits_f64, float_from_bits_f32, float_to_bits_f64, float_to_bits_f32, nan_f64, infinity_f64, is_nan_f64};\n");
-    for (column, name) in ["inputs", "sines", "cosines", "tangents"]
-        .iter()
-        .enumerate()
-    {
+    for (column, name) in ["inputs", "sines", "cosines", "tangents"].iter().enumerate() {
         source += &format!(
             "static {name}: array<u64, {}> = [{}];\n",
             rows.len(),
-            rows.iter()
-                .map(|r| r[column].to_string())
-                .collect::<Vec<_>>()
-                .join(",")
+            rows.iter().map(|r| r[column].to_string()).collect::<Vec<_>>().join(",")
         );
     }
     source += &format!("const CASES: i32 = {};\n", rows.len());
@@ -498,24 +432,13 @@ fn full_range_trigonometry_matches_high_precision_references() {
         include_str!("fixtures/native_providers/trig_reference_f32.txt")
             .lines()
             .filter(|s| !s.starts_with('#'))
-            .map(|s| {
-                s.split_whitespace()
-                    .map(|n| u64::from_str_radix(n, 16).unwrap())
-                    .collect()
-            })
+            .map(|s| s.split_whitespace().map(|n| u64::from_str_radix(n, 16).unwrap()).collect())
             .collect();
-    for (column, name) in ["inputs32", "sines32", "cosines32", "tangents32"]
-        .iter()
-        .enumerate()
-    {
+    for (column, name) in ["inputs32", "sines32", "cosines32", "tangents32"].iter().enumerate() {
         source += &format!(
             "static {name}: array<u64, {}> = [{}];\n",
             single_rows.len(),
-            single_rows
-                .iter()
-                .map(|r| r[column].to_string())
-                .collect::<Vec<_>>()
-                .join(",")
+            single_rows.iter().map(|r| r[column].to_string()).collect::<Vec<_>>().join(",")
         );
     }
     source += &format!("const SINGLE_CASES: i32 = {};\n", single_rows.len());
@@ -538,14 +461,7 @@ fn native_wide_arithmetic_is_freestanding_and_matches_reference_values() {
     let case = Case::new();
     for opt in ["-O0", "-O2"] {
         let output = case.0.join("wide.exe");
-        build(
-            &case,
-            &fixture("wide_arithmetic.wave"),
-            &target,
-            opt,
-            &output,
-            false,
-        );
+        build(&case, &fixture("wide_arithmetic.wave"), &target, opt, &output, false);
         checked(&mut Command::new(output), "native i128 runtime", &case.0);
     }
 }
@@ -618,9 +534,7 @@ fn native_arithmetic_helpers_preserve_direct_lowering_and_private_symbol_ownersh
             "native direct arithmetic",
             &case.0,
         );
-        assert!(!fs::read_to_string(case.0.join("direct.ll"))
-            .unwrap()
-            .contains("__wave.runtime."));
+        assert!(!fs::read_to_string(case.0.join("direct.ll")).unwrap().contains("__wave.runtime."));
     }
     fs::write(&source, "extern(c, \"__wave.runtime.udiv.i128.i128\") fun user_symbol() -> u64; export(c) fun first(a: u128, b: u128) -> u128 { return a / b; } export(c) fun second(a: u128, b: u128) -> u128 { return a / b; } export(c) fun user() -> u64 { return user_symbol(); }").unwrap();
     checked(
@@ -634,36 +548,21 @@ fn native_arithmetic_helpers_preserve_direct_lowering_and_private_symbol_ownersh
     );
     let ir = fs::read_to_string(case.0.join("direct.ll")).unwrap();
     assert_eq!(
-        ir.matches("define private i128 @__wave.runtime.udiv.i128.i128.")
-            .count(),
+        ir.matches("define private i128 @__wave.runtime.udiv.i128.i128.").count(),
         1,
         "{ir}"
     );
-    assert!(
-        ir.contains("declare i64 @__wave.runtime.udiv.i128.i128()"),
-        "{ir}"
-    );
+    assert!(ir.contains("declare i64 @__wave.runtime.udiv.i128.i128()"), "{ir}");
     assert!(!ir.contains("__wave.runtime.sdiv"));
 }
 
-#[cfg(all(
-    target_os = "linux",
-    target_arch = "x86_64",
-    feature = "llvm-target-x86"
-))]
+#[cfg(all(target_os = "linux", target_arch = "x86_64", feature = "llvm-target-x86"))]
 #[test]
 fn native_i128_runtime_preserves_the_public_c_abi() {
     let case = Case::new();
     for opt in ["-O0", "-O2"] {
         let object = case.0.join("wide.o");
-        build(
-            &case,
-            &fixture("wide_abi.wave"),
-            &host_target(),
-            opt,
-            &object,
-            true,
-        );
+        build(&case, &fixture("wide_abi.wave"), &host_target(), opt, &object, true);
         let binary = case.0.join("wide-c");
         checked(
             Command::new("clang")
@@ -695,10 +594,7 @@ fn network_error_values_remain_available_without_a_socket_provider() {
             continue;
         }
         checked(
-            case.compiler()
-                .arg("check")
-                .arg(&source)
-                .args(["--target", target]),
+            case.compiler().arg("check").arg(&source).args(["--target", target]),
             "portable network error values",
             &case.0,
         );
@@ -754,10 +650,6 @@ fun main() -> i32 {
     for opt in ["-O0", "-O2"] {
         let output = case.0.join("cwd-contract.exe");
         build(&case, &source, &target, opt, &output, false);
-        checked(
-            &mut Command::new(output),
-            "getcwd provider convention",
-            &case.0,
-        );
+        checked(&mut Command::new(output), "getcwd provider convention", &case.0);
     }
 }

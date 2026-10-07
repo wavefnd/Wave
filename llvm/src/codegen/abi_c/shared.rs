@@ -116,13 +116,13 @@ pub(super) fn flatten_leaf_types<'ctx>(t: BasicTypeEnum<'ctx>, out: &mut Vec<Bas
                 let f = st.get_field_type_at_index(i).unwrap();
                 flatten_leaf_types(f, out);
             }
-        }
+        },
         BasicTypeEnum::ArrayType(at) => {
             let elem = at.get_element_type();
             for _ in 0..at.len() {
                 flatten_leaf_types(elem, out);
             }
-        }
+        },
         _ => out.push(t),
     }
 }

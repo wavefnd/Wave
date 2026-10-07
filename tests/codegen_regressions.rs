@@ -31,12 +31,8 @@ fn wavec_bin() -> PathBuf {
 
 fn temp_case_dir(name: &str) -> PathBuf {
     let sequence = NEXT_TEMP_CASE.fetch_add(1, Ordering::Relaxed);
-    let dir = std::env::temp_dir().join(format!(
-        "wavec-{}-{}-{}",
-        name,
-        std::process::id(),
-        sequence
-    ));
+    let dir =
+        std::env::temp_dir().join(format!("wavec-{}-{}-{}", name, std::process::id(), sequence));
     let _ = fs::remove_dir_all(&dir);
     fs::create_dir_all(&dir).unwrap();
     dir
@@ -164,14 +160,8 @@ fn compact_variants_preserve_constants_statics_and_nested_payloads() {
             dir.join(target).as_os_str(),
         ]);
         let ir = fs::read_to_string(dir.join(target).join("test126.ll")).unwrap();
-        let layout = ir
-            .lines()
-            .find(|line| line.starts_with("%variant.Payload ="))
-            .unwrap();
-        assert!(
-            layout.contains("[32 x i8]") && layout.contains("[0 x"),
-            "{target}: {layout}"
-        );
+        let layout = ir.lines().find(|line| line.starts_with("%variant.Payload =")).unwrap();
+        assert!(layout.contains("[32 x i8]") && layout.contains("[0 x"), "{target}: {layout}");
     }
 }
 
@@ -179,10 +169,7 @@ fn compact_variants_preserve_constants_statics_and_nested_payloads() {
 fn type_layout_queries_follow_the_target_and_generic_storage() {
     let dir = temp_case_dir("type-layout-queries");
     let home = dir.join("home");
-    copy_tree(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("std"),
-        &home.join(".wave/lib/wave/std"),
-    );
+    copy_tree(&Path::new(env!("CARGO_MANIFEST_DIR")).join("std"), &home.join(".wave/lib/wave/std"));
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/cases/shared/test124.wave");
     for optimization in ["-O0", "-O2"] {
         let output = wavec_command()
@@ -195,11 +182,7 @@ fn type_layout_queries_follow_the_target_and_generic_storage() {
             .arg(dir.join(optimization))
             .output()
             .unwrap();
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
     }
     let source = write_wave(
         &dir,
@@ -240,17 +223,9 @@ fun main() -> i32 { return 0; }
             ("record_size", 16),
             ("array_size", 48),
         ] {
-            let body = ir
-                .split(&format!("@{function}("))
-                .nth(1)
-                .unwrap()
-                .split('}')
-                .next()
-                .unwrap();
-            assert!(
-                body.contains(&format!("ret i64 {value}")),
-                "{target}: {function}: {body}"
-            );
+            let body =
+                ir.split(&format!("@{function}(")).nth(1).unwrap().split('}').next().unwrap();
+            assert!(body.contains(&format!("ret i64 {value}")), "{target}: {function}: {body}");
         }
     }
     for query in [
@@ -262,10 +237,7 @@ fun main() -> i32 { return 0; }
         let source = write_wave(&dir, "invalid.wave", &format!("fun main() {{ {query}; }}"));
         let output = wavec_command().arg("check").arg(source).output().unwrap();
         let stderr = String::from_utf8_lossy(&output.stderr);
-        assert!(
-            !output.status.success() && !stderr.contains("panicked"),
-            "{query}: {stderr}"
-        );
+        assert!(!output.status.success() && !stderr.contains("panicked"), "{query}: {stderr}");
     }
 }
 
@@ -273,10 +245,7 @@ fun main() -> i32 { return 0; }
 fn uleb128_cursors_preserve_state_on_failure() {
     let dir = temp_case_dir("uleb128-cursors");
     let home = dir.join("home");
-    copy_tree(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("std"),
-        &home.join(".wave/lib/wave/std"),
-    );
+    copy_tree(&Path::new(env!("CARGO_MANIFEST_DIR")).join("std"), &home.join(".wave/lib/wave/std"));
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/cases/shared/test125.wave");
     for optimization in ["-O0", "-O2"] {
         let output = wavec_command()
@@ -289,11 +258,7 @@ fn uleb128_cursors_preserve_state_on_failure() {
             .arg(dir.join(optimization))
             .output()
             .unwrap();
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
     }
 }
 
@@ -313,11 +278,7 @@ fn os_randomness_preserves_bounds_and_partial_failure_counts() {
         .arg(dir.join("native"))
         .output()
         .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
     fs::write(
         std.join("sys/random.wave"),
         r#"
@@ -356,21 +317,14 @@ fun main() -> i32 {
         .arg(dir.join("partial"))
         .output()
         .unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
 }
 
 #[test]
 fn linux_numeric_and_explicit_table_resolvers_are_libc_independent() {
     let dir = temp_case_dir("linux-numeric-resolver");
     let home = dir.join("home");
-    copy_tree(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("std"),
-        &home.join(".wave/lib/wave/std"),
-    );
+    copy_tree(&Path::new(env!("CARGO_MANIFEST_DIR")).join("std"), &home.join(".wave/lib/wave/std"));
     let fixture = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/linux_resolver");
     for target in [
         "x86_64-unknown-linux-gnu",
@@ -393,38 +347,22 @@ fn linux_numeric_and_explicit_table_resolvers_are_libc_independent() {
             .arg(dir.join(target))
             .output()
             .unwrap();
-        assert!(
-            output.status.success(),
-            "{target}: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        assert!(output.status.success(), "{target}: {}", String::from_utf8_lossy(&output.stderr));
         let ir = fs::read_to_string(dir.join(target).join("numeric_and_table.ll")).unwrap();
         for symbol in ["getaddrinfo", "freeaddrinfo", "getpagesize"] {
-            assert!(
-                !ir.contains(&format!("@{symbol}(")),
-                "unexpected libc import {symbol}"
-            );
+            assert!(!ir.contains(&format!("@{symbol}(")), "unexpected libc import {symbol}");
         }
     }
     if cfg!(all(target_os = "linux", target_arch = "x86_64")) {
         let runtime = dir.join("start.o");
         let compile = Command::new("cc")
-            .args([
-                "-ffreestanding",
-                "-fno-builtin",
-                "-fno-stack-protector",
-                "-c",
-            ])
+            .args(["-ffreestanding", "-fno-builtin", "-fno-stack-protector", "-c"])
             .arg(fixture.join("start.c"))
             .arg("-o")
             .arg(&runtime)
             .output()
             .unwrap();
-        assert!(
-            compile.status.success(),
-            "{}",
-            String::from_utf8_lossy(&compile.stderr)
-        );
+        assert!(compile.status.success(), "{}", String::from_utf8_lossy(&compile.stderr));
         let executable = dir.join("resolver");
         let link = Command::new("cc")
             .args(["-nostdlib", "-static", "-Wl,-e,_start"])
@@ -434,11 +372,7 @@ fn linux_numeric_and_explicit_table_resolvers_are_libc_independent() {
             .arg(&executable)
             .output()
             .unwrap();
-        assert!(
-            link.status.success(),
-            "{}",
-            String::from_utf8_lossy(&link.stderr)
-        );
+        assert!(link.status.success(), "{}", String::from_utf8_lossy(&link.stderr));
         assert!(Command::new(executable).status().unwrap().success());
     }
 }
@@ -447,10 +381,7 @@ fn linux_numeric_and_explicit_table_resolvers_are_libc_independent() {
 fn windows_filesystem_errors_and_unicode_paths_use_native_apis() {
     let dir = temp_case_dir("windows-filesystem");
     let home = dir.join("home");
-    copy_tree(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("std"),
-        &home.join(".wave/lib/wave/std"),
-    );
+    copy_tree(&Path::new(env!("CARGO_MANIFEST_DIR")).join("std"), &home.join(".wave/lib/wave/std"));
     for fixture in ["errors", "unicode"] {
         let source = Path::new(env!("CARGO_MANIFEST_DIR"))
             .join(format!("tests/fixtures/windows_fs/{fixture}.wave"));
@@ -476,12 +407,9 @@ fn windows_filesystem_errors_and_unicode_paths_use_native_apis() {
                 String::from_utf8_lossy(&output.stderr)
             );
             let ir = fs::read_to_string(destination.join(format!("{fixture}.ll"))).unwrap();
-            for symbol in [
-                "CreateFileW",
-                "MultiByteToWideChar",
-                "WideCharToMultiByte",
-                "GetLastError",
-            ] {
+            for symbol in
+                ["CreateFileW", "MultiByteToWideChar", "WideCharToMultiByte", "GetLastError"]
+            {
                 assert!(ir.contains(&format!("@{symbol}(")), "missing {symbol}");
             }
             assert!(!ir.contains("@CreateFileA("));
@@ -496,11 +424,7 @@ fn windows_filesystem_errors_and_unicode_paths_use_native_apis() {
                 .arg(&output)
                 .output()
                 .unwrap();
-            assert!(
-                compile.status.success(),
-                "{}",
-                String::from_utf8_lossy(&compile.stderr)
-            );
+            assert!(compile.status.success(), "{}", String::from_utf8_lossy(&compile.stderr));
             let run = Command::new(output).current_dir(&dir).output().unwrap();
             assert!(
                 run.status.success(),
@@ -517,30 +441,13 @@ fn windows_filesystem_errors_and_unicode_paths_use_native_apis() {
 fn wasm_reclaiming_allocators_emit_for_both_pointer_widths() {
     let dir = temp_case_dir("wasm-reclaiming-allocators");
     let home = dir.join("home");
-    copy_tree(
-        &Path::new(env!("CARGO_MANIFEST_DIR")).join("std"),
-        &home.join(".wave/lib/wave/std"),
-    );
+    copy_tree(&Path::new(env!("CARGO_MANIFEST_DIR")).join("std"), &home.join(".wave/lib/wave/std"));
     for (target, case, intrinsic) in [
-        (
-            "wasm32-unknown-unknown",
-            "wasm/wasm32/test11.wave",
-            "llvm.wasm.memory.grow.i32",
-        ),
-        (
-            "wasm32-wasip1",
-            "wasi/wasm32/test11.wave",
-            "llvm.wasm.memory.grow.i32",
-        ),
-        (
-            "wasm64-unknown-unknown",
-            "wasm/wasm64/test12.wave",
-            "llvm.wasm.memory.grow.i64",
-        ),
+        ("wasm32-unknown-unknown", "wasm/wasm32/test11.wave", "llvm.wasm.memory.grow.i32"),
+        ("wasm32-wasip1", "wasi/wasm32/test11.wave", "llvm.wasm.memory.grow.i32"),
+        ("wasm64-unknown-unknown", "wasm/wasm64/test12.wave", "llvm.wasm.memory.grow.i64"),
     ] {
-        let source = Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("tests/cases")
-            .join(case);
+        let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/cases").join(case);
         let output = wavec_command()
             .env("HOME", &home)
             .arg("build")
@@ -552,15 +459,9 @@ fn wasm_reclaiming_allocators_emit_for_both_pointer_widths() {
             .arg(dir.join(target))
             .output()
             .unwrap();
-        assert!(
-            output.status.success(),
-            "{target}: {}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        assert!(output.status.success(), "{target}: {}", String::from_utf8_lossy(&output.stderr));
         let ir = fs::read_to_string(
-            dir.join(target)
-                .join(Path::new(case).file_stem().unwrap())
-                .with_extension("ll"),
+            dir.join(target).join(Path::new(case).file_stem().unwrap()).with_extension("ll"),
         )
         .unwrap();
         assert!(ir.contains(intrinsic), "{target}: {ir}");
@@ -664,10 +565,7 @@ fun main() -> i32 { return get_current_process_id() as i32; }
         assert!(ir.contains("@GetCurrentProcessId"), "{target}: {ir}");
     }
 
-    if cfg!(any(
-        feature = "llvm-target-all",
-        feature = "llvm-target-aarch64"
-    )) {
+    if cfg!(any(feature = "llvm-target-all", feature = "llvm-target-aarch64")) {
         let arm64_bin = dir.join("system-arm64.exe");
         let (link_plan, stderr) = run_wavec_capture([
             OsStr::new("build"),
@@ -681,10 +579,7 @@ fun main() -> i32 { return get_current_process_id() as i32; }
         assert!(stderr.trim().is_empty(), "{stderr}");
         assert!(link_plan.contains("lld-link"), "{link_plan}");
     }
-    if !cfg!(any(
-        feature = "llvm-target-all",
-        feature = "llvm-target-x86"
-    )) {
+    if !cfg!(any(feature = "llvm-target-all", feature = "llvm-target-x86")) {
         return;
     }
     let linux_out = dir.join("linux");
@@ -705,39 +600,22 @@ fn incompatible_std_is_rejected_from_an_isolated_home() {
     let home = dir.join("home");
     let std_root = home.join(".wave/lib/wave/std");
     fs::create_dir_all(std_root.join("string")).unwrap();
-    fs::write(
-        std_root.join("manifest.json"),
-        r#"{"name":"std","compatibility_revision":0}"#,
-    )
-    .unwrap();
-    fs::write(
-        std_root.join("string/len.wave"),
-        "pub fun len(value: str) -> i64 { return 0; }\n",
-    )
-    .unwrap();
+    fs::write(std_root.join("manifest.json"), r#"{"name":"std","compatibility_revision":0}"#)
+        .unwrap();
+    fs::write(std_root.join("string/len.wave"), "pub fun len(value: str) -> i64 { return 0; }\n")
+        .unwrap();
     let source = write_wave(
         &dir,
         "main.wave",
         "import(\"std::string::len\")::{len};\nfun main() { len(\"x\"); }\n",
     );
 
-    let output = wavec_command()
-        .env("HOME", &home)
-        .arg("check")
-        .arg(&source)
-        .output()
-        .unwrap();
+    let output = wavec_command().env("HOME", &home).arg("check").arg(&source).output().unwrap();
     assert!(!output.status.success());
     let error = String::from_utf8_lossy(&output.stderr);
+    assert!(error.contains("installed std compatibility revision 0"), "{error}");
     assert!(
-        error.contains("installed std compatibility revision 0"),
-        "{error}"
-    );
-    assert!(
-        error.contains(&format!(
-            "requires {}",
-            parser::import::STD_COMPATIBILITY_REVISION
-        )),
+        error.contains(&format!("requires {}", parser::import::STD_COMPATIBILITY_REVISION)),
         "{error}"
     );
     assert!(error.contains("wavec update std"), "{error}");
@@ -829,18 +707,12 @@ fun infer_nested() {
 }
 
 fn bytes_contains(haystack: &[u8], needle: &[u8]) -> bool {
-    haystack
-        .windows(needle.len())
-        .any(|window| window == needle)
+    haystack.windows(needle.len()).any(|window| window == needle)
 }
 
 fn riscv64_elf_flags(path: &Path) -> u32 {
     let object = fs::read(path).unwrap();
-    assert!(
-        object.len() >= 52,
-        "truncated ELF object: {}",
-        path.display()
-    );
+    assert!(object.len() >= 52, "truncated ELF object: {}", path.display());
     assert_eq!(&object[..4], b"\x7fELF", "{}", path.display());
     assert_eq!(object[4], 2, "expected ELF64 object: {}", path.display());
     assert_eq!(u16::from_le_bytes([object[18], object[19]]), 243);
@@ -850,11 +722,7 @@ fn riscv64_elf_flags(path: &Path) -> u32 {
 #[cfg(any(feature = "llvm-target-all", feature = "llvm-target-loongarch"))]
 fn loongarch64_elf_flags(path: &Path) -> u32 {
     let object = fs::read(path).unwrap();
-    assert!(
-        object.len() >= 52,
-        "truncated ELF object: {}",
-        path.display()
-    );
+    assert!(object.len() >= 52, "truncated ELF object: {}", path.display());
     assert_eq!(&object[..4], b"\x7fELF", "{}", path.display());
     assert_eq!(object[4], 2, "expected ELF64 object: {}", path.display());
     assert_eq!(u16::from_le_bytes([object[18], object[19]]), 258);
@@ -936,14 +804,8 @@ fn retired_let_declarations_are_rejected() {
     let dir = temp_case_dir("retired-let-syntax");
     let cases = [
         ("let.wave", "fun main() { let value: i32 = 1; }\n"),
-        (
-            "let_mut.wave",
-            "fun main() { let mut value: i32 = 1; value += 1; }\n",
-        ),
-        (
-            "for_let.wave",
-            "fun main() { for (let index: i32 = 0; index < 1; index += 1) {} }\n",
-        ),
+        ("let_mut.wave", "fun main() { let mut value: i32 = 1; value += 1; }\n"),
+        ("for_let.wave", "fun main() { for (let index: i32 = 0; index < 1; index += 1) {} }\n"),
     ];
 
     for (file_name, source) in cases {
@@ -1012,12 +874,7 @@ fun main() {
 "#,
     );
     let mapping = OsString::from(format!("add={}", package.display()));
-    run_wavec([
-        OsStr::new("check"),
-        entry.as_os_str(),
-        OsStr::new("--dep"),
-        mapping.as_os_str(),
-    ]);
+    run_wavec([OsStr::new("check"), entry.as_os_str(), OsStr::new("--dep"), mapping.as_os_str()]);
 
     let selected_private = write_wave(
         &dir,
@@ -1030,11 +887,7 @@ fun main() {
         OsStr::new("--dep"),
         mapping.as_os_str(),
     ]);
-    assert!(
-        error.contains("symbol 'internal_sum' is private in module 'add'"),
-        "{}",
-        error
-    );
+    assert!(error.contains("symbol 'internal_sum' is private in module 'add'"), "{}", error);
 
     let qualified_private = write_wave(
         &dir,
@@ -1047,11 +900,7 @@ fun main() {
         OsStr::new("--dep"),
         mapping.as_os_str(),
     ]);
-    assert!(
-        error.contains("symbol 'internal_sum' is private in module 'add'"),
-        "{}",
-        error
-    );
+    assert!(error.contains("symbol 'internal_sum' is private in module 'add'"), "{}", error);
 }
 
 #[test]
@@ -1117,10 +966,7 @@ fun main() -> i32 { return logical_shift(0x80000000 as u32) as i32; }
         dir.as_os_str(),
     ]);
     let ir = fs::read_to_string(dir.join("shift.ll")).unwrap();
-    assert!(
-        ir.contains("lshr i32"),
-        "unsigned shift must use lshr:\n{ir}"
-    );
+    assert!(ir.contains("lshr i32"), "unsigned shift must use lshr:\n{ir}");
     assert!(ir.contains("ashr i32"), "signed shift must use ashr:\n{ir}");
 }
 
@@ -1171,24 +1017,15 @@ fun main() -> i32 {
     ]);
     let ir = fs::read_to_string(dir.join("integer_ops.ll")).unwrap();
     for instruction in ["udiv i32", "urem i32", "icmp ugt i32"] {
-        assert!(
-            ir.contains(instruction),
-            "unsigned integers must use {instruction}:\n{ir}"
-        );
+        assert!(ir.contains(instruction), "unsigned integers must use {instruction}:\n{ir}");
     }
-    assert!(
-        ir.contains("zext i1"),
-        "boolean comparison results must normalize true to one:\n{ir}"
-    );
+    assert!(ir.contains("zext i1"), "boolean comparison results must normalize true to one:\n{ir}");
     assert!(
         ir.contains("lshr i16"),
         "nested u16 bitwise expressions must retain unsigned shift semantics:\n{ir}"
     );
     for instruction in ["sdiv i32", "srem i32", "icmp sgt i32"] {
-        assert!(
-            ir.contains(instruction),
-            "signed integers must use {instruction}:\n{ir}"
-        );
+        assert!(ir.contains(instruction), "signed integers must use {instruction}:\n{ir}");
     }
     run_native_wave(&source);
 
@@ -1198,10 +1035,7 @@ fun main() -> i32 {
         "fun mask(value: u16) -> u16 { return value & 0x10000; }\nfun main() {}\n",
     );
     let error = run_wavec_expect_failure([OsStr::new("check"), invalid_literal.as_os_str()]);
-    assert!(
-        error.contains("integer literal `0x10000` does not fit `u16`"),
-        "{error}"
-    );
+    assert!(error.contains("integer literal `0x10000` does not fit `u16`"), "{error}");
 }
 
 #[test]
@@ -1230,14 +1064,8 @@ fun main() -> i32 {
         dir.as_os_str(),
     ]);
     let ir = fs::read_to_string(dir.join("widen.ll")).unwrap();
-    assert!(
-        ir.contains("zext i8"),
-        "unsigned widening must use zext:\n{ir}"
-    );
-    assert!(
-        ir.contains("sext i8"),
-        "signed widening must use sext:\n{ir}"
-    );
+    assert!(ir.contains("zext i8"), "unsigned widening must use zext:\n{ir}");
+    assert!(ir.contains("sext i8"), "signed widening must use sext:\n{ir}");
     assert!(
         ir.contains("ret i64 9221120237041090560"),
         "an explicitly cast wide literal must retain all target bits:\n{ir}"
@@ -1386,15 +1214,8 @@ fun main() -> i32 {
         ir.matches("zext i8").count() >= 4,
         "implicit unsigned widening must use zext in every value context:\n{ir}"
     );
-    assert!(
-        ir.contains("idx_zext"),
-        "unsigned array index must zero-extend:\n{ir}"
-    );
-    for (function, width) in [
-        ("add_offset", 8),
-        ("add_offset_left", 8),
-        ("add_offset_u32", 32),
-    ] {
+    assert!(ir.contains("idx_zext"), "unsigned array index must zero-extend:\n{ir}");
+    for (function, width) in [("add_offset", 8), ("add_offset_left", 8), ("add_offset_u32", 32)] {
         let body = ir
             .split(&format!("define ptr @{function}("))
             .nth(1)
@@ -1529,11 +1350,7 @@ fun main() -> i32 {
         .unwrap();
     child.stdin.take().unwrap().write_all(b"73\n").unwrap();
     let output = child.wait_with_output().unwrap();
-    assert!(
-        output.status.success(),
-        "{}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
 }
 
 #[test]
@@ -1564,10 +1381,7 @@ fun main() -> i32 {
 "#,
     );
     let mut targets = vec![("x86_64-unknown-linux-gnu", 64)];
-    if cfg!(any(
-        feature = "llvm-target-all",
-        feature = "llvm-target-wasm"
-    )) {
+    if cfg!(any(feature = "llvm-target-all", feature = "llvm-target-wasm")) {
         targets.push(("wasm32-unknown-unknown", 32));
         targets.push(("wasm64-unknown-unknown", 64));
     }
@@ -1588,34 +1402,17 @@ fun main() -> i32 {
             ("narrow_unsigned", "zext", "i8"),
             ("widest_unsigned", "trunc", "i128"),
         ] {
-            let body = ir
-                .split(&format!("@{function}("))
-                .nth(1)
-                .unwrap()
-                .split('}')
-                .next()
-                .unwrap();
+            let body =
+                ir.split(&format!("@{function}(")).nth(1).unwrap().split('}').next().unwrap();
             assert!(
                 body.contains(&format!("{instruction} {operand}"))
                     && body.contains(&format!("to i{width}")),
                 "{target}: {body}"
             );
         }
-        let body = ir
-            .split("@word_unsigned(")
-            .nth(1)
-            .unwrap()
-            .split('}')
-            .next()
-            .unwrap();
+        let body = ir.split("@word_unsigned(").nth(1).unwrap().split('}').next().unwrap();
         assert_eq!(body.contains("zext i32"), width == 64, "{target}: {body}");
-        let body = ir
-            .split("@wide_unsigned(")
-            .nth(1)
-            .unwrap()
-            .split('}')
-            .next()
-            .unwrap();
+        let body = ir.split("@wide_unsigned(").nth(1).unwrap().split('}').next().unwrap();
         assert_eq!(body.contains("trunc i64"), width == 32, "{target}: {body}");
     }
 }
@@ -1673,10 +1470,7 @@ fun main() -> i32 {
         dir.as_os_str(),
     ]);
     let ir = fs::read_to_string(dir.join("compare.ll")).unwrap();
-    assert!(
-        ir.contains("icmp eq i64"),
-        "numeric comparisons must retain the operand width:\n{ir}"
-    );
+    assert!(ir.contains("icmp eq i64"), "numeric comparisons must retain the operand width:\n{ir}");
     run_native_wave(&source);
 }
 
@@ -1687,24 +1481,9 @@ fn freebsd_lp64_providers_emit_direct_syscalls_and_kernel_layouts() {
     let home = dir.join("home");
     copy_tree(&root.join("std"), &home.join(".wave/lib/wave/std"));
     for (arch, target, instruction, registers) in [
-        (
-            "amd64",
-            "x86_64-unknown-freebsd",
-            "syscall",
-            ["={rax}", "={rdx}"],
-        ),
-        (
-            "arm64",
-            "aarch64-unknown-freebsd",
-            "svc $3",
-            ["={x0}", "={x1}"],
-        ),
-        (
-            "riscv64",
-            "riscv64-unknown-freebsd",
-            "ecall",
-            ["={x10}", "={x11}"],
-        ),
+        ("amd64", "x86_64-unknown-freebsd", "syscall", ["={rax}", "={rdx}"]),
+        ("arm64", "aarch64-unknown-freebsd", "svc $3", ["={x0}", "={x1}"]),
+        ("riscv64", "riscv64-unknown-freebsd", "ecall", ["={x10}", "={x11}"]),
     ] {
         for number in [11, 12] {
             let source = root.join(format!("tests/cases/freebsd/{arch}/test{number}.wave"));
@@ -1733,10 +1512,7 @@ fn freebsd_lp64_providers_emit_direct_syscalls_and_kernel_layouts() {
                     );
                 }
                 let ir = fs::read_to_string(output_dir.join(format!("test{number}.ll"))).unwrap();
-                assert!(
-                    ir.contains(instruction),
-                    "{target} must issue a kernel trap"
-                );
+                assert!(ir.contains(instruction), "{target} must issue a kernel trap");
                 for register in registers {
                     assert!(
                         ir.contains(register),
@@ -1771,10 +1547,7 @@ fn std_net_compiles_for_every_supported_socket_abi() {
     let dir = temp_case_dir("std-net-target-matrix");
     let home = dir.join("home");
     let std_destination = home.join(".wave/lib/wave/std");
-    copy_tree(
-        &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("std"),
-        &std_destination,
-    );
+    copy_tree(&PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("std"), &std_destination);
 
     let sources = [
         PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/std/net_tcp.wave"),
@@ -1896,20 +1669,13 @@ fn std_net_compiles_for_every_supported_socket_abi() {
                             "{target} must use kernel syscalls, not {obsolete}"
                         );
                     }
-                    let create_number = if target.starts_with("x86_64-") {
-                        291
-                    } else {
-                        20
-                    };
+                    let create_number = if target.starts_with("x86_64-") { 291 } else { 20 };
                     assert!(
                         ir.contains(&format!("_syscall1(i64 {create_number}, i64 0)")),
                         "{target} must call epoll_create1 through its native syscall number"
                     );
-                    let (stride, data_offset) = if target.starts_with("x86_64-") {
-                        (12, 4)
-                    } else {
-                        (16, 8)
-                    };
+                    let (stride, data_offset) =
+                        if target.starts_with("x86_64-") { (12, 4) } else { (16, 8) };
                     assert!(
                         ir.contains(&format!(
                             "__epoll_event_stride() #0 {{\nentry:\n  ret i32 {stride}"
@@ -1931,54 +1697,30 @@ fn std_net_compiles_for_every_supported_socket_abi() {
 #[test]
 fn import_graph_rejects_cycles_path_escape_and_public_main() {
     let dir = temp_case_dir("module-import-errors");
-    fs::write(
-        dir.join("a.wave"),
-        "import(\"./b\");\npub fun from_a() -> i32 { return 1; }\n",
-    )
-    .unwrap();
-    fs::write(
-        dir.join("b.wave"),
-        "import(\"./a\");\npub fun from_b() -> i32 { return 2; }\n",
-    )
-    .unwrap();
+    fs::write(dir.join("a.wave"), "import(\"./b\");\npub fun from_a() -> i32 { return 1; }\n")
+        .unwrap();
+    fs::write(dir.join("b.wave"), "import(\"./a\");\npub fun from_b() -> i32 { return 2; }\n")
+        .unwrap();
     let cycle = write_wave(&dir, "cycle.wave", "import(\"./a\");\nfun main() {}\n");
     let error = run_wavec_expect_failure([OsStr::new("check"), cycle.as_os_str()]);
     assert!(error.contains("import cycle detected"), "{}", error);
 
-    let escape = write_wave(
-        &dir,
-        "escape.wave",
-        "import(\"./../outside\");\nfun main() {}\n",
-    );
+    let escape = write_wave(&dir, "escape.wave", "import(\"./../outside\");\nfun main() {}\n");
     let error = run_wavec_expect_failure([OsStr::new("check"), escape.as_os_str()]);
     assert!(error.contains("escapes its module directory"), "{}", error);
 
-    let package_escape = write_wave(
-        &dir,
-        "package_escape.wave",
-        "import(\"add::..\");\nfun main() {}\n",
-    );
+    let package_escape =
+        write_wave(&dir, "package_escape.wave", "import(\"add::..\");\nfun main() {}\n");
     let error = run_wavec_expect_failure([OsStr::new("check"), package_escape.as_os_str()]);
-    assert!(
-        error.contains("package and module names must be identifiers"),
-        "{}",
-        error
-    );
+    assert!(error.contains("package and module names must be identifiers"), "{}", error);
 
     let public_main = write_wave(&dir, "public_main.wave", "pub fun main() {}\n");
     let error = run_wavec_expect_failure([OsStr::new("check"), public_main.as_os_str()]);
-    assert!(
-        error.contains("entry function `main` cannot be public"),
-        "{}",
-        error
-    );
+    assert!(error.contains("entry function `main` cannot be public"), "{}", error);
 
     fs::write(dir.join("library_main.wave"), "fun main() {}\n").unwrap();
-    let imported_main = write_wave(
-        &dir,
-        "imported_main.wave",
-        "import(\"./library_main\");\nfun main() {}\n",
-    );
+    let imported_main =
+        write_wave(&dir, "imported_main.wave", "import(\"./library_main\");\nfun main() {}\n");
     let error = run_wavec_expect_failure([OsStr::new("check"), imported_main.as_os_str()]);
     assert!(
         error.contains("function 'main' may only be declared in the entry module"),
@@ -2104,20 +1846,8 @@ fun main<T>() {}
                 mode
             );
             let stderr = String::from_utf8_lossy(&output.stderr);
-            assert!(
-                stderr.contains("error[E3001]"),
-                "{} ({}): {}",
-                file_name,
-                mode,
-                stderr
-            );
-            assert!(
-                stderr.contains(expected),
-                "{} ({}): {}",
-                file_name,
-                mode,
-                stderr
-            );
+            assert!(stderr.contains("error[E3001]"), "{} ({}): {}", file_name, mode, stderr);
+            assert!(stderr.contains(expected), "{} ({}): {}", file_name, mode, stderr);
             assert!(
                 !stderr.contains("E9001") && !stderr.contains("compiler internal error"),
                 "{} ({}) leaked a backend failure: {}",
@@ -2757,23 +2487,11 @@ fun main() {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("duplicate_type.wave:2:8"), "{}", stderr);
-    assert!(
-        stderr.contains("struct Item { second: i32; }"),
-        "{}",
-        stderr
-    );
+    assert!(stderr.contains("struct Item { second: i32; }"), "{}", stderr);
 
     let imported = dir.join("broken.wave");
-    fs::write(
-        &imported,
-        "fun broken() {\n    var value: Missing = 1;\n}\n",
-    )
-    .unwrap();
-    let entry = write_wave(
-        &dir,
-        "import_main.wave",
-        "import(\"./broken\");\n\nfun main() {}\n",
-    );
+    fs::write(&imported, "fun broken() {\n    var value: Missing = 1;\n}\n").unwrap();
+    let entry = write_wave(&dir, "import_main.wave", "import(\"./broken\");\n\nfun main() {}\n");
     let output = run_wavec_raw([OsStr::new("check"), entry.as_os_str()]);
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
@@ -2796,16 +2514,8 @@ fun main() {
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(stderr.contains("generic_broken.wave:3:9"), "{}", stderr);
-    assert!(
-        stderr.contains("type `Box` expects 1 generic argument(s), found 2"),
-        "{}",
-        stderr
-    );
-    assert!(
-        !stderr.contains("generic monomorphization failed"),
-        "{}",
-        stderr
-    );
+    assert!(stderr.contains("type `Box` expects 1 generic argument(s), found 2"), "{}", stderr);
+    assert!(!stderr.contains("generic monomorphization failed"), "{}", stderr);
 }
 
 #[test]
@@ -2893,11 +2603,7 @@ fn vex_cli_print_json_contracts_are_machine_readable() {
     assert!(stderr.trim().is_empty(), "unexpected stderr:\n{}", stderr);
     let json = stdout.trim();
     assert!(json.starts_with('{') && json.ends_with('}'), "{}", json);
-    assert!(
-        json.contains("\"triple\":\"x86_64-unknown-linux-gnu\""),
-        "{}",
-        json
-    );
+    assert!(json.contains("\"triple\":\"x86_64-unknown-linux-gnu\""), "{}", json);
     assert!(json.contains("\"arch\":\"x86_64\""), "{}", json);
     assert!(json.contains("\"os\":\"linux\""), "{}", json);
     assert!(json.contains("\"env\":\"gnu\""), "{}", json);
@@ -3000,22 +2706,14 @@ fun main() -> i32 {
         out_dir.as_os_str(),
     ]);
     assert!(stderr.trim().is_empty(), "unexpected stderr:\n{stderr}");
-    assert!(
-        plan.contains("\"target\":\"wasm32-unknown-unknown\""),
-        "{plan}"
-    );
-    assert!(
-        plan.contains("\"program\":") && plan.contains("wasm-ld"),
-        "{plan}"
-    );
+    assert!(plan.contains("\"target\":\"wasm32-unknown-unknown\""), "{plan}");
+    assert!(plan.contains("\"program\":") && plan.contains("wasm-ld"), "{plan}");
     assert!(plan.contains("--no-entry"), "{plan}");
     assert!(plan.contains("--allow-undefined"), "{plan}");
     assert!(plan.contains("--export-if-defined=main"), "{plan}");
     assert!(plan.contains("--export-memory"), "{plan}");
     assert!(
-        plan.contains(&json_string_for_test(
-            &out_dir.join("module.wasm").to_string_lossy()
-        )),
+        plan.contains(&json_string_for_test(&out_dir.join("module.wasm").to_string_lossy())),
         "{plan}"
     );
 
@@ -3069,11 +2767,8 @@ fun main() -> i32 {
         "memory64 host flags must be selected at execution time: {wasm64_plan}"
     );
 
-    let asm_source = write_wave(
-        &dir,
-        "inline_asm.wave",
-        "fun main() {\n    asm {\n        \"nop\"\n    }\n}\n",
-    );
+    let asm_source =
+        write_wave(&dir, "inline_asm.wave", "fun main() {\n    asm {\n        \"nop\"\n    }\n}\n");
     let asm_error = run_wavec_expect_failure([
         OsStr::new("build"),
         asm_source.as_os_str(),
@@ -3093,10 +2788,7 @@ fun main() -> i32 {
 #[cfg(feature = "llvm-target-wasm")]
 fn wasm_host_output_preserves_bytes_numeric_formatting_and_exit_status() {
     for tool in ["node", "wasm-ld"] {
-        if !Command::new(tool)
-            .arg("--version")
-            .output()
-            .is_ok_and(|output| output.status.success())
+        if !Command::new(tool).arg("--version").output().is_ok_and(|output| output.status.success())
         {
             eprintln!("skipping WebAssembly output execution: {tool} unavailable");
             return;
@@ -3129,11 +2821,7 @@ fun main() -> i32 {
 "#,
     );
     let expected = "한글 text A -42 340282366920938463463374607431768211455 -0.000000 0.007812 100% host puts\n";
-    for target in [
-        "wasm32-unknown-unknown",
-        "wasm32-wasip1",
-        "wasm64-unknown-unknown",
-    ] {
+    for target in ["wasm32-unknown-unknown", "wasm32-wasip1", "wasm64-unknown-unknown"] {
         for optimization in ["-O0", "-O2"] {
             let output = wavec_command()
                 .arg("build")
@@ -3150,11 +2838,7 @@ fun main() -> i32 {
                 "{target} {optimization}: {}",
                 String::from_utf8_lossy(&output.stderr)
             );
-            assert_eq!(
-                output.stdout,
-                expected.as_bytes(),
-                "{target} {optimization}"
-            );
+            assert_eq!(output.stdout, expected.as_bytes(), "{target} {optimization}");
         }
     }
     fs::remove_dir_all(dir).unwrap();
@@ -3164,10 +2848,7 @@ fun main() -> i32 {
 #[cfg(feature = "llvm-target-wasm")]
 fn wasi_runner_preserves_explicit_process_exit_status() {
     for tool in ["node", "wasm-ld"] {
-        if !Command::new(tool)
-            .arg("--version")
-            .output()
-            .is_ok_and(|output| output.status.success())
+        if !Command::new(tool).arg("--version").output().is_ok_and(|output| output.status.success())
         {
             eprintln!("skipping WASI execution: {tool} unavailable");
             return;
@@ -3243,10 +2924,7 @@ fun main() -> i32 { return 0; }
             && host_ir.contains("\"wasm-import-name\"=\"host_transform\""),
         "{host_ir}"
     );
-    assert!(
-        host_ir.contains("\"wasm-export-name\"=\"wave_transform\""),
-        "{host_ir}"
-    );
+    assert!(host_ir.contains("\"wasm-export-name\"=\"wave_transform\""), "{host_ir}");
 
     let host64_out = dir.join("host64-out");
     run_wavec([
@@ -3287,10 +2965,7 @@ fun main() -> i32 { return 0; }
         wasi_out.as_os_str(),
     ]);
     let wasi_ir = fs::read_to_string(wasi_out.join("wasi.ll")).unwrap();
-    assert!(
-        wasi_ir.contains("target triple = \"wasm32-wasip1\""),
-        "{wasi_ir}"
-    );
+    assert!(wasi_ir.contains("target triple = \"wasm32-wasip1\""), "{wasi_ir}");
     assert!(
         wasi_ir.contains("\"wasm-import-module\"=\"wasi_snapshot_preview1\"")
             && wasi_ir.contains("\"wasm-import-name\"=\"fd_write\""),
@@ -3370,11 +3045,7 @@ fun main() -> i32 {
     let plan = stdout.trim();
     assert!(plan.starts_with('{') && plan.ends_with('}'), "{}", plan);
     assert!(plan.contains("\"schema_version\":1"), "{}", plan);
-    assert!(
-        plan.contains("\"target\":\"x86_64-unknown-none-elf\""),
-        "{}",
-        plan
-    );
+    assert!(plan.contains("\"target\":\"x86_64-unknown-none-elf\""), "{}", plan);
     assert!(plan.contains("\"cpu\":\"generic\""), "{}", plan);
     assert!(plan.contains("\"features\":\"\""), "{}", plan);
     assert!(plan.contains("\"abi\":null"), "{}", plan);
@@ -3468,16 +3139,9 @@ fun main() -> i32 {
     assert!(plan.contains("\"kind\":\"wave\""), "{}", plan);
     assert!(plan.contains("\"kind\":\"obj\""), "{}", plan);
     assert!(plan.contains("\"kind\":\"archive\""), "{}", plan);
+    assert!(plan.contains("\"emit_kinds\":[\"obj\",\"bin\"]"), "{}", plan);
     assert!(
-        plan.contains("\"emit_kinds\":[\"obj\",\"bin\"]"),
-        "{}",
-        plan
-    );
-    assert!(
-        plan.contains(&format!(
-            "\"output\":{}",
-            json_string_for_test(&binary.to_string_lossy())
-        )),
+        plan.contains(&format!("\"output\":{}", json_string_for_test(&binary.to_string_lossy()))),
         "-o must apply to final linked binary only:\n{}",
         plan
     );
@@ -3514,11 +3178,7 @@ fun main() -> i32 {
     let stdout = String::from_utf8_lossy(&run_plan.stdout);
     assert!(stdout.contains("\"mode\":\"build+run\""), "{}", stdout);
     assert!(stdout.contains("\"execute\":{"), "{}", stdout);
-    assert!(
-        stdout.contains("\"args\":[\"arg one\",\"--flag\"]"),
-        "{}",
-        stdout
-    );
+    assert!(stdout.contains("\"args\":[\"arg one\",\"--flag\"]"), "{}", stdout);
 
     let cases: &[(&str, &[&str], &[&str])] = &[
         (
@@ -3543,14 +3203,7 @@ fun main() -> i32 {
         ),
         (
             "no-pie relocation conflict",
-            &[
-                "-C",
-                "relocation-model=pie",
-                "build",
-                "main.wave",
-                "--no-pie",
-                "--dry-run",
-            ],
+            &["-C", "relocation-model=pie", "build", "main.wave", "--no-pie", "--dry-run"],
             &["--no-pie", "relocation-model=pie"],
         ),
         (
@@ -3566,9 +3219,8 @@ fun main() -> i32 {
     ];
 
     for (name, args, needles) in cases {
-        let full_args = std::iter::once("--error-format=json")
-            .chain(args.iter().copied())
-            .map(OsStr::new);
+        let full_args =
+            std::iter::once("--error-format=json").chain(args.iter().copied()).map(OsStr::new);
         let out = run_wavec_raw(full_args);
         assert!(
             !out.status.success(),
@@ -3579,20 +3231,9 @@ fun main() -> i32 {
         );
         assert_eq!(out.status.code(), Some(2), "{}", name);
         let stderr = String::from_utf8_lossy(&out.stderr);
-        assert!(
-            stderr.contains("\"kind\":\"usage\""),
-            "{}: {}",
-            name,
-            stderr
-        );
+        assert!(stderr.contains("\"kind\":\"usage\""), "{}: {}", name, stderr);
         for needle in *needles {
-            assert!(
-                stderr.contains(needle),
-                "{} missing '{}': {}",
-                name,
-                needle,
-                stderr
-            );
+            assert!(stderr.contains(needle), "{} missing '{}': {}", name, needle, stderr);
         }
     }
 }
@@ -3690,10 +3331,7 @@ fn target_configuration_is_rejected_before_frontend_or_backend_work() {
             String::from_utf8_lossy(&output.stderr)
         );
         let stdout = String::from_utf8_lossy(&output.stdout);
-        assert!(
-            stdout.trim().is_empty(),
-            "JSON usage errors must not write to stdout: {stdout}"
-        );
+        assert!(stdout.trim().is_empty(), "JSON usage errors must not write to stdout: {stdout}");
         let stderr = String::from_utf8_lossy(&output.stderr);
         assert!(stderr.contains("\"kind\":\"usage\""), "{}", stderr);
         assert!(stderr.contains(expected), "{}", stderr);
@@ -3709,12 +3347,7 @@ fn target_configuration_is_rejected_before_frontend_or_backend_work() {
     for mode in [
         &["--target", "mips64-unknown-linux-gnu", "--emit=check"][..],
         &["--target", "mips64-unknown-linux-gnu", "--emit=obj"][..],
-        &[
-            "--target",
-            "mips64-unknown-linux-gnu",
-            "--emit=obj",
-            "--dry-run",
-        ][..],
+        &["--target", "mips64-unknown-linux-gnu", "--emit=obj", "--dry-run"][..],
     ] {
         run_failure(mode, "unsupported target 'mips64-unknown-linux-gnu'");
     }
@@ -3729,83 +3362,37 @@ fn target_configuration_is_rejected_before_frontend_or_backend_work() {
             "unsupported target 'riscv64-unknown-linux-musl'",
         ),
         (
-            &[
-                "--target",
-                "x86_64-unknown-linux-gnu",
-                "--cpu",
-                "sifive-u74",
-                "--emit=check",
-            ][..],
+            &["--target", "x86_64-unknown-linux-gnu", "--cpu", "sifive-u74", "--emit=check"][..],
             "unsupported CPU 'sifive-u74'",
         ),
         (
-            &[
-                "--target",
-                "riscv64-unknown-none-elf",
-                "--cpu",
-                "rocket",
-                "--emit=obj",
-            ][..],
+            &["--target", "riscv64-unknown-none-elf", "--cpu", "rocket", "--emit=obj"][..],
             "unsupported CPU 'rocket'",
         ),
         (
-            &[
-                "--target",
-                "x86_64-unknown-linux-gnu",
-                "--features",
-                "+m",
-                "--emit=check",
-            ][..],
+            &["--target", "x86_64-unknown-linux-gnu", "--features", "+m", "--emit=check"][..],
             "unsupported feature 'm'",
         ),
         (
-            &[
-                "--target",
-                "aarch64-unknown-linux-gnu",
-                "--features",
-                "+fp",
-                "--emit=obj",
-            ][..],
+            &["--target", "aarch64-unknown-linux-gnu", "--features", "+fp", "--emit=obj"][..],
             "unsupported feature 'fp'",
         ),
         (
-            &[
-                "--target",
-                "x86_64-unknown-linux-gnu",
-                "--abi",
-                "lp64d",
-                "--emit=check",
-            ][..],
+            &["--target", "x86_64-unknown-linux-gnu", "--abi", "lp64d", "--emit=check"][..],
             "unsupported ABI 'lp64d'",
         ),
         (
-            &[
-                "--target",
-                "x86_64-unknown-linux-gnu",
-                "--features",
-                "sse2",
-                "--emit=check",
-            ][..],
+            &["--target", "x86_64-unknown-linux-gnu", "--features", "sse2", "--emit=check"][..],
             "invalid target feature 'sse2'",
         ),
         (
-            &[
-                "--target",
-                "x86_64-unknown-linux-gnu",
-                "--features",
-                "+sse2,-sse2",
-                "--emit=check",
-            ][..],
+            &["--target", "x86_64-unknown-linux-gnu", "--features", "+sse2,-sse2", "--emit=check"]
+                [..],
             "target feature 'sse2' is specified more than once",
         ),
         (
-            &[
-                "--target",
-                "x86_64-unknown-linux-gnu",
-                "--features",
-                "+sse2,,+avx",
-                "--emit=check",
-            ][..],
+            &["--target", "x86_64-unknown-linux-gnu", "--features", "+sse2,,+avx", "--emit=check"]
+                [..],
             "invalid empty target feature",
         ),
         (
@@ -3845,13 +3432,7 @@ fn target_configuration_is_rejected_before_frontend_or_backend_work() {
             "ABI 'lp64f' for target 'riscv64-unknown-none-elf' requires feature 'f'",
         ),
         (
-            &[
-                "--target",
-                "riscv64-unknown-linux-gnu",
-                "--features",
-                "-zicsr",
-                "--emit=check",
-            ][..],
+            &["--target", "riscv64-unknown-linux-gnu", "--features", "-zicsr", "--emit=check"][..],
             "feature 'f' requires feature 'zicsr'",
         ),
     ] {
@@ -3920,11 +3501,7 @@ fn target_configuration_is_rejected_before_frontend_or_backend_work() {
     assert!(stdout.contains("\"hosted\":false"), "{}", stdout);
     assert!(stdout.contains("\"freestanding\":true"), "{}", stdout);
     assert!(stdout.contains("\"cpu\":\"generic-rv64\""), "{}", stdout);
-    assert!(
-        stdout.contains("\"features\":\"+m,+a,-f,-d,+c,-zicsr,-zifencei\""),
-        "{}",
-        stdout
-    );
+    assert!(stdout.contains("\"features\":\"+m,+a,-f,-d,+c,-zicsr,-zifencei\""), "{}", stdout);
     assert!(stdout.contains("\"abi\":\"lp64\""), "{}", stdout);
     assert!(stdout.contains("\"isa\":\"rv64imac\""), "{}", stdout);
 
@@ -3938,11 +3515,7 @@ fn target_configuration_is_rejected_before_frontend_or_backend_work() {
     assert!(stderr.trim().is_empty(), "{}", stderr);
     assert!(stdout.contains("\"hosted\":true"), "{}", stdout);
     assert!(stdout.contains("\"freestanding\":false"), "{}", stdout);
-    assert!(
-        stdout.contains("\"features\":\"+m,+a,+f,+d,+c,+zicsr,+zifencei\""),
-        "{}",
-        stdout
-    );
+    assert!(stdout.contains("\"features\":\"+m,+a,+f,+d,+c,+zicsr,+zifencei\""), "{}", stdout);
     assert!(stdout.contains("\"abi\":\"lp64d\""), "{}", stdout);
     assert!(stdout.contains("\"isa\":\"rv64gc\""), "{}", stdout);
 
@@ -3957,11 +3530,7 @@ fn target_configuration_is_rejected_before_frontend_or_backend_work() {
     ]);
     assert!(stderr.trim().is_empty(), "{}", stderr);
     assert!(stdout.contains("\"cpu\":\"generic-rv64\""), "{}", stdout);
-    assert!(
-        stdout.contains("\"features\":\"+m,+a,+f,+d,+c,+zicsr,+zifencei\""),
-        "{}",
-        stdout
-    );
+    assert!(stdout.contains("\"features\":\"+m,+a,+f,+d,+c,+zicsr,+zifencei\""), "{}", stdout);
     assert!(stdout.contains("\"abi\":\"lp64d\""), "{}", stdout);
     assert!(stdout.contains("\"isa\":\"rv64gc\""), "{}", stdout);
 
@@ -3976,16 +3545,8 @@ fn target_configuration_is_rejected_before_frontend_or_backend_work() {
         OsStr::new("--dry-run"),
     ]);
     assert!(stderr.trim().is_empty(), "{}", stderr);
-    assert!(
-        stdout.contains("--dynamic-linker=/lib/ld-linux-riscv64-lp64.so.1"),
-        "{}",
-        stdout
-    );
-    assert!(
-        !stdout.contains("ld-linux-riscv64-lp64d.so.1"),
-        "{}",
-        stdout
-    );
+    assert!(stdout.contains("--dynamic-linker=/lib/ld-linux-riscv64-lp64.so.1"), "{}", stdout);
+    assert!(!stdout.contains("ld-linux-riscv64-lp64d.so.1"), "{}", stdout);
     assert!(
         json_contains_path_components(
             &stdout,
@@ -4085,20 +3646,14 @@ fn freebsd_link_plans_use_target_sysroot_and_elf_loader() {
             ]);
             assert!(stderr.is_empty(), "{stderr}");
             assert!(plan.contains(&format!("\"-m\",\"{emulation}\"")), "{plan}");
-            assert!(
-                plan.contains("--dynamic-linker=/libexec/ld-elf.so.1"),
-                "{plan}"
-            );
+            assert!(plan.contains("--dynamic-linker=/libexec/ld-elf.so.1"), "{plan}");
             for file in [start, "crti.o", "crtn.o"] {
                 assert!(
                     json_contains_path_components(&plan, &["sysroot", "usr", "lib", file]),
                     "{plan}"
                 );
             }
-            assert!(
-                !plan.contains("ld-linux") && !plan.contains("unknown-linux-gnu"),
-                "{plan}"
-            );
+            assert!(!plan.contains("ld-linux") && !plan.contains("unknown-linux-gnu"), "{plan}");
         }
     }
 }
@@ -4192,17 +3747,10 @@ fn riscv64_debian_cross_prefix_does_not_double_apply_linker_sysroot() {
         ),
     )
     .unwrap();
-    fs::write(
-        runtime.join("libm.so"),
-        format!("GROUP ( {runtime_prefix}/libm.so.6 )\n"),
-    )
-    .unwrap();
-    for runtime_file in [
-        "libc.so.6",
-        "libc_nonshared.a",
-        "libm.so.6",
-        "ld-linux-riscv64-lp64d.so.1",
-    ] {
+    fs::write(runtime.join("libm.so"), format!("GROUP ( {runtime_prefix}/libm.so.6 )\n")).unwrap();
+    for runtime_file in
+        ["libc.so.6", "libc_nonshared.a", "libm.so.6", "ld-linux-riscv64-lp64d.so.1"]
+    {
         fs::write(runtime.join(runtime_file), []).unwrap();
     }
 
@@ -4216,16 +3764,8 @@ fn riscv64_debian_cross_prefix_does_not_double_apply_linker_sysroot() {
         OsStr::new("--format=json"),
     ]);
     assert!(stderr.trim().is_empty(), "{}", stderr);
-    assert!(
-        target_spec.contains("\"sysroot_source\":\"explicit\""),
-        "{}",
-        target_spec
-    );
-    assert!(
-        json_contains_path_value(&target_spec, &sysroot.to_string_lossy()),
-        "{}",
-        target_spec
-    );
+    assert!(target_spec.contains("\"sysroot_source\":\"explicit\""), "{}", target_spec);
+    assert!(json_contains_path_value(&target_spec, &sysroot.to_string_lossy()), "{}", target_spec);
 
     let (stdout, stderr) = run_wavec_capture([
         OsStr::new("--error-format=json"),
@@ -4239,11 +3779,7 @@ fn riscv64_debian_cross_prefix_does_not_double_apply_linker_sysroot() {
         OsStr::new("--dry-run"),
     ]);
     assert!(stderr.trim().is_empty(), "{}", stderr);
-    assert!(
-        stdout.contains("\"sysroot_source\":\"explicit\""),
-        "{}",
-        stdout
-    );
+    assert!(stdout.contains("\"sysroot_source\":\"explicit\""), "{}", stdout);
     assert!(stdout.contains("--sysroot=/"), "{}", stdout);
     assert!(
         !stdout.contains(&format!("--sysroot={}", sysroot.display())),
@@ -4281,9 +3817,7 @@ fn advertised_target_options_reach_object_codegen_without_backend_diagnostics() 
         assert!(stdout.trim().is_empty(), "{}", stdout);
         let only_nonstandard_lp64f_warnings = target.starts_with("loongarch64-")
             && !stderr.trim().is_empty()
-            && stderr
-                .lines()
-                .all(|line| line == "warning: 'lp64f' has not been standardized");
+            && stderr.lines().all(|line| line == "warning: 'lp64f' has not been standardized");
         assert!(
             stderr.trim().is_empty() || only_nonstandard_lp64f_warnings,
             "advertised target option emitted a backend diagnostic for {target}: {stderr}"
@@ -4312,10 +3846,7 @@ fn advertised_target_options_reach_object_codegen_without_backend_diagnostics() 
         if target_spec.contains("\"object_format\":\"elf\"") {
             assert!(object.starts_with(b"\x7fELF"), "{target}: {target_spec}");
         } else if target_spec.contains("\"object_format\":\"macho\"") {
-            assert!(
-                object.starts_with(&[0xcf, 0xfa, 0xed, 0xfe]),
-                "{target}: {target_spec}"
-            );
+            assert!(object.starts_with(&[0xcf, 0xfa, 0xed, 0xfe]), "{target}: {target_spec}");
         } else if target_spec.contains("\"object_format\":\"coff\"") {
             let machine = if target_spec.contains("\"arch\":\"aarch64\"") {
                 [0x64, 0xaa]
@@ -4362,7 +3893,7 @@ fn advertised_target_options_reach_object_codegen_without_backend_diagnostics() 
                     (true, "d", "+") => "+f,+d".to_string(),
                     _ if target.starts_with("riscv64-") && feature == "zicsr" && sign == "-" => {
                         "-f,-d,-zicsr".to_string()
-                    }
+                    },
                     _ => format!("{sign}{feature}"),
                 };
                 if target == "riscv64-unknown-freebsd"
@@ -4553,11 +4084,7 @@ fn projected_deref_preserves_pointer_storage_types() {
     // Use the advertised targets so this regression also runs in isolated
     // backend builds and covers WebAssembly's 32-bit pointer representation.
     let (targets, _) = run_wavec_capture(["print", "target-list"]);
-    for target in targets
-        .lines()
-        .map(str::trim)
-        .filter(|line| !line.is_empty())
-    {
+    for target in targets.lines().map(str::trim).filter(|line| !line.is_empty()) {
         let out = dir.join(target);
         run_wavec([
             OsStr::new("build"),
@@ -4570,24 +4097,12 @@ fn projected_deref_preserves_pointer_storage_types() {
         ]);
         let ir = fs::read_to_string(out.join("test103.ll")).unwrap();
         for name in ["check_writer", "check_index", "check_depth"] {
-            let body = ir
-                .split(&format!("@{name}("))
-                .nth(1)
-                .unwrap()
-                .split("\n}")
-                .next()
-                .unwrap();
+            let body = ir.split(&format!("@{name}(")).nth(1).unwrap().split("\n}").next().unwrap();
             assert!(body.contains("load ptr"), "{target} {name}: {body}");
             assert!(!body.contains("load i8"), "{target} {name}: {body}");
         }
         for name in ["widen_field", "widen_scalar"] {
-            let body = ir
-                .split(&format!("@{name}("))
-                .nth(1)
-                .unwrap()
-                .split("\n}")
-                .next()
-                .unwrap();
+            let body = ir.split(&format!("@{name}(")).nth(1).unwrap().split("\n}").next().unwrap();
             assert!(body.contains("load i8"), "{target} {name}: {body}");
             assert!(!body.contains("load i64"), "{target} {name}: {body}");
         }
@@ -5066,11 +4581,7 @@ fn riscv64_ir_and_bitcode_preserve_target_contract_when_recompiled() {
     assert!(ir.contains("!\"target-abi\", !\"lp64f\""), "{}", ir);
     assert!(ir.contains("!\"riscv-isa\""), "{}", ir);
     assert!(ir.contains("\"target-cpu\"=\"generic-rv64\""), "{}", ir);
-    assert!(
-        ir.contains("\"target-features\"=\"+m,+a,+f,-d,+c,+zicsr,+zifencei\""),
-        "{}",
-        ir
-    );
+    assert!(ir.contains("\"target-features\"=\"+m,+a,+f,-d,+c,+zicsr,+zifencei\""), "{}", ir);
 
     let from_ir = dir.join("from-ir");
     let ir_input = original.join("main.ll");
@@ -5091,17 +4602,8 @@ fn riscv64_ir_and_bitcode_preserve_target_contract_when_recompiled() {
         from_bc.as_os_str(),
     ]);
 
-    for object in [
-        original.join("main.o"),
-        from_ir.join("main.o"),
-        from_bc.join("main.o"),
-    ] {
-        assert_eq!(
-            riscv64_elf_flags(&object) & 0x7,
-            0x3,
-            "{}",
-            object.display()
-        );
+    for object in [original.join("main.o"), from_ir.join("main.o"), from_bc.join("main.o")] {
+        assert_eq!(riscv64_elf_flags(&object) & 0x7, 0x3, "{}", object.display());
         let bytes = fs::read(&object).unwrap();
         assert!(bytes_contains(&bytes, b"zicsr"), "{}", object.display());
         assert!(bytes_contains(&bytes, b"zifencei"), "{}", object.display());
@@ -5155,11 +4657,7 @@ fun main() -> i32 {
         "{}",
         ir
     );
-    assert!(
-        ir.contains("define void @wave_make(ptr sret(%Triple) align 8"),
-        "{}",
-        ir
-    );
+    assert!(ir.contains("define void @wave_make(ptr sret(%Triple) align 8"), "{}", ir);
     assert!(ir.contains("@__wave_export_impl_wave_take"), "{}", ir);
     assert!(ir.contains("@__wave_export_impl_wave_make"), "{}", ir);
 }
@@ -5350,17 +4848,14 @@ fn odd_sized_aggregate_transport_matches_clang_ir_contracts() {
                 ("x86_64", true) => (object_integer.clone(), object_integer),
                 ("x86_64", false) => {
                     let remainder = (size - 8) * 8;
-                    (
-                        format!("{{ i64, i{remainder} }}"),
-                        format!("i64, i{remainder}"),
-                    )
-                }
+                    (format!("{{ i64, i{remainder} }}"), format!("i64, i{remainder}"))
+                },
                 ("aarch64", true) => (object_integer, "i64".to_string()),
                 ("aarch64", false) => ("[2 x i64]".to_string(), "[2 x i64]".to_string()),
                 ("riscv64" | "loongarch64", true) => ("i64".to_string(), "i64".to_string()),
                 ("riscv64" | "loongarch64", false) => {
                     ("[2 x i64]".to_string(), "[2 x i64]".to_string())
-                }
+                },
                 _ => unreachable!(),
             };
             let c_contract = format!("{result} @c_bytes{size}({argument}");
@@ -5375,14 +4870,8 @@ fn odd_sized_aggregate_transport_matches_clang_ir_contracts() {
                 clang_c_definition.contains(&c_contract),
                 "missing `{c_contract}` in `{clang_c_definition}`"
             );
-            assert!(
-                wave_ir.contains(&format!("declare {c_contract}")),
-                "{wave_ir}"
-            );
-            assert!(
-                clang_ir.contains(&wave_contract),
-                "missing `{wave_contract}`:\n{clang_ir}"
-            );
+            assert!(wave_ir.contains(&format!("declare {c_contract}")), "{wave_ir}");
+            assert!(clang_ir.contains(&wave_contract), "missing `{wave_contract}`:\n{clang_ir}");
             let wave_definition = wave_ir
                 .lines()
                 .find(|line| line.contains(&format!("@wave_bytes{size}(")))
@@ -5395,10 +4884,7 @@ fn odd_sized_aggregate_transport_matches_clang_ir_contracts() {
             );
         }
         for contract in ["void @c_empty()", "void @wave_empty()"] {
-            assert!(
-                clang_ir.contains(contract),
-                "missing `{contract}`:\n{clang_ir}"
-            );
+            assert!(clang_ir.contains(contract), "missing `{contract}`:\n{clang_ir}");
         }
         assert!(wave_ir.contains("declare void @c_empty()"), "{wave_ir}");
         assert!(wave_ir.contains("define void @wave_empty()"), "{wave_ir}");
@@ -5437,23 +4923,16 @@ fn odd_sized_aggregate_transport_matches_clang_ir_contracts() {
                 .unwrap_or_else(|| panic!("missing c_{name} definition:\n{clang_ir}"))
                 .replace(" %0", "");
             assert!(
-                clang_contracts
-                    .iter()
-                    .any(|contract| clang_definition.contains(contract)),
+                clang_contracts.iter().any(|contract| clang_definition.contains(contract)),
                 "missing one of {clang_contracts:?} for {target} in `{clang_definition}`"
             );
-            assert!(
-                wave_ir.contains(&format!("declare {c_contract}")),
-                "{wave_ir}"
-            );
+            assert!(wave_ir.contains(&format!("declare {c_contract}")), "{wave_ir}");
             let mut clang_wave_contracts = vec![wave_contract.clone()];
             if matches!(tag, "x86_64" | "aarch64") && *name == "pointer_member" {
                 clang_wave_contracts.push("i64 @wave_pointer_member(i64".to_string());
             }
             assert!(
-                clang_wave_contracts
-                    .iter()
-                    .any(|contract| clang_ir.contains(contract)),
+                clang_wave_contracts.iter().any(|contract| clang_ir.contains(contract)),
                 "missing one of {clang_wave_contracts:?} for {target}:\n{clang_ir}"
             );
             let wave_definition = wave_ir
@@ -5635,10 +5114,7 @@ fun main() -> i32 {
         "extern(c) fun consume(count: i32, ...) -> i64; fun main() { consume(1, null); }\n",
     );
     let error = run_wavec_expect_failure([OsStr::new("check"), invalid.as_os_str()]);
-    assert!(
-        error.contains("variadic argument 2") && error.contains("no scalar type"),
-        "{error}"
-    );
+    assert!(error.contains("variadic argument 2") && error.contains("no scalar type"), "{error}");
 }
 
 #[test]
@@ -5726,14 +5202,8 @@ fn riscv_link_input_abi_is_validated_before_linking() {
         validate_riscv_link_inputs(RiscvFloatAbi::Lp64d, &[archive.display().to_string()])
             .unwrap_err()
             .to_string();
-    assert!(
-        archive_error.contains("libmixed.a(main.o)"),
-        "{archive_error}"
-    );
-    assert!(
-        archive_error.contains("input ABI: LP64F"),
-        "{archive_error}"
-    );
+    assert!(archive_error.contains("libmixed.a(main.o)"), "{archive_error}");
+    assert!(archive_error.contains("input ABI: LP64F"), "{archive_error}");
 
     for (input, expected_input_abi) in [(&objects[0].1, "LP64"), (&archive, "LP64F")] {
         let output = run_wavec_raw([
@@ -5751,15 +5221,9 @@ fn riscv_link_input_abi_is_validated_before_linking() {
         ]);
         assert!(!output.status.success());
         let error = String::from_utf8_lossy(&output.stderr);
-        assert!(
-            error.contains("RISC-V floating-point ABI mismatch before linking"),
-            "{error}"
-        );
+        assert!(error.contains("RISC-V floating-point ABI mismatch before linking"), "{error}");
         assert!(error.contains("target ABI: LP64D"), "{error}");
-        assert!(
-            error.contains(&format!("input ABI: {expected_input_abi}")),
-            "{error}"
-        );
+        assert!(error.contains(&format!("input ABI: {expected_input_abi}")), "{error}");
         assert!(
             !error.contains("link failed"),
             "external linker ran before ABI validation: {error}"
@@ -5782,11 +5246,8 @@ fn loongarch64_link_inputs_require_matching_abi_before_linking() {
         out.as_os_str(),
     ]);
     let compatible = out.join("main.o");
-    validate_loongarch64_link_inputs(
-        LoongArchFloatAbi::Lp64d,
-        &[compatible.display().to_string()],
-    )
-    .unwrap();
+    validate_loongarch64_link_inputs(LoongArchFloatAbi::Lp64d, &[compatible.display().to_string()])
+        .unwrap();
 
     let incompatible = dir.join("soft-float.o");
     let mut bytes = fs::read(&compatible).unwrap();
@@ -5814,14 +5275,8 @@ fn loongarch64_link_inputs_require_matching_abi_before_linking() {
     ]);
     assert!(!output.status.success());
     let error = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        error.contains("LoongArch floating-point ABI mismatch before linking"),
-        "{error}"
-    );
-    assert!(
-        !error.contains("link failed"),
-        "external linker ran before ABI validation: {error}"
-    );
+    assert!(error.contains("LoongArch floating-point ABI mismatch before linking"), "{error}");
+    assert!(!error.contains("link failed"), "external linker ran before ABI validation: {error}");
 }
 
 #[cfg(any(feature = "llvm-target-all", feature = "llvm-target-loongarch"))]
@@ -5841,10 +5296,7 @@ fn loongarch64_lp64f_hosted_linking_is_rejected_before_the_linker() {
 
     assert!(!output.status.success());
     let error = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        error.contains("glibc does not provide an LP64F runtime"),
-        "{error}"
-    );
+    assert!(error.contains("glibc does not provide an LP64F runtime"), "{error}");
     assert!(
         !error.contains("link failed"),
         "external linker ran before LP64F runtime validation: {error}"
@@ -5918,10 +5370,7 @@ fun main() -> i32 { return 0; }
         ]);
         let ir = fs::read_to_string(output.join("modes.ll")).unwrap();
         for declaration in declarations {
-            assert!(
-                ir.contains(declaration),
-                "{abi}: missing `{declaration}`\n{ir}"
-            );
+            assert!(ir.contains(declaration), "{abi}: missing `{declaration}`\n{ir}");
         }
         let object = output.join("modes.o");
         assert_eq!(loongarch64_elf_flags(&object) & 0x7, expected_flags);
@@ -5965,22 +5414,14 @@ fn run_linux_c_abi_fixture_at_optimization(
     optimization: &str,
 ) {
     let dir = temp_case_dir(&format!("{fixture_name}-c-abi-interop"));
-    let fixture_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests")
-        .join("fixtures")
-        .join(fixture_name);
+    let fixture_dir =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests").join("fixtures").join(fixture_name);
     let c_object = dir.join("interop-c.o");
     let wave_out = dir.join("wave");
     let binary = dir.join("interop");
 
     let c_compile = Command::new(c_compiler)
-        .args([
-            "-O2",
-            "-ffreestanding",
-            "-fno-builtin",
-            "-fno-stack-protector",
-            "-c",
-        ])
+        .args(["-O2", "-ffreestanding", "-fno-builtin", "-fno-stack-protector", "-c"])
         .arg(fixture_dir.join("interop.c"))
         .arg("-o")
         .arg(&c_object)
@@ -6038,10 +5479,7 @@ fn run_linux_c_abi_fixture_at_optimization(
 
 fn pe_machine(path: &Path) -> u16 {
     let bytes = fs::read(path).unwrap();
-    assert!(
-        bytes.len() >= 0x40 && &bytes[..2] == b"MZ",
-        "invalid PE file"
-    );
+    assert!(bytes.len() >= 0x40 && &bytes[..2] == b"MZ", "invalid PE file");
     let pe_offset = u32::from_le_bytes(bytes[0x3c..0x40].try_into().unwrap()) as usize;
     assert!(
         bytes.len() >= pe_offset + 6 && &bytes[pe_offset..pe_offset + 4] == b"PE\0\0",
@@ -6073,11 +5511,7 @@ fn windows_arm64_c_abi_emits_msvc_objects() {
         .arg(&c_object)
         .output()
         .unwrap();
-    assert!(
-        compiled.status.success(),
-        "{}",
-        String::from_utf8_lossy(&compiled.stderr)
-    );
+    assert!(compiled.status.success(), "{}", String::from_utf8_lossy(&compiled.stderr));
     run_wavec([
         OsStr::new("build"),
         fixture_dir.join("interop.wave").as_os_str(),
@@ -6126,21 +5560,13 @@ fn aarch64_c_abi_interoperates_with_c() {
     run_linux_c_abi_fixture(
         "aarch64_aapcs64",
         "aarch64-unknown-linux-gnu",
-        if native {
-            "gcc"
-        } else {
-            "aarch64-linux-gnu-gcc"
-        },
+        if native { "gcc" } else { "aarch64-linux-gnu-gcc" },
         if native { None } else { Some("qemu-aarch64") },
     );
     run_linux_c_abi_fixture(
         "c_abi_edges",
         "aarch64-unknown-linux-gnu",
-        if native {
-            "gcc"
-        } else {
-            "aarch64-linux-gnu-gcc"
-        },
+        if native { "gcc" } else { "aarch64-linux-gnu-gcc" },
         if native { None } else { Some("qemu-aarch64") },
     );
 }
@@ -6195,13 +5621,7 @@ fn riscv64_c_abi_interoperates_with_c_under_qemu() {
     ]);
 
     let link = Command::new("riscv64-linux-gnu-gcc")
-        .args([
-            "-march=rv64gc",
-            "-mabi=lp64d",
-            "-nostdlib",
-            "-static",
-            "-Wl,-e,_start",
-        ])
+        .args(["-march=rv64gc", "-mabi=lp64d", "-nostdlib", "-static", "-Wl,-e,_start"])
         .arg(wave_out.join("interop.o"))
         .arg(&c_object)
         .arg("-o")
@@ -6214,10 +5634,8 @@ fn riscv64_c_abi_interoperates_with_c_under_qemu() {
         String::from_utf8_lossy(&link.stderr)
     );
 
-    let run = Command::new("qemu-riscv64")
-        .arg(&binary)
-        .output()
-        .expect("failed to start qemu-riscv64");
+    let run =
+        Command::new("qemu-riscv64").arg(&binary).output().expect("failed to start qemu-riscv64");
     assert!(
         run.status.success(),
         "C/Wave psABI fixture failed with status {}\nstdout:\n{}\nstderr:\n{}",
@@ -6259,16 +5677,12 @@ fn run_loongarch64_c_abi_fixture(abi: &str, fixture_name: &str) {
         .find(|tool| Command::new(tool).arg("--version").output().is_ok())
         .expect("ld.lld 21 is required for LoongArch ABI tests");
     assert!(
-        Command::new("qemu-loongarch64")
-            .arg("--version")
-            .output()
-            .is_ok(),
+        Command::new("qemu-loongarch64").arg("--version").output().is_ok(),
         "qemu-loongarch64 is required for LoongArch ABI tests"
     );
 
-    let fixture = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-        .join("tests/fixtures")
-        .join(fixture_name);
+    let fixture =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures").join(fixture_name);
     let dir = temp_case_dir(&format!("loongarch64-{abi}-c-abi-interop"));
     let c_object = dir.join("interop-c.o");
     let wave_out = dir.join("wave");
@@ -6324,10 +5738,7 @@ fn run_loongarch64_c_abi_fixture(abi: &str, fixture_name: &str) {
         ]
     };
     for contract in contracts {
-        assert!(
-            wave_ir.contains(*contract),
-            "missing `{contract}`:\n{wave_ir}"
-        );
+        assert!(wave_ir.contains(*contract), "missing `{contract}`:\n{wave_ir}");
     }
 
     let expected_flags = if abi == "lp64s" { 1 } else { 3 };
@@ -6691,11 +6102,7 @@ fn run_shared_language_workloads(flag: &str, target: &str, runner: &str) {
         .arg(&runtime)
         .output()
         .unwrap();
-    assert!(
-        compile.status.success(),
-        "{}",
-        String::from_utf8_lossy(&compile.stderr)
-    );
+    assert!(compile.status.success(), "{}", String::from_utf8_lossy(&compile.stderr));
     let arch = match target {
         "aarch64-unknown-linux-gnu" => "arm64",
         "riscv64-unknown-linux-gnu" => "riscv64",
@@ -6732,14 +6139,7 @@ fn run_shared_language_workloads(flag: &str, target: &str, runner: &str) {
         ]);
         let binary = output_dir.join(case);
         let link = Command::new(&clang)
-            .args([
-                "-target",
-                target,
-                "-fuse-ld=lld",
-                "-nostdlib",
-                "-static",
-                "-Wl,-e,_start",
-            ])
+            .args(["-target", target, "-fuse-ld=lld", "-nostdlib", "-static", "-Wl,-e,_start"])
             .arg(&runtime)
             .arg(output_dir.join(format!("{case}.o")))
             .arg("-o")
@@ -6826,42 +6226,23 @@ fn msvc_link_companions_keep_final_names_and_survive_failed_replacement() {
             ));
         }
         let output = command.output().unwrap();
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
         for extension in ["dll", "lib", "pdb"] {
             assert!(
                 output_dir.join(format!("answer.{extension}")).is_file(),
                 "missing final {extension} for {target}"
             );
         }
-        assert_eq!(
-            pe_machine(&dll),
-            if target.starts_with("aarch64-") {
-                0xaa64
-            } else {
-                0x8664
-            }
-        );
+        assert_eq!(pe_machine(&dll), if target.starts_with("aarch64-") { 0xaa64 } else { 0x8664 });
         let library = fs::read(output_dir.join("answer.lib")).unwrap();
-        assert!(library
-            .windows(b"answer.dll".len())
-            .any(|bytes| bytes == b"answer.dll"));
-        assert!(!library
-            .windows(b".wave-output-".len())
-            .any(|bytes| bytes == b".wave-output-"));
+        assert!(library.windows(b"answer.dll".len()).any(|bytes| bytes == b"answer.dll"));
+        assert!(!library.windows(b".wave-output-".len()).any(|bytes| bytes == b".wave-output-"));
         let custom_lib = output_dir.join("imports").join("public.lib");
         let custom_pdb = output_dir.join("symbols").join("private.pdb");
         command.arg(format!("-Clink-arg=/IMPLIB:{}", custom_lib.display()));
         command.arg(format!("-Clink-arg=/PDB:{}", custom_pdb.display()));
         let output = command.output().unwrap();
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
         assert_eq!(fs::read(&custom_lib).unwrap(), library);
         assert!(custom_pdb.is_file());
         let consumer = write_wave(
@@ -6887,9 +6268,7 @@ fun main() -> i32 { return 0; }
             executable.as_os_str(),
         ]);
         let image = fs::read(&executable).unwrap();
-        assert!(image
-            .windows(b"answer.dll".len())
-            .any(|bytes| bytes == b"answer.dll"));
+        assert!(image.windows(b"answer.dll".len()).any(|bytes| bytes == b"answer.dll"));
         let original_dll = fs::read(&dll).unwrap();
         let original_pdb = fs::read(&custom_pdb).unwrap();
         command.arg("-Clink-arg=/EXPORT:missing_symbol");
@@ -6914,21 +6293,9 @@ fn explicit_entry_uses_the_selected_linker_dialect_once() {
         ("x86_64-pc-windows-msvc", None, "\"/ENTRY:wave_start\""),
         ("aarch64-pc-windows-msvc", None, "\"/ENTRY:wave_start\""),
         ("x86_64-unknown-linux-gnu", None, "\"-e\",\"wave_start\""),
-        (
-            "x86_64-unknown-linux-gnu",
-            Some("ld.lld"),
-            "\"-e\",\"wave_start\"",
-        ),
-        (
-            "x86_64-unknown-linux-gnu",
-            Some("clang"),
-            "\"-Wl,-e,wave_start\"",
-        ),
-        (
-            "x86_64-pc-windows-msvc",
-            Some("link.exe"),
-            "\"/ENTRY:wave_start\"",
-        ),
+        ("x86_64-unknown-linux-gnu", Some("ld.lld"), "\"-e\",\"wave_start\""),
+        ("x86_64-unknown-linux-gnu", Some("clang"), "\"-Wl,-e,wave_start\""),
+        ("x86_64-pc-windows-msvc", Some("link.exe"), "\"/ENTRY:wave_start\""),
         ("aarch64-apple-darwin", None, "\"-e\",\"wave_start\""),
         ("wasm32-unknown-unknown", None, "\"--entry=wave_start\""),
     ];
@@ -6951,19 +6318,10 @@ fn explicit_entry_uses_the_selected_linker_dialect_once() {
             command.arg(format!("-Clinker={linker}"));
         }
         let output = command.output().unwrap();
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
         let plan = String::from_utf8(output.stdout).unwrap();
-        let link_args = plan
-            .split("\"args\":[")
-            .nth(1)
-            .unwrap()
-            .split("],\"command\":")
-            .next()
-            .unwrap();
+        let link_args =
+            plan.split("\"args\":[").nth(1).unwrap().split("],\"command\":").next().unwrap();
         assert!(link_args.contains(expected), "{target}/{linker:?}: {plan}");
         assert_eq!(link_args.matches("wave_start").count(), 1, "{plan}");
     }
@@ -7028,11 +6386,7 @@ fn msvc_native_fixtures_compile_and_arm64_hfas_match_clang() {
                 .arg(output.join("stack.o"))
                 .output()
                 .expect("llvm-readobj is required for stack contracts");
-            assert!(
-                unwind.status.success(),
-                "{}",
-                String::from_utf8_lossy(&unwind.stderr)
-            );
+            assert!(unwind.status.success(), "{}", String::from_utf8_lossy(&unwind.stderr));
             let unwind = String::from_utf8_lossy(&unwind.stdout);
             assert!(
                 unwind.contains("RuntimeFunction") && unwind.contains("__chkstk"),
@@ -7047,13 +6401,8 @@ fn msvc_native_fixtures_compile_and_arm64_hfas_match_clang() {
                             line.starts_with("define ") && line.contains(&format!("@{name}("))
                         })
                         .unwrap_or_else(|| panic!("missing {name}: {ir}"));
-                    let group = definition
-                        .split('#')
-                        .nth(1)
-                        .unwrap()
-                        .split_whitespace()
-                        .next()
-                        .unwrap();
+                    let group =
+                        definition.split('#').nth(1).unwrap().split_whitespace().next().unwrap();
                     let attributes = ir
                         .lines()
                         .find(|line| line.starts_with(&format!("attributes #{group} =")))
@@ -7076,11 +6425,7 @@ fn msvc_native_fixtures_compile_and_arm64_hfas_match_clang() {
                 .arg(&c_ir)
                 .output()
                 .unwrap();
-            assert!(
-                result.status.success(),
-                "{}",
-                String::from_utf8_lossy(&result.stderr)
-            );
+            assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stderr));
             if target.starts_with("aarch64") {
                 let c = fs::read_to_string(c_ir).unwrap();
                 let wave = fs::read_to_string(output.join("abi.ll")).unwrap();
@@ -7091,10 +6436,7 @@ fn msvc_native_fixtures_compile_and_arm64_hfas_match_clang() {
                     "{wave}"
                 );
                 assert!(wave.contains("declare %Hda @c_hda([4 x double])"), "{wave}");
-                assert!(
-                    wave.contains("define %Hda @wave_hda([4 x double]"),
-                    "{wave}"
-                );
+                assert!(wave.contains("define %Hda @wave_hda([4 x double]"), "{wave}");
                 // HFA exhaustion must move the aggregate together onto the stack.
                 assert!(wave.contains("float, [4 x float], float)"), "{wave}");
             }
@@ -7116,10 +6458,9 @@ extern(system) fun native_api(value: i32) -> i32;
 fun main() -> i32 { return 0; }
 "#,
     );
-    for (target, machine) in [
-        ("x86_64-pc-windows-msvc", 0x8664u16),
-        ("aarch64-pc-windows-msvc", 0xaa64u16),
-    ] {
+    for (target, machine) in
+        [("x86_64-pc-windows-msvc", 0x8664u16), ("aarch64-pc-windows-msvc", 0xaa64u16)]
+    {
         if llvm::codegen::target::target_spec_for_triple(target).is_none() {
             continue;
         }
@@ -7177,10 +6518,7 @@ fun main() -> i32 { return 0; }
             assert_eq!(&image[..2], b"MZ");
             let pe = u32::from_le_bytes(image[0x3c..0x40].try_into().unwrap()) as usize;
             assert_eq!(&image[pe..pe + 4], b"PE\0\0");
-            assert_eq!(
-                u16::from_le_bytes(image[pe + 4..pe + 6].try_into().unwrap()),
-                machine
-            );
+            assert_eq!(u16::from_le_bytes(image[pe + 4..pe + 6].try_into().unwrap()), machine);
         }
     }
 }
@@ -7199,12 +6537,7 @@ fn async_tasks_suspend_resume_cancel_and_exchange_tcp_data() {
         &PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("std"),
         &home.join(".wave/lib/wave/std"),
     );
-    for name in [
-        "lazy_nested",
-        "control_flow",
-        "timer_fairness",
-        "tcp_roundtrip",
-    ] {
+    for name in ["lazy_nested", "control_flow", "timer_fairness", "tcp_roundtrip"] {
         let source = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
             .join(format!("tests/fixtures/async/{name}.wave"));
         let output = dir.join(name);
@@ -7216,11 +6549,7 @@ fn async_tasks_suspend_resume_cancel_and_exchange_tcp_data() {
             .arg(&output)
             .output()
             .unwrap();
-        assert!(
-            compiled.status.success(),
-            "{name}: {}",
-            String::from_utf8_lossy(&compiled.stderr)
-        );
+        assert!(compiled.status.success(), "{name}: {}", String::from_utf8_lossy(&compiled.stderr));
         let mut child = Command::new(&output).spawn().unwrap();
         let deadline = std::time::Instant::now() + std::time::Duration::from_secs(15);
         loop {
@@ -7373,11 +6702,7 @@ fn executor_restart_fixture_emits_for_windows_msvc() {
             String::from_utf8_lossy(&compiled.stderr)
         );
         let object = fs::read(output).unwrap();
-        let expected = if target.starts_with("aarch64") {
-            0xaa64
-        } else {
-            0x8664
-        };
+        let expected = if target.starts_with("aarch64") { 0xaa64 } else { 0x8664 };
         assert_eq!(u16::from_le_bytes([object[0], object[1]]), expected);
     }
     fs::remove_dir_all(dir).unwrap();
@@ -7405,10 +6730,7 @@ fn msvc_rejects_foreign_link_input_before_launch_and_preserves_output() {
         OsStr::new("-o"),
         output.as_os_str(),
     ]);
-    assert!(
-        error.contains("foreign.obj") && error.contains("machine"),
-        "{error}"
-    );
+    assert!(error.contains("foreign.obj") && error.contains("machine"), "{error}");
     assert_eq!(fs::read(output).unwrap(), b"retained executable");
 }
 
@@ -7453,10 +6775,9 @@ fn darwin_process_and_timed_socket_fixtures_preserve_raw_syscall_contracts() {
     let dir = temp_case_dir("darwin-process-socket");
     let home = dir.join("home");
     copy_tree(&root.join("std"), &home.join(".wave/lib/wave/std"));
-    for (target, result_registers) in [
-        ("x86_64-apple-darwin", "={rax},={rdx}"),
-        ("aarch64-apple-darwin", "={x0},={x1}"),
-    ] {
+    for (target, result_registers) in
+        [("x86_64-apple-darwin", "={rax},={rdx}"), ("aarch64-apple-darwin", "={x0},={x1}")]
+    {
         if llvm::codegen::target::target_spec_for_triple(target).is_none() {
             continue;
         }
@@ -7481,11 +6802,7 @@ fn darwin_process_and_timed_socket_fixtures_preserve_raw_syscall_contracts() {
                 assert!(out.join(format!("{source}.o")).is_file());
                 if opt == "-O0" {
                     let ir = fs::read_to_string(out.join(format!("{source}.ll"))).unwrap();
-                    let suffix = if source == "fork_status" {
-                        "_fork("
-                    } else {
-                        "_sendto("
-                    };
+                    let suffix = if source == "fork_status" { "_fork(" } else { "_sendto(" };
                     let function = ir
                         .split("\ndefine ")
                         .find(|body| body.lines().next().unwrap_or("").contains(suffix))
@@ -7534,10 +6851,7 @@ fn retired_windows_gnu_targets_report_the_msvc_replacement() {
             OsStr::new(target),
             OsStr::new("--emit=obj"),
         ]);
-        assert!(
-            error.contains("has been retired") && error.contains(replacement),
-            "{error}"
-        );
+        assert!(error.contains("has been retired") && error.contains(replacement), "{error}");
     }
 }
 
@@ -7608,16 +6922,9 @@ fn phase1_literal_printing_preserves_non_utf8_bytes() {
             OsStr::new("--out-dir"),
             dir.join(opt).as_os_str(),
         ]);
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        let expected: &[u8] = if cfg!(windows) {
-            b"\xff\xc3\xa9\x80 42\r\n"
-        } else {
-            b"\xff\xc3\xa9\x80 42\n"
-        };
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+        let expected: &[u8] =
+            if cfg!(windows) { b"\xff\xc3\xa9\x80 42\r\n" } else { b"\xff\xc3\xa9\x80 42\n" };
         assert_eq!(output.stdout, expected);
     }
 }
@@ -7626,26 +6933,15 @@ fn phase1_literal_printing_preserves_non_utf8_bytes() {
 fn main_parameter_contract_is_shared_by_hosted_freestanding_and_wasi_targets() {
     let dir = temp_case_dir("main-parameter-contract");
     let mut targets = vec!["x86_64-unknown-linux-gnu", "x86_64-unknown-none-elf"];
-    if cfg!(any(
-        feature = "llvm-target-wasm",
-        feature = "llvm-target-all"
-    )) {
+    if cfg!(any(feature = "llvm-target-wasm", feature = "llvm-target-all")) {
         targets.push("wasm32-wasip1");
     }
     for target in targets {
         for (name, body, valid) in [
             ("void_entry", "fun main() {}", true),
             ("int_entry", "fun main() -> i32 { return 0; }", true),
-            (
-                "parameter_entry",
-                "fun main(x: i32) -> i32 { return x; }",
-                false,
-            ),
-            (
-                "default_entry",
-                "fun main(x: i32 = 42) -> i32 { return x; }",
-                false,
-            ),
+            ("parameter_entry", "fun main(x: i32) -> i32 { return x; }", false),
+            ("default_entry", "fun main(x: i32 = 42) -> i32 { return x; }", false),
         ] {
             let source = write_wave(&dir, &format!("{name}.wave"), body);
             let out = dir.join(target).join(name);
@@ -7680,27 +6976,11 @@ fn phase1_diagnostics_are_located_in_human_and_json_modes() {
     for newline in ["\n", "\r\n", "\r"] {
         for (body, message, code) in [
             ("fun f() { const x: i32 = 1; }", "top level", "E2001"),
-            (
-                "fun f() { for (static x: i32 = 1; x < 2; x += 1) {} }",
-                "top level",
-                "E2001",
-            ),
+            ("fun f() { for (static x: i32 = 1; x < 2; x += 1) {} }", "top level", "E2001"),
             ("fun f() { match (1) { 1 {} } }", "match arm", "E2001"),
-            (
-                "extern(c) fun f(x: ptr<,>);",
-                "extern parameter type",
-                "E2001",
-            ),
-            (
-                "extern(c) fun f() -> ptr<,>;",
-                "extern return type",
-                "E2001",
-            ),
-            (
-                "fun main(x: i32 = 42) -> i32 { return x; }",
-                "must have zero parameters",
-                "E3001",
-            ),
+            ("extern(c) fun f(x: ptr<,>);", "extern parameter type", "E2001"),
+            ("extern(c) fun f() -> ptr<,>;", "extern return type", "E2001"),
+            ("fun main(x: i32 = 42) -> i32 { return x; }", "must have zero parameters", "E3001"),
             (r#"fun f() { var s: str = "\x00"; }"#, "NUL", "E1004"),
         ] {
             let source = write_wave(&dir, "bad.wave", &format!("// 한글{newline}{body}"));
@@ -7711,11 +6991,7 @@ fn phase1_diagnostics_are_located_in_human_and_json_modes() {
                     OsStr::new(&format!("--error-format={format}")),
                 ]);
                 assert!(!output.status.success(), "{body}");
-                assert!(
-                    output.stdout.is_empty(),
-                    "unexpected parser output: {:?}",
-                    output.stdout
-                );
+                assert!(output.stdout.is_empty(), "unexpected parser output: {:?}", output.stdout);
                 let stderr = String::from_utf8(output.stderr).unwrap();
                 assert!(stderr.contains(message), "{stderr}");
                 assert!(stderr.contains(code), "{stderr}");
@@ -7752,11 +7028,7 @@ fn addressed_array_literals_preserve_contextual_storage_at_o0_and_o2() {
 #[cfg(feature = "llvm-target-wasm")]
 fn wasi_access_checks_minimal_rights_and_preserves_host_errors() {
     for tool in ["node", "wasm-ld"] {
-        if !Command::new(tool)
-            .arg("--version")
-            .output()
-            .is_ok_and(|out| out.status.success())
-        {
+        if !Command::new(tool).arg("--version").output().is_ok_and(|out| out.status.success()) {
             eprintln!("skipping WASI access execution: {tool} unavailable");
             return;
         }
@@ -7780,11 +7052,7 @@ fn wasi_access_checks_minimal_rights_and_preserves_host_errors() {
             .arg(&dir)
             .output()
             .unwrap();
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
+        assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
         let module = dir.join("access.wasm");
         let link = Command::new("wasm-ld")
             .args(["--no-entry", "--export=check_access", "--export-memory"])
@@ -7793,11 +7061,7 @@ fn wasi_access_checks_minimal_rights_and_preserves_host_errors() {
             .arg(&module)
             .output()
             .unwrap();
-        assert!(
-            link.status.success(),
-            "{}",
-            String::from_utf8_lossy(&link.stderr)
-        );
+        assert!(link.status.success(), "{}", String::from_utf8_lossy(&link.stderr));
         let result = Command::new("node")
             .arg(root.join("tests/fixtures/wasi_access/host.cjs"))
             .arg(&module)
@@ -7818,34 +7082,19 @@ fn wasi_access_checks_minimal_rights_and_preserves_host_errors() {
 #[cfg(feature = "llvm-target-wasm")]
 fn wasm_missing_host_imports_have_actionable_human_and_json_errors() {
     for tool in ["node", "wasm-ld"] {
-        if !Command::new(tool)
-            .arg("--version")
-            .output()
-            .is_ok_and(|out| out.status.success())
-        {
+        if !Command::new(tool).arg("--version").output().is_ok_and(|out| out.status.success()) {
             eprintln!("skipping WebAssembly missing-import execution: {tool} unavailable");
             return;
         }
     }
     let dir = temp_case_dir("wasm-missing-imports");
     let source = write_wave(&dir, "missing.wave", "extern(c) fun host_add(a: i32, b: i32) -> i32;\nfun main() -> i32 { return host_add(2, 3); }\n");
-    for target in [
-        "wasm32-unknown-unknown",
-        "wasm64-unknown-unknown",
-        "wasm32-wasip1",
-    ] {
+    for target in ["wasm32-unknown-unknown", "wasm64-unknown-unknown", "wasm32-wasip1"] {
         for format in ["human", "json"] {
             let output = wavec_command()
                 .arg("build")
                 .arg(&source)
-                .args([
-                    "--target",
-                    target,
-                    "--run",
-                    "--error-format",
-                    format,
-                    "--out-dir",
-                ])
+                .args(["--target", target, "--run", "--error-format", format, "--out-dir"])
                 .arg(dir.join(target))
                 .output()
                 .unwrap();
@@ -7858,10 +7107,7 @@ fn wasm_missing_host_imports_have_actionable_human_and_json_errors() {
             };
             assert!(stderr.contains(name), "{stderr}");
             assert!(stderr.contains("explicit JavaScript host"), "{stderr}");
-            assert!(
-                !stderr.contains("LinkError") && !stderr.contains("at async"),
-                "{stderr}"
-            );
+            assert!(!stderr.contains("LinkError") && !stderr.contains("at async"), "{stderr}");
             if format == "json" {
                 let value = utils::wson::parse_json(stderr.trim()).unwrap();
                 let error = value.get("error").unwrap();

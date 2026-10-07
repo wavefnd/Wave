@@ -56,9 +56,7 @@ fn select_std_reference<'a>(
         ));
     }
     if value.starts_with('-') || value.contains(':') || value.chars().any(char::is_whitespace) {
-        return Err(CliError::usage(
-            "invalid std reference: expected a Git commit, branch or tag",
-        ));
+        return Err(CliError::usage("invalid std reference: expected a Git commit, branch or tag"));
     }
     Ok(value)
 }
@@ -141,17 +139,11 @@ fn fetch_std_from_wave_repo_sparse(
     // commit. Never fetch a moving master as a fallback for a missing pin.
     run_cmd(Command::new("git").arg("init").arg(checkout), "git init")?;
     run_cmd(
-        Command::new("git")
-            .arg("-C")
-            .arg(checkout)
-            .args(["remote", "add", "origin", repository]),
+        Command::new("git").arg("-C").arg(checkout).args(["remote", "add", "origin", repository]),
         "git remote add",
     )?;
     run_cmd(
-        Command::new("git")
-            .arg("-C")
-            .arg(checkout)
-            .args(["sparse-checkout", "set", "std"]),
+        Command::new("git").arg("-C").arg(checkout).args(["sparse-checkout", "set", "std"]),
         "git sparse-checkout set std",
     )?;
     run_cmd(
@@ -165,19 +157,12 @@ fn fetch_std_from_wave_repo_sparse(
         "git fetch std reference",
     )?;
     run_cmd(
-        Command::new("git")
-            .arg("-C")
-            .arg(checkout)
-            .args(["checkout", "--detach", "FETCH_HEAD"]),
+        Command::new("git").arg("-C").arg(checkout).args(["checkout", "--detach", "FETCH_HEAD"]),
         "git checkout std revision",
     )?;
 
     let source_revision = run_cmd_stdout(
-        Command::new("git")
-            .arg("-C")
-            .arg(checkout)
-            .arg("rev-parse")
-            .arg("HEAD"),
+        Command::new("git").arg("-C").arg(checkout).arg("rev-parse").arg("HEAD"),
         "git rev-parse HEAD",
     )?;
 
@@ -333,10 +318,7 @@ fn run_cmd_stdout(cmd: &mut Command, label: &str) -> Result<String, CliError> {
 
     let stdout = String::from_utf8_lossy(&out.stdout).trim().to_string();
     if stdout.is_empty() {
-        return Err(CliError::CommandFailed(format!(
-            "{} returned empty output",
-            label
-        )));
+        return Err(CliError::CommandFailed(format!("{} returned empty output", label)));
     }
     Ok(stdout)
 }
@@ -346,10 +328,7 @@ fn make_tmp_dir(prefix: &str) -> Result<PathBuf, CliError> {
 }
 
 fn unique_path_in(parent: &Path, prefix: &str) -> PathBuf {
-    let timestamp = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
+    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH).unwrap().as_nanos();
     parent.join(format!("{}-{}-{}", prefix, std::process::id(), timestamp))
 }
 
@@ -400,37 +379,26 @@ mod tests {
         git(&["commit", "-m", "compatible"]);
         let pinned = git(&["rev-parse", "HEAD"]);
         git(&["tag", "compatible"]);
-        fs::write(
-            &manifest,
-            r#"{"name":"std","format":1,"compatibility_revision":999999}"#,
-        )
-        .unwrap();
+        fs::write(&manifest, r#"{"name":"std","format":1,"compatibility_revision":999999}"#)
+            .unwrap();
         fs::write(repository.join("std/version.wave"), "new").unwrap();
         git(&["add", "."]);
         git(&["commit", "-m", "incompatible"]);
         let installed = root.join("install/std");
         let repo = repository.to_str().unwrap();
         install_from_repository(repo, &pinned, &installed, |_, _| Ok(())).unwrap();
-        assert_eq!(
-            fs::read_to_string(installed.join("version.wave")).unwrap(),
-            "old"
-        );
+        assert_eq!(fs::read_to_string(installed.join("version.wave")).unwrap(), "old");
         assert!(fs::read_to_string(installed.join("INSTALL_META"))
             .unwrap()
             .contains(&format!("revision={pinned}")));
         for reference in ["HEAD", "missing-reference"] {
             assert!(install_from_repository(repo, reference, &installed, |_, _| Ok(())).is_err());
-            assert_eq!(
-                fs::read_to_string(installed.join("version.wave")).unwrap(),
-                "old"
-            );
+            assert_eq!(fs::read_to_string(installed.join("version.wave")).unwrap(), "old");
         }
-        assert!(
-            install_from_repository(repo, "compatible", &installed, |_, _| Err(
-                CliError::CommandFailed("validation failed".into())
-            ))
-            .is_err()
-        );
+        assert!(install_from_repository(repo, "compatible", &installed, |_, _| Err(
+            CliError::CommandFailed("validation failed".into())
+        ))
+        .is_err());
         assert!(install_from_repository(
             root.join("missing-repository").to_str().unwrap(),
             &pinned,
@@ -438,14 +406,8 @@ mod tests {
             |_, _| Ok(())
         )
         .is_err());
-        assert_eq!(
-            fs::read_to_string(installed.join("version.wave")).unwrap(),
-            "old"
-        );
-        assert_eq!(
-            fs::read_dir(installed.parent().unwrap()).unwrap().count(),
-            1
-        );
+        assert_eq!(fs::read_to_string(installed.join("version.wave")).unwrap(), "old");
+        assert_eq!(fs::read_dir(installed.parent().unwrap()).unwrap().count(), 1);
         install_from_repository(repo, "compatible", &installed, |_, stage| {
             assert_eq!(fs::read_to_string(stage.join("version.wave"))?, "old");
             Ok(())
@@ -461,14 +423,8 @@ mod tests {
         let revision = "0123456789abcdef0123456789abcdef01234567";
         assert_eq!(select_std_reference(None, revision).unwrap(), revision);
         assert!(select_std_reference(None, "").is_err());
-        assert_eq!(
-            select_std_reference(Some("release-tag"), "").unwrap(),
-            "release-tag"
-        );
-        assert_eq!(
-            resolve_std_reference(Some("release-tag")).unwrap(),
-            "release-tag"
-        );
+        assert_eq!(select_std_reference(Some("release-tag"), "").unwrap(), "release-tag");
+        assert_eq!(resolve_std_reference(Some("release-tag")).unwrap(), "release-tag");
         for value in ["", "--all", "head:local", "two refs"] {
             assert!(resolve_std_reference(Some(value)).is_err());
         }
@@ -487,10 +443,7 @@ mod tests {
         replace_std_tree(&staged, &installed).unwrap();
 
         assert!(!installed.join("old.wave").exists());
-        assert_eq!(
-            fs::read_to_string(installed.join("new.wave")).unwrap(),
-            "new"
-        );
+        assert_eq!(fs::read_to_string(installed.join("new.wave")).unwrap(), "new");
         assert!(!staged.exists());
         let _ = fs::remove_dir_all(root);
     }
@@ -505,13 +458,8 @@ mod tests {
 
         let error = replace_std_tree(&missing_stage, &installed).unwrap_err();
 
-        assert!(error
-            .message()
-            .contains("previous installation was restored"));
-        assert_eq!(
-            fs::read_to_string(installed.join("old.wave")).unwrap(),
-            "old"
-        );
+        assert!(error.message().contains("previous installation was restored"));
+        assert_eq!(fs::read_to_string(installed.join("old.wave")).unwrap(), "old");
         let _ = fs::remove_dir_all(root);
     }
 }

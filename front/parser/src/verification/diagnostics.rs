@@ -56,18 +56,14 @@ pub(super) fn top_level_span_hint(node: &ASTNode) -> SemanticSpanHint {
         ASTNode::Struct(structure) => (SemanticSpanKind::Declaration, structure.name.clone()),
         ASTNode::ProtoImpl(implementation) => {
             (SemanticSpanKind::Declaration, implementation.target.clone())
-        }
+        },
         ASTNode::TypeAlias(alias) => (SemanticSpanKind::Declaration, alias.name.clone()),
         ASTNode::Enum(enumeration) => (SemanticSpanKind::Declaration, enumeration.name.clone()),
         ASTNode::Variant(variant) => (SemanticSpanKind::Declaration, variant.name.clone()),
         ASTNode::Variable(variable) => (SemanticSpanKind::Declaration, variable.name.clone()),
         ASTNode::Statement(_) | ASTNode::Expression(_) | ASTNode::Program(_) => {
             (SemanticSpanKind::Keyword, "program".to_string())
-        }
+        },
     };
-    SemanticSpanHint {
-        kind,
-        text,
-        occurrence: 1,
-    }
+    SemanticSpanHint { kind, text, occurrence: 1 }
 }

@@ -17,11 +17,13 @@ impl Case {
         fs::create_dir_all(&path).unwrap();
         Self(path)
     }
+
     fn command(&self) -> Command {
         let mut command = Command::new(env!("CARGO_BIN_EXE_wavec"));
         command.current_dir(&self.0).env("NO_COLOR", "1");
         command
     }
+
     fn write(&self, path: &str, text: &str) -> PathBuf {
         let path = self.0.join(path);
         fs::create_dir_all(path.parent().unwrap()).unwrap();
@@ -42,6 +44,7 @@ fn success(out: Output) {
         String::from_utf8_lossy(&out.stderr)
     );
 }
+
 fn rejected(out: Output, message: &str) {
     assert!(!out.status.success());
     assert!(
@@ -50,6 +53,7 @@ fn rejected(out: Output, message: &str) {
         String::from_utf8_lossy(&out.stderr)
     );
 }
+
 fn source() -> &'static str {
     "fun main() -> i32 { return 0; }\n"
 }
@@ -88,10 +92,7 @@ fn output_aliases_preserve_all_input_bytes_before_any_emission() {
             .unwrap(),
         "aliases compiler input",
     );
-    assert_eq!(
-        fs::read_to_string(ir).unwrap(),
-        "define i32 @other() { ret i32 0 }\n"
-    );
+    assert_eq!(fs::read_to_string(ir).unwrap(), "define i32 @other() { ret i32 0 }\n");
     assert!(!case.0.join("source_1.o").exists());
 }
 
@@ -138,10 +139,7 @@ fn symlink_and_imported_source_outputs_are_rejected() {
     );
     let imported = "pub const VALUE: i32 = 0;\n";
     case.write("dep.wave", imported);
-    case.write(
-        "main.wave",
-        "import(\"./dep.wave\")::{VALUE}; fun main() -> i32 { return VALUE; }",
-    );
+    case.write("main.wave", "import(\"./dep.wave\")::{VALUE}; fun main() -> i32 { return VALUE; }");
     rejected(
         case.command()
             .args(["build", "main.wave", "--emit=obj", "-o", "dep.wave"])
@@ -149,10 +147,7 @@ fn symlink_and_imported_source_outputs_are_rejected() {
             .unwrap(),
         "aliases compiler input",
     );
-    assert_eq!(
-        fs::read_to_string(case.0.join("dep.wave")).unwrap(),
-        imported
-    );
+    assert_eq!(fs::read_to_string(case.0.join("dep.wave")).unwrap(), imported);
 }
 
 fn stub_std(case: &Case, name: &str, value: i32) -> PathBuf {
@@ -163,11 +158,7 @@ fn stub_std(case: &Case, name: &str, value: i32) -> PathBuf {
         root.join("manifest.json"),
     )
     .unwrap();
-    fs::write(
-        root.join("value.wave"),
-        format!("pub const VALUE: i32 = {value};"),
-    )
-    .unwrap();
+    fs::write(root.join("value.wave"), format!("pub const VALUE: i32 = {value};")).unwrap();
     root
 }
 
@@ -176,10 +167,8 @@ fn explicit_std_roots_are_isolated_and_never_fall_back() {
     let case = Case::new();
     let first = stub_std(&case, "std 한글 one", 7);
     let second = stub_std(&case, "second", 9);
-    let input = case.write(
-        "main.wave",
-        "import(\"std::value\")::{VALUE}; fun main() -> i32 { return VALUE; }",
-    );
+    let input = case
+        .write("main.wave", "import(\"std::value\")::{VALUE}; fun main() -> i32 { return VALUE; }");
     for (root, value) in [(&first, "7"), (&second, "9")] {
         success(
             case.command()
@@ -195,54 +184,29 @@ fn explicit_std_roots_are_isolated_and_never_fall_back() {
         assert!(ir.contains(&format!("ret i32 {value}")), "{ir}");
     }
     rejected(
-        case.command()
-            .args(["--std-root", "missing", "check"])
-            .arg(&input)
-            .output()
-            .unwrap(),
+        case.command().args(["--std-root", "missing", "check"]).arg(&input).output().unwrap(),
         "cannot resolve std root",
     );
-    fs::write(
-        first.join("manifest.json"),
-        "{\"name\":\"std\",\"compatibility_revision\":999999}",
-    )
-    .unwrap();
+    fs::write(first.join("manifest.json"), "{\"name\":\"std\",\"compatibility_revision\":999999}")
+        .unwrap();
     rejected(
-        case.command()
-            .arg("--std-root")
-            .arg(&first)
-            .args(["check", "main.wave"])
-            .output()
-            .unwrap(),
+        case.command().arg("--std-root").arg(&first).args(["check", "main.wave"]).output().unwrap(),
         "compatibility revision",
     );
     fs::remove_file(first.join("manifest.json")).unwrap();
     rejected(
-        case.command()
-            .arg("--std-root")
-            .arg(&first)
-            .args(["check", "main.wave"])
-            .output()
-            .unwrap(),
+        case.command().arg("--std-root").arg(&first).args(["check", "main.wave"]).output().unwrap(),
         "compatibility revision",
     );
     fs::write(first.join("manifest.json"), "malformed").unwrap();
     rejected(
-        case.command()
-            .arg("--std-root")
-            .arg(&first)
-            .args(["check", "main.wave"])
-            .output()
-            .unwrap(),
+        case.command().arg("--std-root").arg(&first).args(["check", "main.wave"]).output().unwrap(),
         "invalid",
     );
     // Explicit roots are checked even when the source has no std imports.
     case.write("plain.wave", source());
     rejected(
-        case.command()
-            .args(["--std-root", "missing", "check", "plain.wave"])
-            .output()
-            .unwrap(),
+        case.command().args(["--std-root", "missing", "check", "plain.wave"]).output().unwrap(),
         "cannot resolve std root",
     );
 }
@@ -255,12 +219,9 @@ fn constant_cycles_fail_in_the_frontend_but_forward_dags_remain_valid() {
         "const A: i32 = B; const B: i32 = C; const C: i32 = A; fun main() -> i32 { return A; }",
     ] {
         case.write("cycle.wave", source);
-        for (mode, format) in [
-            ("check", "human"),
-            ("build", "human"),
-            ("check", "json"),
-            ("build", "json"),
-        ] {
+        for (mode, format) in
+            [("check", "human"), ("build", "human"), ("check", "json"), ("build", "json")]
+        {
             let mut command = case.command();
             command.arg(format!("--error-format={format}"));
             command.args([mode, "cycle.wave"]);
@@ -278,15 +239,8 @@ fn constant_cycles_fail_in_the_frontend_but_forward_dags_remain_valid() {
         }
     }
     case.write("dep.wave", "pub const A: i32 = B; const B: i32 = A;");
-    case.write(
-        "imported.wave",
-        "import(\"./dep.wave\")::{A}; fun main() -> i32 { return A; }",
-    );
-    let out = case
-        .command()
-        .args(["check", "imported.wave"])
-        .output()
-        .unwrap();
+    case.write("imported.wave", "import(\"./dep.wave\")::{A}; fun main() -> i32 { return A; }");
+    let out = case.command().args(["check", "imported.wave"]).output().unwrap();
     let error = String::from_utf8_lossy(&out.stderr);
     assert!(error.contains("dep.wave"), "{error}");
     rejected(out, "constant dependency cycle");
@@ -296,15 +250,8 @@ fn constant_cycles_fail_in_the_frontend_but_forward_dags_remain_valid() {
         "dag.wave",
         "const B: i32 = D; const C: i32 = D; const D: i32 = 3; fun main() -> i32 { return B + C; }",
     );
-    success(
-        case.command()
-            .args(["build", "dag.wave", "--emit=ir", "-O2"])
-            .output()
-            .unwrap(),
-    );
-    assert!(fs::read_to_string(case.0.join("dag.ll"))
-        .unwrap()
-        .contains("ret i32 6"));
+    success(case.command().args(["build", "dag.wave", "--emit=ir", "-O2"]).output().unwrap());
+    assert!(fs::read_to_string(case.0.join("dag.ll")).unwrap().contains("ret i32 6"));
 }
 
 #[cfg(feature = "llvm-target-wasm")]
@@ -316,10 +263,9 @@ fn webassembly_runtime_is_freestanding_and_wasi_retries_preserve_errors() {
     }
     let case = Case::new();
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));
-    for (fixture, stem, target) in [
-        ("wasi_retry", "retry", "wasm32-wasip1"),
-        ("wasm_wide", "wide", "wasm64-unknown-unknown"),
-    ] {
+    for (fixture, stem, target) in
+        [("wasi_retry", "retry", "wasm32-wasip1"), ("wasm_wide", "wide", "wasm64-unknown-unknown")]
+    {
         for opt in ["-O0", "-O2"] {
             let output = case.0.join(format!("{fixture}{opt}"));
             success(
@@ -354,12 +300,7 @@ fn webassembly_runtime_is_freestanding_and_wasi_retries_preserve_errors() {
                 }
             }
             success(
-                linker
-                    .arg(output.join(format!("{stem}.o")))
-                    .arg("-o")
-                    .arg(&wasm)
-                    .output()
-                    .unwrap(),
+                linker.arg(output.join(format!("{stem}.o"))).arg("-o").arg(&wasm).output().unwrap(),
             );
             let mut node = Command::new("node");
             if target.starts_with("wasm64") {
@@ -397,13 +338,7 @@ fn aggregate_interop(arch: &str, abi: Option<&str>) {
     success(
         Command::new("clang")
             .args(&clang_args)
-            .args([
-                "-O0",
-                "-ffreestanding",
-                "-fno-builtin",
-                "-fno-stack-protector",
-                "-c",
-            ])
+            .args(["-O0", "-ffreestanding", "-fno-builtin", "-fno-stack-protector", "-c"])
             .arg(root.join("tests/fixtures/linux_case_runtime/start.c"))
             .arg("-o")
             .arg(&start)
@@ -424,13 +359,7 @@ fn aggregate_interop(arch: &str, abi: Option<&str>) {
         success(
             Command::new("clang")
                 .args(&clang_args)
-                .args([
-                    "-O0",
-                    "-ffreestanding",
-                    "-fno-builtin",
-                    "-fno-stack-protector",
-                    "-c",
-                ])
+                .args(["-O0", "-ffreestanding", "-fno-builtin", "-fno-stack-protector", "-c"])
                 .arg(fixture.with_extension("c"))
                 .arg("-o")
                 .arg(&object)
@@ -439,10 +368,12 @@ fn aggregate_interop(arch: &str, abi: Option<&str>) {
         );
         for opt in ["-O0", "-O2"] {
             let mut compiler = case.command();
-            compiler
-                .arg("build")
-                .arg(fixture.with_extension("wave"))
-                .args(["--target", &target, "--emit=obj", opt]);
+            compiler.arg("build").arg(fixture.with_extension("wave")).args([
+                "--target",
+                &target,
+                "--emit=obj",
+                opt,
+            ]);
             if let Some(abi) = abi {
                 compiler.arg(format!("--abi={abi}"));
             }
@@ -463,12 +394,7 @@ fn aggregate_interop(arch: &str, abi: Option<&str>) {
             if std::env::consts::ARCH == arch && std::env::consts::OS == "linux" {
                 success(Command::new(&binary).output().unwrap());
             } else {
-                success(
-                    Command::new(format!("qemu-{arch}"))
-                        .arg(&binary)
-                        .output()
-                        .unwrap(),
-                );
+                success(Command::new(format!("qemu-{arch}")).arg(&binary).output().unwrap());
             }
         }
     }
@@ -498,10 +424,7 @@ fn aarch64_aggregate_registers_match_clang() {
 #[test]
 fn loongarch_fp_features_match_emitted_instructions() {
     let case = Case::new();
-    case.write(
-        "float.wave",
-        "export(c) fun add_double(a: f64, b: f64) -> f64 { return a + b; }",
-    );
+    case.write("float.wave", "export(c) fun add_double(a: f64, b: f64) -> f64 { return a + b; }");
     for abi in ["lp64s", "lp64f", "lp64d"] {
         success(
             case.command()
@@ -548,49 +471,29 @@ fn loongarch_fp_features_match_emitted_instructions() {
 #[test]
 fn webassembly_runtime_helpers_are_private_unique_and_only_generated_when_used() {
     let case = Case::new();
-    case.write(
-        "plain.wave",
-        "export(c) fun add(a: u64, b: u64) -> u64 { return a + b; }",
-    );
+    case.write("plain.wave", "export(c) fun add(a: u64, b: u64) -> u64 { return a + b; }");
     success(
         case.command()
-            .args([
-                "build",
-                "plain.wave",
-                "--target=wasm64-unknown-unknown",
-                "--emit=ir",
-            ])
+            .args(["build", "plain.wave", "--target=wasm64-unknown-unknown", "--emit=ir"])
             .output()
             .unwrap(),
     );
-    assert!(!fs::read_to_string(case.0.join("plain.ll"))
-        .unwrap()
-        .contains("__wave.runtime."));
+    assert!(!fs::read_to_string(case.0.join("plain.ll")).unwrap().contains("__wave.runtime."));
     // An application symbol with the same spelling remains an application import.
     case.write("wide.wave", "extern(c, \"__wave.runtime.udiv.i128.i128\") fun host_value() -> u64; export(c) fun divide(a: u128, b: u128) -> u128 { return a / b + a / b; } export(c) fun host() -> u64 { return host_value(); }");
     success(
         case.command()
-            .args([
-                "build",
-                "wide.wave",
-                "--target=wasm64-unknown-unknown",
-                "--emit=ir",
-                "-O0",
-            ])
+            .args(["build", "wide.wave", "--target=wasm64-unknown-unknown", "--emit=ir", "-O0"])
             .output()
             .unwrap(),
     );
     let ir = fs::read_to_string(case.0.join("wide.ll")).unwrap();
     assert_eq!(
-        ir.matches("define private i128 @__wave.runtime.udiv.i128.i128.")
-            .count(),
+        ir.matches("define private i128 @__wave.runtime.udiv.i128.i128.").count(),
         1,
         "{ir}"
     );
-    assert!(
-        ir.contains("declare i64 @__wave.runtime.udiv.i128.i128()"),
-        "{ir}"
-    );
+    assert!(ir.contains("declare i64 @__wave.runtime.udiv.i128.i128()"), "{ir}");
     assert!(ir.contains("\"wasm-import-module\"=\"env\""));
     assert!(!ir.contains("__wave.runtime.sdiv"));
 }

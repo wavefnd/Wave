@@ -8,11 +8,7 @@ use hir::TypedProgram;
 use parser::ast::{ASTNode, Expression, StatementNode};
 
 pub(crate) fn validate(program: &TypedProgram, target: CodegenTarget) -> Result<(), CodegenError> {
-    let mut state = State {
-        program,
-        target,
-        error: None,
-    };
+    let mut state = State { program, target, error: None };
     walk_nodes(program.syntax(), &mut state);
     state.error.map_or(Ok(()), Err)
 }
@@ -56,6 +52,7 @@ impl State<'_> {
             );
         }
     }
+
     fn node(&mut self, node: &ASTNode) {
         if self.error.is_some() {
             return;
@@ -67,25 +64,17 @@ impl State<'_> {
             clobbers,
         }) = node
         {
-            let span = self
-                .program
-                .node_id(node)
-                .and_then(|id| self.program.node_span(id))
-                .cloned();
+            let span =
+                self.program.node_id(node).and_then(|id| self.program.node_span(id)).cloned();
             self.block(instructions, inputs, outputs, clobbers, false, span);
         }
     }
+
     fn expression(&mut self, expression: &Expression) {
         if self.error.is_some() {
             return;
         }
-        if let Expression::AsmBlock {
-            instructions,
-            inputs,
-            outputs,
-            clobbers,
-        } = expression
-        {
+        if let Expression::AsmBlock { instructions, inputs, outputs, clobbers } = expression {
             let span = self
                 .program
                 .expression_id(expression)
@@ -116,7 +105,7 @@ fn walk_node(node: &ASTNode, state: &mut State<'_>) {
                 }
             }
             walk_nodes(&function.body, state);
-        }
+        },
         ASTNode::Struct(structure) => {
             if !structure.generic_params.is_empty() {
                 return;
@@ -129,7 +118,7 @@ fn walk_node(node: &ASTNode, state: &mut State<'_>) {
                 }
                 walk_nodes(&method.body, state);
             }
-        }
+        },
         ASTNode::ProtoImpl(implementation) => {
             for method in &implementation.methods {
                 for parameter in &method.parameters {
@@ -139,19 +128,19 @@ fn walk_node(node: &ASTNode, state: &mut State<'_>) {
                 }
                 walk_nodes(&method.body, state);
             }
-        }
+        },
         ASTNode::Statement(statement) => walk_statement(statement, state),
         ASTNode::Variable(variable) => {
             if let Some(initializer) = &variable.initial_value {
                 walk_expression(initializer, state);
             }
-        }
+        },
         ASTNode::Expression(expression) => walk_expression(expression, state),
         ASTNode::ExternFunction(_)
         | ASTNode::Program(_)
         | ASTNode::TypeAlias(_)
         | ASTNode::Enum(_)
-        | ASTNode::Variant(_) => {}
+        | ASTNode::Variant(_) => {},
     }
 }
 
@@ -163,13 +152,8 @@ fn walk_statement(statement: &StatementNode, state: &mut State<'_>) {
             for argument in args {
                 walk_expression(argument, state);
             }
-        }
-        StatementNode::If {
-            condition,
-            body,
-            else_if_blocks,
-            else_block,
-        } => {
+        },
+        StatementNode::If { condition, body, else_if_blocks, else_block } => {
             walk_expression(condition, state);
             walk_nodes(body, state);
             if let Some(blocks) = else_if_blocks {
@@ -181,46 +165,39 @@ fn walk_statement(statement: &StatementNode, state: &mut State<'_>) {
             if let Some(body) = else_block {
                 walk_nodes(body, state);
             }
-        }
-        StatementNode::For {
-            initialization,
-            condition,
-            increment,
-            body,
-        } => {
+        },
+        StatementNode::For { initialization, condition, increment, body } => {
             walk_node(initialization, state);
             walk_expression(condition, state);
             walk_expression(increment, state);
             walk_nodes(body, state);
-        }
+        },
         StatementNode::While { condition, body } => {
             walk_expression(condition, state);
             walk_nodes(body, state);
-        }
+        },
         StatementNode::Match { value, arms } => {
             walk_expression(value, state);
             for arm in arms {
                 walk_nodes(&arm.body, state);
             }
-        }
+        },
         StatementNode::Assign { value, .. } => walk_expression(value, state),
-        StatementNode::AsmBlock {
-            inputs, outputs, ..
-        } => {
+        StatementNode::AsmBlock { inputs, outputs, .. } => {
             for (_, expression) in inputs.iter().chain(outputs.iter()) {
                 walk_expression(expression, state);
             }
-        }
+        },
         StatementNode::Return(Some(expression)) | StatementNode::Expression(expression) => {
             walk_expression(expression, state)
-        }
+        },
         StatementNode::Print(_)
         | StatementNode::Println(_)
         | StatementNode::Variable(_)
         | StatementNode::Import(_)
         | StatementNode::Break
         | StatementNode::Continue
-        | StatementNode::Return(None) => {}
+        | StatementNode::Return(None) => {},
     }
 }
 
@@ -239,18 +216,18 @@ fn walk_expression(expression: &Expression, state: &mut State<'_>) {
             for (_, value) in fields {
                 walk_expression(value, state);
             }
-        }
+        },
         Expression::FunctionCall { args, .. } => {
             for argument in args {
                 walk_expression(argument, state);
             }
-        }
+        },
         Expression::MethodCall { object, args, .. } => {
             walk_expression(object, state);
             for argument in args {
                 walk_expression(argument, state);
             }
-        }
+        },
         Expression::Deref(inner)
         | Expression::AddressOf(inner)
         | Expression::Await(inner)
@@ -260,34 +237,22 @@ fn walk_expression(expression: &Expression, state: &mut State<'_>) {
         | Expression::FieldAccess { object: inner, .. }
         | Expression::IncDec { target: inner, .. } => walk_expression(inner, state),
         Expression::BinaryExpression { left, right, .. }
-        | Expression::IndexAccess {
-            target: left,
-            index: right,
-        }
-        | Expression::AssignOperation {
-            target: left,
-            value: right,
-            ..
-        }
-        | Expression::Assignment {
-            target: left,
-            value: right,
-        } => {
+        | Expression::IndexAccess { target: left, index: right }
+        | Expression::AssignOperation { target: left, value: right, .. }
+        | Expression::Assignment { target: left, value: right } => {
             walk_expression(left, state);
             walk_expression(right, state);
-        }
+        },
         Expression::ArrayLiteral(values) => {
             for value in values {
                 walk_expression(value, state);
             }
-        }
-        Expression::AsmBlock {
-            inputs, outputs, ..
-        } => {
+        },
+        Expression::AsmBlock { inputs, outputs, .. } => {
             for (_, expression) in inputs.iter().chain(outputs.iter()) {
                 walk_expression(expression, state);
             }
-        }
-        Expression::Null | Expression::Literal(_) | Expression::Variable(_) => {}
+        },
+        Expression::Null | Expression::Literal(_) | Expression::Variable(_) => {},
     }
 }

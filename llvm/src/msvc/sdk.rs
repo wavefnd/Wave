@@ -12,6 +12,7 @@ fn get<'a>(env: &'a Environment, key: &str) -> Option<&'a str> {
         .map(|(_, v)| v.as_str())
         .filter(|v| !v.is_empty())
 }
+
 fn versions(root: &Path) -> Vec<PathBuf> {
     let mut entries: Vec<_> = std::fs::read_dir(root)
         .into_iter()
@@ -33,11 +34,13 @@ fn versions(root: &Path) -> Vec<PathBuf> {
     entries.sort_by(|a, b| b.0.cmp(&a.0));
     entries.into_iter().map(|(_, p)| p).collect()
 }
+
 fn add(paths: &mut Vec<PathBuf>, path: PathBuf) {
     if path.is_dir() && !paths.contains(&path) {
         paths.push(path);
     }
 }
+
 fn add_sdk(paths: &mut Vec<PathBuf>, root: &Path, version: Option<&str>, arch: &str) {
     let lib = root.join("Lib");
     let candidates = if let Some(v) = version {
@@ -55,6 +58,7 @@ fn add_sdk(paths: &mut Vec<PathBuf>, root: &Path, version: Option<&str>, arch: &
         }
     }
 }
+
 fn add_vc(paths: &mut Vec<PathBuf>, root: &Path, arch: &str) {
     let lib = root.join("lib").join(arch);
     if lib.join("vcruntime.lib").is_file() {
@@ -63,11 +67,7 @@ fn add_vc(paths: &mut Vec<PathBuf>, root: &Path, arch: &str) {
 }
 
 pub fn discover(target: &str, explicit: &[String], env: &Environment) -> Vec<PathBuf> {
-    let arch = if target.starts_with("aarch64-") {
-        "arm64"
-    } else {
-        "x64"
-    };
+    let arch = if target.starts_with("aarch64-") { "arm64" } else { "x64" };
     let mut paths = explicit.iter().map(PathBuf::from).collect::<Vec<_>>();
     if let Some(lib) = get(env, "LIB") {
         for path in lib.split(';').filter(|p| !p.is_empty()) {
@@ -75,19 +75,9 @@ pub fn discover(target: &str, explicit: &[String], env: &Environment) -> Vec<Pat
         }
     }
     if let Some(root) = get(env, "WindowsSdkDir") {
-        add_sdk(
-            &mut paths,
-            Path::new(root),
-            get(env, "WindowsSDKVersion"),
-            arch,
-        );
+        add_sdk(&mut paths, Path::new(root), get(env, "WindowsSDKVersion"), arch);
     } else if let Some(programs) = get(env, "ProgramFiles(x86)") {
-        add_sdk(
-            &mut paths,
-            &Path::new(programs).join("Windows Kits/10"),
-            None,
-            arch,
-        );
+        add_sdk(&mut paths, &Path::new(programs).join("Windows Kits/10"), None, arch);
     }
     if let Some(root) = get(env, "VCToolsInstallDir") {
         add_vc(&mut paths, Path::new(root), arch);
@@ -120,9 +110,8 @@ fn installed_sdk_root() -> Option<String> {
             bytes: *mut u32,
         ) -> i32;
     }
-    let subkey: Vec<u16> = "SOFTWARE\\Microsoft\\Windows Kits\\Installed Roots\0"
-        .encode_utf16()
-        .collect();
+    let subkey: Vec<u16> =
+        "SOFTWARE\\Microsoft\\Windows Kits\\Installed Roots\0".encode_utf16().collect();
     let value: Vec<u16> = "KitsRoot10\0".encode_utf16().collect();
     let mut buffer = vec![0u16; 32768];
     let mut bytes = (buffer.len() * 2) as u32;
@@ -142,9 +131,7 @@ fn installed_sdk_root() -> Option<String> {
     if status != 0 || bytes < 2 || bytes as usize > buffer.len() * 2 || bytes % 2 != 0 {
         return None;
     }
-    String::from_utf16(&buffer[..bytes as usize / 2 - 1])
-        .ok()
-        .filter(|s| !s.is_empty())
+    String::from_utf16(&buffer[..bytes as usize / 2 - 1]).ok().filter(|s| !s.is_empty())
 }
 
 pub fn environment(target: &str) -> Environment {
@@ -166,23 +153,11 @@ pub fn environment(target: &str) -> Environment {
         if let Some(programs) = get(&env, "ProgramFiles(x86)") {
             let exe = Path::new(programs).join("Microsoft Visual Studio/Installer/vswhere.exe");
             if let Ok(out) = std::process::Command::new(exe)
-                .args([
-                    "-all",
-                    "-sort",
-                    "-utf8",
-                    "-products",
-                    "*",
-                    "-property",
-                    "installationPath",
-                ])
+                .args(["-all", "-sort", "-utf8", "-products", "*", "-property", "installationPath"])
                 .output()
             {
                 if out.status.success() {
-                    let arch = if target.starts_with("aarch64-") {
-                        "arm64"
-                    } else {
-                        "x64"
-                    };
+                    let arch = if target.starts_with("aarch64-") { "arm64" } else { "x64" };
                     for root in String::from_utf8_lossy(&out.stdout).lines().map(str::trim) {
                         if !root.is_empty()
                             && versions(&Path::new(root).join("VC/Tools/MSVC"))
@@ -206,11 +181,11 @@ pub fn discovered_arguments(target: &str, paths: &[String]) -> Vec<String> {
         .map(|p| p.to_string_lossy().into_owned())
         .collect()
 }
+
 fn value<'a>(arg: &'a str, prefix: &str) -> Option<&'a str> {
-    arg.get(..prefix.len())
-        .filter(|v| v.eq_ignore_ascii_case(prefix))
-        .map(|_| &arg[prefix.len()..])
+    arg.get(..prefix.len()).filter(|v| v.eq_ignore_ascii_case(prefix)).map(|_| &arg[prefix.len()..])
 }
+
 fn find_library(name: &str, paths: &[PathBuf]) -> Option<PathBuf> {
     let name = name.trim_matches('"');
     let file = if name.to_ascii_lowercase().ends_with(".lib") {
@@ -228,11 +203,8 @@ fn find_library(name: &str, paths: &[PathBuf]) -> Option<PathBuf> {
 /// Inspect explicitly resolved inputs before either linker is launched. Object
 /// directives are still interpreted by the linker; no claim of LTO validation.
 pub fn validate_arguments(target: &str, args: &[String]) -> Result<(), String> {
-    let paths: Vec<_> = args
-        .iter()
-        .filter_map(|a| value(a, "/LIBPATH:"))
-        .map(PathBuf::from)
-        .collect();
+    let paths: Vec<_> =
+        args.iter().filter_map(|a| value(a, "/LIBPATH:")).map(PathBuf::from).collect();
     let no_defaults = args.iter().any(|a| a.eq_ignore_ascii_case("/NODEFAULTLIB"));
     let mut files = Vec::new();
     let mut required = Vec::new();
@@ -245,7 +217,7 @@ pub fn validate_arguments(target: &str, args: &[String]) -> Result<(), String> {
             required.push(lib);
         } else if arg.starts_with('@') {
             return Err(
-                "MSVC response-file input cannot be inspected; supply inputs directly".into(),
+                "MSVC response-file input cannot be inspected; supply inputs directly".into()
             );
         } else if arg.starts_with('/') && arg.contains(':') && !Path::new(arg).is_file() {
             continue;
@@ -258,7 +230,7 @@ pub fn validate_arguments(target: &str, args: &[String]) -> Result<(), String> {
             {
                 Some("lib") => required.push(arg),
                 Some("obj" | "o" | "a" | "bc") => files.push(PathBuf::from(arg)),
-                _ => {}
+                _ => {},
             }
         }
     }

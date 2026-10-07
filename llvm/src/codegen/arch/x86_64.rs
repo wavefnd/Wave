@@ -68,20 +68,14 @@ pub(crate) fn operand_register_group(token: &str) -> Option<String> {
 }
 
 pub(crate) fn default_clobbers() -> Vec<String> {
-    ["~{memory}", "~{dirflag}", "~{fpsr}", "~{flags}"]
-        .into_iter()
-        .map(String::from)
-        .collect()
+    ["~{memory}", "~{dirflag}", "~{fpsr}", "~{flags}"].into_iter().map(String::from).collect()
 }
 
 pub(crate) fn allocatable_registers() -> Vec<String> {
-    [
-        "rax", "rbx", "rcx", "rdx", "rsi", "rdi", "r8", "r9", "r10", "r11", "r12", "r13", "r14",
-        "r15",
-    ]
-    .into_iter()
-    .map(String::from)
-    .collect()
+    ["rax", "rbx", "rcx", "rdx", "rsi", "rdi", "r8", "r9", "r10", "r11", "r12", "r13", "r14", "r15"]
+        .into_iter()
+        .map(String::from)
+        .collect()
 }
 
 pub(crate) fn normalize_special_clobber(token: &str) -> Option<String> {
@@ -95,11 +89,8 @@ pub(crate) fn normalize_special_clobber(token: &str) -> Option<String> {
 }
 
 fn parse_immediate(raw: &str) -> Option<i64> {
-    let mut value = raw
-        .trim()
-        .trim_start_matches('$')
-        .trim_start_matches('#')
-        .trim_end_matches(',');
+    let mut value =
+        raw.trim().trim_start_matches('$').trim_start_matches('#').trim_end_matches(',');
     let negative = value.starts_with('-');
     if negative {
         value = value.trim_start_matches('-');
@@ -114,9 +105,8 @@ fn parse_immediate(raw: &str) -> Option<i64> {
 }
 
 fn stack_adjustment(code: &str) -> Option<i64> {
-    let mut parts = code
-        .split(|c: char| c.is_ascii_whitespace() || c == ',')
-        .filter(|part| !part.is_empty());
+    let mut parts =
+        code.split(|c: char| c.is_ascii_whitespace() || c == ',').filter(|part| !part.is_empty());
     let op = parts.next()?;
     let first = parts.next()?;
     let second = parts.next()?;
@@ -155,31 +145,29 @@ pub(crate) fn stack_analysis(line: &str) -> super::StackAnalysis {
         "push" | "pushq" => {
             out.touches_stack = true;
             out.unbalanced_delta = -8;
-        }
+        },
         "pop" | "popq" | "ret" | "retq" => {
             out.touches_stack = true;
             out.unbalanced_delta = 8;
-        }
+        },
         "retf" | "retfq" => {
             out.touches_stack = true;
             out.unbalanced_delta = 16;
-        }
+        },
         "iret" | "iretq" | "leave" | "enter" => {
             out.touches_stack = true;
             out.unknown_stack_write = true;
-        }
+        },
         "jmp" | "jmpq" => out.nonreturning_branch = jump_is_indirect(&code),
         _ => {
             if let Some(delta) = stack_adjustment(&code) {
                 out.touches_stack = true;
                 out.unbalanced_delta = delta;
             } else {
-                let writes_sp = ["mov", "movq", "and", "andq", "xor", "lea"]
-                    .iter()
-                    .any(|op| {
-                        code.starts_with(&format!("{} rsp", op))
-                            || code.starts_with(&format!("{} %rsp", op))
-                    });
+                let writes_sp = ["mov", "movq", "and", "andq", "xor", "lea"].iter().any(|op| {
+                    code.starts_with(&format!("{} rsp", op))
+                        || code.starts_with(&format!("{} %rsp", op))
+                });
                 if writes_sp {
                     out.touches_stack = true;
                     out.unknown_stack_write = true;
@@ -191,7 +179,7 @@ pub(crate) fn stack_analysis(line: &str) -> super::StackAnalysis {
                         || code.contains(", sp");
                 }
             }
-        }
+        },
     }
     out
 }

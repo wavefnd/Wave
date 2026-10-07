@@ -98,9 +98,7 @@ pub fn demangle_module_names(text: &str) -> String {
         out.push_str(&rest[..index]);
         let candidate = &rest[index + PREFIX.len()..];
         if candidate.len() >= 17
-            && candidate.as_bytes()[..16]
-                .iter()
-                .all(|byte| byte.is_ascii_hexdigit())
+            && candidate.as_bytes()[..16].iter().all(|byte| byte.is_ascii_hexdigit())
             && candidate.as_bytes()[16] == b'_'
         {
             rest = &candidate[17..];
@@ -140,10 +138,7 @@ impl Resolver<'_> {
 
         self.visiting.push(key.clone());
         let mut interface = collect_symbols(&key, &ast, is_entry)?;
-        let mut names = NameContext {
-            own: interface.symbols.clone(),
-            ..NameContext::default()
-        };
+        let mut names = NameContext { own: interface.symbols.clone(), ..NameContext::default() };
 
         for node in &ast {
             let ASTNode::Statement(StatementNode::Import(import)) = node.unspanned() else {
@@ -159,10 +154,8 @@ impl Resolver<'_> {
                 *index
             } else {
                 let index = self.sources.len();
-                self.sources.push(ModuleSource {
-                    path: unit.abs_path.clone(),
-                    source: unit.source,
-                });
+                self.sources
+                    .push(ModuleSource { path: unit.abs_path.clone(), source: unit.source });
                 self.source_indices.insert(child_key.clone(), index);
                 index
             };
@@ -188,9 +181,7 @@ impl Resolver<'_> {
                         if qualified.starts_with(&prefix)
                             && constructor.kind == SymbolKind::VariantConstructor
                         {
-                            interface
-                                .symbols
-                                .insert(qualified.clone(), constructor.clone());
+                            interface.symbols.insert(qualified.clone(), constructor.clone());
                         }
                     }
                 }
@@ -199,10 +190,7 @@ impl Resolver<'_> {
 
         let mut lowered = Vec::new();
         for node in ast {
-            if matches!(
-                node.unspanned(),
-                ASTNode::Statement(StatementNode::Import(_))
-            ) {
+            if matches!(node.unspanned(), ASTNode::Statement(StatementNode::Import(_))) {
                 continue;
             }
             lowered.push(rewrite_top_level(node, &names, &key, is_entry)?);
@@ -210,8 +198,7 @@ impl Resolver<'_> {
 
         self.visiting.pop();
         self.interfaces.insert(key, interface.clone());
-        self.origins
-            .extend(std::iter::repeat_n(origin, lowered.len()));
+        self.origins.extend(std::iter::repeat_n(origin, lowered.len()));
         self.ast.extend(lowered);
         Ok(interface)
     }
@@ -267,11 +254,7 @@ fn insert_symbol(
     }
     symbols.insert(
         source_name.to_string(),
-        ModuleSymbol {
-            lowered: internal_name(path, source_name, is_entry),
-            visibility,
-            kind,
-        },
+        ModuleSymbol { lowered: internal_name(path, source_name, is_entry), visibility, kind },
     );
     Ok(())
 }
@@ -301,7 +284,7 @@ fn collect_symbols(
                     SymbolKind::Function,
                     is_entry,
                 )?;
-            }
+            },
             ASTNode::ExternFunction(function) => insert_symbol(
                 path,
                 &mut symbols,
@@ -353,7 +336,7 @@ fn collect_symbols(
                         },
                     );
                 }
-            }
+            },
             ASTNode::Variant(variant) => {
                 insert_symbol(
                     path,
@@ -374,7 +357,7 @@ fn collect_symbols(
                         },
                     );
                 }
-            }
+            },
             ASTNode::Variable(variable)
                 if matches!(variable.mutability, Mutability::Const | Mutability::Static) =>
             {
@@ -386,8 +369,8 @@ fn collect_symbols(
                     SymbolKind::Value,
                     is_entry,
                 )?;
-            }
-            _ => {}
+            },
+            _ => {},
         }
     }
     Ok(ModuleInterface { symbols })
@@ -395,10 +378,7 @@ fn collect_symbols(
 
 fn default_namespace(path: &str) -> Option<String> {
     if path.starts_with("./") {
-        return Path::new(path)
-            .file_stem()
-            .and_then(|name| name.to_str())
-            .map(str::to_string);
+        return Path::new(path).file_stem().and_then(|name| name.to_str()).map(str::to_string);
     }
     Some(path.to_string())
 }
@@ -423,10 +403,7 @@ fn bind_import(
                 return Err(module_error(
                     current_path,
                     "Private imported symbol",
-                    format!(
-                        "symbol '{}' is private in module '{}'",
-                        selected, import.path
-                    ),
+                    format!("symbol '{}' is private in module '{}'", selected, import.path),
                     "mark the declaration `pub` or remove it from the import list",
                 ));
             }
@@ -455,20 +432,15 @@ fn bind_import(
                 if qualified.starts_with(&prefix)
                     && constructor.kind == SymbolKind::VariantConstructor
                 {
-                    names
-                        .selected
-                        .insert(qualified.clone(), constructor.clone());
+                    names.selected.insert(qualified.clone(), constructor.clone());
                 }
             }
         }
         return Ok(());
     }
 
-    let namespace = import
-        .alias
-        .clone()
-        .or_else(|| default_namespace(&import.path))
-        .ok_or_else(|| {
+    let namespace =
+        import.alias.clone().or_else(|| default_namespace(&import.path)).ok_or_else(|| {
             module_error(
                 current_path,
                 "Invalid import namespace",
@@ -503,9 +475,7 @@ fn resolve_name(
         }
         let mut best: Option<(&str, &ModuleInterface)> = None;
         for (namespace, interface) in &names.namespaces {
-            if name
-                .strip_prefix(namespace)
-                .is_some_and(|rest| rest.starts_with("::"))
+            if name.strip_prefix(namespace).is_some_and(|rest| rest.starts_with("::"))
                 && best.is_none_or(|(current, _)| namespace.len() > current.len())
             {
                 best = Some((namespace, interface));
@@ -532,35 +502,27 @@ fn resolve_name(
             return Err(module_error(
                 path,
                 "Private imported symbol",
-                format!(
-                    "symbol '{}' is private in module '{}'",
-                    symbol_name, namespace
-                ),
+                format!("symbol '{}' is private in module '{}'", symbol_name, namespace),
                 "only `pub` declarations are accessible outside their module",
             ));
         }
         return Ok(Some(symbol.clone()));
     }
 
-    Ok(names
-        .own
-        .get(name)
-        .or_else(|| names.selected.get(name))
-        .cloned())
+    Ok(names.own.get(name).or_else(|| names.selected.get(name)).cloned())
 }
 
 fn rewrite_type(ty: WaveType, names: &NameContext, path: &Path) -> Result<WaveType, WaveError> {
     match ty {
-        WaveType::Future(inner) => Ok(WaveType::Future(Box::new(rewrite_type(
-            *inner, names, path,
-        )?))),
-        WaveType::Pointer(inner) => Ok(WaveType::Pointer(Box::new(rewrite_type(
-            *inner, names, path,
-        )?))),
-        WaveType::Array(inner, size) => Ok(WaveType::Array(
-            Box::new(rewrite_type(*inner, names, path)?),
-            size,
-        )),
+        WaveType::Future(inner) => {
+            Ok(WaveType::Future(Box::new(rewrite_type(*inner, names, path)?)))
+        },
+        WaveType::Pointer(inner) => {
+            Ok(WaveType::Pointer(Box::new(rewrite_type(*inner, names, path)?)))
+        },
+        WaveType::Array(inner, size) => {
+            Ok(WaveType::Array(Box::new(rewrite_type(*inner, names, path)?), size))
+        },
         WaveType::Struct(name) => Ok(WaveType::Struct(rewrite_type_name(&name, names, path)?)),
         WaveType::Variant(name) => Ok(WaveType::Variant(rewrite_type_name(&name, names, path)?)),
         other => Ok(other),
@@ -574,17 +536,13 @@ fn rewrite_type_name(name: &str, names: &NameContext, path: &Path) -> Result<Str
             .into_iter()
             .map(|argument| rewrite_type_name(argument.trim(), names, path))
             .collect::<Result<Vec<_>, _>>()?;
-        return Ok(format!(
-            "{}<{}>",
-            rewritten_base,
-            rewritten_arguments.join(",")
-        ));
+        return Ok(format!("{}<{}>", rewritten_base, rewritten_arguments.join(",")));
     }
 
     match resolve_name(name, names, path)? {
         Some(symbol) if matches!(symbol.kind, SymbolKind::Struct | SymbolKind::Type) => {
             Ok(symbol.lowered)
-        }
+        },
         Some(_) => Err(module_error(
             path,
             "Expected imported type",
@@ -614,8 +572,8 @@ fn split_type_arguments(arguments: &str) -> Vec<&str> {
             ',' if depth == 0 => {
                 out.push(&arguments[start..index]);
                 start = index + 1;
-            }
-            _ => {}
+            },
+            _ => {},
         }
     }
     out.push(&arguments[start..]);
@@ -631,7 +589,7 @@ fn rewrite_top_level(
     match node {
         ASTNode::Located { value, span } => {
             Ok(rewrite_top_level(*value, names, path, is_entry)?.with_span(Some(span)))
-        }
+        },
         ASTNode::Function(mut function) => {
             let original = function.name.clone();
             function.name = names.own[&original].lowered.clone();
@@ -647,7 +605,7 @@ fn rewrite_top_level(
             }
             rewrite_function(&mut function, names, path)?;
             Ok(ASTNode::Function(function))
-        }
+        },
         ASTNode::ExternFunction(mut function) => {
             function.name = names.own[&function.name].lowered.clone();
             function.params = function
@@ -657,7 +615,7 @@ fn rewrite_top_level(
                 .collect::<Result<_, WaveError>>()?;
             function.return_type = rewrite_type(function.return_type, names, path)?;
             Ok(ASTNode::ExternFunction(function))
-        }
+        },
         ASTNode::Struct(mut structure) => {
             structure.name = names.own[&structure.name].lowered.clone();
             structure.fields = structure
@@ -669,12 +627,12 @@ fn rewrite_top_level(
                 rewrite_function(method, names, path)?;
             }
             Ok(ASTNode::Struct(structure))
-        }
+        },
         ASTNode::TypeAlias(mut alias) => {
             alias.name = names.own[&alias.name].lowered.clone();
             alias.target = rewrite_type(alias.target, names, path)?;
             Ok(ASTNode::TypeAlias(alias))
-        }
+        },
         ASTNode::Enum(mut enumeration) => {
             enumeration.name = names.own[&enumeration.name].lowered.clone();
             enumeration.repr_type = rewrite_type(enumeration.repr_type, names, path)?;
@@ -682,7 +640,7 @@ fn rewrite_top_level(
                 variant.name = names.own[&variant.name].lowered.clone();
             }
             Ok(ASTNode::Enum(enumeration))
-        }
+        },
         ASTNode::Variant(mut variant) => {
             variant.name = names.own[&variant.name].lowered.clone();
             for case in &mut variant.cases {
@@ -693,7 +651,7 @@ fn rewrite_top_level(
                     .collect::<Result<_, _>>()?;
             }
             Ok(ASTNode::Variant(variant))
-        }
+        },
         ASTNode::Variable(mut variable) => {
             variable.name = names.own[&variable.name].lowered.clone();
             variable.type_name = rewrite_type(variable.type_name, names, path)?;
@@ -702,7 +660,7 @@ fn rewrite_top_level(
                     Some(rewrite_expression(value, names, path, &HashSet::new())?);
             }
             Ok(ASTNode::Variable(variable))
-        }
+        },
         ASTNode::ProtoImpl(mut implementation) => {
             implementation.target = resolve_name(&implementation.target, names, path)?
                 .map_or(implementation.target, |symbol| symbol.lowered);
@@ -710,19 +668,13 @@ fn rewrite_top_level(
                 rewrite_function(method, names, path)?;
             }
             Ok(ASTNode::ProtoImpl(implementation))
-        }
-        ASTNode::Statement(statement) => Ok(ASTNode::Statement(rewrite_statement(
-            statement,
-            names,
-            path,
-            &mut HashSet::new(),
-        )?)),
-        ASTNode::Expression(expression) => Ok(ASTNode::Expression(rewrite_expression(
-            expression,
-            names,
-            path,
-            &HashSet::new(),
-        )?)),
+        },
+        ASTNode::Statement(statement) => {
+            Ok(ASTNode::Statement(rewrite_statement(statement, names, path, &mut HashSet::new())?))
+        },
+        ASTNode::Expression(expression) => {
+            Ok(ASTNode::Expression(rewrite_expression(expression, names, path, &HashSet::new())?))
+        },
         other => Ok(other),
     }
 }
@@ -735,16 +687,10 @@ fn rewrite_function(
     for parameter in &mut function.parameters {
         parameter.param_type = rewrite_type(parameter.param_type.clone(), names, path)?;
     }
-    function.return_type = function
-        .return_type
-        .take()
-        .map(|ty| rewrite_type(ty, names, path))
-        .transpose()?;
-    let mut locals = function
-        .parameters
-        .iter()
-        .map(|parameter| parameter.name.clone())
-        .collect::<HashSet<_>>();
+    function.return_type =
+        function.return_type.take().map(|ty| rewrite_type(ty, names, path)).transpose()?;
+    let mut locals =
+        function.parameters.iter().map(|parameter| parameter.name.clone()).collect::<HashSet<_>>();
     function.body = rewrite_block(std::mem::take(&mut function.body), names, path, &mut locals)?;
     Ok(())
 }
@@ -760,12 +706,8 @@ fn rewrite_block(
         match node {
             ASTNode::Located { value, span } => {
                 let rewritten = rewrite_block(vec![*value], names, path, locals)?;
-                out.extend(
-                    rewritten
-                        .into_iter()
-                        .map(|node| node.with_span(Some(span.clone()))),
-                );
-            }
+                out.extend(rewritten.into_iter().map(|node| node.with_span(Some(span.clone()))));
+            },
             ASTNode::Variable(mut variable) => {
                 variable.type_name = rewrite_type(variable.type_name, names, path)?;
                 if let Some(value) = variable.initial_value.take() {
@@ -773,13 +715,13 @@ fn rewrite_block(
                 }
                 locals.insert(variable.name.clone());
                 out.push(ASTNode::Variable(variable));
-            }
-            ASTNode::Statement(statement) => out.push(ASTNode::Statement(rewrite_statement(
-                statement, names, path, locals,
-            )?)),
-            ASTNode::Expression(expression) => out.push(ASTNode::Expression(rewrite_expression(
-                expression, names, path, locals,
-            )?)),
+            },
+            ASTNode::Statement(statement) => {
+                out.push(ASTNode::Statement(rewrite_statement(statement, names, path, locals)?))
+            },
+            ASTNode::Expression(expression) => {
+                out.push(ASTNode::Expression(rewrite_expression(expression, names, path, locals)?))
+            },
             other => out.push(other),
         }
     }
@@ -801,16 +743,10 @@ fn rewrite_statement(
             format,
             args: rewrite_expressions(args, names, path, locals)?,
         },
-        StatementNode::Input { format, args } => StatementNode::Input {
-            format,
-            args: rewrite_expressions(args, names, path, locals)?,
+        StatementNode::Input { format, args } => {
+            StatementNode::Input { format, args: rewrite_expressions(args, names, path, locals)? }
         },
-        StatementNode::If {
-            condition,
-            body,
-            else_if_blocks,
-            else_block,
-        } => {
+        StatementNode::If { condition, body, else_if_blocks, else_block } => {
             let condition = rewrite_expression(condition, names, path, locals)?;
             let mut body_scope = locals.clone();
             let body = rewrite_block(body, names, path, &mut body_scope)?;
@@ -833,19 +769,9 @@ fn rewrite_statement(
                     rewrite_block(*body, names, path, &mut scope).map(Box::new)
                 })
                 .transpose()?;
-            StatementNode::If {
-                condition,
-                body,
-                else_if_blocks,
-                else_block,
-            }
-        }
-        StatementNode::For {
-            initialization,
-            condition,
-            increment,
-            body,
-        } => {
+            StatementNode::If { condition, body, else_if_blocks, else_block }
+        },
+        StatementNode::For { initialization, condition, increment, body } => {
             let mut scope = locals.clone();
             let initialization = rewrite_block(vec![*initialization], names, path, &mut scope)?
                 .into_iter()
@@ -860,13 +786,13 @@ fn rewrite_statement(
                 increment,
                 body,
             }
-        }
+        },
         StatementNode::While { condition, body } => {
             let condition = rewrite_expression(condition, names, path, locals)?;
             let mut scope = locals.clone();
             let body = rewrite_block(body, names, path, &mut scope)?;
             StatementNode::While { condition, body }
-        }
+        },
         StatementNode::Match { value, arms } => StatementNode::Match {
             value: rewrite_expression(value, names, path, locals)?,
             arms: arms
@@ -888,32 +814,23 @@ fn rewrite_statement(
             },
             value: rewrite_expression(value, names, path, locals)?,
         },
-        StatementNode::AsmBlock {
-            instructions,
-            inputs,
-            outputs,
-            clobbers,
-        } => StatementNode::AsmBlock {
-            instructions,
-            inputs: inputs
-                .into_iter()
-                .map(|(constraint, expression)| {
-                    Ok((
-                        constraint,
-                        rewrite_expression(expression, names, path, locals)?,
-                    ))
-                })
-                .collect::<Result<_, WaveError>>()?,
-            outputs: outputs
-                .into_iter()
-                .map(|(constraint, expression)| {
-                    Ok((
-                        constraint,
-                        rewrite_expression(expression, names, path, locals)?,
-                    ))
-                })
-                .collect::<Result<_, WaveError>>()?,
-            clobbers,
+        StatementNode::AsmBlock { instructions, inputs, outputs, clobbers } => {
+            StatementNode::AsmBlock {
+                instructions,
+                inputs: inputs
+                    .into_iter()
+                    .map(|(constraint, expression)| {
+                        Ok((constraint, rewrite_expression(expression, names, path, locals)?))
+                    })
+                    .collect::<Result<_, WaveError>>()?,
+                outputs: outputs
+                    .into_iter()
+                    .map(|(constraint, expression)| {
+                        Ok((constraint, rewrite_expression(expression, names, path, locals)?))
+                    })
+                    .collect::<Result<_, WaveError>>()?,
+                clobbers,
+            }
         },
         StatementNode::Return(value) => StatementNode::Return(
             value
@@ -922,7 +839,7 @@ fn rewrite_statement(
         ),
         StatementNode::Expression(expression) => {
             StatementNode::Expression(rewrite_expression(expression, names, path, locals)?)
-        }
+        },
         other => other,
     })
 }
@@ -954,12 +871,8 @@ fn rewrite_match_pattern(
                     *name = symbol.lowered;
                 }
             }
-        }
-        MatchPattern::Variant {
-            variant_type,
-            case_name,
-            payloads,
-        } => {
+        },
+        MatchPattern::Variant { variant_type, case_name, payloads } => {
             let qualified = format!("{}::{}", variant_type, case_name);
             let symbol = resolve_name(&qualified, names, path)?.ok_or_else(|| {
                 module_error(
@@ -983,8 +896,8 @@ fn rewrite_match_pattern(
             for payload in payloads {
                 rewrite_match_pattern(payload, names, path, locals)?;
             }
-        }
-        MatchPattern::Int(_) | MatchPattern::Binding(_) | MatchPattern::Wildcard => {}
+        },
+        MatchPattern::Int(_) | MatchPattern::Binding(_) | MatchPattern::Wildcard => {},
     }
     Ok(())
 }
@@ -994,13 +907,13 @@ fn collect_pattern_bindings(pattern: &MatchPattern, locals: &mut HashSet<String>
         MatchPattern::Located { value, .. } => collect_pattern_bindings(value, locals),
         MatchPattern::Binding(name) => {
             locals.insert(name.clone());
-        }
+        },
         MatchPattern::Variant { payloads, .. } => {
             for payload in payloads {
                 collect_pattern_bindings(payload, locals);
             }
-        }
-        MatchPattern::Int(_) | MatchPattern::Ident(_) | MatchPattern::Wildcard => {}
+        },
+        MatchPattern::Int(_) | MatchPattern::Ident(_) | MatchPattern::Wildcard => {},
     }
 }
 
@@ -1037,16 +950,11 @@ fn rewrite_expression_in_place(
                         *ty = rewrite_type(std::mem::replace(ty, WaveType::Void), names, path)?;
                     }
                     return Ok(());
-                }
+                },
                 Work::Failure(error) => return Err(*error),
                 Work::Expression(expression) => expression,
             };
-            if let Expression::FunctionCall {
-                name,
-                type_args,
-                args,
-            } = expression
-            {
+            if let Expression::FunctionCall { name, type_args, args } = expression {
                 if type_args.is_empty() && args.is_empty() {
                     if let Some(symbol) = resolve_name(name, names, path)? {
                         if symbol.kind == SymbolKind::Struct {
@@ -1064,18 +972,14 @@ fn rewrite_expression_in_place(
                     // Recursive callers previously applied the outermost span
                     // last. Retain that diagnostic location without recursion.
                     pending.push((Work::Expression(value), enclosing_span.or(Some(&*span))));
-                }
+                },
                 Expression::StructLiteral { name, fields } => {
                     *name = rewrite_type_name(name, names, path)?;
                     for (_, value) in fields.iter_mut().rev() {
                         pending.push((Work::Expression(value), enclosing_span));
                     }
-                }
-                Expression::FunctionCall {
-                    name,
-                    type_args,
-                    args,
-                } => {
+                },
+                Expression::FunctionCall { name, type_args, args } => {
                     let symbol = resolve_name(name, names, path)?;
                     for ty in type_args.iter_mut() {
                         *ty = rewrite_type(std::mem::replace(ty, WaveType::Void), names, path)?;
@@ -1090,7 +994,7 @@ fn rewrite_expression_in_place(
                                 format!("struct '{}' must be initialized with named fields", name),
                                 "use `Type { field: value }`; `Type()` is only valid for empty structs",
                             ))), enclosing_span));
-                        }
+                        },
                         Some(symbol)
                             if matches!(
                                 symbol.kind,
@@ -1098,7 +1002,7 @@ fn rewrite_expression_in_place(
                             ) =>
                         {
                             *name = symbol.lowered;
-                        }
+                        },
                         Some(_) => {
                             pending.push((
                                 Work::Failure(Box::new(module_error(
@@ -1109,82 +1013,72 @@ fn rewrite_expression_in_place(
                                 ))),
                                 enclosing_span,
                             ));
-                        }
-                        None => {}
+                        },
+                        None => {},
                     }
                     // Arguments still report errors before a non-callable
                     // symbol/invalid-constructor error, in source order.
                     for arg in args.iter_mut().rev() {
                         pending.push((Work::Expression(arg), enclosing_span));
                     }
-                }
-                Expression::MethodCall {
-                    object,
-                    type_args,
-                    args,
-                    ..
-                } => {
+                },
+                Expression::MethodCall { object, type_args, args, .. } => {
                     for arg in args.iter_mut().rev() {
                         pending.push((Work::Expression(arg), enclosing_span));
                     }
                     pending.push((Work::Types(type_args), enclosing_span));
                     pending.push((Work::Expression(object), enclosing_span));
-                }
+                },
                 Expression::Variable(name) => {
                     if !locals.contains(name) {
                         if let Some(symbol) = resolve_name(name, names, path)? {
                             *name = symbol.lowered;
                         }
                     }
-                }
+                },
                 Expression::Deref(inner)
                 | Expression::AddressOf(inner)
                 | Expression::Await(inner)
                 | Expression::Grouped(inner) => {
                     pending.push((Work::Expression(inner), enclosing_span))
-                }
+                },
                 Expression::BinaryExpression { left, right, .. } => {
                     pending.push((Work::Expression(right), enclosing_span));
                     pending.push((Work::Expression(left), enclosing_span));
-                }
+                },
                 Expression::IndexAccess { target, index } => {
                     pending.push((Work::Expression(index), enclosing_span));
                     pending.push((Work::Expression(target), enclosing_span));
-                }
+                },
                 Expression::ArrayLiteral(values) => {
                     for value in values.iter_mut().rev() {
                         pending.push((Work::Expression(value), enclosing_span));
                     }
-                }
+                },
                 Expression::AssignOperation { target, value, .. }
                 | Expression::Assignment { target, value } => {
                     pending.push((Work::Expression(value), enclosing_span));
                     pending.push((Work::Expression(target), enclosing_span));
-                }
-                Expression::AsmBlock {
-                    inputs, outputs, ..
-                } => {
+                },
+                Expression::AsmBlock { inputs, outputs, .. } => {
                     for (_, value) in inputs.iter_mut().chain(outputs).rev() {
                         pending.push((Work::Expression(value), enclosing_span));
                     }
-                }
+                },
                 Expression::FieldAccess { object, .. } => {
                     pending.push((Work::Expression(object), enclosing_span));
-                }
+                },
                 Expression::Unary { expr, .. } => {
                     pending.push((Work::Expression(expr), enclosing_span))
-                }
+                },
                 Expression::Cast { expr, target_type } => {
-                    pending.push((
-                        Work::Types(std::slice::from_mut(target_type)),
-                        enclosing_span,
-                    ));
+                    pending.push((Work::Types(std::slice::from_mut(target_type)), enclosing_span));
                     pending.push((Work::Expression(expr), enclosing_span));
-                }
+                },
                 Expression::IncDec { target, .. } => {
                     pending.push((Work::Expression(target), enclosing_span))
-                }
-                Expression::Null | Expression::Literal(_) => {}
+                },
+                Expression::Null | Expression::Literal(_) => {},
             }
             Ok(())
         })();

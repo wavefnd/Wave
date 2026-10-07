@@ -87,10 +87,7 @@ fn normalize_token(s: &str) -> String {
 fn parse_token(target: CodegenTarget, raw: &str) -> RegToken {
     let raw_norm = normalize_token(raw);
     let phys_group = arch::operand_register_group(target.architecture(), &raw_norm);
-    RegToken {
-        raw_norm,
-        phys_group,
-    }
+    RegToken { raw_norm, phys_group }
 }
 
 fn is_valid_constraint_class(token: &str) -> bool {
@@ -151,7 +148,7 @@ fn build_default_clobbers(
             }
 
             clobbers
-        }
+        },
     }
 }
 
@@ -194,24 +191,15 @@ fn normalize_special_clobber(target: CodegenTarget, token: &str) -> Option<Strin
 }
 
 fn is_stack_pseudo_clobber(token: &str) -> bool {
-    matches!(
-        normalize_token(token).as_str(),
-        "stack" | "uses_stack" | "uses-stack"
-    )
+    matches!(normalize_token(token).as_str(), "stack" | "uses_stack" | "uses-stack")
 }
 
 fn is_nostack_pseudo_clobber(token: &str) -> bool {
-    matches!(
-        normalize_token(token).as_str(),
-        "nostack" | "no_stack" | "no-stack"
-    )
+    matches!(normalize_token(token).as_str(), "nostack" | "no_stack" | "no-stack")
 }
 
 fn is_noreturn_pseudo_clobber(token: &str) -> bool {
-    matches!(
-        normalize_token(token).as_str(),
-        "noreturn" | "no_return" | "no-return"
-    )
+    matches!(normalize_token(token).as_str(), "noreturn" | "no_return" | "no-return")
 }
 
 fn normalize_clobber_item(target: CodegenTarget, s: &str) -> Result<String, String> {
@@ -320,15 +308,11 @@ fn stack_contract_from_user_clobbers(user: &[String]) -> Result<StackContract, S
 
     if stack_declared && nostack_declared {
         return Err(
-            "asm cannot declare both clobber(\"stack\") and clobber(\"nostack\")".to_string(),
+            "asm cannot declare both clobber(\"stack\") and clobber(\"nostack\")".to_string()
         );
     }
 
-    Ok(StackContract {
-        stack_declared,
-        nostack_declared,
-        noreturn_declared,
-    })
+    Ok(StackContract { stack_declared, nostack_declared, noreturn_declared })
 }
 
 fn asm_stack_analysis(target: CodegenTarget, instructions: &[String]) -> arch::StackAnalysis {

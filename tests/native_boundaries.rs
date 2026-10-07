@@ -17,6 +17,7 @@ impl Case {
         fs::create_dir_all(&path).unwrap();
         Self(path)
     }
+
     fn command(&self) -> Command {
         let mut c = Command::new(env!("CARGO_BIN_EXE_wavec"));
         c.current_dir(&self.0).arg("--std-root").arg(repo("std"));
@@ -31,6 +32,7 @@ impl Drop for Case {
 fn repo(path: &str) -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR")).join(path)
 }
+
 fn success(out: Output) {
     assert!(
         out.status.success(),
@@ -69,21 +71,15 @@ fn windows_file_and_memory_boundaries() {
                 .output()
                 .unwrap(),
         );
-        success(
-            Command::new(case.0.join("case.exe"))
-                .current_dir(&case.0)
-                .output()
-                .unwrap(),
-        );
+        success(Command::new(case.0.join("case.exe")).current_dir(&case.0).output().unwrap());
     }
 }
 #[cfg(target_os = "linux")]
 #[test]
 fn windows_boundary_native_api_mocks() {
     let case = Case::new();
-    let mut provider = fs::read_to_string(repo("std/sys/windows/fs.wave"))
-        .unwrap()
-        .replace("\r\n", "\n");
+    let mut provider =
+        fs::read_to_string(repo("std/sys/windows/fs.wave")).unwrap().replace("\r\n", "\n");
     let path_import = "import(\"std::sys::windows::path_encoding\")::{WidePath, wide_path, release_path, wide_path_to_utf8};";
     assert!(provider.contains(path_import));
     provider = provider.replace(path_import, r#"
@@ -100,11 +96,8 @@ fun wide_path_to_utf8(path: ptr<u16>, n: i32, dst: ptr<u8>, cap: i64) -> i64 { r
             .replace("extern(system,", "extern(c,"),
     )
     .unwrap();
-    fs::copy(
-        repo("tests/fixtures/native_boundaries/windows_mock.wave"),
-        case.0.join("case.wave"),
-    )
-    .unwrap();
+    fs::copy(repo("tests/fixtures/native_boundaries/windows_mock.wave"), case.0.join("case.wave"))
+        .unwrap();
     success(
         Command::new("cc")
             .args(["-c", "-O2"])
@@ -132,11 +125,7 @@ fn non_utf8_cli_paths_report_errors_without_colliding_outputs() {
     // Validate argv before filesystem access: macOS CI rejects file creation
     // with these byte sequences. A valid file at their shared lossy rendering
     // also catches accidental compilation of a different source via decoding.
-    fs::write(
-        case.0.join("x\u{fffd}.wave"),
-        "fun main() -> i32 { return 0; }",
-    )
-    .unwrap();
+    fs::write(case.0.join("x\u{fffd}.wave"), "fun main() -> i32 { return 0; }").unwrap();
     for byte in [0xfe, 0xff] {
         let name = std::ffi::OsString::from_vec(vec![b'x', byte, b'.', b'w', b'a', b'v', b'e']);
         for args in [
@@ -144,13 +133,8 @@ fn non_utf8_cli_paths_report_errors_without_colliding_outputs() {
             vec!["build", "--emit=obj", "-o", "output.o"],
             vec!["build", "--out-dir", "out"],
         ] {
-            let out = case
-                .command()
-                .args(args)
-                .arg(&name)
-                .arg("--error-format=json")
-                .output()
-                .unwrap();
+            let out =
+                case.command().args(args).arg(&name).arg("--error-format=json").output().unwrap();
             assert_eq!(out.status.code(), Some(2), "{out:?}");
             let error =
                 utils::wson::parse_json(String::from_utf8_lossy(&out.stderr).trim()).unwrap();
@@ -164,11 +148,7 @@ fn non_utf8_cli_paths_report_errors_without_colliding_outputs() {
             assert!(!case.0.join("out").exists());
         }
     }
-    fs::write(
-        case.0.join("normal.wave"),
-        "fun main() -> i32 { return 0; }",
-    )
-    .unwrap();
+    fs::write(case.0.join("normal.wave"), "fun main() -> i32 { return 0; }").unwrap();
     success(
         case.command()
             .args(["build", "normal.wave", "--emit=obj", "-o", "explicit.o"])
@@ -228,9 +208,7 @@ fn environment_short_reads_interruptions_and_failure_cleanup() {
             .output()
             .unwrap(),
     );
-    let high = fs::read_to_string(repo("std/env/environ.wave"))
-        .unwrap()
-        .replace("\r\n", "\n");
+    let high = fs::read_to_string(repo("std/env/environ.wave")).unwrap().replace("\r\n", "\n");
     let high = high.replace("import(\"std::sys::env\")::{\n    env_read,\n};", "extern(c, \"mock_env_read\") fun env_read(buf: ptr<u8>, cap: i64) -> i64;")
         .replace("import(\"std::sys::memory\")::{sys_alloc, sys_free};", "extern(c, \"mock_alloc\") fun sys_alloc(size: i64) -> ptr<u8>; extern(c, \"mock_free\") fun sys_free(p: ptr<u8>, size: i64) -> i64;");
     assert!(!high.contains("std::sys::env") && !high.contains("std::sys::memory"));
@@ -345,10 +323,8 @@ fn windows_environment_conversion_capacity_and_cleanup() {
     let provider = fs::read_to_string(repo("std/sys/windows/env.wave"))
         .unwrap()
         .replace("extern(system,", "extern(c,");
-    let fixture = fs::read_to_string(repo(
-        "tests/fixtures/release_constants/windows_env_mock.wave",
-    ))
-    .unwrap();
+    let fixture =
+        fs::read_to_string(repo("tests/fixtures/release_constants/windows_env_mock.wave")).unwrap();
     fs::write(case.0.join("case.wave"), format!("{provider}\n{fixture}")).unwrap();
     success(
         Command::new("cc")

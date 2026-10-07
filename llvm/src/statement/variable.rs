@@ -40,10 +40,7 @@ pub enum CoercionMode {
 }
 
 pub(crate) fn wave_type_is_unsigned(ty: Option<&WaveType>) -> bool {
-    matches!(
-        ty,
-        Some(WaveType::Uint(_) | WaveType::Bool | WaveType::Byte | WaveType::Char)
-    )
+    matches!(ty, Some(WaveType::Uint(_) | WaveType::Bool | WaveType::Byte | WaveType::Char))
 }
 
 pub(crate) fn expression_is_unsigned(program: &TypedProgram, expr: &Expression) -> bool {
@@ -69,19 +66,12 @@ pub fn coerce_basic_value<'ctx>(
     if matches!(mode, CoercionMode::Implicit) {
         if let (BasicValueEnum::IntValue(value), BasicTypeEnum::IntType(target)) = (val, expected) {
             if value.get_type().get_bit_width() == 1 && target.get_bit_width() == 8 {
-                return builder
-                    .build_int_z_extend(value, target, tag)
-                    .unwrap()
-                    .into();
+                return builder.build_int_z_extend(value, target, tag).unwrap().into();
             }
         }
-        if matches!(
-            val,
-            BasicValueEnum::IntValue(_) | BasicValueEnum::FloatValue(_)
-        ) && matches!(
-            expected,
-            BasicTypeEnum::IntType(_) | BasicTypeEnum::FloatType(_)
-        ) {
+        if matches!(val, BasicValueEnum::IntValue(_) | BasicValueEnum::FloatValue(_))
+            && matches!(expected, BasicTypeEnum::IntType(_) | BasicTypeEnum::FloatType(_))
+        {
             panic!("ICE: numeric boundary conversion missing from HIR: {tag}");
         }
     }
@@ -101,51 +91,36 @@ pub fn coerce_basic_value<'ctx>(
                             "implicit integer narrowing is forbidden: i{} -> i{}",
                             src_bw, dst_bw
                         );
-                    }
-                    CoercionMode::Asm | CoercionMode::Explicit | CoercionMode::Abi => builder
-                        .build_int_truncate(iv, dst, tag)
-                        .unwrap()
-                        .as_basic_value_enum(),
+                    },
+                    CoercionMode::Asm | CoercionMode::Explicit | CoercionMode::Abi => {
+                        builder.build_int_truncate(iv, dst, tag).unwrap().as_basic_value_enum()
+                    },
                 }
             } else if src_bw == 1 || source_unsigned {
-                builder
-                    .build_int_z_extend(iv, dst, tag)
-                    .unwrap()
-                    .as_basic_value_enum()
+                builder.build_int_z_extend(iv, dst, tag).unwrap().as_basic_value_enum()
             } else {
-                builder
-                    .build_int_s_extend(iv, dst, tag)
-                    .unwrap()
-                    .as_basic_value_enum()
+                builder.build_int_s_extend(iv, dst, tag).unwrap().as_basic_value_enum()
             }
-        }
+        },
 
         // float <-> float
-        (BasicValueEnum::FloatValue(fv), BasicTypeEnum::FloatType(dst)) => builder
-            .build_float_cast(fv, dst, tag)
-            .unwrap()
-            .as_basic_value_enum(),
+        (BasicValueEnum::FloatValue(fv), BasicTypeEnum::FloatType(dst)) => {
+            builder.build_float_cast(fv, dst, tag).unwrap().as_basic_value_enum()
+        },
 
         // float -> int
-        (BasicValueEnum::FloatValue(fv), BasicTypeEnum::IntType(dst)) => builder
-            .build_float_to_signed_int(fv, dst, tag)
-            .unwrap()
-            .as_basic_value_enum(),
+        (BasicValueEnum::FloatValue(fv), BasicTypeEnum::IntType(dst)) => {
+            builder.build_float_to_signed_int(fv, dst, tag).unwrap().as_basic_value_enum()
+        },
 
         // int -> float
         (BasicValueEnum::IntValue(iv), BasicTypeEnum::FloatType(dst)) => {
             if source_unsigned {
-                builder
-                    .build_unsigned_int_to_float(iv, dst, tag)
-                    .unwrap()
-                    .as_basic_value_enum()
+                builder.build_unsigned_int_to_float(iv, dst, tag).unwrap().as_basic_value_enum()
             } else {
-                builder
-                    .build_signed_int_to_float(iv, dst, tag)
-                    .unwrap()
-                    .as_basic_value_enum()
+                builder.build_signed_int_to_float(iv, dst, tag).unwrap().as_basic_value_enum()
             }
-        }
+        },
 
         // ptr -> ptr (bitcast)
         (BasicValueEnum::PointerValue(pv), BasicTypeEnum::PointerType(dst)) => builder
@@ -161,34 +136,25 @@ pub fn coerce_basic_value<'ctx>(
                 } else {
                     panic!("Implicit int->ptr is not allowed (use explicit cast).");
                 }
-            }
-            CoercionMode::Asm | CoercionMode::Explicit | CoercionMode::Abi => builder
-                .build_int_to_ptr(iv, dst, tag)
-                .unwrap()
-                .as_basic_value_enum(),
+            },
+            CoercionMode::Asm | CoercionMode::Explicit | CoercionMode::Abi => {
+                builder.build_int_to_ptr(iv, dst, tag).unwrap().as_basic_value_enum()
+            },
         },
 
         // ptr -> int
         (BasicValueEnum::PointerValue(pv), BasicTypeEnum::IntType(dst)) => match mode {
             CoercionMode::Implicit => {
-                panic!(
-                    "Implicit ptr->int is not allowed during '{}' (use explicit cast).",
-                    tag
-                );
-            }
-            CoercionMode::Asm | CoercionMode::Explicit | CoercionMode::Abi => builder
-                .build_ptr_to_int(pv, dst, tag)
-                .unwrap()
-                .as_basic_value_enum(),
+                panic!("Implicit ptr->int is not allowed during '{}' (use explicit cast).", tag);
+            },
+            CoercionMode::Asm | CoercionMode::Explicit | CoercionMode::Abi => {
+                builder.build_ptr_to_int(pv, dst, tag).unwrap().as_basic_value_enum()
+            },
         },
 
         _ => {
-            panic!(
-                "Type mismatch: expected {:?}, got {:?}",
-                expected,
-                val.get_type()
-            );
-        }
+            panic!("Type mismatch: expected {:?}, got {:?}", expected, val.get_type());
+        },
     }
 }
 
@@ -205,13 +171,7 @@ pub(super) fn gen_variable_ir<'ctx>(
     extern_c_info: &HashMap<String, ExternCInfo<'ctx>>,
     program: &TypedProgram,
 ) {
-    let VariableNode {
-        name,
-        type_name,
-        initial_value,
-        mutability,
-        ..
-    } = var_node;
+    let VariableNode { name, type_name, initial_value, mutability, .. } = var_node;
 
     if matches!(initial_value, Some(Expression::Null)) && !matches!(type_name, WaveType::Pointer(_))
     {
@@ -229,19 +189,12 @@ pub(super) fn gen_variable_ir<'ctx>(
         (type_name, initial_value.as_ref())
     {
         if values.len() != *size as usize {
-            panic!(
-                "❌ Array length mismatch: expected {}, got {}",
-                size,
-                values.len()
-            );
+            panic!("❌ Array length mismatch: expected {}, got {}", size, values.len());
         }
 
         let array_ty = match llvm_type {
             BasicTypeEnum::ArrayType(a) => a,
-            other => panic!(
-                "WaveType::Array must lower to LLVM array type, got {:?}",
-                other
-            ),
+            other => panic!("WaveType::Array must lower to LLVM array type, got {:?}", other),
         };
 
         let llvm_element_type =
@@ -293,11 +246,7 @@ pub(super) fn gen_variable_ir<'ctx>(
 
         variables.insert(
             name.clone(),
-            VariableInfo {
-                ptr: alloca,
-                mutability: mutability.clone(),
-                ty: type_name.clone(),
-            },
+            VariableInfo { ptr: alloca, mutability: mutability.clone(), ty: type_name.clone() },
         );
 
         return;
@@ -309,11 +258,7 @@ pub(super) fn gen_variable_ir<'ctx>(
     if asm_initializer {
         variables.insert(
             name.clone(),
-            VariableInfo {
-                ptr: alloca,
-                mutability: mutability.clone(),
-                ty: type_name.clone(),
-            },
+            VariableInfo { ptr: alloca, mutability: mutability.clone(), ty: type_name.clone() },
         );
     }
 
@@ -350,11 +295,7 @@ pub(super) fn gen_variable_ir<'ctx>(
     if !asm_initializer {
         variables.insert(
             name.clone(),
-            VariableInfo {
-                ptr: alloca,
-                mutability: mutability.clone(),
-                ty: type_name.clone(),
-            },
+            VariableInfo { ptr: alloca, mutability: mutability.clone(), ty: type_name.clone() },
         );
     }
 }
@@ -365,9 +306,8 @@ pub(super) fn build_entry_alloca<'ctx>(
     ty: BasicTypeEnum<'ctx>,
     name: &str,
 ) -> PointerValue<'ctx> {
-    let cur_block = builder
-        .get_insert_block()
-        .unwrap_or_else(|| panic!("build_entry_alloca: no insert block"));
+    let cur_block =
+        builder.get_insert_block().unwrap_or_else(|| panic!("build_entry_alloca: no insert block"));
     let func = cur_block
         .get_parent()
         .unwrap_or_else(|| panic!("build_entry_alloca: insert block has no parent function"));

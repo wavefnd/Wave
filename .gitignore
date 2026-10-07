@@ -94,3 +94,30 @@ cmake-build-debug/
 cmake-build-release/
 
 .DS_Store
+
+# AI assistant instructions, configuration, and local state (at any depth)
+AGENTS.md
+AGENTS.override.md
+CLAUDE.md
+CLAUDE.local.md
+GEMINI.md
+.codex
+.agents
+.claude
+.cursor
+.cursorrules
+.cursorignore
+.windsurf
+.windsurfrules
+.continue
+.clinerules
+.roo
+.roomodes
+.aider.conf.yml
+.aiderignore
+.aider.chat.history.md
+.aider.input.history
+.github/copilot-instructions.md
+.github/instructions/
+.github/prompts/
+.github/agents/

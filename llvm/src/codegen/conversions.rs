@@ -36,30 +36,18 @@ pub(crate) fn apply<'ctx>(
     use ConversionKind::*;
     let source = wave_type_to_llvm_type(context, &info.source_type, structs, TypeFlavor::Value);
     let target = wave_type_to_llvm_type(context, &info.target_type, structs, TypeFlavor::Value);
-    assert_eq!(
-        value.get_type(),
-        source,
-        "ICE: conversion source differs from verified HIR"
-    );
+    assert_eq!(value.get_type(), source, "ICE: conversion source differs from verified HIR");
     match info.kind {
         Identity | ReinterpretInteger => {
             assert_eq!(source, target);
             value
-        }
+        },
         SignExtend => builder
-            .build_int_s_extend(
-                value.into_int_value(),
-                target.into_int_type(),
-                "convert.sext",
-            )
+            .build_int_s_extend(value.into_int_value(), target.into_int_type(), "convert.sext")
             .unwrap()
             .into(),
         ZeroExtend => builder
-            .build_int_z_extend(
-                value.into_int_value(),
-                target.into_int_type(),
-                "convert.zext",
-            )
+            .build_int_z_extend(value.into_int_value(), target.into_int_type(), "convert.zext")
             .unwrap()
             .into(),
         IntegerToBool => builder
@@ -81,11 +69,7 @@ pub(crate) fn apply<'ctx>(
             .unwrap()
             .into(),
         Truncate => builder
-            .build_int_truncate(
-                value.into_int_value(),
-                target.into_int_type(),
-                "convert.trunc",
-            )
+            .build_int_truncate(value.into_int_value(), target.into_int_type(), "convert.trunc")
             .unwrap()
             .into(),
         SignedToFloat => builder
@@ -112,11 +96,7 @@ pub(crate) fn apply<'ctx>(
             let range = hir::conversions::float_integer_range(&info.source_type, &info.target_type);
             let low = builder
                 .build_float_compare(
-                    if range.lower_inclusive {
-                        FloatPredicate::OGE
-                    } else {
-                        FloatPredicate::OGT
-                    },
+                    if range.lower_inclusive { FloatPredicate::OGE } else { FloatPredicate::OGT },
                     input,
                     ty.const_float(range.lower),
                     "convert.lower",
@@ -140,9 +120,7 @@ pub(crate) fn apply<'ctx>(
                 )
                 .unwrap();
             let valid = builder.build_and(low, high, "convert.range").unwrap();
-            let valid = builder
-                .build_and(valid, finite_low, "convert.valid")
-                .unwrap();
+            let valid = builder.build_and(valid, finite_low, "convert.valid").unwrap();
             trap_unless(context, builder, module, valid);
             if bits > 64 && input.get_constant().is_none() {
                 return wide_float_to_int(context, builder, input, target.into_int_type());
@@ -158,29 +136,17 @@ pub(crate) fn apply<'ctx>(
                     .unwrap()
                     .into()
             }
-        }
+        },
         FloatExtend | FloatTruncate => builder
-            .build_float_cast(
-                value.into_float_value(),
-                target.into_float_type(),
-                "convert.float",
-            )
+            .build_float_cast(value.into_float_value(), target.into_float_type(), "convert.float")
             .unwrap()
             .into(),
         PointerToInteger => builder
-            .build_ptr_to_int(
-                value.into_pointer_value(),
-                target.into_int_type(),
-                "convert.ptrint",
-            )
+            .build_ptr_to_int(value.into_pointer_value(), target.into_int_type(), "convert.ptrint")
             .unwrap()
             .into(),
         IntegerToPointer => builder
-            .build_int_to_ptr(
-                value.into_int_value(),
-                target.into_pointer_type(),
-                "convert.intptr",
-            )
+            .build_int_to_ptr(value.into_int_value(), target.into_pointer_type(), "convert.intptr")
             .unwrap()
             .into(),
         PointerCast => builder
@@ -220,15 +186,12 @@ pub(crate) fn binary<'ctx>(
             )
             .unwrap();
         trap_unless(context, builder, module, valid);
-        let count = builder
-            .build_int_cast(count, lhs.get_type(), "shift.narrow")
-            .unwrap();
+        let count = builder.build_int_cast(count, lhs.get_type(), "shift.narrow").unwrap();
         return match operator {
             Operator::ShiftLeft => builder.build_left_shift(lhs, count, "shl").unwrap().into(),
-            Operator::ShiftRight => builder
-                .build_right_shift(lhs, count, !unsigned(computation), "shr")
-                .unwrap()
-                .into(),
+            Operator::ShiftRight => {
+                builder.build_right_shift(lhs, count, !unsigned(computation), "shr").unwrap().into()
+            },
             _ => panic!("ICE: shift facts on a non-shift operation"),
         };
     }
@@ -246,59 +209,47 @@ pub(crate) fn binary<'ctx>(
                 Operator::Multiply => builder.build_int_mul(l_casted, r_casted, "multmp"),
                 Operator::Divide if operation_unsigned => {
                     builder.build_int_unsigned_div(l_casted, r_casted, "divtmp")
-                }
+                },
                 Operator::Divide => builder.build_int_signed_div(l_casted, r_casted, "divtmp"),
                 Operator::Remainder if operation_unsigned => {
                     builder.build_int_unsigned_rem(l_casted, r_casted, "modtmp")
-                }
+                },
                 Operator::Remainder => builder.build_int_signed_rem(l_casted, r_casted, "modtmp"),
                 Operator::ShiftLeft => builder.build_left_shift(l_casted, r_casted, "shl"),
                 Operator::ShiftRight => {
                     let arithmetic = !operation_unsigned;
                     builder.build_right_shift(l_casted, r_casted, arithmetic, "shr")
-                }
+                },
                 Operator::BitwiseAnd => builder.build_and(l_casted, r_casted, "andtmp"),
                 Operator::BitwiseOr => builder.build_or(l_casted, r_casted, "ortmp"),
                 Operator::BitwiseXor => builder.build_xor(l_casted, r_casted, "xortmp"),
 
                 Operator::Greater => {
-                    let predicate = if operation_unsigned {
-                        IntPredicate::UGT
-                    } else {
-                        IntPredicate::SGT
-                    };
+                    let predicate =
+                        if operation_unsigned { IntPredicate::UGT } else { IntPredicate::SGT };
                     builder.build_int_compare(predicate, l_casted, r_casted, "cmptmp")
-                }
+                },
                 Operator::Less => {
-                    let predicate = if operation_unsigned {
-                        IntPredicate::ULT
-                    } else {
-                        IntPredicate::SLT
-                    };
+                    let predicate =
+                        if operation_unsigned { IntPredicate::ULT } else { IntPredicate::SLT };
                     builder.build_int_compare(predicate, l_casted, r_casted, "cmptmp")
-                }
+                },
                 Operator::Equal => {
                     builder.build_int_compare(IntPredicate::EQ, l_casted, r_casted, "cmptmp")
-                }
+                },
                 Operator::NotEqual => {
                     builder.build_int_compare(IntPredicate::NE, l_casted, r_casted, "cmptmp")
-                }
+                },
                 Operator::GreaterEqual => {
-                    let predicate = if operation_unsigned {
-                        IntPredicate::UGE
-                    } else {
-                        IntPredicate::SGE
-                    };
+                    let predicate =
+                        if operation_unsigned { IntPredicate::UGE } else { IntPredicate::SGE };
                     builder.build_int_compare(predicate, l_casted, r_casted, "cmptmp")
-                }
+                },
                 Operator::LessEqual => {
-                    let predicate = if operation_unsigned {
-                        IntPredicate::ULE
-                    } else {
-                        IntPredicate::SLE
-                    };
+                    let predicate =
+                        if operation_unsigned { IntPredicate::ULE } else { IntPredicate::SLE };
                     builder.build_int_compare(predicate, l_casted, r_casted, "cmptmp")
-                }
+                },
 
                 Operator::LogicalAnd | Operator::LogicalOr => unreachable!(),
 
@@ -307,29 +258,24 @@ pub(crate) fn binary<'ctx>(
             .unwrap();
 
             result.into()
-        }
+        },
         (BasicValueEnum::FloatValue(l), BasicValueEnum::FloatValue(r)) => {
             let result: BasicValueEnum<'ctx> = match operator {
-                Operator::Add => builder
-                    .build_float_add(l, r, "faddtmp")
-                    .unwrap()
-                    .as_basic_value_enum(),
-                Operator::Subtract => builder
-                    .build_float_sub(l, r, "fsubtmp")
-                    .unwrap()
-                    .as_basic_value_enum(),
-                Operator::Multiply => builder
-                    .build_float_mul(l, r, "fmultmp")
-                    .unwrap()
-                    .as_basic_value_enum(),
-                Operator::Divide => builder
-                    .build_float_div(l, r, "fdivtmp")
-                    .unwrap()
-                    .as_basic_value_enum(),
-                Operator::Remainder => builder
-                    .build_float_rem(l, r, "fmodtmp")
-                    .unwrap()
-                    .as_basic_value_enum(),
+                Operator::Add => {
+                    builder.build_float_add(l, r, "faddtmp").unwrap().as_basic_value_enum()
+                },
+                Operator::Subtract => {
+                    builder.build_float_sub(l, r, "fsubtmp").unwrap().as_basic_value_enum()
+                },
+                Operator::Multiply => {
+                    builder.build_float_mul(l, r, "fmultmp").unwrap().as_basic_value_enum()
+                },
+                Operator::Divide => {
+                    builder.build_float_div(l, r, "fdivtmp").unwrap().as_basic_value_enum()
+                },
+                Operator::Remainder => {
+                    builder.build_float_rem(l, r, "fmodtmp").unwrap().as_basic_value_enum()
+                },
 
                 Operator::Greater => builder
                     .build_float_compare(FloatPredicate::OGT, l, r, "fcmpgt")
@@ -360,7 +306,7 @@ pub(crate) fn binary<'ctx>(
             };
 
             result
-        }
+        },
         _ => panic!("ICE: nonnumeric computation"),
     }
 }
@@ -381,10 +327,7 @@ fn trap_unless<'ctx>(
     let bad = context.append_basic_block(parent, "numeric.invalid");
     builder.build_conditional_branch(valid, ok, bad).unwrap();
     builder.position_at_end(bad);
-    let trap = Intrinsic::find("llvm.trap")
-        .unwrap()
-        .get_declaration(module, &[])
-        .unwrap();
+    let trap = Intrinsic::find("llvm.trap").unwrap().get_declaration(module, &[]).unwrap();
     builder.build_call(trap, &[], "").unwrap();
     builder.build_unreachable().unwrap();
     builder.position_at_end(ok);
@@ -399,53 +342,24 @@ fn wide_float_to_int<'ctx>(
     target: inkwell::types::IntType<'ctx>,
 ) -> BasicValueEnum<'ctx> {
     let single = value.get_type() == context.f32_type();
-    let (bits, fraction, bias, exponent_mask) = if single {
-        (32, 23, 127, 255)
-    } else {
-        (64, 52, 1023, 2047)
-    };
+    let (bits, fraction, bias, exponent_mask) =
+        if single { (32, 23, 127, 255) } else { (64, 52, 1023, 2047) };
     let storage = context.custom_width_int_type(bits);
-    let raw = builder
-        .build_bit_cast(value, storage, "convert.ieee")
-        .unwrap()
-        .into_int_value();
+    let raw = builder.build_bit_cast(value, storage, "convert.ieee").unwrap().into_int_value();
     let negative = builder
-        .build_int_compare(
-            IntPredicate::SLT,
-            raw,
-            storage.const_zero(),
-            "convert.negative",
-        )
+        .build_int_compare(IntPredicate::SLT, raw, storage.const_zero(), "convert.negative")
         .unwrap();
     let exponent = builder
-        .build_right_shift(
-            raw,
-            storage.const_int(fraction, false),
-            false,
-            "convert.exponent",
-        )
+        .build_right_shift(raw, storage.const_int(fraction, false), false, "convert.exponent")
         .unwrap();
     let exponent = builder
-        .build_and(
-            exponent,
-            storage.const_int(exponent_mask, false),
-            "convert.exponent.bits",
-        )
+        .build_and(exponent, storage.const_int(exponent_mask, false), "convert.exponent.bits")
         .unwrap();
     let shift = builder
-        .build_int_sub(
-            exponent,
-            storage.const_int(bias + fraction, false),
-            "convert.shift",
-        )
+        .build_int_sub(exponent, storage.const_int(bias + fraction, false), "convert.shift")
         .unwrap();
     let leftward = builder
-        .build_int_compare(
-            IntPredicate::SGE,
-            shift,
-            storage.const_zero(),
-            "convert.leftward",
-        )
+        .build_int_compare(IntPredicate::SGE, shift, storage.const_zero(), "convert.leftward")
         .unwrap();
     let left_count = builder
         .build_select(leftward, shift, storage.const_zero(), "convert.left.count")
@@ -453,12 +367,7 @@ fn wide_float_to_int<'ctx>(
         .into_int_value();
     let neg_shift = builder.build_int_neg(shift, "convert.right.shift").unwrap();
     let right_count = builder
-        .build_select(
-            leftward,
-            storage.const_zero(),
-            neg_shift,
-            "convert.right.count",
-        )
+        .build_select(leftward, storage.const_zero(), neg_shift, "convert.right.count")
         .unwrap()
         .into_int_value();
     let too_large = builder
@@ -479,33 +388,15 @@ fn wide_float_to_int<'ctx>(
         .unwrap()
         .into_int_value();
     let significand = builder
-        .build_and(
-            raw,
-            storage.const_int((1u64 << fraction) - 1, false),
-            "convert.fraction",
-        )
+        .build_and(raw, storage.const_int((1u64 << fraction) - 1, false), "convert.fraction")
         .unwrap();
     let significand = builder
-        .build_or(
-            significand,
-            storage.const_int(1u64 << fraction, false),
-            "convert.significand",
-        )
+        .build_or(significand, storage.const_int(1u64 << fraction, false), "convert.significand")
         .unwrap();
-    let low = builder
-        .build_right_shift(significand, right_count, false, "convert.low")
-        .unwrap();
-    let magnitude = builder
-        .build_int_z_extend(low, target, "convert.wide")
-        .unwrap();
-    let left_count = builder
-        .build_int_z_extend(left_count, target, "convert.wide.count")
-        .unwrap();
-    let magnitude = builder
-        .build_left_shift(magnitude, left_count, "convert.magnitude")
-        .unwrap();
+    let low = builder.build_right_shift(significand, right_count, false, "convert.low").unwrap();
+    let magnitude = builder.build_int_z_extend(low, target, "convert.wide").unwrap();
+    let left_count = builder.build_int_z_extend(left_count, target, "convert.wide.count").unwrap();
+    let magnitude = builder.build_left_shift(magnitude, left_count, "convert.magnitude").unwrap();
     let negated = builder.build_int_neg(magnitude, "convert.negate").unwrap();
-    builder
-        .build_select(negative, negated, magnitude, "convert.integer")
-        .unwrap()
+    builder.build_select(negative, negated, magnitude, "convert.integer").unwrap()
 }

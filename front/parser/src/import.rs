@@ -49,14 +49,8 @@ struct TargetAttrCondition<'a> {
 impl TargetConditionContext {
     fn actual_value(&self, key: &str) -> String {
         match key {
-            "arch" => self
-                .arch
-                .clone()
-                .unwrap_or_else(|| std::env::consts::ARCH.to_string()),
-            "os" => self
-                .os
-                .clone()
-                .unwrap_or_else(|| std::env::consts::OS.to_string()),
+            "arch" => self.arch.clone().unwrap_or_else(|| std::env::consts::ARCH.to_string()),
+            "os" => self.os.clone().unwrap_or_else(|| std::env::consts::OS.to_string()),
             "env" => self.env.clone().unwrap_or_default(),
             "abi" => self.abi.clone().unwrap_or_default(),
             _ => String::new(),
@@ -66,12 +60,9 @@ impl TargetConditionContext {
 
 impl<'a> TargetAttrCondition<'a> {
     fn matches(&self, target: &TargetConditionContext) -> bool {
-        for (key, expected) in [
-            ("arch", self.arch),
-            ("os", self.os),
-            ("env", self.env),
-            ("abi", self.abi),
-        ] {
+        for (key, expected) in
+            [("arch", self.arch), ("os", self.os), ("env", self.env), ("abi", self.abi)]
+        {
             if let Some(expected) = expected {
                 let actual = target.actual_value(key);
                 if normalize_target_value(key, &actual) != normalize_target_value(key, expected) {
@@ -263,11 +254,7 @@ fn consume_target_item(
 
         let mut saw_semicolon = false;
         scan_target_item_line(
-            if idx == first {
-                &line[first_offset..]
-            } else {
-                line
-            },
+            if idx == first { &line[first_offset..] } else { line },
             in_block_comment,
             &mut depth,
             &mut seen_open,
@@ -328,10 +315,7 @@ pub fn preprocess_target_attrs(source: &str, target: &TargetConditionContext) ->
 
     while idx < lines.len() {
         let line = lines[idx];
-        if let Some(target_attr) = (comment_depth == 0)
-            .then(|| parse_target_attr(line))
-            .flatten()
-        {
+        if let Some(target_attr) = (comment_depth == 0).then(|| parse_target_attr(line)).flatten() {
             // Attribute line is removed for parser compatibility,
             // but we keep its line slot to preserve diagnostics.
             out.push(" ".repeat(line.len()));
@@ -387,9 +371,7 @@ pub fn preprocess_target_attrs(source: &str, target: &TargetConditionContext) ->
     for (i, line) in out.iter().enumerate() {
         result.push_str(line);
         let (start, original) = source_lines[i];
-        let end = source_lines
-            .get(i + 1)
-            .map_or(source.len(), |(start, _)| *start);
+        let end = source_lines.get(i + 1).map_or(source.len(), |(start, _)| *start);
         result.push_str(&source[start + original.len()..end]);
     }
     result
@@ -545,10 +527,7 @@ pub fn local_import_unit_with_config(
     if !canonical_target.starts_with(&canonical_base) {
         return Err(WaveError::new(
             WaveErrorKind::SyntaxError("Local import escapes module directory".to_string()),
-            format!(
-                "local import '{}' resolves outside its module directory",
-                path
-            ),
+            format!("local import '{}' resolves outside its module directory", path),
             path,
             0,
             0,
@@ -556,12 +535,7 @@ pub fn local_import_unit_with_config(
         .with_help("remove symlink or path traversal components from the local import"));
     }
 
-    parse_wave_file(
-        &canonical_target,
-        &target_file_name,
-        already_imported,
-        config,
-    )
+    parse_wave_file(&canonical_target, &target_file_name, already_imported, config)
 }
 
 pub fn local_import(
@@ -569,10 +543,8 @@ pub fn local_import(
     already_imported: &mut HashSet<String>,
     base_dir: &Path,
 ) -> Result<Vec<ASTNode>, WaveError> {
-    Ok(
-        local_import_unit_with_config(path, already_imported, base_dir, &ImportConfig::default())?
-            .ast,
-    )
+    Ok(local_import_unit_with_config(path, already_imported, base_dir, &ImportConfig::default())?
+        .ast)
 }
 
 pub fn local_import_with_config(
@@ -618,13 +590,8 @@ fn external_import_unit(
 
     let valid_segment = |segment: &str| {
         !segment.is_empty()
-            && segment
-                .chars()
-                .next()
-                .is_some_and(|ch| ch.is_ascii_alphabetic() || ch == '_')
-            && segment
-                .chars()
-                .all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
+            && segment.chars().next().is_some_and(|ch| ch.is_ascii_alphabetic() || ch == '_')
+            && segment.chars().all(|ch| ch.is_ascii_alphanumeric() || ch == '_')
     };
 
     if !valid_segment(package) || module_parts.iter().any(|segment| !valid_segment(segment)) {
@@ -646,10 +613,7 @@ fn external_import_unit(
         Ok(None) => {
             let mut err = WaveError::new(
                 WaveErrorKind::SyntaxError("External dependency not found".to_string()),
-                format!(
-                    "could not resolve external package '{}' for import '{}'",
-                    package, path
-                ),
+                format!("could not resolve external package '{}' for import '{}'", package, path),
                 path,
                 0,
                 0,
@@ -671,13 +635,10 @@ fn external_import_unit(
                 err = err.with_note(format!("currently configured dependency roots: {}", roots));
             }
             return Err(err);
-        }
+        },
         Err(candidates) => {
-            let roots = candidates
-                .iter()
-                .map(|p| p.display().to_string())
-                .collect::<Vec<_>>()
-                .join(", ");
+            let roots =
+                candidates.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(", ");
 
             return Err(WaveError::new(
                 WaveErrorKind::SyntaxError("Ambiguous external package root".to_string()),
@@ -691,7 +652,7 @@ fn external_import_unit(
             )
             .with_note(format!("candidates: {}", roots))
             .with_help("pin the package path explicitly with `--dep <name>=<path>`"));
-        }
+        },
     };
 
     if !package_root.is_dir() {
@@ -710,25 +671,16 @@ fn external_import_unit(
     }
 
     let candidates = if module_parts.is_empty() {
-        vec![
-            package_root.join("src/lib.wave"),
-            package_root.join("lib.wave"),
-        ]
+        vec![package_root.join("src/lib.wave"), package_root.join("lib.wave")]
     } else {
         let module_file = format!("{}.wave", module_parts.join("/"));
-        vec![
-            package_root.join("src").join(&module_file),
-            package_root.join(&module_file),
-        ]
+        vec![package_root.join("src").join(&module_file), package_root.join(&module_file)]
     };
 
     let canonical_package_root = package_root.canonicalize().map_err(|error| {
         WaveError::new(
             WaveErrorKind::SyntaxError("Canonicalization failed".to_string()),
-            format!(
-                "failed to canonicalize dependency package '{}': {}",
-                package, error
-            ),
+            format!("failed to canonicalize dependency package '{}': {}", package, error),
             path,
             0,
             0,
@@ -751,10 +703,7 @@ fn external_import_unit(
                     WaveErrorKind::SyntaxError(
                         "Package import escapes dependency root".to_string(),
                     ),
-                    format!(
-                        "package import '{}' resolves outside package '{}'",
-                        path, package
-                    ),
+                    format!("package import '{}' resolves outside package '{}'", path, package),
                     path,
                     0,
                     0,
@@ -765,18 +714,12 @@ fn external_import_unit(
         }
     }
 
-    let searched = candidates
-        .iter()
-        .map(|p| p.display().to_string())
-        .collect::<Vec<_>>()
-        .join(", ");
+    let searched =
+        candidates.iter().map(|p| p.display().to_string()).collect::<Vec<_>>().join(", ");
 
     Err(WaveError::new(
         WaveErrorKind::SyntaxError("File not found".to_string()),
-        format!(
-            "could not find external import target '{}' in package '{}'",
-            path, package
-        ),
+        format!("could not find external import target '{}' in package '{}'", path, package),
         path,
         0,
         0,
@@ -809,37 +752,22 @@ fn std_import_unit(
 
 fn resolve_std_import_path(std_root: &Path, path: &str) -> Result<PathBuf, WaveError> {
     let invalid = |message: String| {
-        WaveError::new(
-            WaveErrorKind::SyntaxError("Invalid std import".into()),
-            message,
-            path,
-            0,
-            0,
-        )
+        WaveError::new(WaveErrorKind::SyntaxError("Invalid std import".into()), message, path, 0, 0)
     };
-    let rel = path
-        .strip_prefix("std::")
-        .ok_or_else(|| invalid("expected std:: module path".into()))?;
+    let rel =
+        path.strip_prefix("std::").ok_or_else(|| invalid("expected std:: module path".into()))?;
     if rel.split("::").any(|segment| {
         let mut chars = segment.chars();
-        !chars
-            .next()
-            .is_some_and(|ch| ch == '_' || ch.is_alphabetic())
+        !chars.next().is_some_and(|ch| ch == '_' || ch.is_alphabetic())
             || !chars.all(|ch| ch == '_' || ch.is_alphanumeric())
     }) {
-        return Err(invalid(
-            "std import paths must contain module names separated by `::`".into(),
-        ));
+        return Err(invalid("std import paths must contain module names separated by `::`".into()));
     }
     let root = std::fs::canonicalize(std_root)
         .map_err(|e| invalid(format!("cannot resolve std root: {e}")))?;
     let target = root.join(format!("{}.wave", rel.replace("::", "/")));
-    let target = std::fs::canonicalize(&target).map_err(|e| {
-        invalid(format!(
-            "cannot resolve std import '{}': {e}",
-            target.display()
-        ))
-    })?;
+    let target = std::fs::canonicalize(&target)
+        .map_err(|e| invalid(format!("cannot resolve std import '{}': {e}", target.display())))?;
     if !target.starts_with(&root) || !target.is_file() {
         return Err(invalid(
             "std import target must be a file inside the standard-library root".into(),
@@ -858,17 +786,11 @@ pub fn std_compatibility_revision(std_root: &Path) -> Result<u64, String> {
         .map_err(|error| format!("invalid '{}': {}", manifest_path.display(), error))?;
 
     if manifest.get_str("name") != Some("std") {
-        return Err(format!(
-            "invalid '{}': name must be 'std'",
-            manifest_path.display()
-        ));
+        return Err(format!("invalid '{}': name must be 'std'", manifest_path.display()));
     }
 
     let raw = manifest.get_u64("compatibility_revision").ok_or_else(|| {
-        format!(
-            "invalid '{}': compatibility_revision must be an integer",
-            manifest_path.display()
-        )
+        format!("invalid '{}': compatibility_revision must be an integer", manifest_path.display())
     })?;
     Ok(raw)
 }
@@ -902,10 +824,7 @@ fn std_root_dir(import_path: &str) -> Result<PathBuf, WaveError> {
     utils::paths::std_root_dir().ok_or_else(|| {
         WaveError::new(
             WaveErrorKind::SyntaxError("std not installed".to_string()),
-            format!(
-                "{}; cannot locate std",
-                utils::paths::missing_home_message()
-            ),
+            format!("{}; cannot locate std", utils::paths::missing_home_message()),
             import_path,
             0,
             0,
@@ -943,11 +862,7 @@ fn parse_wave_file(
         .to_string();
 
     if already_imported.contains(&abs_path_str) {
-        return Ok(ImportedUnit {
-            abs_path,
-            ast: vec![],
-            source: String::new(),
-        });
+        return Ok(ImportedUnit { abs_path, ast: vec![], source: String::new() });
     }
     already_imported.insert(abs_path_str);
 
@@ -967,26 +882,17 @@ fn parse_wave_file(
 
     let ast = parse_syntax_with_spans(&tokens).map_err(|e| {
         let (kind, phase, code) = match &e {
-            ParseError::Syntax(_) => (
-                WaveErrorKind::SyntaxError(e.message().to_string()),
-                "syntax",
-                "E2001",
-            ),
-            ParseError::Semantic(_) => (
-                WaveErrorKind::InvalidStatement(e.message().to_string()),
-                "semantic",
-                "E3001",
-            ),
+            ParseError::Syntax(_) => {
+                (WaveErrorKind::SyntaxError(e.message().to_string()), "syntax", "E2001")
+            },
+            ParseError::Semantic(_) => {
+                (WaveErrorKind::InvalidStatement(e.message().to_string()), "semantic", "E3001")
+            },
         };
 
         let mut we = WaveError::new(
             kind,
-            format!(
-                "{} validation failed for '{}': {}",
-                phase,
-                abs_path.display(),
-                e.message()
-            ),
+            format!("{} validation failed for '{}': {}", phase, abs_path.display(), e.message()),
             display_name,
             e.line().max(1),
             e.column().max(1),
@@ -994,9 +900,7 @@ fn parse_wave_file(
         .with_code(code)
         .with_source_code(content.clone());
 
-        we = we
-            .with_span(e.span())
-            .with_related(e.related().iter().cloned());
+        we = we.with_span(e.span()).with_related(e.related().iter().cloned());
         if let Some(ctx) = e.context() {
             we = we.with_context(ctx.to_string());
         }
@@ -1016,11 +920,7 @@ fn parse_wave_file(
         we
     })?;
 
-    Ok(ImportedUnit {
-        abs_path,
-        ast,
-        source: content,
-    })
+    Ok(ImportedUnit { abs_path, ast, source: content })
 }
 
 #[cfg(test)]
@@ -1055,10 +955,7 @@ mod tests {
         std::fs::write(root.join("second.wave"), "pub const SECOND: i32 = 2;").unwrap();
         let resolved = ResolvedStdRoot::resolve(Some(&root)).unwrap();
         std::fs::write(root.join("manifest.json"), "invalid").unwrap();
-        let config = ImportConfig {
-            std_root: Ok(resolved),
-            ..ImportConfig::default()
-        };
+        let config = ImportConfig { std_root: Ok(resolved), ..ImportConfig::default() };
         let mut imported = HashSet::new();
         std_import_unit("std::first", &mut imported, &config).unwrap();
         std_import_unit("std::second", &mut imported, &config).unwrap();
@@ -1120,17 +1017,12 @@ mod tests {
                 lines.push("pub fun after() {}");
                 let source = lines.join(newline);
                 for os in ["linux", "windows"] {
-                    let target = TargetConditionContext {
-                        os: Some(os.into()),
-                        ..Default::default()
-                    };
+                    let target =
+                        TargetConditionContext { os: Some(os.into()), ..Default::default() };
                     let processed = preprocess_target_attrs(&source, &target);
                     assert_eq!(processed.len(), source.len());
                     assert_eq!(error::span::source_lines(&processed).len(), lines.len());
-                    assert_eq!(
-                        processed.find("pub fun after"),
-                        source.find("pub fun after")
-                    );
+                    assert_eq!(processed.find("pub fun after"), source.find("pub fun after"));
                     assert_eq!(
                         processed.contains("pub fun selected"),
                         os == "linux",
@@ -1145,10 +1037,7 @@ mod tests {
 
     #[test]
     fn target_directives_inside_ordinary_comments_are_inert() {
-        let target = TargetConditionContext {
-            os: Some("linux".into()),
-            ..Default::default()
-        };
+        let target = TargetConditionContext { os: Some("linux".into()), ..Default::default() };
         for newline in ["\n", "\r\n", "\r"] {
             let source = [
                 "/* outer",
@@ -1216,10 +1105,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(
-            std_compatibility_revision(&root),
-            Ok(STD_COMPATIBILITY_REVISION)
-        );
+        assert_eq!(std_compatibility_revision(&root), Ok(STD_COMPATIBILITY_REVISION));
         let _ = std::fs::remove_dir_all(root);
     }
 
@@ -1228,11 +1114,7 @@ mod tests {
         let root = temp_std_root("incompatible");
         let imported = root.join("fs/file.wave");
         std::fs::create_dir_all(imported.parent().unwrap()).unwrap();
-        std::fs::write(
-            &imported,
-            "pub fun exists(path: str) -> bool { return false; }",
-        )
-        .unwrap();
+        std::fs::write(&imported, "pub fun exists(path: str) -> bool { return false; }").unwrap();
         std::fs::write(
             root.join("manifest.json"),
             "{\"name\":\"std\",\"compatibility_revision\":0}",
@@ -1243,9 +1125,7 @@ mod tests {
         assert_eq!(error.file, imported.display().to_string());
         assert!(error.message.contains("revision 0"), "{}", error.message);
         assert!(
-            error
-                .message
-                .contains(&format!("requires {}", STD_COMPATIBILITY_REVISION)),
+            error.message.contains(&format!("requires {}", STD_COMPATIBILITY_REVISION)),
             "{}",
             error.message
         );

@@ -32,13 +32,7 @@ fn home_dir_from(windows: bool, mut get: impl FnMut(&str) -> Option<OsString>) -
     let mut nonempty = |name| get(name).filter(|value| !value.is_empty());
     // HOME also provides the explicit override used by staged std installation.
     nonempty("HOME")
-        .or_else(|| {
-            if windows {
-                nonempty("USERPROFILE")
-            } else {
-                None
-            }
-        })
+        .or_else(|| if windows { nonempty("USERPROFILE") } else { None })
         .map(PathBuf::from)
 }
 
@@ -72,9 +66,7 @@ mod tests {
 
     #[test]
     fn unix_does_not_fall_back_to_a_windows_profile() {
-        let path = home_dir_from(false, |key| {
-            (key == "USERPROFILE").then(|| "/users/wave".into())
-        });
+        let path = home_dir_from(false, |key| (key == "USERPROFILE").then(|| "/users/wave".into()));
         assert_eq!(path, None);
         assert_eq!(home_dir_from(true, |_| None), None);
         assert_eq!(home_dir_from(true, |_| Some(OsString::new())), None);

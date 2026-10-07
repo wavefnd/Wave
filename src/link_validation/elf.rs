@@ -33,14 +33,8 @@ pub(super) struct ElfMetadata {
 
 #[derive(Debug)]
 pub enum LinkInputInspectionError {
-    Read {
-        input: PathBuf,
-        source: std::io::Error,
-    },
-    Malformed {
-        input: String,
-        reason: String,
-    },
+    Read { input: PathBuf, source: std::io::Error },
+    Malformed { input: String, reason: String },
 }
 
 impl fmt::Display for LinkInputInspectionError {
@@ -53,12 +47,8 @@ impl fmt::Display for LinkInputInspectionError {
                 source
             ),
             Self::Malformed { input, reason } => {
-                write!(
-                    formatter,
-                    "invalid ELF linker input '{}': {}",
-                    input, reason
-                )
-            }
+                write!(formatter, "invalid ELF linker input '{}': {}", input, reason)
+            },
         }
     }
 }
@@ -218,10 +208,7 @@ fn inspect_archive(
         }
     }
     if selected.is_some() {
-        return Err(malformed(
-            &display,
-            "nested archive member offset is not a member header",
-        ));
+        return Err(malformed(&display, "nested archive member offset is not a member header"));
     }
     Ok(())
 }
@@ -231,9 +218,7 @@ fn archive_number(
     text: &[u8],
     reason: &str,
 ) -> Result<usize, LinkInputInspectionError> {
-    let text = std::str::from_utf8(text)
-        .map_err(|_| malformed(display, reason))?
-        .trim();
+    let text = std::str::from_utf8(text).map_err(|_| malformed(display, reason))?.trim();
     if text.is_empty() || !text.bytes().all(|c| c.is_ascii_digit()) {
         return Err(malformed(display, reason));
     }
@@ -249,23 +234,14 @@ fn archive_member<'a>(
 ) -> Result<(String, &'a [u8], Option<usize>), LinkInputInspectionError> {
     if let Some(length) = raw_name.strip_prefix("#1/") {
         if thin {
-            return Err(malformed(
-                display,
-                "BSD extended names are invalid in GNU thin archives",
-            ));
+            return Err(malformed(display, "BSD extended names are invalid in GNU thin archives"));
         }
-        let length = archive_number(
-            display,
-            length.as_bytes(),
-            "invalid BSD archive member name",
-        )?;
+        let length = archive_number(display, length.as_bytes(), "invalid BSD archive member name")?;
         let name = data
             .get(..length)
             .ok_or_else(|| malformed(display, "truncated BSD archive member name"))?;
         return Ok((
-            String::from_utf8_lossy(name)
-                .trim_end_matches('\0')
-                .to_string(),
+            String::from_utf8_lossy(name).trim_end_matches('\0').to_string(),
             &data[length..],
             None,
         ));
@@ -282,11 +258,8 @@ fn archive_member<'a>(
             ),
             _ => (reference, None),
         };
-        let offset = archive_number(
-            display,
-            name_offset.as_bytes(),
-            "invalid GNU archive name offset",
-        )?;
+        let offset =
+            archive_number(display, name_offset.as_bytes(), "invalid GNU archive name offset")?;
         let table =
             long_names.ok_or_else(|| malformed(display, "archive long-name table is missing"))?;
         let tail = table
@@ -310,10 +283,7 @@ fn archive_member<'a>(
 }
 
 fn malformed(input: &str, reason: &str) -> LinkInputInspectionError {
-    LinkInputInspectionError::Malformed {
-        input: input.to_string(),
-        reason: reason.to_string(),
-    }
+    LinkInputInspectionError::Malformed { input: input.to_string(), reason: reason.to_string() }
 }
 
 fn read_u16(bytes: &[u8], little_endian: bool) -> u16 {
@@ -381,6 +351,7 @@ mod tests {
             fs::create_dir_all(path.join("objects")).unwrap();
             Self(path)
         }
+
         fn inspect(&self, bytes: &[u8]) -> Result<Vec<ElfMetadata>, LinkInputInspectionError> {
             let path = self.0.join("lib.a");
             fs::write(&path, bytes).unwrap();
@@ -402,6 +373,7 @@ mod tests {
         bytes[48..52].copy_from_slice(&flags.to_le_bytes());
         bytes
     }
+
     fn thin(names: &[u8], members: &[(&str, usize)]) -> Vec<u8> {
         let mut bytes = THIN_MAGIC.to_vec();
         bytes.extend(archive_header("/", 4));
@@ -433,10 +405,7 @@ mod tests {
         )
         .unwrap_err()
         .to_string();
-        assert!(
-            error.contains("other.o") && error.contains("LP64F"),
-            "{error}"
-        );
+        assert!(error.contains("other.o") && error.contains("LP64F"), "{error}");
     }
 
     #[test]
@@ -465,22 +434,14 @@ mod tests {
         assert_eq!(metadata.len(), 1);
         assert_eq!(metadata[0].flags, 4);
         let bad = thin(b"nested.a/\n", &[("/0:9", 64)]);
-        assert!(fixture
-            .inspect(&bad)
-            .unwrap_err()
-            .to_string()
-            .contains("not a member header"));
+        assert!(fixture.inspect(&bad).unwrap_err().to_string().contains("not a member header"));
     }
 
     #[test]
     fn thin_missing_members_and_malformed_headers_are_diagnostics() {
         let fixture = Fixture::new();
         let valid = thin(b"missing.o/\n", &[("/0", 64)]);
-        assert!(fixture
-            .inspect(&valid)
-            .unwrap_err()
-            .to_string()
-            .contains("missing.o"));
+        assert!(fixture.inspect(&valid).unwrap_err().to_string().contains("missing.o"));
         for bytes in [
             thin(b"missing.o/\n", &[("/999", 64)]),
             thin(b"missing.o/\n", &[("/1", 64)]),
@@ -492,10 +453,6 @@ mod tests {
             assert!(fixture.inspect(&bytes).is_err());
         }
         let cycle = thin(b"lib.a/\n", &[("/0", 64)]);
-        assert!(fixture
-            .inspect(&cycle)
-            .unwrap_err()
-            .to_string()
-            .contains("nesting limit"));
+        assert!(fixture.inspect(&cycle).unwrap_err().to_string().contains("nesting limit"));
     }
 }

@@ -3,11 +3,9 @@ use std::{env, path::Path, process::Command};
 
 fn git(args: &[&str]) -> Option<String> {
     let result = Command::new("git").args(args).output().ok()?;
-    result
-        .status
-        .success()
-        .then(|| String::from_utf8_lossy(&result.stdout).trim().to_owned())
+    result.status.success().then(|| String::from_utf8_lossy(&result.stdout).trim().to_owned())
 }
+
 fn main() {
     println!("cargo:rerun-if-env-changed=WAVE_STD_REVISION");
     // Track both detached HEAD and branch ref changes, including worktrees.
@@ -32,9 +30,7 @@ fn main() {
             // Do not accidentally record an enclosing, unrelated repository.
             let root = git(&["rev-parse", "--show-toplevel"])?;
             if Path::new(&root).canonicalize().ok()?
-                != Path::new(&env::var("CARGO_MANIFEST_DIR").ok()?)
-                    .canonicalize()
-                    .ok()?
+                != Path::new(&env::var("CARGO_MANIFEST_DIR").ok()?).canonicalize().ok()?
             {
                 return None;
             }

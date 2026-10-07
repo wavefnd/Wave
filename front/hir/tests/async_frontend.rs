@@ -9,6 +9,7 @@ use parser::{
 fn syntax(s: &str) -> Vec<ASTNode> {
     parse_syntax_with_spans(&Lexer::new_with_file(s, "async.wave").tokenize().unwrap()).unwrap()
 }
+
 fn typed(s: &str) -> TypedProgram {
     TypedProgram::lower(monomorphize_generics(syntax(s)).unwrap()).unwrap()
 }
@@ -60,10 +61,7 @@ fn rejects_invalid_async_declarations_and_operands() {
     for (source, needle) in [
         ("fun f() { await 1; }", "only valid inside"),
         ("async fun f() { await 1; }", "requires a Future"),
-        (
-            "async fun f() -> i64 { return 1; } fun main(){var v:i64=f();}",
-            "Future<i64>",
-        ),
+        ("async fun f() -> i64 { return 1; } fun main(){var v:i64=f();}", "Future<i64>"),
         ("extern(c) fun send(f:Future<i64>); fun main(){}", "FFI"),
         ("type Bad = Future<Bad>; fun main(){}", "cyclic"),
     ] {

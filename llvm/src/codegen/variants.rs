@@ -66,19 +66,12 @@ pub(crate) fn declare_variant_types<'ctx>(
             collect_type_variants(payload, &mut names);
         }
     }
-    for variant in templates
-        .values()
-        .filter(|variant| variant.generic_params.is_empty())
-    {
+    for variant in templates.values().filter(|variant| variant.generic_params.is_empty()) {
         names.insert(variant.name.clone());
     }
 
     let mut definitions = BTreeMap::<String, Vec<Vec<WaveType>>>::new();
-    while let Some(name) = names
-        .iter()
-        .find(|name| !definitions.contains_key(*name))
-        .cloned()
-    {
+    while let Some(name) = names.iter().find(|name| !definitions.contains_key(*name)).cloned() {
         let cases = specialize_variant(&name, &templates);
         for case in &cases {
             for payload in case {
@@ -94,10 +87,7 @@ pub(crate) fn declare_variant_types<'ctx>(
             let llvm_name = format!("variant.{name}");
             let ty = context.opaque_struct_type(&llvm_name);
             if struct_types.insert(name.clone(), ty).is_some() {
-                panic!(
-                    "variant type '{}' conflicts with another LLVM aggregate",
-                    name
-                );
+                panic!("variant type '{}' conflicts with another LLVM aggregate", name);
             }
             VariantDefinition { name, cases }
         })
@@ -158,10 +148,7 @@ pub(crate) fn define_variant_types<'ctx>(
             );
             false
         });
-        assert!(
-            pending.len() < before,
-            "validated variants contain an unsized value cycle"
-        );
+        assert!(pending.len() < before, "validated variants contain an unsized value cycle");
     }
 }
 
@@ -169,21 +156,15 @@ fn specialize_variant(
     concrete_name: &str,
     templates: &HashMap<String, &VariantNode>,
 ) -> Vec<Vec<WaveType>> {
-    if let Some(concrete) = templates
-        .get(concrete_name)
-        .filter(|variant| variant.generic_params.is_empty())
+    if let Some(concrete) =
+        templates.get(concrete_name).filter(|variant| variant.generic_params.is_empty())
     {
-        return concrete
-            .cases
-            .iter()
-            .map(|case| case.payload_types.clone())
-            .collect();
+        return concrete.cases.iter().map(|case| case.payload_types.clone()).collect();
     }
     let (base, arguments) = split_variant_application(concrete_name)
         .unwrap_or_else(|| (concrete_name.to_string(), Vec::new()));
-    let template = templates
-        .get(&base)
-        .unwrap_or_else(|| panic!("variant template '{}' not found", base));
+    let template =
+        templates.get(&base).unwrap_or_else(|| panic!("variant template '{}' not found", base));
     if template.generic_params.len() != arguments.len() {
         panic!(
             "variant '{}' expects {} type arguments, found {}",
@@ -192,12 +173,8 @@ fn specialize_variant(
             arguments.len()
         );
     }
-    let substitutions = template
-        .generic_params
-        .iter()
-        .cloned()
-        .zip(arguments)
-        .collect::<HashMap<_, _>>();
+    let substitutions =
+        template.generic_params.iter().cloned().zip(arguments).collect::<HashMap<_, _>>();
     template
         .cases
         .iter()
@@ -216,16 +193,12 @@ fn resolve_payload_type(
     templates: &HashMap<String, &VariantNode>,
 ) -> WaveType {
     match ty {
-        WaveType::Future(inner) => WaveType::Future(Box::new(resolve_payload_type(
-            inner,
-            substitutions,
-            templates,
-        ))),
-        WaveType::Pointer(inner) => WaveType::Pointer(Box::new(resolve_payload_type(
-            inner,
-            substitutions,
-            templates,
-        ))),
+        WaveType::Future(inner) => {
+            WaveType::Future(Box::new(resolve_payload_type(inner, substitutions, templates)))
+        },
+        WaveType::Pointer(inner) => {
+            WaveType::Pointer(Box::new(resolve_payload_type(inner, substitutions, templates)))
+        },
         WaveType::Array(inner, length) => WaveType::Array(
             Box::new(resolve_payload_type(inner, substitutions, templates)),
             *length,
@@ -248,18 +221,14 @@ fn resolve_payload_type(
             let concrete = format!(
                 "{}<{}>",
                 base,
-                arguments
-                    .iter()
-                    .map(display_wave_type)
-                    .collect::<Vec<_>>()
-                    .join(",")
+                arguments.iter().map(display_wave_type).collect::<Vec<_>>().join(",")
             );
             if templates.contains_key(&base) {
                 WaveType::Variant(concrete)
             } else {
                 WaveType::Struct(concrete)
             }
-        }
+        },
         _ => ty.clone(),
     }
 }
@@ -298,11 +267,11 @@ fn collect_type_variants(ty: &WaveType, names: &mut BTreeSet<String>) {
     match ty {
         WaveType::Variant(name) => {
             names.insert(name.clone());
-        }
+        },
         WaveType::Future(inner) | WaveType::Pointer(inner) | WaveType::Array(inner, _) => {
             collect_type_variants(inner, names)
-        }
-        _ => {}
+        },
+        _ => {},
     }
 }
 
@@ -318,13 +287,13 @@ fn collect_node_variant_types(nodes: &[ASTNode], names: &mut BTreeSet<String>) {
                     collect_type_variants(return_type, names);
                 }
                 collect_node_variant_types(&function.body, names);
-            }
+            },
             ASTNode::ExternFunction(function) => {
                 for (_, ty) in &function.params {
                     collect_type_variants(ty, names);
                 }
                 collect_type_variants(&function.return_type, names);
-            }
+            },
             ASTNode::Program(parameter) => collect_type_variants(&parameter.param_type, names),
             ASTNode::Variable(variable) => collect_type_variants(&variable.type_name, names),
             ASTNode::Statement(statement) => collect_statement_variant_types(statement, names),
@@ -341,7 +310,7 @@ fn collect_node_variant_types(nodes: &[ASTNode], names: &mut BTreeSet<String>) {
                     }
                     collect_node_variant_types(&method.body, names);
                 }
-            }
+            },
             ASTNode::ProtoImpl(implementation) => {
                 for method in &implementation.methods {
                     if let Some(return_type) = &method.return_type {
@@ -352,22 +321,17 @@ fn collect_node_variant_types(nodes: &[ASTNode], names: &mut BTreeSet<String>) {
                     }
                     collect_node_variant_types(&method.body, names);
                 }
-            }
+            },
             ASTNode::TypeAlias(alias) => collect_type_variants(&alias.target, names),
             ASTNode::Enum(enumeration) => collect_type_variants(&enumeration.repr_type, names),
-            ASTNode::Variant(_) | ASTNode::Expression(_) => {}
+            ASTNode::Variant(_) | ASTNode::Expression(_) => {},
         }
     }
 }
 
 fn collect_statement_variant_types(statement: &StatementNode, names: &mut BTreeSet<String>) {
     match statement {
-        StatementNode::If {
-            body,
-            else_if_blocks,
-            else_block,
-            ..
-        } => {
+        StatementNode::If { body, else_if_blocks, else_block, .. } => {
             collect_node_variant_types(body, names);
             if let Some(blocks) = else_if_blocks {
                 for (_, body) in blocks.iter() {
@@ -377,22 +341,18 @@ fn collect_statement_variant_types(statement: &StatementNode, names: &mut BTreeS
             if let Some(body) = else_block {
                 collect_node_variant_types(body, names);
             }
-        }
+        },
         StatementNode::While { body, .. } => collect_node_variant_types(body, names),
-        StatementNode::For {
-            initialization,
-            body,
-            ..
-        } => {
+        StatementNode::For { initialization, body, .. } => {
             collect_node_variant_types(std::slice::from_ref(initialization.as_ref()), names);
             collect_node_variant_types(body, names);
-        }
+        },
         StatementNode::Match { arms, .. } => {
             for arm in arms {
                 collect_node_variant_types(&arm.body, names);
             }
-        }
-        _ => {}
+        },
+        _ => {},
     }
 }
 
@@ -421,7 +381,7 @@ pub(crate) fn constant_storage_bytes<'ctx>(
                 )?;
             }
             return Ok(());
-        }
+        },
         BasicValueEnum::ArrayValue(array) => {
             let ty = array.get_type();
             let stride = td.get_abi_size(&ty.get_element_type()) as usize;
@@ -441,8 +401,8 @@ pub(crate) fn constant_storage_bytes<'ctx>(
                 )?;
             }
             return Ok(());
-        }
-        _ => {}
+        },
+        _ => {},
     }
     let size = td.get_store_size(&value.get_type()) as usize;
     let integer = match value {
@@ -456,7 +416,7 @@ pub(crate) fn constant_storage_bytes<'ctx>(
                     ty.as_type_ref(),
                 ))
             }
-        }
+        },
         BasicValueEnum::PointerValue(pointer) => {
             let ty = context.custom_width_int_type(size as u32 * 8);
             // LLVM does not fold ptrtoint(inttoptr(i64)) to i32 without
@@ -473,26 +433,21 @@ pub(crate) fn constant_storage_bytes<'ctx>(
                     pointer.const_to_int(ty)
                 }
             }
-        }
+        },
         _ => {
             return Err(ConstEvalError::Unsupported(
                 "variant constant contains unsupported storage".into(),
             ))
-        }
+        },
     };
     let printed = integer.print_to_string().to_string();
-    let raw = printed
-        .split_once(' ')
-        .map(|(_, value)| value)
-        .unwrap_or("");
+    let raw = printed.split_once(' ').map(|(_, value)| value).unwrap_or("");
     let raw = match raw {
         "true" => "1",
         "false" => "0",
         other => other,
     };
-    let (negative, digits) = raw
-        .strip_prefix('-')
-        .map_or((false, raw), |digits| (true, digits));
+    let (negative, digits) = raw.strip_prefix('-').map_or((false, raw), |digits| (true, digits));
     if digits.is_empty() || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
         return Err(ConstEvalError::Unsupported(format!(
             "variant constant requires numeric storage: {printed}"

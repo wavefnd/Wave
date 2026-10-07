@@ -52,28 +52,18 @@ pub(super) fn lower<'ctx>(
                 helper.set_triple(&module.get_triple());
                 helper.set_data_layout(&module.get_data_layout());
                 module.link_in_module(helper).map_err(|e| e.to_string())?;
-                let function = module
-                    .get_function(&name)
-                    .expect("linked arithmetic helper");
+                let function = module.get_function(&name).expect("linked arithmetic helper");
                 function.set_linkage(Linkage::Private);
                 helpers.insert(key.clone(), function);
                 function
             };
             builder.position_before(&instruction);
-            let arguments: Vec<_> = instruction
-                .get_operands()
-                .map(|op| op.unwrap().unwrap_value().into())
-                .collect();
-            let call = builder
-                .build_call(function, &arguments, "runtime")
-                .map_err(|e| e.to_string())?;
+            let arguments: Vec<_> =
+                instruction.get_operands().map(|op| op.unwrap().unwrap_value().into()).collect();
+            let call =
+                builder.build_call(function, &arguments, "runtime").map_err(|e| e.to_string())?;
             instruction.replace_all_uses_with(
-                &call
-                    .try_as_basic_value()
-                    .basic()
-                    .unwrap()
-                    .as_instruction_value()
-                    .unwrap(),
+                &call.try_as_basic_value().basic().unwrap().as_instruction_value().unwrap(),
             );
             instruction.erase_from_basic_block();
         }
@@ -101,18 +91,14 @@ fn operation(instruction: InstructionValue<'_>, target: CodegenTarget) -> Option
     if !wasm && matches!(instruction.get_opcode(), UDiv | SDiv | URem | SRem) {
         // LLVM's native DAG lowering expands power-of-two divisors into
         // shifts/masks (with signed rounding adjustments), even at O0.
-        if let Some(divisor) = instruction
-            .get_operand(1)
-            .and_then(|v| v.value())
-            .filter(|v| v.is_int_value())
+        if let Some(divisor) =
+            instruction.get_operand(1).and_then(|v| v.value()).filter(|v| v.is_int_value())
         {
             let divisor = divisor.into_int_value();
             if divisor.is_const() {
                 let text = divisor.print_to_string().to_string();
-                if let Some(value) = text
-                    .split_whitespace()
-                    .last()
-                    .and_then(|s| s.parse::<i128>().ok())
+                if let Some(value) =
+                    text.split_whitespace().last().and_then(|s| s.parse::<i128>().ok())
                 {
                     let magnitude = if matches!(instruction.get_opcode(), SDiv | SRem) {
                         value.unsigned_abs()
@@ -126,12 +112,7 @@ fn operation(instruction: InstructionValue<'_>, target: CodegenTarget) -> Option
             }
         }
     }
-    let source = instruction
-        .get_operand(0)?
-        .value()?
-        .get_type()
-        .print_to_string()
-        .to_string();
+    let source = instruction.get_operand(0)?.value()?.get_type().print_to_string().to_string();
     let target = instruction.get_type().print_to_string().to_string();
     let opcode = match instruction.get_opcode() {
         UDiv if source == "i128" => "udiv",
@@ -141,11 +122,7 @@ fn operation(instruction: InstructionValue<'_>, target: CodegenTarget) -> Option
         Mul if source == "i128" => "mul",
         Shl | LShr | AShr
             if source == "i128"
-                && !instruction
-                    .get_operand(1)?
-                    .value()?
-                    .into_int_value()
-                    .is_const() =>
+                && !instruction.get_operand(1)?.value()?.into_int_value().is_const() =>
         {
             match instruction.get_opcode() {
                 Shl => "shl",
@@ -153,7 +130,7 @@ fn operation(instruction: InstructionValue<'_>, target: CodegenTarget) -> Option
                 AShr => "ashr",
                 _ => unreachable!(),
             }
-        }
+        },
         UIToFP if source == "i128" && matches!(target.as_str(), "float" | "double") => "uitofp",
         SIToFP if source == "i128" && matches!(target.as_str(), "float" | "double") => "sitofp",
         FPToUI if target == "i128" && matches!(source.as_str(), "float" | "double") => "fptoui",

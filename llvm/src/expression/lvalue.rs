@@ -43,7 +43,7 @@ fn llvm_basic_to_wave_type<'ctx>(bt: BasicTypeEnum<'ctx>) -> WaveType {
             } else {
                 WaveType::Int(w as usize as u16)
             }
-        }
+        },
         BasicTypeEnum::FloatType(ft) => {
             let bw = ft.get_bit_width();
             match bw {
@@ -51,14 +51,11 @@ fn llvm_basic_to_wave_type<'ctx>(bt: BasicTypeEnum<'ctx>) -> WaveType {
                 64 => WaveType::Float(64),
                 _ => panic!("Unsupported float width: {}", bw),
             }
-        }
+        },
         BasicTypeEnum::ArrayType(at) => {
             let elem = at.get_element_type();
-            WaveType::Array(
-                Box::new(llvm_basic_to_wave_type(elem)),
-                at.len() as usize as u32,
-            )
-        }
+            WaveType::Array(Box::new(llvm_basic_to_wave_type(elem)), at.len() as usize as u32)
+        },
         BasicTypeEnum::StructType(st) => {
             let raw = st
                 .get_name()
@@ -66,11 +63,11 @@ fn llvm_basic_to_wave_type<'ctx>(bt: BasicTypeEnum<'ctx>) -> WaveType {
                 .unwrap_or_else(|| panic!("Unnamed struct type; cannot map to WaveType"));
             let name = raw.strip_prefix("struct.").unwrap_or(raw).to_string();
             WaveType::Struct(name)
-        }
+        },
         BasicTypeEnum::PointerType(_) => WaveType::Pointer(Box::new(WaveType::Void)),
         BasicTypeEnum::VectorType(_) | BasicTypeEnum::ScalableVectorType(_) => {
             panic!("Vector types are not supported in WaveType mapping yet");
-        }
+        },
     }
 }
 
@@ -81,10 +78,7 @@ fn load_ptr_value<'ctx>(
     name: &str,
 ) -> PointerValue<'ctx> {
     let ptr_ty = context.ptr_type(AddressSpace::default());
-    builder
-        .build_load(ptr_ty, addr_of_ptr, name)
-        .unwrap()
-        .into_pointer_value()
+    builder.build_load(ptr_ty, addr_of_ptr, name).unwrap().into_pointer_value()
 }
 
 fn generate_lvalue_ir_typed<'ctx>(
@@ -106,12 +100,11 @@ fn generate_lvalue_ir_typed<'ctx>(
                 panic!("Cannot use constant '{}' as lvalue", name);
             }
 
-            let info = variables
-                .get(name)
-                .unwrap_or_else(|| panic!("Undefined variable '{}'", name));
+            let info =
+                variables.get(name).unwrap_or_else(|| panic!("Undefined variable '{}'", name));
 
             (info.ptr, info.ty.clone())
-        }
+        },
 
         Expression::Grouped(inner) => generate_lvalue_ir_typed(
             program,
@@ -177,7 +170,7 @@ fn generate_lvalue_ir_typed<'ctx>(
             };
 
             (p, pointee_ty)
-        }
+        },
 
         Expression::AddressOf(inner) => generate_lvalue_ir_typed(
             program,
@@ -251,10 +244,10 @@ fn generate_lvalue_ir_typed<'ctx>(
                                  Target expression type info is missing: {:?}",
                                 target
                             );
-                        }
+                        },
                         _ => panic!("Index target is not a pointer/array: {:?}", target),
                     }
-                }
+                },
             };
 
             let zero = idx.get_type().const_zero();
@@ -274,7 +267,7 @@ fn generate_lvalue_ir_typed<'ctx>(
                             .unwrap()
                     };
                     (gep, *inner)
-                }
+                },
 
                 WaveType::Pointer(inner) => {
                     let base_ptr = load_ptr_value(context, builder, base_addr, "load_index_base");
@@ -298,7 +291,7 @@ fn generate_lvalue_ir_typed<'ctx>(
                                     .unwrap()
                             };
                             (gep, *element)
-                        }
+                        },
                         element => {
                             let elem_llvm = wave_type_to_llvm_type(
                                 context,
@@ -312,9 +305,9 @@ fn generate_lvalue_ir_typed<'ctx>(
                                     .unwrap()
                             };
                             (gep, element)
-                        }
+                        },
                     }
-                }
+                },
 
                 WaveType::String => {
                     let base_ptr = load_ptr_value(context, builder, base_addr, "load_index_base");
@@ -325,16 +318,13 @@ fn generate_lvalue_ir_typed<'ctx>(
                             .unwrap()
                     };
                     (gep, WaveType::Byte)
-                }
+                },
 
                 other => {
-                    panic!(
-                        "IndexAccess target is not array/pointer/string: {:?}",
-                        other
-                    );
-                }
+                    panic!("IndexAccess target is not array/pointer/string: {:?}", other);
+                },
             }
-        }
+        },
 
         Expression::FieldAccess { object, field } => {
             let (obj_addr, obj_ty) = generate_lvalue_ir_typed(
@@ -358,14 +348,11 @@ fn generate_lvalue_ir_typed<'ctx>(
                     WaveType::Struct(name) => {
                         let p = load_ptr_value(context, builder, obj_addr, "load_struct_ptr");
                         (p, name)
-                    }
+                    },
                     other => panic!("FieldAccess base pointer is not ptr<struct>: {:?}", other),
                 },
 
-                other => panic!(
-                    "FieldAccess base is not a struct or ptr<struct>: {:?}",
-                    other
-                ),
+                other => panic!("FieldAccess base is not a struct or ptr<struct>: {:?}", other),
             };
 
             let struct_ty = struct_types
@@ -378,9 +365,8 @@ fn generate_lvalue_ir_typed<'ctx>(
                 .copied()
                 .unwrap_or_else(|| panic!("Unknown field '{}.{}'", struct_name, field));
 
-            let field_ptr = builder
-                .build_struct_gep(*struct_ty, obj_ptr, field_index, "field_ptr")
-                .unwrap();
+            let field_ptr =
+                builder.build_struct_gep(*struct_ty, obj_ptr, field_index, "field_ptr").unwrap();
 
             let field_bt = struct_ty
                 .get_field_type_at_index(field_index)
@@ -394,11 +380,11 @@ fn generate_lvalue_ir_typed<'ctx>(
             };
 
             (field_ptr, field_wave_ty)
-        }
+        },
 
         _ => {
             panic!("Expression is not an lvalue (not assignable): {:?}", expr);
-        }
+        },
     }
 }
 

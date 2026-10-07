@@ -56,16 +56,8 @@ pub fn msvc_link_args(
     entry: Option<&str>,
     extra: &[String],
 ) -> Vec<String> {
-    let machine = if target.starts_with("aarch64-") {
-        "ARM64"
-    } else {
-        "X64"
-    };
-    let mut args = vec![
-        "/NOLOGO".into(),
-        format!("/MACHINE:{machine}"),
-        format!("/OUT:{output}"),
-    ];
+    let machine = if target.starts_with("aarch64-") { "ARM64" } else { "X64" };
+    let mut args = vec!["/NOLOGO".into(), format!("/MACHINE:{machine}"), format!("/OUT:{output}")];
     if shared {
         args.push("/DLL".into());
     } else {
@@ -110,9 +102,7 @@ pub fn msvc_link_args(
 }
 
 fn is_wasm_target(target: Option<&str>) -> bool {
-    target
-        .and_then(target_spec_for_triple)
-        .is_some_and(|spec| spec.object_format == "wasm")
+    target.and_then(target_spec_for_triple).is_some_and(|spec| spec.object_format == "wasm")
 }
 
 fn normalize_llvm_opt_flag(opt_flag: &str) -> &str {
@@ -139,10 +129,7 @@ pub fn compile_ir_to_object(
     configure_bundled_llvm_tool_env(&mut cmd, &llc);
 
     if let Some(target) = &backend.target {
-        cmd.arg(format!(
-            "--mtriple={}",
-            llvm_triple_for_abi(target, backend.abi.as_deref())
-        ));
+        cmd.arg(format!("--mtriple={}", llvm_triple_for_abi(target, backend.abi.as_deref())));
     }
     if let Some(cpu) = &backend.cpu {
         cmd.arg(format!("--mcpu={}", cpu));
@@ -215,10 +202,7 @@ pub fn link_objects(
 ) -> Result<(), CodegenError> {
     let pending = PendingOutput::new(std::path::Path::new(output))?;
     let target = backend.target.as_deref().unwrap_or("");
-    let linker_bin = backend
-        .linker
-        .clone()
-        .unwrap_or_else(|| default_lld_for_target(target));
+    let linker_bin = backend.linker.clone().unwrap_or_else(|| default_lld_for_target(target));
     let mut cmd = Command::new(&linker_bin);
     configure_bundled_llvm_tool_env(&mut cmd, &linker_bin);
 
@@ -291,9 +275,8 @@ pub fn link_objects(
         }
     }
 
-    let output = cmd
-        .output()
-        .map_err(|e| CodegenError::tool_launch(CodegenPhase::Link, &linker_bin, e))?;
+    let output =
+        cmd.output().map_err(|e| CodegenError::tool_launch(CodegenPhase::Link, &linker_bin, e))?;
     if !output.status.success() {
         return Err(CodegenError::new(
             CodegenPhase::Link,
@@ -354,9 +337,7 @@ fn expand_lld_link_args(link_args: &[String]) -> Vec<String> {
         }
         if let Some(rest) = arg.strip_prefix("-Wl,") {
             out.extend(
-                rest.split(',')
-                    .filter(|part| !part.is_empty())
-                    .map(|part| part.to_string()),
+                rest.split(',').filter(|part| !part.is_empty()).map(|part| part.to_string()),
             );
         } else {
             out.push(arg.clone());

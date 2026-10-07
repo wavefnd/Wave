@@ -6,10 +6,7 @@ use std::process::Command;
 #[test]
 fn native_standard_io_preserves_data_descriptors_and_deadlines() {
     let compiler = env!("CARGO_BIN_EXE_wavec");
-    let target = Command::new(compiler)
-        .args(["print", "default-target"])
-        .output()
-        .unwrap();
+    let target = Command::new(compiler).args(["print", "default-target"]).output().unwrap();
     assert!(target.status.success());
     let host = String::from_utf8(target.stdout).unwrap().trim().to_owned();
     if llvm::codegen::target::target_spec_for_triple(&host).is_none() {

@@ -27,20 +27,15 @@ pub(crate) fn gen_struct_literal<'ctx, 'a>(
     name: &str,
     fields: &[(String, Expression)],
 ) -> BasicValueEnum<'ctx> {
-    let struct_ty = *env
-        .struct_types
-        .get(name)
-        .unwrap_or_else(|| panic!("Struct type '{}' not found", name));
+    let struct_ty =
+        *env.struct_types.get(name).unwrap_or_else(|| panic!("Struct type '{}' not found", name));
 
     let field_indices = env
         .struct_field_indices
         .get(name)
         .unwrap_or_else(|| panic!("Field index map for struct '{}' not found", name));
 
-    let tmp_alloca = env
-        .builder
-        .build_alloca(struct_ty, &format!("tmp_{}_literal", name))
-        .unwrap();
+    let tmp_alloca = env.builder.build_alloca(struct_ty, &format!("tmp_{}_literal", name)).unwrap();
 
     for (field_name, field_expr) in fields {
         let idx = *field_indices
@@ -64,23 +59,14 @@ pub(crate) fn gen_struct_literal<'ctx, 'a>(
 
         let field_ptr = env
             .builder
-            .build_struct_gep(
-                struct_ty,
-                tmp_alloca,
-                idx,
-                &format!("{}.{}", name, field_name),
-            )
+            .build_struct_gep(struct_ty, tmp_alloca, idx, &format!("{}.{}", name, field_name))
             .unwrap();
 
         env.builder.build_store(field_ptr, field_val).unwrap();
     }
 
     env.builder
-        .build_load(
-            struct_ty.as_basic_type_enum(),
-            tmp_alloca,
-            &format!("{}_literal_val", name),
-        )
+        .build_load(struct_ty.as_basic_type_enum(), tmp_alloca, &format!("{}_literal_val", name))
         .unwrap()
         .as_basic_value_enum()
 }
@@ -97,9 +83,7 @@ pub(crate) fn gen_field_access<'ctx, 'a>(
     // Keep the original receiver identity so typed HIR remains authoritative.
     // A returned struct is a value; reconstructing an lvalue would require an
     // address that function/method call results do not have.
-    let receiver_type = env
-        .wave_type(object)
-        .expect("field receiver has a resolved HIR type");
+    let receiver_type = env.wave_type(object).expect("field receiver has a resolved HIR type");
     let struct_name = match &receiver_type {
         WaveType::Struct(name) => name,
         WaveType::Pointer(inner) => match inner.as_ref() {
@@ -119,10 +103,8 @@ pub(crate) fn gen_field_access<'ctx, 'a>(
             .build_extract_value(value, index, &format!("field_{field}"))
             .expect("field index matches the resolved struct"),
         BasicValueEnum::PointerValue(pointer) => {
-            let struct_type = *env
-                .struct_types
-                .get(struct_name)
-                .expect("resolved struct has an LLVM type");
+            let struct_type =
+                *env.struct_types.get(struct_name).expect("resolved struct has an LLVM type");
             let field_type = struct_type
                 .get_field_type_at_index(index)
                 .expect("resolved field has an LLVM type");
@@ -133,7 +115,7 @@ pub(crate) fn gen_field_access<'ctx, 'a>(
             env.builder
                 .build_load(field_type, pointer, &format!("load_field_{field}"))
                 .expect("field pointer has the resolved field type")
-        }
+        },
         other => panic!("resolved struct receiver lowered to an invalid LLVM value: {other:?}"),
     }
 }

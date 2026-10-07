@@ -69,6 +69,7 @@ fn target_condition_context_for_llvm(llvm: Option<&LlvmFlags>) -> TargetConditio
 
     target
 }
+
 fn parse_wave_tokens_or_exit(
     file_path: &Path,
     source: &str,
@@ -98,9 +99,7 @@ fn parse_wave_tokens_or_exit(
         .with_code(code)
         .with_source_code(source.to_string());
 
-        wave_err = wave_err
-            .with_span(err.span())
-            .with_related(err.related().iter().cloned());
+        wave_err = wave_err.with_span(err.span()).with_related(err.related().iter().cloned());
         if let Some(ctx) = err.context() {
             wave_err = wave_err.with_context(ctx.to_string());
         }
@@ -154,7 +153,7 @@ fn lower_wave_hir_or_exit(file_path: &Path, source: &str, ast: Vec<ASTNode>) -> 
             error.display_auto();
 
             process::exit(1);
-        }
+        },
     }
 }
 
@@ -169,20 +168,13 @@ fn validate_expanded_ast_or_exit(expanded: &ExpandedWaveAst) {
     if let Some(primary) = &mut diagnostic.primary {
         primary.text = demangle_module_names(&primary.text);
     }
-    let origin = expanded
-        .origins
-        .get(diagnostic.top_level_index)
-        .copied()
-        .unwrap_or(0);
+    let origin = expanded.origins.get(diagnostic.top_level_index).copied().unwrap_or(0);
     let source_unit = expanded.sources.get(origin).unwrap_or(&expanded.sources[0]);
     let span = diagnostic.span.clone();
     let diagnostic_source = span
         .as_ref()
         .and_then(|span| {
-            expanded
-                .sources
-                .iter()
-                .find(|unit| unit.path.to_string_lossy() == span.file)
+            expanded.sources.iter().find(|unit| unit.path.to_string_lossy() == span.file)
         })
         .map(|unit| unit.source.clone())
         .unwrap_or_else(|| source_unit.source.clone());
@@ -235,9 +227,7 @@ where
             "non-string panic payload".to_string()
         };
 
-        let loc = info
-            .location()
-            .map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()));
+        let loc = info.location().map(|l| format!("{}:{}:{}", l.file(), l.line(), l.column()));
 
         if let Ok(mut guard) = hook_state.lock() {
             *guard = Some((payload, loc));
@@ -251,20 +241,13 @@ where
         Ok(v) => Ok(v),
         Err(payload) => {
             let fallback = panic_payload_to_string(&*payload);
-            let captured = captured
-                .lock()
-                .ok()
-                .and_then(|g| g.clone())
-                .unwrap_or((fallback.clone(), None));
+            let captured =
+                captured.lock().ok().and_then(|g| g.clone()).unwrap_or((fallback.clone(), None));
 
-            let msg = if captured.0.trim().is_empty() {
-                fallback
-            } else {
-                captured.0
-            };
+            let msg = if captured.0.trim().is_empty() { fallback } else { captured.0 };
 
             Err((msg, captured.1))
-        }
+        },
     }
 }
 
@@ -280,13 +263,11 @@ fn emit_backend_error_and_exit(
         0,
         0,
     )
-    .with_code(
-        if error.kind == llvm::diagnostic::CodegenErrorKind::InvalidAssembly {
-            "E3401"
-        } else {
-            "E9002"
-        },
-    )
+    .with_code(if error.kind == llvm::diagnostic::CodegenErrorKind::InvalidAssembly {
+        "E3401"
+    } else {
+        "E9002"
+    })
     .with_context(format!("compiler phase: {}", error.phase));
     if let Some(span) = error.span {
         let contents = if Path::new(&span.file) == file_path {
@@ -344,9 +325,7 @@ fn build_import_config(dep: &DepFlags, target: TargetConditionContext) -> Import
     }
 
     for package in &dep.packages {
-        config
-            .dep_packages
-            .insert(package.name.clone(), PathBuf::from(&package.path));
+        config.dep_packages.insert(package.name.clone(), PathBuf::from(&package.path));
     }
 
     config
@@ -396,11 +375,7 @@ fn expand_imports_for_codegen(
     import_config: &ImportConfig,
 ) -> Result<ExpandedWaveAst, WaveError> {
     let mut graph = resolve_import_graph(entry_path, entry_source, ast, import_config)?;
-    let pointer_bits = if import_config.target.arch.as_deref() == Some("wasm32") {
-        32
-    } else {
-        64
-    };
+    let pointer_bits = if import_config.target.arch.as_deref() == Some("wasm32") { 32 } else { 64 };
     ::hir::resolve_target_types(&mut graph.ast, pointer_bits).map_err(|message| {
         WaveError::new(
             WaveErrorKind::InvalidStatement(message.clone()),
@@ -416,10 +391,7 @@ fn expand_imports_for_codegen(
         sources: graph
             .sources
             .into_iter()
-            .map(|source| SemanticSourceUnit {
-                path: source.path,
-                source: source.source,
-            })
+            .map(|source| SemanticSourceUnit { path: source.path, source: source.source })
             .collect(),
     })
 }
@@ -462,7 +434,7 @@ fn utf8_output_path(path: &Path, file_path: &Path) -> String {
             .with_help("pass a UTF-8 output path with -o <file>")
             .display_auto();
             process::exit(1);
-        }
+        },
     }
 }
 
@@ -499,11 +471,7 @@ fn resolve_output_target(
             if let Err(err) = fs::create_dir_all(parent) {
                 WaveError::new(
                     WaveErrorKind::FileWriteError(output.display().to_string()),
-                    format!(
-                        "failed to create output directory `{}`: {}",
-                        parent.display(),
-                        err
-                    ),
+                    format!("failed to create output directory `{}`: {}", parent.display(), err),
                     file_path.display().to_string(),
                     0,
                     0,
@@ -557,7 +525,7 @@ fn frontend_prepare_wave_hir(
             .with_help("check if the file exists and you have permission to read it")
             .display_auto();
             process::exit(1);
-        }
+        },
     };
     let target = target_condition_context_for_llvm(llvm);
     let code = preprocess_target_attrs(&raw_code, &target);
@@ -590,7 +558,7 @@ fn frontend_prepare_wave_hir(
         Err(e) => {
             e.display_auto();
             process::exit(1);
-        }
+        },
     };
     // Validate both sides of monomorphization: templates must be semantically
     // sound, and generated concrete nodes must satisfy the same language rules.
@@ -613,7 +581,7 @@ fn frontend_prepare_wave_hir(
             )
             .display_auto();
             process::exit(1);
-        }
+        },
     };
 
     let hir = lower_wave_hir_or_exit(file_path, &code, ast);
@@ -648,7 +616,7 @@ pub(crate) fn emit_whale_ir_text(
             .with_context("Whale IR lowering")
             .display_auto();
             process::exit(1);
-        }
+        },
     }
 }
 
@@ -690,7 +658,7 @@ fn print_ast_dump(ast: &[::parser::ast::ASTNode], code: &str, file: &Path) {
         Err(error) => {
             eprintln!("AST dump failed: {error}");
             process::exit(1);
-        }
+        },
     }
 }
 
@@ -709,7 +677,7 @@ pub(crate) unsafe fn emit_wave_ir_text(
         Ok(Err(error)) => emit_backend_error_and_exit(file_path, &code, error),
         Err((msg, loc)) => {
             emit_codegen_panic_and_exit(file_path, &code, "llvm-ir-generation", msg, loc)
-        }
+        },
     };
 
     if debug.ir {
@@ -758,7 +726,7 @@ unsafe fn emit_wave_codegen_file_from_hir(
             Ok(Err(error)) => emit_backend_error_and_exit(file_path, code, error),
             Err((msg, loc)) => {
                 emit_codegen_panic_and_exit(file_path, code, "llvm-ir-generation", msg, loc)
-            }
+            },
         };
         println!("\n===== LLVM IR =====\n{}", ir);
     }
@@ -782,11 +750,11 @@ unsafe fn emit_wave_codegen_file_from_hir(
     match run_panic_guarded(|| unsafe {
         emit_codegen_file(hir, opt_flag, &backend_opts, output, kind)
     }) {
-        Ok(Ok(())) => {}
+        Ok(Ok(())) => {},
         Ok(Err(error)) => emit_backend_error_and_exit(file_path, code, error),
         Err((msg, loc)) => {
             emit_codegen_panic_and_exit(file_path, code, codegen_file_phase(kind), msg, loc)
-        }
+        },
     }
 }
 
@@ -798,15 +766,7 @@ pub(crate) unsafe fn emit_wave_bitcode_file(
     llvm: &LlvmFlags,
     output: &Path,
 ) {
-    emit_wave_codegen_file(
-        file_path,
-        opt_flag,
-        debug,
-        dep,
-        llvm,
-        output,
-        CodegenFileKind::Bitcode,
-    );
+    emit_wave_codegen_file(file_path, opt_flag, debug, dep, llvm, output, CodegenFileKind::Bitcode);
 }
 
 pub(crate) unsafe fn emit_wave_assembly_file(
@@ -850,7 +810,7 @@ pub(crate) unsafe fn run_wave_file(
             .with_help("check if the file exists and you have permission to read it")
             .display_auto();
             process::exit(1);
-        }
+        },
     };
     let target = target_condition_context_for_llvm(Some(llvm));
     let code = preprocess_target_attrs(&raw_code, &target);
@@ -881,7 +841,7 @@ pub(crate) unsafe fn run_wave_file(
         Err(e) => {
             e.display_auto();
             process::exit(1);
-        }
+        },
     };
     validate_expanded_ast_or_exit(&expanded);
     let ast = match monomorphize_generics(expanded.ast) {
@@ -902,15 +862,13 @@ pub(crate) unsafe fn run_wave_file(
             )
             .display_auto();
             process::exit(1);
-        }
+        },
     };
 
     let hir = lower_wave_hir_or_exit(file_path, &code, ast);
 
-    let object_patch = utf8_output_path(
-        &default_output_path(file_path, Path::new(""), Some("o")),
-        file_path,
-    );
+    let object_patch =
+        utf8_output_path(&default_output_path(file_path, Path::new(""), Some("o")), file_path);
     emit_wave_codegen_file_from_hir(
         file_path,
         &code,
@@ -939,10 +897,8 @@ pub(crate) unsafe fn run_wave_file(
         println!();
     }
 
-    let exe_patch = utf8_output_path(
-        &default_output_path(file_path, Path::new("target"), None),
-        file_path,
-    );
+    let exe_patch =
+        utf8_output_path(&default_output_path(file_path, Path::new("target"), None), file_path);
     let backend_opts = build_backend_options(llvm);
 
     match run_panic_guarded(|| {
@@ -954,7 +910,7 @@ pub(crate) unsafe fn run_wave_file(
             &backend_opts,
         )
     }) {
-        Ok(Ok(())) => {}
+        Ok(Ok(())) => {},
         Ok(Err(error)) => emit_backend_error_and_exit(file_path, &code, error),
         Err((msg, loc)) => emit_codegen_panic_and_exit(file_path, &code, "native-link", msg, loc),
     }
@@ -1100,15 +1056,9 @@ pub(crate) unsafe fn build_wave_file(
     let backend_opts = build_backend_options(llvm);
 
     match run_panic_guarded(|| {
-        link_objects(
-            &[object_path],
-            &exe_path,
-            &link.libs,
-            &link.paths,
-            &backend_opts,
-        )
+        link_objects(&[object_path], &exe_path, &link.libs, &link.paths, &backend_opts)
     }) {
-        Ok(Ok(())) => {}
+        Ok(Ok(())) => {},
         Ok(Err(error)) => emit_backend_error_and_exit(file_path, &source, error),
         Err((msg, loc)) => emit_codegen_panic_and_exit(file_path, &source, "native-link", msg, loc),
     }

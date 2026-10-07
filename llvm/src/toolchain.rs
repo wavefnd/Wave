@@ -25,9 +25,7 @@ use std::path::{Path, PathBuf};
 /// precedence over paths relative to the running compiler and the build-time
 /// fallback directory.
 pub fn find_bundled_linux_crt(target: &str, abi: Option<&str>, name: &str) -> Option<PathBuf> {
-    bundled_linux_crt_candidates(target, abi, name)
-        .into_iter()
-        .find(|path| path.is_file())
+    bundled_linux_crt_candidates(target, abi, name).into_iter().find(|path| path.is_file())
 }
 
 /// Returns the highest-priority path where a bundled CRT object is expected.
@@ -78,10 +76,7 @@ fn bundled_linux_crt_candidates(target: &str, abi: Option<&str>, name: &str) -> 
 
 fn crt_relative_path(target: &str, abi: Option<&str>, name: &str) -> PathBuf {
     let mut path = PathBuf::from(target);
-    if matches!(
-        target,
-        "riscv64-unknown-linux-gnu" | "loongarch64-unknown-linux-gnu"
-    ) {
+    if matches!(target, "riscv64-unknown-linux-gnu" | "loongarch64-unknown-linux-gnu") {
         path.push(abi.unwrap_or("lp64d"));
     }
     // Accept only the final component so a caller cannot escape the target CRT

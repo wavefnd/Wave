@@ -58,10 +58,7 @@ mod tests {
         assert_eq!(roadmap_platform("ios"), Some(&ios::PLAN));
         assert_eq!(roadmap_platform("linux"), None);
 
-        for triple in android::CANDIDATE_TRIPLES
-            .iter()
-            .chain(ios::CANDIDATE_TRIPLES.iter())
-        {
+        for triple in android::CANDIDATE_TRIPLES.iter().chain(ios::CANDIDATE_TRIPLES.iter()) {
             assert_eq!(target_spec_for_triple(triple), None, "{triple}");
         }
     }

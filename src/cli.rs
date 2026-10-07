@@ -44,11 +44,7 @@ use utils::colorex::*;
 #[derive(Debug)]
 enum CliCommand {
     Build(BuildRequest),
-    Print {
-        item: String,
-        target: Option<String>,
-        format: PrintFormat,
-    },
+    Print { item: String, target: Option<String>, format: PrintFormat },
     StdInstall(Option<String>),
     StdUpdate(Option<String>),
     Help,
@@ -285,23 +281,21 @@ fn dispatch(mut global: Global, cmd: CliCommand) -> Result<(), CliError> {
         CliCommand::Version => {
             print_version_for_backend(global.whale.enabled);
             Ok(())
-        }
+        },
         CliCommand::Help => {
             print_help();
             Ok(())
-        }
+        },
         CliCommand::Build(build) => dispatch_build(&global, &build),
-        CliCommand::Print {
-            item,
-            target,
-            format,
-        } => dispatch_print(&global, &item, target.as_deref(), format),
+        CliCommand::Print { item, target, format } => {
+            dispatch_print(&global, &item, target.as_deref(), format)
+        },
         CliCommand::StdInstall(reference) => {
             wave_std::std_install_with_reference(reference.as_deref())
-        }
+        },
         CliCommand::StdUpdate(reference) => {
             wave_std::std_update_with_reference(reference.as_deref())
-        }
+        },
     }
 }
 
@@ -309,10 +303,7 @@ fn dispatch(mut global: Global, cmd: CliCommand) -> Result<(), CliError> {
 /// LLVM target resolution: an LLVM installation must not decide Whale support.
 fn dispatch_whale_build(global: &Global, build: &BuildRequest) -> Result<(), CliError> {
     let mut global = global.clone();
-    let target = global
-        .llvm
-        .target
-        .get_or_insert_with(|| "x86_64-unknown-linux-gnu".into());
+    let target = global.llvm.target.get_or_insert_with(|| "x86_64-unknown-linux-gnu".into());
     if target != "x86_64-unknown-linux-gnu" {
         return Err(CliError::usage(
             "Whale currently supports only --target x86_64-unknown-linux-gnu",
@@ -387,11 +378,7 @@ fn dispatch_whale_build(global: &Global, build: &BuildRequest) -> Result<(), Cli
     };
     let mut inputs = build.inputs.clone();
     for input in &classified {
-        inputs.extend(runner::wave_input_paths(
-            &input.path,
-            &global.dep,
-            &global.llvm,
-        ));
+        inputs.extend(runner::wave_input_paths(&input.path, &global.dep, &global.llvm));
     }
     crate::output_guard::validate(&inputs, &outputs)?;
     if build.dry_run {
@@ -491,8 +478,8 @@ fn dispatch_build(global: &Global, build: &BuildRequest) -> Result<(), CliError>
             },
             InputKind::Ir | InputKind::Bc | InputKind::Asm => {
                 compile_non_wave_to_object(&effective_global, job)?;
-            }
-            InputKind::Obj | InputKind::Archive => {}
+            },
+            InputKind::Obj | InputKind::Archive => {},
         }
     }
 
@@ -541,9 +528,7 @@ fn effective_global_for_build(global: &Global, build: &BuildRequest) -> Global {
         out.llvm.link_args.push("-nostartfiles".to_string());
     }
     if let Some(script) = &build.linker_script {
-        out.llvm
-            .link_args
-            .push(format!("-Wl,-T,{}", script.to_string_lossy()));
+        out.llvm.link_args.push(format!("-Wl,-T,{}", script.to_string_lossy()));
     }
 
     out
@@ -581,23 +566,23 @@ fn dispatch_print_human(global: &Global, item: &str, target: &str) -> Result<(),
         "host-target" | "default-target" => {
             println!("{}", host_target_triple());
             Ok(())
-        }
+        },
         "host" => {
             validate_target_options_for(&host_target_triple(), &global.llvm)?;
             print_target_spec_human(global, &host_target_triple());
             Ok(())
-        }
+        },
         "target-spec" => {
             validate_target_options_for(target, &global.llvm)?;
             print_target_spec_human(global, target);
             Ok(())
-        }
+        },
         "target-list" | "supported-targets" => {
             for t in supported_targets() {
                 println!("{}", t);
             }
             Ok(())
-        }
+        },
         "sysroot" => {
             let selection = effective_sysroot_selection(global, target)?;
             if let Some(selection) = selection {
@@ -606,7 +591,7 @@ fn dispatch_print_human(global: &Global, item: &str, target: &str) -> Result<(),
                 println!();
             }
             Ok(())
-        }
+        },
         "std-path" => {
             if let Some(path) = default_std_path(global) {
                 println!("{}", path);
@@ -614,52 +599,52 @@ fn dispatch_print_human(global: &Global, item: &str, target: &str) -> Result<(),
                 println!();
             }
             Ok(())
-        }
+        },
         "dep-search-paths" => {
             if let Some(path) = default_std_path(global) {
                 println!("{}", path);
             }
             Ok(())
-        }
+        },
         "default-linker" => {
             ensure_supported_target(target)?;
             let target_global = global_with_target(global, target);
             println!("{}", default_linker_name(&target_global));
             Ok(())
-        }
+        },
         "supported-input-types" => {
             for t in supported_input_types() {
                 println!("{}", t);
             }
             Ok(())
-        }
+        },
         "supported-emit-kinds" => {
             println!("check (control-mode)");
             for e in supported_artifact_emit_kinds() {
                 println!("{}", e);
             }
             Ok(())
-        }
+        },
         "supported-print-items" => {
             for item in supported_print_items() {
                 println!("{}", item);
             }
             Ok(())
-        }
+        },
         "cpu-list" => {
             let spec = ensure_supported_target(target)?;
             for cpu in spec.cpus {
                 println!("{}", cpu);
             }
             Ok(())
-        }
+        },
         "target-features" => {
             let spec = ensure_supported_target(target)?;
             for feat in spec.features {
                 println!("{}", feat);
             }
             Ok(())
-        }
+        },
         _ => Err(CliError::usage(format!("unknown print item: {}", item))),
     }
 }
@@ -669,21 +654,21 @@ fn dispatch_print_json(global: &Global, item: &str, target: &str) -> Result<(), 
         "host-target" | "default-target" => {
             println!("{}", json_string(&host_target_triple()));
             Ok(())
-        }
+        },
         "host" => {
             validate_target_options_for(&host_target_triple(), &global.llvm)?;
             println!("{}", target_spec_json(global, &host_target_triple()));
             Ok(())
-        }
+        },
         "target-spec" => {
             validate_target_options_for(target, &global.llvm)?;
             println!("{}", target_spec_json(global, target));
             Ok(())
-        }
+        },
         "target-list" | "supported-targets" => {
             println!("{}", json_string_array(supported_targets()));
             Ok(())
-        }
+        },
         "sysroot" => {
             let selection = effective_sysroot_selection(global, target)?;
             println!(
@@ -693,49 +678,49 @@ fn dispatch_print_json(global: &Global, item: &str, target: &str) -> Result<(), 
                 ))
             );
             Ok(())
-        }
+        },
         "std-path" => {
             println!(
                 "{}",
                 schema_json(&Value::optional_string(default_std_path(global).as_deref()))
             );
             Ok(())
-        }
+        },
         "dep-search-paths" => {
             let paths = default_std_path(global).into_iter().collect::<Vec<_>>();
             println!("{}", schema_json(&Value::strings(&paths)));
             Ok(())
-        }
+        },
         "default-linker" => {
             ensure_supported_target(target)?;
             let target_global = global_with_target(global, target);
             println!("{}", json_string(&default_linker_name(&target_global)));
             Ok(())
-        }
+        },
         "supported-input-types" => {
             println!("{}", json_string_array(supported_input_types()));
             Ok(())
-        }
+        },
         "supported-emit-kinds" => {
             let mut kinds = vec!["check"];
             kinds.extend(supported_artifact_emit_kinds());
             println!("{}", json_string_array(kinds));
             Ok(())
-        }
+        },
         "supported-print-items" => {
             println!("{}", json_string_array(supported_print_items()));
             Ok(())
-        }
+        },
         "cpu-list" => {
             let spec = ensure_supported_target(target)?;
             println!("{}", json_string_array(spec.cpus.to_vec()));
             Ok(())
-        }
+        },
         "target-features" => {
             let spec = ensure_supported_target(target)?;
             println!("{}", json_string_array(spec.features.to_vec()));
             Ok(())
-        }
+        },
         _ => Err(CliError::usage(format!("unknown print item: {}", item))),
     }
 }
@@ -806,9 +791,7 @@ fn parse_global(args: Vec<String>) -> Result<(Global, Vec<String>), CliError> {
         if let Some(mode) = a.strip_prefix("--debug-wave=") {
             for value in mode.split(',').map(str::trim).filter(|v| !v.is_empty()) {
                 if !matches!(value, "tokens" | "ast" | "ir" | "mc" | "hex" | "all") {
-                    return Err(CliError::usage(format!(
-                        "unknown --debug-wave mode: {value}"
-                    )));
+                    return Err(CliError::usage(format!("unknown --debug-wave mode: {value}")));
                 }
             }
             g.debug.apply(mode);
@@ -822,9 +805,7 @@ fn parse_global(args: Vec<String>) -> Result<(Global, Vec<String>), CliError> {
             })?;
             for value in mode.split(',').map(str::trim).filter(|v| !v.is_empty()) {
                 if !matches!(value, "tokens" | "ast" | "ir" | "mc" | "hex" | "all") {
-                    return Err(CliError::usage(format!(
-                        "unknown --debug-wave mode: {value}"
-                    )));
+                    return Err(CliError::usage(format!("unknown --debug-wave mode: {value}")));
                 }
             }
             g.debug.apply(mode);
@@ -839,9 +820,8 @@ fn parse_global(args: Vec<String>) -> Result<(Global, Vec<String>), CliError> {
         }
 
         if a == "--link" {
-            let lib = args
-                .get(i + 1)
-                .ok_or_else(|| CliError::usage("missing value: --link <lib>"))?;
+            let lib =
+                args.get(i + 1).ok_or_else(|| CliError::usage("missing value: --link <lib>"))?;
             g.link.libs.push(lib.to_string());
             i += 2;
             continue;
@@ -849,9 +829,8 @@ fn parse_global(args: Vec<String>) -> Result<(Global, Vec<String>), CliError> {
 
         if let Some(p) = a.strip_prefix("-L") {
             if p.is_empty() {
-                let path = args
-                    .get(i + 1)
-                    .ok_or_else(|| CliError::usage("missing value: -L <path>"))?;
+                let path =
+                    args.get(i + 1).ok_or_else(|| CliError::usage("missing value: -L <path>"))?;
                 g.link.paths.push(path.to_string());
                 i += 2;
             } else if let Some(native) = p.strip_prefix("native=") {
@@ -946,24 +925,18 @@ fn parse_global(args: Vec<String>) -> Result<(Global, Vec<String>), CliError> {
 fn parse_dep_spec(spec: &str) -> Result<DepPackage, CliError> {
     let trimmed = spec.trim();
     if trimmed.is_empty() {
-        return Err(CliError::usage(
-            "invalid --dep value: expected <name>=<path>",
-        ));
+        return Err(CliError::usage("invalid --dep value: expected <name>=<path>"));
     }
 
     let Some((name, path)) = trimmed.split_once('=') else {
-        return Err(CliError::usage(
-            "invalid --dep value: expected <name>=<path>",
-        ));
+        return Err(CliError::usage("invalid --dep value: expected <name>=<path>"));
     };
 
     let name = name.trim();
     let path = path.trim();
 
     if name.is_empty() || path.is_empty() {
-        return Err(CliError::usage(
-            "invalid --dep value: expected <name>=<path>",
-        ));
+        return Err(CliError::usage("invalid --dep value: expected <name>=<path>"));
     }
 
     let mut chars = name.chars();
@@ -975,15 +948,10 @@ fn parse_dep_spec(spec: &str) -> Result<DepPackage, CliError> {
     };
 
     if !valid {
-        return Err(CliError::usage(
-            "invalid --dep package name: use [A-Za-z_][A-Za-z0-9_]*",
-        ));
+        return Err(CliError::usage("invalid --dep package name: use [A-Za-z_][A-Za-z0-9_]*"));
     }
 
-    Ok(DepPackage {
-        name: name.to_string(),
-        path: path.to_string(),
-    })
+    Ok(DepPackage { name: name.to_string(), path: path.to_string() })
 }
 
 fn parse_llvm_backend_option(
@@ -1003,9 +971,8 @@ fn parse_llvm_backend_option(
         return Ok(true);
     }
     if a == "--target" {
-        let v = args
-            .get(*i + 1)
-            .ok_or_else(|| CliError::usage("missing value: --target <triple>"))?;
+        let v =
+            args.get(*i + 1).ok_or_else(|| CliError::usage("missing value: --target <triple>"))?;
         if v.trim().is_empty() {
             return Err(CliError::usage("missing value: --target <triple>"));
         }
@@ -1024,9 +991,7 @@ fn parse_llvm_backend_option(
         return Ok(true);
     }
     if a == "--cpu" {
-        let v = args
-            .get(*i + 1)
-            .ok_or_else(|| CliError::usage("missing value: --cpu <name>"))?;
+        let v = args.get(*i + 1).ok_or_else(|| CliError::usage("missing value: --cpu <name>"))?;
         if v.trim().is_empty() {
             return Err(CliError::usage("missing value: --cpu <name>"));
         }
@@ -1044,9 +1009,8 @@ fn parse_llvm_backend_option(
         return Ok(true);
     }
     if a == "--features" {
-        let v = args
-            .get(*i + 1)
-            .ok_or_else(|| CliError::usage("missing value: --features <csv>"))?;
+        let v =
+            args.get(*i + 1).ok_or_else(|| CliError::usage("missing value: --features <csv>"))?;
         if v.trim().is_empty() {
             return Err(CliError::usage("missing value: --features <csv>"));
         }
@@ -1064,9 +1028,7 @@ fn parse_llvm_backend_option(
         return Ok(true);
     }
     if a == "--abi" {
-        let v = args
-            .get(*i + 1)
-            .ok_or_else(|| CliError::usage("missing value: --abi <name>"))?;
+        let v = args.get(*i + 1).ok_or_else(|| CliError::usage("missing value: --abi <name>"))?;
         if v.trim().is_empty() {
             return Err(CliError::usage("missing value: --abi <name>"));
         }
@@ -1085,9 +1047,8 @@ fn parse_llvm_backend_option(
         return Ok(true);
     }
     if a == "--sysroot" {
-        let v = args
-            .get(*i + 1)
-            .ok_or_else(|| CliError::usage("missing value: --sysroot <path>"))?;
+        let v =
+            args.get(*i + 1).ok_or_else(|| CliError::usage("missing value: --sysroot <path>"))?;
         if v.trim().is_empty() {
             return Err(CliError::usage("missing value: --sysroot <path>"));
         }
@@ -1098,9 +1059,8 @@ fn parse_llvm_backend_option(
     }
 
     if a == "-C" {
-        let spec = args
-            .get(*i + 1)
-            .ok_or_else(|| CliError::usage("missing value: -C <key>[=<value>]"))?;
+        let spec =
+            args.get(*i + 1).ok_or_else(|| CliError::usage("missing value: -C <key>[=<value>]"))?;
         parse_llvm_codegen_spec(spec, llvm)?;
         *i += 2;
         return Ok(true);
@@ -1153,7 +1113,7 @@ fn parse_llvm_codegen_spec(spec: &str, llvm: &mut LlvmFlags) -> Result<(), CliEr
                 "unsupported -C option '{}': supported keys are linker, link-arg, link-sysroot, no-default-libs, code-model, relocation-model",
                 key
             )));
-        }
+        },
     }
 
     Ok(())
@@ -1265,8 +1225,7 @@ fn parse_build(args: &[String]) -> Result<CliCommand, CliError> {
                 value
             } else {
                 i += 1;
-                args.get(i)
-                    .ok_or_else(|| CliError::usage("missing --ast-format value"))?
+                args.get(i).ok_or_else(|| CliError::usage("missing --ast-format value"))?
             };
             build.ast_format = match value {
                 "wson" => parser::ast_output::AstFormat::Wson,
@@ -1281,11 +1240,11 @@ fn parse_build(args: &[String]) -> Result<CliCommand, CliError> {
             "--" => {
                 after_double_dash = true;
                 i += 1;
-            }
+            },
             "-c" => {
                 compile_only = true;
                 i += 1;
-            }
+            },
             "-o" | "--output" => {
                 let Some(v) = args.get(i + 1) else {
                     return Err(CliError::usage(format!("missing value: {} <file>", a)));
@@ -1295,7 +1254,7 @@ fn parse_build(args: &[String]) -> Result<CliCommand, CliError> {
                 }
                 build.output = Some(PathBuf::from(v));
                 i += 2;
-            }
+            },
             _ if a.starts_with("--output=") => {
                 let v = a.trim_start_matches("--output=");
                 if v.trim().is_empty() {
@@ -1303,7 +1262,7 @@ fn parse_build(args: &[String]) -> Result<CliCommand, CliError> {
                 }
                 build.output = Some(PathBuf::from(v));
                 i += 1;
-            }
+            },
             "--out-dir" => {
                 let Some(v) = args.get(i + 1) else {
                     return Err(CliError::usage("missing value: --out-dir <dir>"));
@@ -1313,7 +1272,7 @@ fn parse_build(args: &[String]) -> Result<CliCommand, CliError> {
                 }
                 build.out_dir = Some(PathBuf::from(v));
                 i += 2;
-            }
+            },
             _ if a.starts_with("--out-dir=") => {
                 let v = a.trim_start_matches("--out-dir=");
                 if v.trim().is_empty() {
@@ -1321,7 +1280,7 @@ fn parse_build(args: &[String]) -> Result<CliCommand, CliError> {
                 }
                 build.out_dir = Some(PathBuf::from(v));
                 i += 1;
-            }
+            },
             "--target-dir" => {
                 let Some(v) = args.get(i + 1) else {
                     return Err(CliError::usage("missing value: --target-dir <dir>"));
@@ -1331,7 +1290,7 @@ fn parse_build(args: &[String]) -> Result<CliCommand, CliError> {
                 }
                 build.target_dir = Some(PathBuf::from(v));
                 i += 2;
-            }
+            },
             _ if a.starts_with("--target-dir=") => {
                 let v = a.trim_start_matches("--target-dir=");
                 if v.trim().is_empty() {
@@ -1339,47 +1298,47 @@ fn parse_build(args: &[String]) -> Result<CliCommand, CliError> {
                 }
                 build.target_dir = Some(PathBuf::from(v));
                 i += 1;
-            }
+            },
             "--emit" => {
                 let Some(v) = args.get(i + 1) else {
                     return Err(CliError::usage("missing value: --emit <kinds>"));
                 };
                 apply_emit_spec(&mut build, &mut emit_explicit, v)?;
                 i += 2;
-            }
+            },
             _ if a.starts_with("--emit=") => {
                 let v = a.trim_start_matches("--emit=");
                 apply_emit_spec(&mut build, &mut emit_explicit, v)?;
                 i += 1;
-            }
+            },
             "--input-type" => {
                 let Some(v) = args.get(i + 1) else {
                     return Err(CliError::usage("missing value: --input-type <kind>"));
                 };
                 build.input_type = Some(parse_input_kind(v)?);
                 i += 2;
-            }
+            },
             _ if a.starts_with("--input-type=") => {
                 let v = a.trim_start_matches("--input-type=");
                 build.input_type = Some(parse_input_kind(v)?);
                 i += 1;
-            }
+            },
             "--link-only" => {
                 build.link_only = true;
                 i += 1;
-            }
+            },
             "--run" => {
                 build.run = true;
                 i += 1;
-            }
+            },
             "--dry-run" => {
                 build.dry_run = true;
                 i += 1;
-            }
+            },
             "--freestanding" => {
                 build.freestanding = true;
                 i += 1;
-            }
+            },
             "--entry" => {
                 let Some(v) = args.get(i + 1) else {
                     return Err(CliError::usage("missing value: --entry <symbol>"));
@@ -1389,7 +1348,7 @@ fn parse_build(args: &[String]) -> Result<CliCommand, CliError> {
                 }
                 build.entry = Some(v.clone());
                 i += 2;
-            }
+            },
             _ if a.starts_with("--entry=") => {
                 let v = a.trim_start_matches("--entry=");
                 if v.trim().is_empty() {
@@ -1397,7 +1356,7 @@ fn parse_build(args: &[String]) -> Result<CliCommand, CliError> {
                 }
                 build.entry = Some(v.to_string());
                 i += 1;
-            }
+            },
             "--linker-script" => {
                 let Some(v) = args.get(i + 1) else {
                     return Err(CliError::usage("missing value: --linker-script <path>"));
@@ -1407,7 +1366,7 @@ fn parse_build(args: &[String]) -> Result<CliCommand, CliError> {
                 }
                 build.linker_script = Some(PathBuf::from(v));
                 i += 2;
-            }
+            },
             _ if a.starts_with("--linker-script=") => {
                 let v = a.trim_start_matches("--linker-script=");
                 if v.trim().is_empty() {
@@ -1415,54 +1374,52 @@ fn parse_build(args: &[String]) -> Result<CliCommand, CliError> {
                 }
                 build.linker_script = Some(PathBuf::from(v));
                 i += 1;
-            }
+            },
             "--no-start-files" => {
                 build.no_start_files = true;
                 i += 1;
-            }
+            },
             "--shared" => {
                 build.shared = true;
                 i += 1;
-            }
+            },
             "--static" => {
                 build.static_link = true;
                 i += 1;
-            }
+            },
             "--pie" => {
                 if build.pie == Some(false) {
                     return Err(CliError::usage("cannot combine --pie and --no-pie"));
                 }
                 build.pie = Some(true);
                 i += 1;
-            }
+            },
             "--no-pie" => {
                 if build.pie == Some(true) {
                     return Err(CliError::usage("cannot combine --pie and --no-pie"));
                 }
                 build.pie = Some(false);
                 i += 1;
-            }
+            },
             "--error-format" => {
                 let Some(v) = args.get(i + 1) else {
-                    return Err(CliError::usage(
-                        "missing value: --error-format <human,json>",
-                    ));
+                    return Err(CliError::usage("missing value: --error-format <human,json>"));
                 };
                 build.error_format = parse_error_format(v)?;
                 i += 2;
-            }
+            },
             _ if a.starts_with("--error-format=") => {
                 let v = a.trim_start_matches("--error-format=");
                 build.error_format = parse_error_format(v)?;
                 i += 1;
-            }
+            },
             _ if a.starts_with('-') => {
                 return Err(CliError::usage(format!("unknown option for build: {}", a)));
-            }
+            },
             _ => {
                 build.inputs.push(PathBuf::from(a));
                 i += 1;
-            }
+            },
         }
     }
 
@@ -1480,7 +1437,7 @@ fn parse_build(args: &[String]) -> Result<CliCommand, CliError> {
         match &build.emit {
             EmitSpec::Check => {
                 return Err(CliError::usage("-c cannot be combined with --emit=check"));
-            }
+            },
             EmitSpec::Set(set) => {
                 if emit_explicit {
                     if !(set.len() == 1 && set.contains(&EmitKind::Obj)) {
@@ -1493,7 +1450,7 @@ fn parse_build(args: &[String]) -> Result<CliCommand, CliError> {
                     obj_only.insert(EmitKind::Obj);
                     build.emit = EmitSpec::Set(obj_only);
                 }
-            }
+            },
         }
     }
 
@@ -1554,37 +1511,27 @@ fn parse_print(args: &[String]) -> Result<CliCommand, CliError> {
         return Err(CliError::usage(format!("unknown option for print: {}", a)));
     }
 
-    Ok(CliCommand::Print {
-        item,
-        target,
-        format,
-    })
+    Ok(CliCommand::Print { item, target, format })
 }
 
 fn parse_std_reference(args: &[String]) -> Result<Option<String>, CliError> {
     if args.first().map(String::as_str) != Some("std") {
-        return Err(CliError::usage(
-            "usage: wavec install|update std [--ref <commit-or-ref>]",
-        ));
+        return Err(CliError::usage("usage: wavec install|update std [--ref <commit-or-ref>]"));
     }
     let reference = match &args[1..] {
         [] => return Ok(None),
         [flag, value] if flag == "--ref" => value.as_str(),
         [value] if value.starts_with("--ref=") => &value[6..],
         _ => {
-            return Err(CliError::usage(
-                "usage: wavec install|update std [--ref <commit-or-ref>]",
-            ))
-        }
+            return Err(CliError::usage("usage: wavec install|update std [--ref <commit-or-ref>]"))
+        },
     };
     if reference.is_empty()
         || reference.starts_with('-')
         || reference.contains(':')
         || reference.chars().any(char::is_whitespace)
     {
-        return Err(CliError::usage(
-            "invalid std reference: expected a Git commit, branch or tag",
-        ));
+        return Err(CliError::usage("invalid std reference: expected a Git commit, branch or tag"));
     }
     Ok(Some(reference.to_owned()))
 }
@@ -1616,10 +1563,7 @@ fn parse_error_format(v: &str) -> Result<ErrorFormat, CliError> {
     match v.trim() {
         "human" => Ok(ErrorFormat::Human),
         "json" => Ok(ErrorFormat::Json),
-        _ => Err(CliError::usage(format!(
-            "invalid --error-format '{}': expected human, json",
-            v
-        ))),
+        _ => Err(CliError::usage(format!("invalid --error-format '{}': expected human, json", v))),
     }
 }
 
@@ -1627,10 +1571,7 @@ fn parse_print_format(v: &str) -> Result<PrintFormat, CliError> {
     match v.trim() {
         "human" => Ok(PrintFormat::Human),
         "json" => Ok(PrintFormat::Json),
-        _ => Err(CliError::usage(format!(
-            "invalid --format '{}': expected human, json",
-            v
-        ))),
+        _ => Err(CliError::usage(format!("invalid --format '{}': expected human, json", v))),
     }
 }
 
@@ -1680,9 +1621,7 @@ fn apply_emit_spec(
     }
 
     if saw_check && !set.is_empty() {
-        return Err(CliError::usage(
-            "--emit=check must be used alone (check is a control mode)",
-        ));
+        return Err(CliError::usage("--emit=check must be used alone (check is a control mode)"));
     }
 
     if saw_check {
@@ -1691,12 +1630,12 @@ fn apply_emit_spec(
             EmitSpec::Set(ref existing) if existing.is_empty() => {
                 build.emit = EmitSpec::Check;
                 return Ok(());
-            }
+            },
             EmitSpec::Set(_) => {
                 return Err(CliError::usage(
                     "--emit=check cannot be combined with other emit kinds",
                 ));
-            }
+            },
         }
     }
 
@@ -1705,13 +1644,13 @@ fn apply_emit_spec(
     }
 
     match &mut build.emit {
-        EmitSpec::Check => Err(CliError::usage(
-            "--emit=check cannot be combined with other emit kinds",
-        )),
+        EmitSpec::Check => {
+            Err(CliError::usage("--emit=check cannot be combined with other emit kinds"))
+        },
         EmitSpec::Set(existing) => {
             existing.extend(set);
             Ok(())
-        }
+        },
     }
 }
 
@@ -1719,10 +1658,7 @@ fn classify_inputs(build: &BuildRequest) -> Result<Vec<ClassifiedInput>, CliErro
     let mut out = Vec::with_capacity(build.inputs.len());
     for input in &build.inputs {
         let kind = resolve_input_kind(input, build.input_type)?;
-        out.push(ClassifiedInput {
-            path: input.clone(),
-            kind,
-        });
+        out.push(ClassifiedInput { path: input.clone(), kind });
     }
     Ok(out)
 }
@@ -1795,9 +1731,7 @@ fn validate_build_request(
         return Err(CliError::usage("cannot combine --shared and --static"));
     }
     if build.shared && build.pie.is_some() {
-        return Err(CliError::usage(
-            "cannot combine --shared with --pie/--no-pie in v1",
-        ));
+        return Err(CliError::usage("cannot combine --shared with --pie/--no-pie in v1"));
     }
 
     if let Some(reloc) = global.llvm.relocation_model.as_deref() {
@@ -1820,14 +1754,10 @@ fn validate_build_request(
 
     if build.emit.is_check() {
         if build.link_only {
-            return Err(CliError::usage(
-                "--emit=check cannot be combined with --link-only",
-            ));
+            return Err(CliError::usage("--emit=check cannot be combined with --link-only"));
         }
         if build.run {
-            return Err(CliError::usage(
-                "--emit=check cannot be combined with --run",
-            ));
+            return Err(CliError::usage("--emit=check cannot be combined with --run"));
         }
         if build.output.is_some() || build.out_dir.is_some() {
             return Err(CliError::usage(
@@ -1835,9 +1765,7 @@ fn validate_build_request(
             ));
         }
         if classified.iter().any(|i| i.kind != InputKind::Wave) {
-            return Err(CliError::usage(
-                "--emit=check currently supports only Wave source inputs",
-            ));
+            return Err(CliError::usage("--emit=check currently supports only Wave source inputs"));
         }
         return Ok(());
     }
@@ -1846,9 +1774,7 @@ fn validate_build_request(
 
     for kind in [EmitKind::Ast, EmitKind::Ir, EmitKind::Bc, EmitKind::Asm] {
         if emit_set.contains(&kind)
-            && !classified
-                .iter()
-                .any(|input| supports_emit_for_input(kind, input.kind))
+            && !classified.iter().any(|input| supports_emit_for_input(kind, input.kind))
         {
             return Err(CliError::usage(format!(
                 "--emit={} has no compatible inputs in this build request",
@@ -1859,9 +1785,7 @@ fn validate_build_request(
 
     if build.link_only {
         if !(emit_set.len() == 1 && emit_set.contains(&EmitKind::Bin)) {
-            return Err(CliError::usage(
-                "--link-only supports only --emit=bin in v1",
-            ));
+            return Err(CliError::usage("--link-only supports only --emit=bin in v1"));
         }
         if classified.iter().any(|i| !i.kind.is_link_input()) {
             return Err(CliError::usage(
@@ -1881,14 +1805,10 @@ fn validate_build_request(
 
     if build.run {
         if !emit_set.contains(&EmitKind::Bin) {
-            return Err(CliError::usage(
-                "--run requires a binary output (emit includes bin)",
-            ));
+            return Err(CliError::usage("--run requires a binary output (emit includes bin)"));
         }
         if build.shared {
-            return Err(CliError::usage(
-                "--run is not allowed when --shared is specified",
-            ));
+            return Err(CliError::usage("--run is not allowed when --shared is specified"));
         }
     }
 
@@ -1905,9 +1825,7 @@ fn validate_build_request(
             ));
         }
         if build.no_start_files && !global.llvm.no_default_libs {
-            return Err(CliError::usage(
-                "MSVC --no-start-files requires -Cno-default-libs",
-            ));
+            return Err(CliError::usage("MSVC --no-start-files requires -Cno-default-libs"));
         }
     }
 
@@ -1932,10 +1850,7 @@ fn validate_build_request(
     }
 
     if build.output.is_some() {
-        let compile_count = classified
-            .iter()
-            .filter(|i| !i.kind.is_link_input())
-            .count();
+        let compile_count = classified.iter().filter(|i| !i.kind.is_link_input()).count();
         let has_bin = emit_set.contains(&EmitKind::Bin) || build.run;
 
         if !has_bin {
@@ -1992,11 +1907,7 @@ fn validate_output_paths(
     // emit or object job writes an artifact, including the final link output.
     if !build.dry_run {
         for input in inputs.iter().filter(|input| input.kind == InputKind::Wave) {
-            sources.extend(runner::wave_input_paths(
-                &input.path,
-                &global.dep,
-                &global.llvm,
-            ));
+            sources.extend(runner::wave_input_paths(&input.path, &global.dep, &global.llvm));
         }
         crate::output_guard::validate(&sources, &outputs)?;
     }
@@ -2034,18 +1945,14 @@ fn create_build_plan(
         return Ok(BuildPlan::default());
     }
 
-    let compile_total = classified
-        .iter()
-        .filter(|i| !i.kind.is_link_input())
-        .count();
+    let compile_total = classified.iter().filter(|i| !i.kind.is_link_input()).count();
     let mut compile_index = 0usize;
 
     let mut plan = BuildPlan::default();
 
     for input in classified {
         if input.kind.is_link_input() {
-            plan.link_inputs
-                .push(input.path.to_string_lossy().to_string());
+            plan.link_inputs.push(input.path.to_string_lossy().to_string());
             continue;
         }
 
@@ -2063,11 +1970,7 @@ fn create_build_plan(
         );
 
         plan.link_inputs.push(output.to_string_lossy().to_string());
-        plan.compile_jobs.push(CompileJob {
-            input: input.path.clone(),
-            kind: input.kind,
-            output,
-        });
+        plan.compile_jobs.push(CompileJob { input: input.path.clone(), kind: input.kind, output });
         compile_index += 1;
     }
 
@@ -2149,11 +2052,8 @@ fn resolve_binary_output_path(
 }
 
 fn object_file_name(path: &Path, compile_index: usize, compile_total: usize) -> String {
-    let stem = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .filter(|s| !s.is_empty())
-        .unwrap_or("input");
+    let stem =
+        path.file_stem().and_then(|s| s.to_str()).filter(|s| !s.is_empty()).unwrap_or("input");
 
     if compile_total > 1 {
         format!("{}_{}.o", stem, compile_index + 1)
@@ -2178,10 +2078,9 @@ fn supports_emit_for_input(kind: EmitKind, input: InputKind) -> bool {
         EmitKind::Ast => input == InputKind::Wave,
         EmitKind::Ir => input == InputKind::Wave || input == InputKind::Ir,
         EmitKind::Bc => matches!(input, InputKind::Wave | InputKind::Ir | InputKind::Bc),
-        EmitKind::Asm => matches!(
-            input,
-            InputKind::Wave | InputKind::Ir | InputKind::Bc | InputKind::Asm
-        ),
+        EmitKind::Asm => {
+            matches!(input, InputKind::Wave | InputKind::Ir | InputKind::Bc | InputKind::Asm)
+        },
         EmitKind::Obj => matches!(
             input,
             InputKind::Wave | InputKind::Ir | InputKind::Bc | InputKind::Asm | InputKind::Obj
@@ -2215,17 +2114,11 @@ fn emit_artifact_file_name(
     input_total: usize,
     kind: EmitKind,
 ) -> String {
-    let stem = path
-        .file_stem()
-        .and_then(|s| s.to_str())
-        .filter(|s| !s.is_empty())
-        .unwrap_or("input");
+    let stem =
+        path.file_stem().and_then(|s| s.to_str()).filter(|s| !s.is_empty()).unwrap_or("input");
 
-    let base = if input_total > 1 {
-        format!("{}_{}", stem, input_index + 1)
-    } else {
-        stem.to_string()
-    };
+    let base =
+        if input_total > 1 { format!("{}_{}", stem, input_index + 1) } else { stem.to_string() };
 
     let ext = emit_artifact_extension(kind);
     if ext.is_empty() {
@@ -2244,11 +2137,8 @@ fn resolve_extra_emit_output_path(
 ) -> PathBuf {
     let mut file_name = emit_artifact_file_name(&input.path, input_index, input_total, kind);
     if kind == EmitKind::Ast {
-        file_name = format!(
-            "{}.{}",
-            file_name.strip_suffix(".ast").unwrap(),
-            build.ast_format.extension()
-        );
+        file_name =
+            format!("{}.{}", file_name.strip_suffix(".ast").unwrap(), build.ast_format.extension());
     }
     if let Some(out_dir) = &build.out_dir {
         return out_dir.join(&file_name);
@@ -2299,7 +2189,7 @@ fn execute_explicit_emit_artifacts(
                         )
                     };
                     fs::write(output, text.map_err(|e| CliError::usage(e.to_string()))?)?;
-                }
+                },
                 EmitKind::Ir => match input.kind {
                     InputKind::Wave => {
                         let text = unsafe {
@@ -2312,9 +2202,9 @@ fn execute_explicit_emit_artifacts(
                             )
                         };
                         fs::write(output, text)?;
-                    }
+                    },
                     InputKind::Ir => copy_if_different(&input.path, &output)?,
-                    _ => {}
+                    _ => {},
                 },
                 EmitKind::Bc => match input.kind {
                     InputKind::Wave => unsafe {
@@ -2335,9 +2225,9 @@ fn execute_explicit_emit_artifacts(
                             &output,
                             EmitKind::Bc,
                         )?;
-                    }
+                    },
                     InputKind::Bc => copy_if_different(&input.path, &output)?,
-                    _ => {}
+                    _ => {},
                 },
                 EmitKind::Asm => match input.kind {
                     InputKind::Wave => unsafe {
@@ -2358,11 +2248,11 @@ fn execute_explicit_emit_artifacts(
                             &output,
                             EmitKind::Asm,
                         )?;
-                    }
+                    },
                     InputKind::Asm => copy_if_different(&input.path, &output)?,
-                    _ => {}
+                    _ => {},
                 },
-                _ => {}
+                _ => {},
             }
         }
     }
@@ -2397,12 +2287,8 @@ fn compile_lowering_with_llvm_tools(
         return pending.commit().map_err(CliError::from);
     }
 
-    let stderr = String::from_utf8_lossy(&process_output.stderr)
-        .trim()
-        .to_string();
-    let stdout = String::from_utf8_lossy(&process_output.stdout)
-        .trim()
-        .to_string();
+    let stderr = String::from_utf8_lossy(&process_output.stderr).trim().to_string();
+    let stdout = String::from_utf8_lossy(&process_output.stdout).trim().to_string();
 
     Err(CodegenError::new(
         CodegenPhase::Tool,
@@ -2433,15 +2319,12 @@ fn build_llvm_lowering_args(
                 output.to_string_lossy().to_string(),
             ];
             (resolve_bundled_tool("llvm-as"), args)
-        }
+        },
         (InputKind::Ir | InputKind::Bc, EmitKind::Obj | EmitKind::Asm) => {
             build_llc_lowering_args(global, input, output, emit_kind)
-        }
+        },
         (InputKind::Asm, EmitKind::Obj) => build_llvm_mc_lowering_args(global, input, output),
-        _ => (
-            resolve_bundled_tool("llvm-as"),
-            vec!["--version".to_string()],
-        ),
+        _ => (resolve_bundled_tool("llvm-as"), vec!["--version".to_string()]),
     }
 }
 
@@ -2590,15 +2473,11 @@ fn link_objects(
     configure_bundled_llvm_tool_env(&mut command, &bin);
 
     let transport = if llvm::backend::is_windows_msvc_target(&target) {
-        Some(llvm::msvc::response::LinkArguments::prepare(
-            &bin, &args, output,
-        )?)
+        Some(llvm::msvc::response::LinkArguments::prepare(&bin, &args, output)?)
     } else {
         None
     };
-    let args = transport
-        .as_ref()
-        .map_or(&args, |transport| &transport.arguments);
+    let args = transport.as_ref().map_or(&args, |transport| &transport.arguments);
     let out = command.args(args).output().map_err(|error| {
         CodegenError::tool_launch(
             CodegenPhase::Link,
@@ -2659,16 +2538,10 @@ fn validate_default_elf_runtime(global: &Global, build: &BuildRequest) -> Result
             missing.push(format!("target CRT ({}, crti.o, crtn.o)", start_name));
         }
     }
-    let libc_names: &[&str] = if build.static_link {
-        &["libc.a"]
-    } else {
-        &["libc.so", "libc.a", "libc.so.6"]
-    };
-    let libm_names: &[&str] = if build.static_link {
-        &["libm.a"]
-    } else {
-        &["libm.so", "libm.a", "libm.so.6"]
-    };
+    let libc_names: &[&str] =
+        if build.static_link { &["libc.a"] } else { &["libc.so", "libc.a", "libc.so.6"] };
+    let libm_names: &[&str] =
+        if build.static_link { &["libm.a"] } else { &["libm.so", "libm.a", "libm.so.6"] };
     if find_elf_runtime_file_any(&target, global, libc_names).is_none() {
         missing.push("libc".to_string());
     }
@@ -2678,14 +2551,12 @@ fn validate_default_elf_runtime(global: &Global, build: &BuildRequest) -> Result
     if !build.static_link && !build.shared {
         match elf_dynamic_linker(&target, global.llvm.abi.as_deref()) {
             Some(loader) => {
-                let loader_name = Path::new(loader)
-                    .file_name()
-                    .and_then(|name| name.to_str())
-                    .unwrap_or(loader);
+                let loader_name =
+                    Path::new(loader).file_name().and_then(|name| name.to_str()).unwrap_or(loader);
                 if find_elf_runtime_file(&target, global, loader_name).is_none() {
                     missing.push(format!("dynamic loader ({loader})"));
                 }
-            }
+            },
             None => missing.push(format!(
                 "dynamic loader for ABI {}",
                 global.llvm.abi.as_deref().unwrap_or("default")
@@ -2733,11 +2604,7 @@ fn build_linker_args(
         );
         llvm::msvc::runtime::add_builtins(&target, &mut args);
         return (
-            global
-                .llvm
-                .linker
-                .clone()
-                .unwrap_or_else(|| resolve_bundled_tool("lld-link")),
+            global.llvm.linker.clone().unwrap_or_else(|| resolve_bundled_tool("lld-link")),
             args,
         );
     }
@@ -2807,11 +2674,8 @@ fn build_execute_command(
     match codegen {
         Some(target @ (CodegenTarget::Wasm32Unknown | CodegenTarget::Wasm64Unknown)) => {
             let mut args = vec!["--no-warnings".to_string()];
-            let runner = wasm_runner(
-                target == CodegenTarget::Wasm64Unknown,
-                false,
-                global.error_format,
-            );
+            let runner =
+                wasm_runner(target == CodegenTarget::Wasm64Unknown, false, global.error_format);
             args.extend([
                 "--input-type=module".to_string(),
                 "--eval".to_string(),
@@ -2820,7 +2684,7 @@ fn build_execute_command(
             ]);
             args.extend(build.run_args.iter().cloned());
             ("node".to_string(), args)
-        }
+        },
         Some(CodegenTarget::Wasm32WasiP1) => {
             let mut args = vec![
                 "--no-warnings".to_string(),
@@ -2831,7 +2695,7 @@ fn build_execute_command(
             ];
             args.extend(build.run_args.iter().cloned());
             ("node".to_string(), args)
-        }
+        },
         Some(CodegenTarget::LinuxLoongArch64) if std::env::consts::ARCH != "loongarch64" => {
             let mut args = Vec::new();
             if let Some(sysroot) = &global.llvm.sysroot {
@@ -2841,7 +2705,7 @@ fn build_execute_command(
             args.push(output.to_string_lossy().to_string());
             args.extend(build.run_args.iter().cloned());
             ("qemu-loongarch64".to_string(), args)
-        }
+        },
         _ => (output.to_string_lossy().to_string(), build.run_args.clone()),
     }
 }
@@ -2901,12 +2765,7 @@ fn build_darwin_lld_args(
     args.push(macos_version);
 
     let detected_sysroot = detect_macos_sysroot_owned();
-    if let Some(sysroot) = global
-        .llvm
-        .sysroot
-        .as_deref()
-        .or(detected_sysroot.as_deref())
-    {
+    if let Some(sysroot) = global.llvm.sysroot.as_deref().or(detected_sysroot.as_deref()) {
         args.push("-syslibroot".to_string());
         args.push(sysroot.to_string());
     }
@@ -3110,9 +2969,7 @@ fn append_lld_link_args(args: &mut Vec<String>, link_args: &[String]) {
         }
         if let Some(rest) = arg.strip_prefix("-Wl,") {
             args.extend(
-                rest.split(',')
-                    .filter(|part| !part.is_empty())
-                    .map(|part| part.to_string()),
+                rest.split(',').filter(|part| !part.is_empty()).map(|part| part.to_string()),
             );
         } else {
             args.push(arg.clone());
@@ -3121,11 +2978,7 @@ fn append_lld_link_args(args: &mut Vec<String>, link_args: &[String]) {
 }
 
 fn target_triple_for_global(global: &Global) -> String {
-    global
-        .llvm
-        .target
-        .clone()
-        .unwrap_or_else(host_target_triple)
+    global.llvm.target.clone().unwrap_or_else(host_target_triple)
 }
 
 fn is_darwin_target(target: &str) -> bool {
@@ -3263,22 +3116,8 @@ fn append_elf_end_files(args: &mut Vec<String>, target: &str, global: &Global) {
 }
 
 fn append_elf_default_libs(args: &mut Vec<String>, target: &str, global: &Global) {
-    append_elf_default_lib(
-        args,
-        target,
-        global,
-        "c",
-        &["libc.so", "libc.a"],
-        &["libc.so.6"],
-    );
-    append_elf_default_lib(
-        args,
-        target,
-        global,
-        "m",
-        &["libm.so", "libm.a"],
-        &["libm.so.6"],
-    );
+    append_elf_default_lib(args, target, global, "c", &["libc.so", "libc.a"], &["libc.so.6"]);
+    append_elf_default_lib(args, target, global, "m", &["libm.so", "libm.a"], &["libm.so.6"]);
 }
 
 fn append_elf_default_lib(
@@ -3560,11 +3399,7 @@ fn llvm_tool_search_dirs() -> Vec<PathBuf> {
 }
 
 fn linker_tool_name(bin: &str) -> String {
-    Path::new(bin)
-        .file_name()
-        .and_then(|name| name.to_str())
-        .unwrap_or(bin)
-        .to_string()
+    Path::new(bin).file_name().and_then(|name| name.to_str()).unwrap_or(bin).to_string()
 }
 
 fn missing_linker_tool_name(_global: &Global, bin: &str) -> String {
@@ -3633,17 +3468,13 @@ fn dry_run_explicit_emit_steps(
                         input.path.display(),
                         output.display()
                     )
-                }
+                },
                 (EmitKind::Ir, InputKind::Wave) => {
-                    format!(
-                        "[wave frontend] {} -> {} (ir)",
-                        input.path.display(),
-                        output.display()
-                    )
-                }
+                    format!("[wave frontend] {} -> {} (ir)", input.path.display(), output.display())
+                },
                 (EmitKind::Ir, InputKind::Ir) => {
                     format!("cp {} {}", input.path.display(), output.display())
-                }
+                },
                 (EmitKind::Bc, InputKind::Wave) | (EmitKind::Asm, InputKind::Wave) => {
                     format!(
                         "[wave frontend + LLVM] {} -> {} ({})",
@@ -3651,17 +3482,17 @@ fn dry_run_explicit_emit_steps(
                         output.display(),
                         emit_kind_name(kind)
                     )
-                }
+                },
                 (EmitKind::Bc, InputKind::Ir)
                 | (EmitKind::Asm, InputKind::Ir)
                 | (EmitKind::Asm, InputKind::Bc) => {
                     let (bin, args) =
                         build_llvm_lowering_args(global, &input.path, input.kind, &output, kind);
                     shell_join(&bin, &args)
-                }
+                },
                 (EmitKind::Bc, InputKind::Bc) | (EmitKind::Asm, InputKind::Asm) => {
                     format!("cp {} {}", input.path.display(), output.display())
-                }
+                },
                 _ => continue,
             };
             steps.push(step);
@@ -3699,14 +3530,8 @@ fn print_dry_run_human(
     println!("  features: {}", target_options.features);
     println!("  abi: {}", target_options.abi.as_deref().unwrap_or(""));
     println!("  isa: {}", target_options.isa.as_deref().unwrap_or(""));
-    println!(
-        "  sysroot: {}",
-        global.llvm.sysroot.as_deref().unwrap_or("")
-    );
-    println!(
-        "  sysroot-source: {}",
-        global.llvm.sysroot_source.as_deref().unwrap_or("")
-    );
+    println!("  sysroot: {}", global.llvm.sysroot.as_deref().unwrap_or(""));
+    println!("  sysroot-source: {}", global.llvm.sysroot_source.as_deref().unwrap_or(""));
     println!("  emit: {}", render_emit_spec(&build.emit));
     println!("  link-only: {}", build.link_only);
     println!("  run: {}", build.run);
@@ -3765,10 +3590,7 @@ fn print_dry_run_human(
 
     if let Some(link_output) = &plan.link_output {
         println!("  link:");
-        println!(
-            "    - {}",
-            render_link_command(global, build, &plan.link_inputs, link_output)
-        );
+        println!("    - {}", render_link_command(global, build, &plan.link_inputs, link_output));
     }
 
     if build.run {
@@ -3859,24 +3681,12 @@ fn print_dry_run_json(
         ("features", Value::string(&target_options.features)),
         ("abi", Value::optional_string(target_options.abi.as_deref())),
         ("isa", Value::optional_string(target_options.isa.as_deref())),
-        (
-            "sysroot",
-            Value::optional_string(global.llvm.sysroot.as_deref()),
-        ),
-        (
-            "sysroot_source",
-            Value::optional_string(global.llvm.sysroot_source.as_deref()),
-        ),
+        ("sysroot", Value::optional_string(global.llvm.sysroot.as_deref())),
+        ("sysroot_source", Value::optional_string(global.llvm.sysroot_source.as_deref())),
         ("emit", Value::string(render_emit_spec(&build.emit))),
         ("emit_kinds", emit_kinds),
-        (
-            "control_mode",
-            Value::optional_string(build.emit.is_check().then_some("check")),
-        ),
-        (
-            "forced_input_type",
-            Value::optional_string(build.input_type.map(|k| k.as_str())),
-        ),
+        ("control_mode", Value::optional_string(build.emit.is_check().then_some("check"))),
+        ("forced_input_type", Value::optional_string(build.input_type.map(|k| k.as_str()))),
         ("link_only", Value::Bool(build.link_only)),
         ("run", Value::Bool(build.run)),
         ("freestanding", Value::Bool(build.freestanding)),
@@ -3886,10 +3696,7 @@ fn print_dry_run_json(
             "linker_script",
             Value::optional_string(build.linker_script.as_ref().map(|p| p.to_string_lossy())),
         ),
-        (
-            "out_dir",
-            Value::optional_string(build.out_dir.as_ref().map(|p| p.to_string_lossy())),
-        ),
+        ("out_dir", Value::optional_string(build.out_dir.as_ref().map(|p| p.to_string_lossy()))),
         (
             "target_dir",
             Value::optional_string(build.target_dir.as_ref().map(|p| p.to_string_lossy())),
@@ -3909,10 +3716,7 @@ fn print_dry_run_json(
                     .collect(),
             ),
         ),
-        (
-            "emit_jobs",
-            Value::strings(dry_run_explicit_emit_steps(global, build, classified)),
-        ),
+        ("emit_jobs", Value::strings(dry_run_explicit_emit_steps(global, build, classified))),
         ("compile", compile),
         ("link", link),
         ("execute", execute),
@@ -4017,10 +3821,7 @@ fn host_target_triple() -> String {
 }
 
 fn supported_targets() -> Vec<&'static str> {
-    supported_target_specs()
-        .into_iter()
-        .map(|spec| spec.triple)
-        .collect()
+    supported_target_specs().into_iter().map(|spec| spec.triple).collect()
 }
 
 fn supported_input_types() -> Vec<&'static str> {
@@ -4119,19 +3920,10 @@ fn print_target_spec_human(global: &Global, target: &str) {
     println!("freestanding: {}", !spec.hosted);
     println!("supported: {}", spec.supported);
     println!("default-linker: {}", default_linker_name(&target_global));
-    println!(
-        "sysroot: {}",
-        sysroot
-            .as_ref()
-            .map(|value| value.path.as_str())
-            .unwrap_or("")
-    );
+    println!("sysroot: {}", sysroot.as_ref().map(|value| value.path.as_str()).unwrap_or(""));
     println!(
         "sysroot-source: {}",
-        sysroot
-            .as_ref()
-            .map(|value| value.source.as_str())
-            .unwrap_or("")
+        sysroot.as_ref().map(|value| value.source.as_str()).unwrap_or("")
     );
 }
 
@@ -4154,18 +3946,9 @@ fn target_spec_json(global: &Global, target: &str) -> String {
         ("hosted", Value::Bool(spec.hosted)),
         ("freestanding", Value::Bool(!spec.hosted)),
         ("supported", Value::Bool(spec.supported)),
-        (
-            "default_linker",
-            Value::string(default_linker_name(&target_global)),
-        ),
-        (
-            "sysroot",
-            Value::optional_string(sysroot.as_ref().map(|v| v.path.as_str())),
-        ),
-        (
-            "sysroot_source",
-            Value::optional_string(sysroot.as_ref().map(|v| v.source.as_str())),
-        ),
+        ("default_linker", Value::string(default_linker_name(&target_global))),
+        ("sysroot", Value::optional_string(sysroot.as_ref().map(|v| v.path.as_str()))),
+        ("sysroot_source", Value::optional_string(sysroot.as_ref().map(|v| v.source.as_str()))),
     ]))
 }
 
@@ -4197,13 +3980,8 @@ fn ensure_supported_target(target: &str) -> Result<&'static TargetSpec, CliError
 
 fn target_options_for(target: &str, llvm: &LlvmFlags) -> Result<EffectiveTargetOptions, CliError> {
     let spec = ensure_supported_target(target)?;
-    resolve_target_options(
-        spec,
-        llvm.cpu.as_deref(),
-        llvm.features.as_deref(),
-        llvm.abi.as_deref(),
-    )
-    .map_err(CliError::usage)
+    resolve_target_options(spec, llvm.cpu.as_deref(), llvm.features.as_deref(), llvm.abi.as_deref())
+        .map_err(CliError::usage)
 }
 
 fn resolve_target_configuration(llvm: &mut LlvmFlags) -> Result<(), CliError> {
@@ -4213,11 +3991,7 @@ fn resolve_target_configuration(llvm: &mut LlvmFlags) -> Result<(), CliError> {
         .ok_or_else(|| CliError::usage("target resolution did not produce a target triple"))?;
     let effective = target_options_for(&target, llvm)?;
     llvm.cpu = Some(effective.cpu);
-    llvm.features = if effective.features.is_empty() {
-        None
-    } else {
-        Some(effective.features)
-    };
+    llvm.features = if effective.features.is_empty() { None } else { Some(effective.features) };
     llvm.abi = effective.abi;
     llvm.isa = effective.isa;
     Ok(())
@@ -4256,11 +4030,7 @@ fn effective_sysroot_selection(
     if let Some(path) = global.llvm.sysroot.as_ref() {
         return Ok(Some(SysrootSelection {
             path: path.clone(),
-            source: global
-                .llvm
-                .sysroot_source
-                .clone()
-                .unwrap_or_else(|| "explicit".to_string()),
+            source: global.llvm.sysroot_source.clone().unwrap_or_else(|| "explicit".to_string()),
         }));
     }
     Ok(detect_default_sysroot(target, effective.abi.as_deref()))
@@ -4268,10 +4038,8 @@ fn effective_sysroot_selection(
 
 fn detect_default_sysroot(target: &str, abi: Option<&str>) -> Option<SysrootSelection> {
     if is_darwin_target(target) {
-        return detect_macos_sysroot_owned().map(|path| SysrootSelection {
-            path,
-            source: "xcrun".to_string(),
-        });
+        return detect_macos_sysroot_owned()
+            .map(|path| SysrootSelection { path, source: "xcrun".to_string() });
     }
 
     if matches!(
@@ -4405,13 +4173,11 @@ fn loongarch64_linux_sysroot_is_complete(target: &str, abi: Option<&str>, root: 
     else {
         return false;
     };
-    ["libc.so.6", "libm.so.6", loader_name]
-        .into_iter()
-        .all(|name| {
-            find_elf_runtime_file(target, &global, name).is_some_and(|path| {
-                loongarch64_elf_header_matches(Path::new(&path), expected_abi_flags)
-            })
+    ["libc.so.6", "libm.so.6", loader_name].into_iter().all(|name| {
+        find_elf_runtime_file(target, &global, name).is_some_and(|path| {
+            loongarch64_elf_header_matches(Path::new(&path), expected_abi_flags)
         })
+    })
 }
 
 fn command_stdout_path(tool: &str, argument: &str) -> Option<PathBuf> {
@@ -4474,13 +4240,10 @@ fn riscv64_linux_sysroot_is_complete(target: &str, abi: Option<&str>, root: &Pat
     else {
         return false;
     };
-    ["libc.so.6", "libm.so.6", loader_name]
-        .into_iter()
-        .all(|name| {
-            find_elf_runtime_file(target, &global, name).is_some_and(|path| {
-                riscv64_elf_header_matches(Path::new(&path), expected_abi_flags)
-            })
-        })
+    ["libc.so.6", "libm.so.6", loader_name].into_iter().all(|name| {
+        find_elf_runtime_file(target, &global, name)
+            .is_some_and(|path| riscv64_elf_header_matches(Path::new(&path), expected_abi_flags))
+    })
 }
 
 fn riscv64_abi_elf_flags(abi: Option<&str>) -> Option<u32> {
@@ -4562,12 +4325,7 @@ pub fn print_version() {
 fn print_version_for_backend(whale: bool) {
     let os = format!("({})", get_os_pretty_name()).color("117,117,117");
 
-    println!(
-        "{} {} {}",
-        "wavec".color("2,161,47"),
-        version::version().color("2,161,47"),
-        os
-    );
+    println!("{} {} {}", "wavec".color("2,161,47"), version::version().color("2,161,47"), os);
 
     if whale {
         println!("  backend: Whale IR (experimental, Linux amd64, O0)");
@@ -4588,11 +4346,7 @@ pub fn print_help() {
         "build <input...>".color("38,139,235"),
         "Build/check/link/run pipeline (flag-driven)"
     );
-    println!(
-        "  {:<22} {}",
-        "check <file>".color("38,139,235"),
-        "Alias: build <file> --emit=check"
-    );
+    println!("  {:<22} {}", "check <file>".color("38,139,235"), "Alias: build <file> --emit=check");
     println!(
         "  {:<22} {}",
         "run <file>".color("38,139,235"),
@@ -4613,11 +4367,7 @@ pub fn print_help() {
         "update std".color("38,139,235"),
         "Restore compiler-pinned std; --ref <commit-or-ref> selects a compatible revision"
     );
-    println!(
-        "  {:<22} {}",
-        "--version".color("38,139,235"),
-        "Show version"
-    );
+    println!("  {:<22} {}", "--version".color("38,139,235"), "Show version");
     println!("  {:<22} {}", "--help".color("38,139,235"), "Show help");
 
     println!("\nBackend selection:");
@@ -4675,11 +4425,7 @@ pub fn print_help() {
         "--no-start-files".color("38,139,235"),
         "Pass -nostartfiles to linker (link stage only)"
     );
-    println!(
-        "  {:<24} {}",
-        "-o <file>".color("38,139,235"),
-        "Output file"
-    );
+    println!("  {:<24} {}", "-o <file>".color("38,139,235"), "Output file");
     println!(
         "  {:<24} {}",
         "--out-dir <dir>".color("38,139,235"),
@@ -4690,16 +4436,8 @@ pub fn print_help() {
         "--target-dir <dir>".color("38,139,235"),
         "Intermediate/default artifact root"
     );
-    println!(
-        "  {:<24} {}",
-        "--dry-run".color("38,139,235"),
-        "Plan only, no compile/link/exec"
-    );
-    println!(
-        "  {:<24} {}",
-        "--error-format=...".color("38,139,235"),
-        "human, json"
-    );
+    println!("  {:<24} {}", "--dry-run".color("38,139,235"), "Plan only, no compile/link/exec");
+    println!("  {:<24} {}", "--error-format=...".color("38,139,235"), "human, json");
 
     println!("\nLink mode options:");
     println!(
@@ -4707,53 +4445,21 @@ pub fn print_help() {
         "--shared".color("38,139,235"),
         "Build shared output (conflicts with --run)"
     );
-    println!(
-        "  {:<24} {}",
-        "--static".color("38,139,235"),
-        "Request static link mode"
-    );
-    println!(
-        "  {:<24} {}",
-        "--pie".color("38,139,235"),
-        "Enable PIE mode"
-    );
-    println!(
-        "  {:<24} {}",
-        "--no-pie".color("38,139,235"),
-        "Disable PIE mode"
-    );
+    println!("  {:<24} {}", "--static".color("38,139,235"), "Request static link mode");
+    println!("  {:<24} {}", "--pie".color("38,139,235"), "Enable PIE mode");
+    println!("  {:<24} {}", "--no-pie".color("38,139,235"), "Disable PIE mode");
 
     println!("\nGlobal options:");
-    println!(
-        "  {:<24} {}",
-        "-O0..-O3/-Os/-Oz/-Ofast".color("38,139,235"),
-        "Optimization level"
-    );
-    println!(
-        "  {:<24} {}",
-        "--debug-wave=...".color("38,139,235"),
-        "tokens,ast,ir,mc,hex,all"
-    );
-    println!(
-        "  {:<24} {}",
-        "--link=<lib>".color("38,139,235"),
-        "Link library"
-    );
-    println!(
-        "  {:<24} {}",
-        "-L <path>".color("38,139,235"),
-        "Library search path"
-    );
+    println!("  {:<24} {}", "-O0..-O3/-Os/-Oz/-Ofast".color("38,139,235"), "Optimization level");
+    println!("  {:<24} {}", "--debug-wave=...".color("38,139,235"), "tokens,ast,ir,mc,hex,all");
+    println!("  {:<24} {}", "--link=<lib>".color("38,139,235"), "Link library");
+    println!("  {:<24} {}", "-L <path>".color("38,139,235"), "Library search path");
     println!(
         "  {:<24} {}",
         "--std-root=<path>".color("38,139,235"),
         "Explicit standard-library root (no fallback)"
     );
-    println!(
-        "  {:<24} {}",
-        "--dep-root=<path>".color("38,139,235"),
-        "Dependency root directory"
-    );
+    println!("  {:<24} {}", "--dep-root=<path>".color("38,139,235"), "Dependency root directory");
     println!(
         "  {:<24} {}",
         "--dep=<name>=<path>".color("38,139,235"),
@@ -4761,26 +4467,10 @@ pub fn print_help() {
     );
 
     println!("\nLLVM/backend options:");
-    println!(
-        "  {:<24} {}",
-        "--target=<triple>".color("38,139,235"),
-        "Target triple"
-    );
-    println!(
-        "  {:<24} {}",
-        "--cpu=<name>".color("38,139,235"),
-        "Target CPU"
-    );
-    println!(
-        "  {:<24} {}",
-        "--features=<csv>".color("38,139,235"),
-        "Target features"
-    );
-    println!(
-        "  {:<24} {}",
-        "--abi=<name>".color("38,139,235"),
-        "Target ABI"
-    );
+    println!("  {:<24} {}", "--target=<triple>".color("38,139,235"), "Target triple");
+    println!("  {:<24} {}", "--cpu=<name>".color("38,139,235"), "Target CPU");
+    println!("  {:<24} {}", "--features=<csv>".color("38,139,235"), "Target features");
+    println!("  {:<24} {}", "--abi=<name>".color("38,139,235"), "Target ABI");
     println!(
         "  {:<24} {}",
         "--sysroot=<path>".color("38,139,235"),
@@ -4791,11 +4481,7 @@ pub fn print_help() {
         "-C linker=<path>".color("38,139,235"),
         "Override linker executable (default: bundled LLD)"
     );
-    println!(
-        "  {:<24} {}",
-        "-C link-arg=<arg>".color("38,139,235"),
-        "Append raw linker argument"
-    );
+    println!("  {:<24} {}", "-C link-arg=<arg>".color("38,139,235"), "Append raw linker argument");
     println!(
         "  {:<24} {}",
         "-C link-sysroot=<path>".color("38,139,235"),
@@ -4806,23 +4492,11 @@ pub fn print_help() {
         "-C relocation-model=<m>".color("38,139,235"),
         "relocation model for compatibility checks"
     );
-    println!(
-        "  {:<24} {}",
-        "-C no-default-libs".color("38,139,235"),
-        "Disable automatic -lc -lm"
-    );
+    println!("  {:<24} {}", "-C no-default-libs".color("38,139,235"), "Disable automatic -lc -lm");
 
     println!("\nPrint items:");
-    println!(
-        "  {:<24} {}",
-        "target-spec".color("38,139,235"),
-        "Target metadata for build tools"
-    );
-    println!(
-        "  {:<24} {}",
-        "supported-targets".color("38,139,235"),
-        "Supported target triples"
-    );
+    println!("  {:<24} {}", "target-spec".color("38,139,235"), "Target metadata for build tools");
+    println!("  {:<24} {}", "supported-targets".color("38,139,235"), "Supported target triples");
     println!(
         "  {:<24} {}",
         "supported-input-types".color("38,139,235"),
@@ -4840,10 +4514,7 @@ pub fn print_help() {
     );
 }
 
-#[cfg(all(
-    test,
-    any(feature = "llvm-target-riscv", feature = "llvm-target-loongarch")
-))]
+#[cfg(all(test, any(feature = "llvm-target-riscv", feature = "llvm-target-loongarch")))]
 mod tests {
     use super::*;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -4852,12 +4523,8 @@ mod tests {
 
     fn temp_sysroot(name: &str) -> PathBuf {
         let sequence = NEXT_SYSROOT_CASE.fetch_add(1, Ordering::Relaxed);
-        let root = env::temp_dir().join(format!(
-            "wavec-sysroot-{}-{}-{}",
-            name,
-            process::id(),
-            sequence
-        ));
+        let root =
+            env::temp_dir().join(format!("wavec-sysroot-{}-{}-{}", name, process::id(), sequence));
         let _ = fs::remove_dir_all(&root);
         fs::create_dir_all(root.join("lib")).unwrap();
         root
@@ -4889,14 +4556,8 @@ mod tests {
     fn std_commands_accept_only_one_explicit_reference() {
         let args = |items: &[&str]| items.iter().map(|s| s.to_string()).collect::<Vec<_>>();
         assert_eq!(parse_std_reference(&args(&["std"])).unwrap(), None);
-        for input in [
-            vec!["std", "--ref", "release"],
-            vec!["std", "--ref=release"],
-        ] {
-            assert_eq!(
-                parse_std_reference(&args(&input)).unwrap().as_deref(),
-                Some("release")
-            );
+        for input in [vec!["std", "--ref", "release"], vec!["std", "--ref=release"]] {
+            assert_eq!(parse_std_reference(&args(&input)).unwrap().as_deref(), Some("release"));
         }
         for input in [
             vec![],
@@ -4929,10 +4590,7 @@ mod tests {
         )
         .unwrap();
 
-        assert_eq!(
-            Path::new(&selected.path),
-            fs::canonicalize(&complete).unwrap()
-        );
+        assert_eq!(Path::new(&selected.path), fs::canonicalize(&complete).unwrap());
         assert_eq!(selected.source, "cross-gcc");
         let _ = fs::remove_dir_all(incomplete);
         let _ = fs::remove_dir_all(foreign);
@@ -4976,10 +4634,7 @@ mod tests {
             ],
         )
         .unwrap();
-        assert_eq!(
-            Path::new(&selected.path),
-            fs::canonicalize(&complete).unwrap()
-        );
+        assert_eq!(Path::new(&selected.path), fs::canonicalize(&complete).unwrap());
         assert_eq!(selected.source, "cross-gcc");
 
         let selected_soft = select_loongarch64_linux_sysroot(

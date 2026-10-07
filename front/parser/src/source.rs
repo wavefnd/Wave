@@ -53,25 +53,25 @@ impl SourceMap {
                 for f in &mut s.methods {
                     self.function(f);
                 }
-            }
+            },
             ASTNode::ProtoImpl(p) => {
                 for f in &mut p.methods {
                     self.function(f);
                 }
-            }
+            },
             ASTNode::Program(p) => {
                 if let Some(e) = &mut p.initial_value {
                     self.expression(e);
                 }
-            }
+            },
             ASTNode::Variable(v) => {
                 if let Some(e) = &mut v.initial_value {
                     self.expression(e);
                 }
-            }
+            },
             ASTNode::Expression(e) => self.expression(e),
             ASTNode::Statement(s) => self.statement(s),
-            _ => {}
+            _ => {},
         }
     }
 
@@ -83,13 +83,8 @@ impl SourceMap {
                 for e in args {
                     self.expression(e);
                 }
-            }
-            StatementNode::If {
-                condition,
-                body,
-                else_if_blocks,
-                else_block,
-            } => {
+            },
+            StatementNode::If { condition, body, else_if_blocks, else_block } => {
                 self.expression(condition);
                 for node in body {
                     self.node(node);
@@ -107,26 +102,21 @@ impl SourceMap {
                         self.node(node);
                     }
                 }
-            }
-            StatementNode::For {
-                initialization,
-                condition,
-                increment,
-                body,
-            } => {
+            },
+            StatementNode::For { initialization, condition, increment, body } => {
                 self.node(initialization);
                 self.expression(condition);
                 self.expression(increment);
                 for node in body {
                     self.node(node);
                 }
-            }
+            },
             StatementNode::While { condition, body } => {
                 self.expression(condition);
                 for node in body {
                     self.node(node);
                 }
-            }
+            },
             StatementNode::Match { value, arms } => {
                 self.expression(value);
                 for arm in arms {
@@ -135,18 +125,16 @@ impl SourceMap {
                         self.node(node);
                     }
                 }
-            }
+            },
             StatementNode::Assign { value, .. }
             | StatementNode::Return(Some(value))
             | StatementNode::Expression(value) => self.expression(value),
-            StatementNode::AsmBlock {
-                inputs, outputs, ..
-            } => {
+            StatementNode::AsmBlock { inputs, outputs, .. } => {
                 for (_, e) in inputs.iter_mut().chain(outputs.iter_mut()) {
                     self.expression(e);
                 }
-            }
-            _ => {}
+            },
+            _ => {},
         }
     }
 
@@ -160,26 +148,25 @@ impl SourceMap {
             *expression = *value;
         }
         if let Some(span) = span {
-            self.expressions
-                .insert(expression as *const _ as usize, span);
+            self.expressions.insert(expression as *const _ as usize, span);
         }
         match expression {
             Expression::StructLiteral { fields, .. } => {
                 for (_, e) in fields {
                     self.expression(e);
                 }
-            }
+            },
             Expression::FunctionCall { args, .. } | Expression::ArrayLiteral(args) => {
                 for e in args {
                     self.expression(e);
                 }
-            }
+            },
             Expression::MethodCall { object, args, .. } => {
                 self.expression(object);
                 for e in args {
                     self.expression(e);
                 }
-            }
+            },
             Expression::Deref(e)
             | Expression::AddressOf(e)
             | Expression::Await(e)
@@ -189,30 +176,18 @@ impl SourceMap {
             | Expression::FieldAccess { object: e, .. }
             | Expression::IncDec { target: e, .. } => self.expression(e),
             Expression::BinaryExpression { left, right, .. }
-            | Expression::IndexAccess {
-                target: left,
-                index: right,
-            }
-            | Expression::AssignOperation {
-                target: left,
-                value: right,
-                ..
-            }
-            | Expression::Assignment {
-                target: left,
-                value: right,
-            } => {
+            | Expression::IndexAccess { target: left, index: right }
+            | Expression::AssignOperation { target: left, value: right, .. }
+            | Expression::Assignment { target: left, value: right } => {
                 self.expression(left);
                 self.expression(right);
-            }
-            Expression::AsmBlock {
-                inputs, outputs, ..
-            } => {
+            },
+            Expression::AsmBlock { inputs, outputs, .. } => {
                 for (_, e) in inputs.iter_mut().chain(outputs.iter_mut()) {
                     self.expression(e);
                 }
-            }
-            _ => {}
+            },
+            _ => {},
         }
     }
 

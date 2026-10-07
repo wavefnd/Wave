@@ -29,7 +29,7 @@ pub fn walk_node(node: &ASTNode, visit: &mut impl FnMut(&Expression)) {
                 }
             }
             walk_nodes(&function.body, visit);
-        }
+        },
         ASTNode::Struct(structure) => {
             for method in &structure.methods {
                 for parameter in &method.parameters {
@@ -39,7 +39,7 @@ pub fn walk_node(node: &ASTNode, visit: &mut impl FnMut(&Expression)) {
                 }
                 walk_nodes(&method.body, visit);
             }
-        }
+        },
         ASTNode::ProtoImpl(implementation) => {
             for method in &implementation.methods {
                 for parameter in &method.parameters {
@@ -49,19 +49,19 @@ pub fn walk_node(node: &ASTNode, visit: &mut impl FnMut(&Expression)) {
                 }
                 walk_nodes(&method.body, visit);
             }
-        }
+        },
         ASTNode::Statement(statement) => walk_statement(statement, visit),
         ASTNode::Variable(variable) => {
             if let Some(initializer) = &variable.initial_value {
                 walk_expression(initializer, visit);
             }
-        }
+        },
         ASTNode::Expression(expression) => walk_expression(expression, visit),
         ASTNode::ExternFunction(_)
         | ASTNode::Program(_)
         | ASTNode::TypeAlias(_)
         | ASTNode::Enum(_)
-        | ASTNode::Variant(_) => {}
+        | ASTNode::Variant(_) => {},
     }
 }
 
@@ -73,13 +73,8 @@ fn walk_statement(statement: &StatementNode, visit: &mut impl FnMut(&Expression)
             for argument in args {
                 walk_expression(argument, visit);
             }
-        }
-        StatementNode::If {
-            condition,
-            body,
-            else_if_blocks,
-            else_block,
-        } => {
+        },
+        StatementNode::If { condition, body, else_if_blocks, else_block } => {
             walk_expression(condition, visit);
             walk_nodes(body, visit);
             if let Some(blocks) = else_if_blocks {
@@ -91,46 +86,39 @@ fn walk_statement(statement: &StatementNode, visit: &mut impl FnMut(&Expression)
             if let Some(body) = else_block {
                 walk_nodes(body, visit);
             }
-        }
-        StatementNode::For {
-            initialization,
-            condition,
-            increment,
-            body,
-        } => {
+        },
+        StatementNode::For { initialization, condition, increment, body } => {
             walk_node(initialization, visit);
             walk_expression(condition, visit);
             walk_expression(increment, visit);
             walk_nodes(body, visit);
-        }
+        },
         StatementNode::While { condition, body } => {
             walk_expression(condition, visit);
             walk_nodes(body, visit);
-        }
+        },
         StatementNode::Match { value, arms } => {
             walk_expression(value, visit);
             for arm in arms {
                 walk_nodes(&arm.body, visit);
             }
-        }
+        },
         StatementNode::Assign { value, .. } => walk_expression(value, visit),
-        StatementNode::AsmBlock {
-            inputs, outputs, ..
-        } => {
+        StatementNode::AsmBlock { inputs, outputs, .. } => {
             for (_, expression) in inputs.iter().chain(outputs.iter()) {
                 walk_expression(expression, visit);
             }
-        }
+        },
         StatementNode::Return(Some(expression)) | StatementNode::Expression(expression) => {
             walk_expression(expression, visit)
-        }
+        },
         StatementNode::Print(_)
         | StatementNode::Println(_)
         | StatementNode::Variable(_)
         | StatementNode::Import(_)
         | StatementNode::Break
         | StatementNode::Continue
-        | StatementNode::Return(None) => {}
+        | StatementNode::Return(None) => {},
     }
 }
 
@@ -154,18 +142,18 @@ pub fn walk_expression_children<'a>(
             for (_, value) in fields {
                 visit(value);
             }
-        }
+        },
         Expression::FunctionCall { args, .. } => {
             for argument in args {
                 visit(argument);
             }
-        }
+        },
         Expression::MethodCall { object, args, .. } => {
             visit(object);
             for argument in args {
                 visit(argument);
             }
-        }
+        },
         Expression::Deref(inner)
         | Expression::AddressOf(inner)
         | Expression::Await(inner)
@@ -175,34 +163,22 @@ pub fn walk_expression_children<'a>(
         | Expression::FieldAccess { object: inner, .. }
         | Expression::IncDec { target: inner, .. } => visit(inner),
         Expression::BinaryExpression { left, right, .. }
-        | Expression::IndexAccess {
-            target: left,
-            index: right,
-        }
-        | Expression::AssignOperation {
-            target: left,
-            value: right,
-            ..
-        }
-        | Expression::Assignment {
-            target: left,
-            value: right,
-        } => {
+        | Expression::IndexAccess { target: left, index: right }
+        | Expression::AssignOperation { target: left, value: right, .. }
+        | Expression::Assignment { target: left, value: right } => {
             visit(left);
             visit(right);
-        }
+        },
         Expression::ArrayLiteral(values) => {
             for value in values {
                 visit(value);
             }
-        }
-        Expression::AsmBlock {
-            inputs, outputs, ..
-        } => {
+        },
+        Expression::AsmBlock { inputs, outputs, .. } => {
             for (_, expression) in inputs.iter().chain(outputs.iter()) {
                 visit(expression);
             }
-        }
-        Expression::Null | Expression::Literal(_) | Expression::Variable(_) => {}
+        },
+        Expression::Null | Expression::Literal(_) | Expression::Variable(_) => {},
     }
 }

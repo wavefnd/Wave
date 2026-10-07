@@ -94,11 +94,8 @@ fn multiply(name: &str) -> String {
 }
 
 fn to_float(name: &str, signed: bool, float: &str) -> String {
-    let (precision, repr, fraction, bias) = if float == "float" {
-        (24, "i32", 23, 127)
-    } else {
-        (53, "i64", 52, 1023)
-    };
+    let (precision, repr, fraction, bias) =
+        if float == "float" { (24, "i32", 23, 127) } else { (53, "i64", 52, 1023) };
     let signs = if signed {
         "  %negative = icmp slt i128 %a, 0\n  %negated = sub i128 0, %a\n  %magnitude = select i1 %negative, i128 %negated, i128 %a\n"
     } else {
@@ -154,11 +151,8 @@ round:
 }
 
 fn from_float(name: &str, signed: bool, float: &str) -> String {
-    let (repr, fraction, bias, total) = if float == "float" {
-        ("i32", 23, 127, 32)
-    } else {
-        ("i64", 52, 1023, 64)
-    };
+    let (repr, fraction, bias, total) =
+        if float == "float" { ("i32", 23, 127, 32) } else { ("i64", 52, 1023, 64) };
     let mask = (1u64 << fraction) - 1;
     let hidden = 1u64 << fraction;
     let expmask = if float == "float" { 255 } else { 2047 };
@@ -242,11 +236,7 @@ fn shift(name: &str, op: &str) -> String {
     let large = if op == "shl" {
         "  %low_large = or i64 0, 0\n  %high_large = shl i64 %low, %extra\n".to_string()
     } else {
-        let fill = if op == "ashr" {
-            "ashr i64 %high, 63"
-        } else {
-            "or i64 0, 0"
-        };
+        let fill = if op == "ashr" { "ashr i64 %high, 63" } else { "or i64 0, 0" };
         format!("  %low_large = {right} i64 %high, %extra\n  %high_large = {fill}\n")
     };
     format!(

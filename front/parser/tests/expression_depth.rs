@@ -11,9 +11,7 @@ fn parser_depth_budget_is_restored_after_errors_and_counts_mixed_shapes() {
         format!("{}1", "x = ".repeat(129)),
     ] {
         let source = format!("fun main() {{ {expression}; }}");
-        let tokens = Lexer::new_with_file(&source, "depth.wave")
-            .tokenize()
-            .unwrap();
+        let tokens = Lexer::new_with_file(&source, "depth.wave").tokenize().unwrap();
         let error = parse_syntax_with_spans(&tokens).unwrap_err();
         assert!(error.message().contains("maximum of 128"), "{error:?}");
         assert_eq!(error.span().unwrap().file, "depth.wave");
@@ -35,9 +33,7 @@ fn struct_depth_boundaries_fit_a_small_native_stack() {
                     "Item { value: ".repeat(depth),
                     " }".repeat(depth),
                 );
-                let tokens = Lexer::new_with_file(&source, "struct-depth.wave")
-                    .tokenize()
-                    .unwrap();
+                let tokens = Lexer::new_with_file(&source, "struct-depth.wave").tokenize().unwrap();
                 for (with_spans, parse) in [
                     (false, parse_syntax_only as fn(&[lexer::Token]) -> _),
                     (true, parse_syntax_with_spans),

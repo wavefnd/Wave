@@ -66,7 +66,7 @@ impl<'a> Lexer<'a> {
             match c {
                 ' ' | '\t' => {
                     self.advance();
-                }
+                },
                 '\n' | '\r' => self.consume_newline(),
                 _ => break,
             }

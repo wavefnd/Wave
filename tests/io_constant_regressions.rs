@@ -24,11 +24,7 @@ fn compile(source: &str, optimization: &str) -> (PathBuf, String) {
         .arg(&dir)
         .output()
         .unwrap();
-    assert!(
-        output.status.success(),
-        "{}\n{source}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    assert!(output.status.success(), "{}\n{source}", String::from_utf8_lossy(&output.stderr));
     let ir = fs::read_to_string(dir.join("case.ll")).unwrap();
     (dir, ir)
 }
@@ -40,12 +36,7 @@ fn execute(dir: &std::path::Path, input: &str) -> Output {
         .stderr(Stdio::piped())
         .spawn()
         .unwrap();
-    child
-        .stdin
-        .take()
-        .unwrap()
-        .write_all(input.as_bytes())
-        .unwrap();
+    child.stdin.take().unwrap().write_all(input.as_bytes()).unwrap();
     child.wait_with_output().unwrap()
 }
 
@@ -55,9 +46,7 @@ fn run_both(source: &str, input: &str, expected: &str) {
         let output = execute(&dir, input);
         assert!(output.status.success(), "{opt}: {output:?}");
         assert_eq!(
-            String::from_utf8(output.stdout)
-                .unwrap()
-                .replace("\r\n", "\n"),
+            String::from_utf8(output.stdout).unwrap().replace("\r\n", "\n"),
             expected,
             "{opt}"
         );
@@ -100,6 +89,7 @@ fn power_of_two(bits: usize) -> String {
     }
     digits.iter().rev().map(|n| char::from(b'0' + n)).collect()
 }
+
 fn minus_one(value: &str) -> String {
     let mut bytes = value.as_bytes().to_vec();
     for digit in bytes.iter_mut().rev() {
@@ -109,10 +99,7 @@ fn minus_one(value: &str) -> String {
         }
         *digit = b'9';
     }
-    String::from_utf8(bytes)
-        .unwrap()
-        .trim_start_matches('0')
-        .to_string()
+    String::from_utf8(bytes).unwrap().trim_start_matches('0').to_string()
 }
 
 #[test]
@@ -137,10 +124,8 @@ println("{{}} {{}}", s{bits}, unsigned{bits});
 "#
         ));
         input.push_str(&format!("+{max} {}1\n{min} {umax}\n", "0".repeat(330)));
-        expected.push_str(&format!(
-            "{min} {umax} {}\n{max} 1\n{min} {umax}\n",
-            "f".repeat(bits / 4)
-        ));
+        expected
+            .push_str(&format!("{min} {umax} {}\n{max} 1\n{min} {umax}\n", "f".repeat(bits / 4)));
     }
     source.push_str("return 0; }");
     run_both(&source, &input, &expected);

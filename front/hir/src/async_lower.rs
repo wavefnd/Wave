@@ -21,12 +21,7 @@ pub enum Transition {
     Jump(usize),
     Branch(Expression, usize, usize),
     Match(Expression, Vec<(MatchPattern, Vec<ASTNode>, usize)>),
-    Await {
-        future: Expression,
-        output: String,
-        result: WaveType,
-        next: usize,
-    },
+    Await { future: Expression, output: String, result: WaveType, next: usize },
     Complete(Option<Expression>),
 }
 #[derive(Debug, Clone)]
@@ -68,11 +63,9 @@ pub fn plan(
     lower.block(&function.body)?;
     Ok(lower.frame)
 }
+
 fn empty_state() -> AsyncState {
-    AsyncState {
-        operations: vec![],
-        transition: Transition::Complete(None),
-    }
+    AsyncState { operations: vec![], transition: Transition::Complete(None) }
 }
 struct Lower<'a> {
     program: &'a TypedProgram,
@@ -84,12 +77,11 @@ struct Lower<'a> {
 fn var(name: impl Into<String>) -> Expression {
     Expression::Variable(name.into())
 }
+
 fn field(name: impl Into<String>) -> Expression {
-    Expression::FieldAccess {
-        object: Box::new(var("$async$frame")),
-        field: name.into(),
-    }
+    Expression::FieldAccess { object: Box::new(var("$async$frame")), field: name.into() }
 }
+
 fn store(target: Expression, value: Expression) -> ASTNode {
     ASTNode::Statement(StatementNode::Expression(Expression::Assignment {
         target: Box::new(target),
@@ -107,6 +99,7 @@ impl Lower<'_> {
                 .cloned(),
         }
     }
+
     fn ty(
         &self,
         e: &Expression,
@@ -116,34 +109,36 @@ impl Lower<'_> {
             Some(HirExpressionType::Resolved(t)) => Ok(t.clone()),
             Some(HirExpressionType::IntegerLiteral) => {
                 Ok(expected.cloned().unwrap_or(WaveType::Int(32)))
-            }
+            },
             Some(HirExpressionType::FloatLiteral) => {
                 Ok(expected.cloned().unwrap_or(WaveType::Float(32)))
-            }
+            },
             _ => expected
                 .cloned()
                 .ok_or_else(|| self.error(e, "async temporary needs a concrete type")),
         }
     }
+
     fn new_slot(&mut self, ty: WaveType) -> String {
         let name = format!("v{}", self.frame.slots.len());
-        self.frame.slots.push(FrameSlot {
-            name: name.clone(),
-            ty,
-        });
+        self.frame.slots.push(FrameSlot { name: name.clone(), ty });
         name
     }
+
     fn state(&mut self) -> usize {
         let id = self.frame.states.len();
         self.frame.states.push(empty_state());
         id
     }
+
     fn emit(&mut self, n: ASTNode) {
         self.frame.states[self.current].operations.push(n);
     }
+
     fn end(&mut self, t: Transition) {
         self.frame.states[self.current].transition = t;
     }
+
     fn snapshot(&mut self, e: Expression, ty: WaveType) -> Expression {
         if ty == WaveType::Void {
             self.emit(ASTNode::Statement(StatementNode::Expression(e)));
@@ -153,6 +148,7 @@ impl Lower<'_> {
         self.emit(store(field(&name), e));
         field(name)
     }
+
     fn place(&mut self, e: &Expression) -> Result<Expression, AsyncLoweringError> {
         Ok(match e.unspanned() {
             Expression::Variable(n) => self.bindings.get(n).map_or_else(|| var(n), field),
@@ -170,21 +166,15 @@ impl Lower<'_> {
                         target_type: t,
                     }))
                 }
-            }
-            Expression::FieldAccess {
-                object,
-                field: name,
-            } => {
+            },
+            Expression::FieldAccess { object, field: name } => {
                 let obj = if matches!(self.ty(object, None)?, WaveType::Pointer(_)) {
                     self.expr(object, None)?
                 } else {
                     self.place(object)?
                 };
-                Expression::FieldAccess {
-                    object: Box::new(obj),
-                    field: name.clone(),
-                }
-            }
+                Expression::FieldAccess { object: Box::new(obj), field: name.clone() }
+            },
             Expression::IndexAccess { target, index } => {
                 let obj = if matches!(self.ty(target, None)?, WaveType::Array(..)) {
                     self.place(target)?
@@ -192,14 +182,12 @@ impl Lower<'_> {
                     self.expr(target, None)?
                 };
                 let index = self.expr(index, None)?;
-                Expression::IndexAccess {
-                    target: Box::new(obj),
-                    index: Box::new(index),
-                }
-            }
+                Expression::IndexAccess { target: Box::new(obj), index: Box::new(index) }
+            },
             _ => return Err(self.error(e, "unsupported address across async suspension")),
         })
     }
+
     fn expr(
         &mut self,
         e: &Expression,
@@ -209,24 +197,16 @@ impl Lower<'_> {
         let value = match e.unspanned() {
             Expression::Await(inner) => {
                 let future = self.expr(inner, None)?;
-                let output = self.new_slot(if ty == WaveType::Void {
-                    WaveType::Byte
-                } else {
-                    ty.clone()
-                });
+                let output =
+                    self.new_slot(if ty == WaveType::Void { WaveType::Byte } else { ty.clone() });
                 let wait = self.state();
                 let next = self.state();
                 self.end(Transition::Jump(wait));
                 self.current = wait;
-                self.end(Transition::Await {
-                    future,
-                    output: output.clone(),
-                    result: ty,
-                    next,
-                });
+                self.end(Transition::Await { future, output: output.clone(), result: ty, next });
                 self.current = next;
                 return Ok(field(output));
-            }
+            },
             Expression::Variable(n) => self.bindings.get(n).map_or_else(|| var(n), field),
             Expression::Literal(_) | Expression::Null => e.clone(),
             Expression::Grouped(inner) => return self.expr(inner, expected),
@@ -244,7 +224,7 @@ impl Lower<'_> {
                         target_type: t,
                     }))
                 }
-            }
+            },
             Expression::Unary { operator, expr } => Expression::Unary {
                 operator: operator.clone(),
                 expr: Box::new(self.expr(expr, Some(&ty))?),
@@ -256,7 +236,7 @@ impl Lower<'_> {
                     Some(HirExpressionType::IntegerLiteral) => match target_type {
                         WaveType::Int(_) | WaveType::Uint(_) | WaveType::Byte | WaveType::Char => {
                             Some(target_type.clone())
-                        }
+                        },
                         WaveType::Pointer(_) | WaveType::Float(_) => Some(WaveType::Int(64)),
                         _ => None,
                     },
@@ -268,19 +248,17 @@ impl Lower<'_> {
                         if matches!(target_type, WaveType::Pointer(_)) =>
                     {
                         Some(target_type.clone())
-                    }
+                    },
                     _ => None,
                 };
                 Expression::Cast {
                     expr: Box::new(self.expr(expr, source_context.as_ref())?),
                     target_type: target_type.clone(),
                 }
-            }
-            Expression::BinaryExpression {
-                left,
-                operator,
-                right,
-            } if matches!(operator, Operator::LogicalAnd | Operator::LogicalOr) => {
+            },
+            Expression::BinaryExpression { left, operator, right }
+                if matches!(operator, Operator::LogicalAnd | Operator::LogicalOr) =>
+            {
                 let value = self.expr(left, Some(&WaveType::Bool))?;
                 let output = self.new_slot(WaveType::Bool);
                 self.emit(store(field(&output), value.clone()));
@@ -298,12 +276,8 @@ impl Lower<'_> {
                 self.end(Transition::Jump(done));
                 self.current = done;
                 return Ok(field(output));
-            }
-            Expression::BinaryExpression {
-                left,
-                operator,
-                right,
-            } => {
+            },
+            Expression::BinaryExpression { left, operator, right } => {
                 let lt = self.ty(
                     left,
                     if ty == WaveType::Bool {
@@ -323,26 +297,19 @@ impl Lower<'_> {
                     operator: operator.clone(),
                     right: Box::new(right),
                 }
-            }
-            Expression::FunctionCall {
-                name,
-                type_args,
-                args,
-            } => {
+            },
+            Expression::FunctionCall { name, type_args, args } => {
                 let parameters = self
                     .program
                     .syntax()
                     .iter()
                     .find_map(|n| match n {
                         ASTNode::Function(f) if &f.name == name => Some(
-                            f.parameters
-                                .iter()
-                                .map(|p| p.param_type.clone())
-                                .collect::<Vec<_>>(),
+                            f.parameters.iter().map(|p| p.param_type.clone()).collect::<Vec<_>>(),
                         ),
                         ASTNode::ExternFunction(f) if &f.name == name => {
                             Some(f.params.iter().map(|p| p.1.clone()).collect())
-                        }
+                        },
                         ASTNode::Struct(s) => s
                             .methods
                             .iter()
@@ -361,30 +328,18 @@ impl Lower<'_> {
                     .enumerate()
                     .map(|(i, a)| self.expr(a, parameters.get(i)))
                     .collect::<Result<_, _>>()?;
-                Expression::FunctionCall {
-                    name: name.clone(),
-                    type_args: type_args.clone(),
-                    args,
-                }
-            }
-            Expression::MethodCall {
-                object,
-                name,
-                type_args,
-                args,
-            } => {
+                Expression::FunctionCall { name: name.clone(), type_args: type_args.clone(), args }
+            },
+            Expression::MethodCall { object, name, type_args, args } => {
                 let object = self.expr(object, None)?;
-                let args = args
-                    .iter()
-                    .map(|a| self.expr(a, None))
-                    .collect::<Result<_, _>>()?;
+                let args = args.iter().map(|a| self.expr(a, None)).collect::<Result<_, _>>()?;
                 Expression::MethodCall {
                     object: Box::new(object),
                     name: name.clone(),
                     type_args: type_args.clone(),
                     args,
                 }
-            }
+            },
             Expression::StructLiteral { name, fields } => {
                 let types = self
                     .program
@@ -407,25 +362,15 @@ impl Lower<'_> {
                         })
                         .collect::<Result<_, AsyncLoweringError>>()?,
                 }
-            }
+            },
             Expression::ArrayLiteral(values) => {
-                let inner = if let WaveType::Array(t, _) = &ty {
-                    Some(t.as_ref())
-                } else {
-                    None
-                };
+                let inner = if let WaveType::Array(t, _) = &ty { Some(t.as_ref()) } else { None };
                 Expression::ArrayLiteral(
-                    values
-                        .iter()
-                        .map(|v| self.expr(v, inner))
-                        .collect::<Result<_, _>>()?,
+                    values.iter().map(|v| self.expr(v, inner)).collect::<Result<_, _>>()?,
                 )
-            }
+            },
             Expression::IndexAccess { .. } => self.place(e)?,
-            Expression::FieldAccess {
-                object,
-                field: name,
-            } => Expression::FieldAccess {
+            Expression::FieldAccess { object, field: name } => Expression::FieldAccess {
                 object: Box::new(self.expr(object, None)?),
                 field: name.clone(),
             },
@@ -443,40 +388,33 @@ impl Lower<'_> {
                 })));
                 let value = Box::new(self.expr(value, Some(&target_ty))?);
                 if let Expression::AssignOperation { operator, .. } = e.unspanned() {
-                    Expression::AssignOperation {
-                        target,
-                        operator: operator.clone(),
-                        value,
-                    }
+                    Expression::AssignOperation { target, operator: operator.clone(), value }
                 } else {
                     Expression::Assignment { target, value }
                 }
-            }
-            Expression::IncDec { kind, target } => Expression::IncDec {
-                kind: kind.clone(),
-                target: Box::new(self.place(target)?),
             },
-            Expression::AsmBlock {
-                instructions,
-                inputs,
-                outputs,
-                clobbers,
-            } => Expression::AsmBlock {
-                instructions: instructions.clone(),
-                inputs: inputs
-                    .iter()
-                    .map(|(n, e)| Ok((n.clone(), self.expr(e, None)?)))
-                    .collect::<Result<_, AsyncLoweringError>>()?,
-                outputs: outputs
-                    .iter()
-                    .map(|(n, e)| Ok((n.clone(), self.place(e)?)))
-                    .collect::<Result<_, AsyncLoweringError>>()?,
-                clobbers: clobbers.clone(),
+            Expression::IncDec { kind, target } => {
+                Expression::IncDec { kind: kind.clone(), target: Box::new(self.place(target)?) }
+            },
+            Expression::AsmBlock { instructions, inputs, outputs, clobbers } => {
+                Expression::AsmBlock {
+                    instructions: instructions.clone(),
+                    inputs: inputs
+                        .iter()
+                        .map(|(n, e)| Ok((n.clone(), self.expr(e, None)?)))
+                        .collect::<Result<_, AsyncLoweringError>>()?,
+                    outputs: outputs
+                        .iter()
+                        .map(|(n, e)| Ok((n.clone(), self.place(e)?)))
+                        .collect::<Result<_, AsyncLoweringError>>()?,
+                    clobbers: clobbers.clone(),
+                }
             },
             Expression::Located { .. } => unreachable!(),
         };
         Ok(self.snapshot(value, ty))
     }
+
     fn block(&mut self, nodes: &[ASTNode]) -> Result<(), AsyncLoweringError> {
         let bindings = self.bindings.clone();
         for n in nodes {
@@ -485,6 +423,7 @@ impl Lower<'_> {
         self.bindings = bindings;
         Ok(())
     }
+
     fn node(&mut self, n: &ASTNode) -> Result<(), AsyncLoweringError> {
         match n.unspanned() {
             ASTNode::Variable(v) => {
@@ -498,31 +437,23 @@ impl Lower<'_> {
                 if let Some(init) = init {
                     self.emit(store(field(slot), init));
                 }
-            }
+            },
             ASTNode::Statement(s) => match s {
                 StatementNode::Return(e) => {
                     let ty = self.frame.result.clone();
                     let value = e.as_ref().map(|e| self.expr(e, Some(&ty))).transpose()?;
                     self.end(Transition::Complete(value));
                     self.current = self.state();
-                }
+                },
                 StatementNode::Expression(e) => {
                     self.expr(e, None)?;
-                }
+                },
                 StatementNode::Assign { variable, value } => {
-                    let target = self
-                        .bindings
-                        .get(variable)
-                        .map_or_else(|| var(variable), field);
+                    let target = self.bindings.get(variable).map_or_else(|| var(variable), field);
                     let value = self.expr(value, None)?;
                     self.emit(store(target, value));
-                }
-                StatementNode::If {
-                    condition,
-                    body,
-                    else_if_blocks,
-                    else_block,
-                } => {
+                },
+                StatementNode::If { condition, body, else_if_blocks, else_block } => {
                     let done = self.state();
                     let mut branches = vec![(condition, body.as_slice())];
                     if let Some(others) = else_if_blocks {
@@ -543,16 +474,13 @@ impl Lower<'_> {
                     }
                     self.end(Transition::Jump(done));
                     self.current = done;
-                }
+                },
                 StatementNode::While { condition, body } => {
                     self.loop_body(None, condition, None, body)?
-                }
-                StatementNode::For {
-                    initialization,
-                    condition,
-                    increment,
-                    body,
-                } => self.loop_body(Some(initialization), condition, Some(increment), body)?,
+                },
+                StatementNode::For { initialization, condition, increment, body } => {
+                    self.loop_body(Some(initialization), condition, Some(increment), body)?
+                },
                 StatementNode::Break | StatementNode::Continue => {
                     let (exit, next) = *self.loops.last().expect("validated loop");
                     self.end(Transition::Jump(if matches!(s, StatementNode::Break) {
@@ -561,7 +489,7 @@ impl Lower<'_> {
                         next
                     }));
                     self.current = self.state();
-                }
+                },
                 StatementNode::Match { value, arms } => {
                     let value_ty = self.ty(value, None)?;
                     let value = self.expr(value, None)?;
@@ -585,41 +513,26 @@ impl Lower<'_> {
                     self.current = start;
                     self.end(Transition::Match(value, branches));
                     self.current = done;
-                }
+                },
                 StatementNode::Input { format, args } => {
-                    let args = args
-                        .iter()
-                        .map(|e| self.place(e))
-                        .collect::<Result<_, _>>()?;
+                    let args = args.iter().map(|e| self.place(e)).collect::<Result<_, _>>()?;
                     self.emit(ASTNode::Statement(StatementNode::Input {
                         format: format.clone(),
                         args,
                     }));
-                }
+                },
                 StatementNode::PrintFormat { format, args }
                 | StatementNode::PrintlnFormat { format, args } => {
-                    let args = args
-                        .iter()
-                        .map(|e| self.expr(e, None))
-                        .collect::<Result<_, _>>()?;
+                    let args = args.iter().map(|e| self.expr(e, None)).collect::<Result<_, _>>()?;
                     let s = match s {
-                        StatementNode::PrintFormat { .. } => StatementNode::PrintFormat {
-                            format: format.clone(),
-                            args,
+                        StatementNode::PrintFormat { .. } => {
+                            StatementNode::PrintFormat { format: format.clone(), args }
                         },
-                        _ => StatementNode::PrintlnFormat {
-                            format: format.clone(),
-                            args,
-                        },
+                        _ => StatementNode::PrintlnFormat { format: format.clone(), args },
                     };
                     self.emit(ASTNode::Statement(s));
-                }
-                StatementNode::AsmBlock {
-                    instructions,
-                    inputs,
-                    outputs,
-                    clobbers,
-                } => {
+                },
+                StatementNode::AsmBlock { instructions, inputs, outputs, clobbers } => {
                     let inputs = inputs
                         .iter()
                         .map(|(n, e)| Ok((n.clone(), self.expr(e, None)?)))
@@ -634,42 +547,41 @@ impl Lower<'_> {
                         outputs,
                         clobbers: clobbers.clone(),
                     }));
-                }
+                },
                 _ => self.emit(n.clone()),
             },
             ASTNode::Expression(e) => {
                 self.expr(e, None)?;
-            }
+            },
             _ => {
                 return Err(AsyncLoweringError {
                     message: "unsupported declaration inside async function".into(),
                     span: n.span().cloned(),
                 })
-            }
+            },
         }
         Ok(())
     }
+
     fn bind_pattern(&mut self, p: &MatchPattern, ty: &WaveType) -> Result<(), AsyncLoweringError> {
         match p.unspanned() {
             MatchPattern::Binding(name) => {
                 let slot = self.new_slot(ty.clone());
                 self.bindings.insert(name.clone(), slot.clone());
                 self.emit(store(field(slot), var(name)));
-            }
+            },
             MatchPattern::Variant { payloads, .. } => {
-                let info = self
-                    .program
-                    .variant_pattern_of(p)
-                    .expect("typed variant pattern");
+                let info = self.program.variant_pattern_of(p).expect("typed variant pattern");
                 let types = info.payload_types.clone();
                 for (p, t) in payloads.iter().zip(types) {
                     self.bind_pattern(p, &t)?;
                 }
-            }
-            _ => {}
+            },
+            _ => {},
         }
         Ok(())
     }
+
     fn loop_body(
         &mut self,
         init: Option<&ASTNode>,
@@ -708,27 +620,23 @@ impl Lower<'_> {
 fn integer(n: usize) -> Expression {
     Expression::Literal(Literal::Int(n.to_string()))
 }
+
 fn call(name: &str, type_args: Vec<WaveType>, args: Vec<Expression>) -> Expression {
-    Expression::FunctionCall {
-        name: name.into(),
-        type_args,
-        args,
-    }
+    Expression::FunctionCall { name: name.into(), type_args, args }
 }
+
 fn statement(e: Expression) -> ASTNode {
     ASTNode::Statement(StatementNode::Expression(e))
 }
+
 fn ret(e: Expression) -> ASTNode {
     ASTNode::Statement(StatementNode::Return(Some(e)))
 }
+
 fn parameter(name: &str, ty: WaveType) -> ParameterNode {
-    ParameterNode {
-        span: None,
-        name: name.into(),
-        param_type: ty,
-        initial_value: None,
-    }
+    ParameterNode { span: None, name: name.into(), param_type: ty, initial_value: None }
 }
+
 fn function(
     name: String,
     parameters: Vec<ParameterNode>,
@@ -748,12 +656,11 @@ fn function(
         visibility: Visibility::Private,
     }
 }
+
 fn jump(next: usize) -> Vec<ASTNode> {
-    vec![
-        store(field("state"), integer(next)),
-        ASTNode::Statement(StatementNode::Continue),
-    ]
+    vec![store(field("state"), integer(next)), ASTNode::Statement(StatementNode::Continue)]
 }
+
 fn emit_frame(
     original: &FunctionNode,
     frame: AsyncFrame,
@@ -762,19 +669,11 @@ fn emit_frame(
     let frame_name = format!("$async$frame${id}");
     let poll_name = format!("$async$poll${id}");
     let frame_ty = WaveType::Struct(frame_name.clone());
-    let mut fields = frame
-        .slots
-        .iter()
-        .map(|s| (s.name.clone(), s.ty.clone()))
-        .collect::<Vec<_>>();
+    let mut fields = frame.slots.iter().map(|s| (s.name.clone(), s.ty.clone())).collect::<Vec<_>>();
     fields.push(("state".into(), WaveType::Int(32)));
     fields.push((
         "result".into(),
-        if frame.result == WaveType::Void {
-            WaveType::Byte
-        } else {
-            frame.result.clone()
-        },
+        if frame.result == WaveType::Void { WaveType::Byte } else { frame.result.clone() },
     ));
     let structure = ASTNode::Struct(StructNode {
         name: frame_name,
@@ -796,7 +695,7 @@ fn emit_frame(
                     else_if_blocks: None,
                     else_block: Some(Box::new(jump(no))),
                 }))
-            }
+            },
             Transition::Match(value, branches) => {
                 body.push(ASTNode::Statement(StatementNode::Match {
                     value,
@@ -804,21 +703,12 @@ fn emit_frame(
                         .into_iter()
                         .map(|(pattern, mut body, next)| {
                             body.extend(jump(next));
-                            MatchArm {
-                                span: None,
-                                pattern,
-                                body,
-                            }
+                            MatchArm { span: None, pattern, body }
                         })
                         .collect(),
                 }))
-            }
-            Transition::Await {
-                future,
-                output,
-                result,
-                next,
-            } => {
+            },
+            Transition::Await { future, output, result, next } => {
                 let take = call("__wave_async_take", vec![], vec![future.clone()]);
                 let mut ready = vec![if result == WaveType::Void {
                     statement(take)
@@ -838,26 +728,18 @@ fn emit_frame(
                     vec![var("$async$id"), future],
                 )));
                 body.push(ret(Expression::Literal(Literal::Bool(false))));
-            }
+            },
             Transition::Complete(value) => {
                 if frame.result != WaveType::Void {
                     if let Some(value) = value {
                         body.push(store(field("result"), value));
                     }
                 }
-                body.push(statement(call(
-                    "__wave_async_complete",
-                    vec![],
-                    vec![var("$async$id")],
-                )));
+                body.push(statement(call("__wave_async_complete", vec![], vec![var("$async$id")])));
                 body.push(ret(Expression::Literal(Literal::Bool(true))));
-            }
+            },
         }
-        arms.push(MatchArm {
-            span: None,
-            pattern: MatchPattern::Int(index.to_string()),
-            body,
-        });
+        arms.push(MatchArm { span: None, pattern: MatchPattern::Int(index.to_string()), body });
     }
     arms.push(MatchArm {
         span: None,
@@ -867,19 +749,13 @@ fn emit_frame(
     let resume = function(
         poll_name.clone(),
         vec![
-            parameter(
-                "$async$frame",
-                WaveType::Pointer(Box::new(frame_ty.clone())),
-            ),
+            parameter("$async$frame", WaveType::Pointer(Box::new(frame_ty.clone()))),
             parameter("$async$id", WaveType::Int(64)),
         ],
         WaveType::Bool,
         vec![ASTNode::Statement(StatementNode::While {
             condition: Expression::Literal(Literal::Bool(true)),
-            body: vec![ASTNode::Statement(StatementNode::Match {
-                value: field("state"),
-                arms,
-            })],
+            body: vec![ASTNode::Statement(StatementNode::Match { value: field("state"), arms })],
         })],
     );
     let mut constructor = original.clone();
@@ -920,7 +796,7 @@ pub fn lower_program(program: &TypedProgram) -> Result<Vec<ASTNode>, AsyncLoweri
                 next += 1;
                 *out = ctor;
                 generated.extend(extra);
-            }
+            },
             (ASTNode::Struct(s), ASTNode::Struct(out)) if s.generic_params.is_empty() => {
                 for (f, target) in s.methods.iter().zip(&mut out.methods) {
                     if f.is_async && f.generic_params.is_empty() {
@@ -930,7 +806,7 @@ pub fn lower_program(program: &TypedProgram) -> Result<Vec<ASTNode>, AsyncLoweri
                         generated.extend(extra);
                     }
                 }
-            }
+            },
             (ASTNode::ProtoImpl(s), ASTNode::ProtoImpl(out)) => {
                 for (f, target) in s.methods.iter().zip(&mut out.methods) {
                     if f.is_async && f.generic_params.is_empty() {
@@ -940,8 +816,8 @@ pub fn lower_program(program: &TypedProgram) -> Result<Vec<ASTNode>, AsyncLoweri
                         generated.extend(extra);
                     }
                 }
-            }
-            _ => {}
+            },
+            _ => {},
         }
     }
     output.extend(generated);

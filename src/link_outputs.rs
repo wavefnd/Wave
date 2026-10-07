@@ -36,11 +36,8 @@ pub(crate) struct MsvcOutputs {
 
 impl MsvcOutputs {
     pub(crate) fn prepare(output: &Path, args: &mut Vec<String>) -> io::Result<Self> {
-        let mut set = Self {
-            outputs: Vec::new(),
-            directories: Vec::new(),
-            preserve_backups: false,
-        };
+        let mut set =
+            Self { outputs: Vec::new(), directories: Vec::new(), preserve_backups: false };
         let image = set.stage(output)?;
         for arg in args.iter_mut() {
             if option_value(arg, "OUT").is_some() {
@@ -53,15 +50,9 @@ impl MsvcOutputs {
         set.rewrite_path(args, "IMPLIB", &library)?;
         set.stage(&library.with_extension("exp"))?;
         let pdb = option_path(args, "PDB").unwrap_or_else(|| output.with_extension("pdb"));
-        if !pdb
-            .to_str()
-            .is_some_and(|name| name.eq_ignore_ascii_case("NONE"))
-        {
+        if !pdb.to_str().is_some_and(|name| name.eq_ignore_ascii_case("NONE")) {
             set.rewrite_path(args, "PDB", &pdb)?;
-            if !args
-                .iter()
-                .any(|arg| option_value(arg, "PDBALTPATH").is_some())
-            {
+            if !args.iter().any(|arg| option_value(arg, "PDBALTPATH").is_some()) {
                 let final_pdb = set.outputs.last().unwrap().destination.to_string_lossy();
                 args.push(format!("/PDBALTPATH:{final_pdb}"));
             }
@@ -69,10 +60,7 @@ impl MsvcOutputs {
         for (option, default) in [
             ("ILK", output.with_extension("ilk")),
             ("MAP", output.with_extension("map")),
-            (
-                "MANIFESTFILE",
-                PathBuf::from(format!("{}.manifest", output.display())),
-            ),
+            ("MANIFESTFILE", PathBuf::from(format!("{}.manifest", output.display()))),
         ] {
             if args.iter().any(|arg| {
                 option_value(arg, option).is_some()
@@ -106,24 +94,15 @@ impl MsvcOutputs {
         let filename = destination.file_name().ok_or_else(|| {
             io::Error::new(io::ErrorKind::InvalidInput, "link output must name a file")
         })?;
-        let parent = destination
-            .parent()
-            .filter(|p| !p.as_os_str().is_empty())
-            .unwrap_or(Path::new("."));
+        let parent =
+            destination.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
         fs::create_dir_all(parent)?;
         let parent = fs::canonicalize(parent)?;
         let destination = parent.join(filename);
-        if self
-            .outputs
-            .iter()
-            .any(|out| out.destination == destination)
-        {
+        if self.outputs.iter().any(|out| out.destination == destination) {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
-                format!(
-                    "link outputs share the same destination: {}",
-                    destination.display()
-                ),
+                format!("link outputs share the same destination: {}", destination.display()),
             ));
         }
         let directory =
@@ -142,16 +121,13 @@ impl MsvcOutputs {
                         Ok(()) => {
                             selected = Some(path);
                             break;
-                        }
+                        },
                         Err(e) if e.kind() == io::ErrorKind::AlreadyExists => continue,
                         Err(e) => return Err(e),
                     }
                 }
                 let staged = selected.ok_or_else(|| {
-                    io::Error::new(
-                        io::ErrorKind::AlreadyExists,
-                        "link staging directory collision",
-                    )
+                    io::Error::new(io::ErrorKind::AlreadyExists, "link staging directory collision")
                 })?;
                 self.directories.push((parent, staged.clone()));
                 staged
@@ -190,10 +166,7 @@ impl MsvcOutputs {
             if output.destination.exists() && !output.destination.is_file() {
                 return Err(io::Error::new(
                     io::ErrorKind::InvalidInput,
-                    format!(
-                        "link destination is not a file: {}",
-                        output.destination.display()
-                    ),
+                    format!("link destination is not a file: {}", output.destination.display()),
                 ));
             }
         }
@@ -241,17 +214,12 @@ impl MsvcOutputs {
 }
 
 fn option_value<'a>(arg: &'a str, option: &str) -> Option<&'a str> {
-    let (name, value) = arg
-        .strip_prefix('/')
-        .or_else(|| arg.strip_prefix('-'))?
-        .split_once(':')?;
+    let (name, value) = arg.strip_prefix('/').or_else(|| arg.strip_prefix('-'))?.split_once(':')?;
     name.eq_ignore_ascii_case(option).then_some(value)
 }
 
 fn option_path(args: &[String], option: &str) -> Option<PathBuf> {
-    args.iter()
-        .rev()
-        .find_map(|arg| option_value(arg, option).map(PathBuf::from))
+    args.iter().rev().find_map(|arg| option_value(arg, option).map(PathBuf::from))
 }
 
 impl Drop for MsvcOutputs {
@@ -305,10 +273,8 @@ mod tests {
         let root = directory("alias");
         let dll = root.join("answer.dll");
         fs::write(&dll, b"old image").unwrap();
-        let mut args = vec![
-            format!("/OUT:{}", dll.display()),
-            format!("/IMPLIB:{}", dll.display()),
-        ];
+        let mut args =
+            vec![format!("/OUT:{}", dll.display()), format!("/IMPLIB:{}", dll.display())];
         assert!(MsvcOutputs::prepare(&dll, &mut args).is_err());
         assert_eq!(fs::read(&dll).unwrap(), b"old image");
         assert_eq!(fs::read_dir(&root).unwrap().count(), 1);

@@ -16,7 +16,7 @@ pub fn quote(value: &str) -> String {
             '\x0c' => out.push_str("\\f"),
             c if c < '\x20' => {
                 write!(out, "\\u{:04x}", c as u32).unwrap();
-            }
+            },
             c => out.push(c),
         }
     }
@@ -34,15 +34,18 @@ pub(super) fn serialize(
     emit(&mut out, value, format, pretty, 0, max_depth)?;
     Ok(out)
 }
+
 fn fail(out: &str, message: &str) -> Error {
     Error::at(out, out.len(), message)
 }
+
 fn newline(out: &mut String, pretty: bool, depth: usize) {
     if pretty {
         out.push('\n');
         out.push_str(&"  ".repeat(depth));
     }
 }
+
 fn emit(
     out: &mut String,
     value: &Value,
@@ -63,34 +66,22 @@ fn emit(
             if format == Format::Json {
                 return Err(fail(out, "WSON date requires explicit conversion for JSON"));
             }
-            let valid = if matches!(value, Value::Date(_)) {
-                valid_date(s)
-            } else {
-                valid_datetime(s)
-            };
+            let valid =
+                if matches!(value, Value::Date(_)) { valid_date(s) } else { valid_datetime(s) };
             if !valid {
                 return Err(fail(out, "invalid date or datetime"));
             }
             out.push_str(s);
-        }
+        },
         Value::Version(parts) => {
             if format == Format::Json {
-                return Err(fail(
-                    out,
-                    "WSON version requires explicit conversion for JSON",
-                ));
+                return Err(fail(out, "WSON version requires explicit conversion for JSON"));
             }
             if parts.len() < 3 {
                 return Err(fail(out, "version requires at least three components"));
             }
-            out.push_str(
-                &parts
-                    .iter()
-                    .map(u32::to_string)
-                    .collect::<Vec<_>>()
-                    .join("."),
-            );
-        }
+            out.push_str(&parts.iter().map(u32::to_string).collect::<Vec<_>>().join("."));
+        },
         Value::Array(values) => {
             out.push('[');
             for (i, v) in values.iter().enumerate() {
@@ -104,7 +95,7 @@ fn emit(
                 newline(out, pretty, depth);
             }
             out.push(']');
-        }
+        },
         Value::Object(fields) => {
             let mut keys = std::collections::HashSet::new();
             out.push('{');
@@ -128,7 +119,7 @@ fn emit(
                 newline(out, pretty, depth);
             }
             out.push('}');
-        }
+        },
     }
     Ok(())
 }

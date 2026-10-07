@@ -36,8 +36,5 @@ pub(crate) fn gen<'ctx, 'a>(
         return addr.as_basic_value_enum();
     }
 
-    env.builder
-        .build_load(elem_ty, addr, "load_index_elem")
-        .unwrap()
-        .as_basic_value_enum()
+    env.builder.build_load(elem_ty, addr, "load_index_elem").unwrap().as_basic_value_enum()
 }

@@ -36,24 +36,19 @@ pub(crate) fn gen_deref<'ctx, 'a>(
         Expression::IndexAccess { .. } | Expression::FieldAccess { .. } => {
             let (addr, load_ty) = generate_address_and_type_ir(env, inner_expr);
             return env.builder.build_load(load_ty, addr, "deref_load").unwrap();
-        }
-        _ => {}
+        },
+        _ => {},
     }
 
     let pointee = match env.wave_type(inner_expr) {
         Some(WaveType::Pointer(inner)) => *inner,
         Some(WaveType::String) => WaveType::Byte,
-        other => panic!(
-            "typed HIR did not provide a pointer type for deref: {:?}",
-            other
-        ),
+        other => panic!("typed HIR did not provide a pointer type for deref: {:?}", other),
     };
     let load_ty =
         wave_type_to_llvm_type(env.context, &pointee, env.struct_types, TypeFlavor::Value);
     let pointer = env.gen(inner_expr, None).into_pointer_value();
-    env.builder
-        .build_load(load_ty, pointer, "deref_load")
-        .unwrap()
+    env.builder.build_load(load_ty, pointer, "deref_load").unwrap()
 }
 
 pub(crate) fn gen_addressof<'ctx, 'a>(
@@ -72,10 +67,7 @@ pub(crate) fn gen_addressof<'ctx, 'a>(
         let array_type =
             wave_type_to_llvm_type(env.context, array_type, env.struct_types, TypeFlavor::Value);
         let value = env.gen(inner_expr, Some(array_type));
-        let storage = env
-            .builder
-            .build_alloca(array_type, "addressed_array")
-            .unwrap();
+        let storage = env.builder.build_alloca(array_type, "addressed_array").unwrap();
         env.builder.build_store(storage, value).unwrap();
         return storage.into();
     }

@@ -25,12 +25,12 @@ use lexer::token::TokenType;
 
 pub fn get_llvm_type<'a>(context: &'a Context, ty: &TokenType) -> BasicTypeEnum<'a> {
     match ty {
-        TokenType::TypeInt(bits) => context
-            .custom_width_int_type(*bits as u32)
-            .as_basic_type_enum(),
-        TokenType::TypeUint(bits) => context
-            .custom_width_int_type(*bits as u32)
-            .as_basic_type_enum(),
+        TokenType::TypeInt(bits) => {
+            context.custom_width_int_type(*bits as u32).as_basic_type_enum()
+        },
+        TokenType::TypeUint(bits) => {
+            context.custom_width_int_type(*bits as u32).as_basic_type_enum()
+        },
         TokenType::TypeFloat(bits) => match bits {
             32 => context.f32_type().as_basic_type_enum(),
             64 => context.f64_type().as_basic_type_enum(),
@@ -42,19 +42,13 @@ pub fn get_llvm_type<'a>(context: &'a Context, ty: &TokenType) -> BasicTypeEnum<
         TokenType::TypeByte => context.i8_type().as_basic_type_enum(),
         TokenType::TypePointer(inner_type) => {
             let _inner_llvm_type = get_llvm_type(context, inner_type);
-            context
-                .ptr_type(AddressSpace::default())
-                .as_basic_type_enum()
-        }
+            context.ptr_type(AddressSpace::default()).as_basic_type_enum()
+        },
         TokenType::TypeArray(inner_type, size) => {
             let inner_llvm_type = get_llvm_type(context, inner_type);
-            inner_llvm_type
-                .array_type(*size as u32)
-                .as_basic_type_enum()
-        }
-        TokenType::TypeString => context
-            .ptr_type(AddressSpace::default())
-            .as_basic_type_enum(),
+            inner_llvm_type.array_type(*size as u32).as_basic_type_enum()
+        },
+        TokenType::TypeString => context.ptr_type(AddressSpace::default()).as_basic_type_enum(),
         _ => panic!("Unsupported type: {:?}", ty),
     }
 }

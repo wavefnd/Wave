@@ -52,6 +52,7 @@ impl CodegenError {
             span: None,
         }
     }
+
     pub fn tool_launch(phase: CodegenPhase, tool: &str, error: std::io::Error) -> Self {
         let missing = error.kind() == std::io::ErrorKind::NotFound;
         let mut diagnostic = Self::new(phase, format!("launch {tool}"), error);
@@ -60,10 +61,12 @@ impl CodegenError {
         }
         diagnostic
     }
+
     pub fn invalid_assembly(mut self) -> Self {
         self.kind = CodegenErrorKind::InvalidAssembly;
         self
     }
+
     pub fn with_span(mut self, span: Option<error::SourceSpan>) -> Self {
         self.span = span.map(Box::new);
         self
@@ -90,35 +93,20 @@ pub struct PendingOutput {
 impl PendingOutput {
     pub fn new(destination: &Path) -> Result<Self, CodegenError> {
         static NEXT: AtomicU64 = AtomicU64::new(0);
-        let parent = destination
-            .parent()
-            .filter(|p| !p.as_os_str().is_empty())
-            .unwrap_or(Path::new("."));
+        let parent =
+            destination.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
         for _ in 0..128 {
             let path = parent.join(format!(
                 ".wave-output-{}-{}.tmp",
                 std::process::id(),
                 NEXT.fetch_add(1, Ordering::Relaxed)
             ));
-            match std::fs::OpenOptions::new()
-                .write(true)
-                .create_new(true)
-                .open(&path)
-            {
-                Ok(_) => {
-                    return Ok(Self {
-                        path,
-                        destination: destination.to_owned(),
-                    })
-                }
+            match std::fs::OpenOptions::new().write(true).create_new(true).open(&path) {
+                Ok(_) => return Ok(Self { path, destination: destination.to_owned() }),
                 Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
                 Err(e) => {
-                    return Err(CodegenError::new(
-                        CodegenPhase::Emission,
-                        "create output",
-                        e,
-                    ))
-                }
+                    return Err(CodegenError::new(CodegenPhase::Emission, "create output", e))
+                },
             }
         }
         Err(CodegenError::new(
@@ -127,9 +115,11 @@ impl PendingOutput {
             "temporary output name collision",
         ))
     }
+
     pub fn path(&self) -> &Path {
         &self.path
     }
+
     pub fn commit(self) -> Result<(), CodegenError> {
         let length = std::fs::metadata(&self.path)
             .map_err(|e| CodegenError::new(CodegenPhase::Emission, "inspect output", e))?

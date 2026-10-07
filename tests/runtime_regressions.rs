@@ -36,10 +36,7 @@ fn copy_tree(source: &Path, destination: &Path) {
 fn run_native_fixture(name: &str) {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let compiler = PathBuf::from(env!("CARGO_BIN_EXE_wavec"));
-    let target = Command::new(&compiler)
-        .args(["print", "default-target"])
-        .output()
-        .unwrap();
+    let target = Command::new(&compiler).args(["print", "default-target"]).output().unwrap();
     assert!(target.status.success());
     let host = String::from_utf8(target.stdout).unwrap().trim().to_owned();
     if llvm::codegen::target::target_spec_for_triple(&host).is_none() {
@@ -56,16 +53,8 @@ fn run_native_fixture(name: &str) {
     fs::create_dir_all(&directory.0).unwrap();
     let home = directory.0.join("home");
     copy_tree(&root.join("std"), &home.join(".wave/lib/wave/std"));
-    fs::copy(
-        root.join("tests/fixtures").join(name),
-        directory.0.join("source.wave"),
-    )
-    .unwrap();
-    let executable = directory.0.join(if cfg!(windows) {
-        "fixture.exe"
-    } else {
-        "fixture"
-    });
+    fs::copy(root.join("tests/fixtures").join(name), directory.0.join("source.wave")).unwrap();
+    let executable = directory.0.join(if cfg!(windows) { "fixture.exe" } else { "fixture" });
     let mut command = Command::new(&compiler);
     command
         .env("HOME", &home)
@@ -103,10 +92,7 @@ fn run_native_fixture(name: &str) {
     );
 }
 
-#[cfg(all(
-    target_os = "linux",
-    any(feature = "llvm-target-aarch64", feature = "llvm-target-all")
-))]
+#[cfg(all(target_os = "linux", any(feature = "llvm-target-aarch64", feature = "llvm-target-all")))]
 #[test]
 fn executor_imports_compile_with_a_one_mib_process_stack() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));

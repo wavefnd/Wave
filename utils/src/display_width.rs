@@ -42,11 +42,7 @@ pub fn diagnostic_line(source: &str, column: usize, length: usize) -> Diagnostic
     let mut caret_offset = 0;
     let mut caret_width = 0;
     for (index, c) in source.chars().enumerate() {
-        let width = if c == '\t' {
-            TAB_STOP - cells % TAB_STOP
-        } else {
-            cell_width(c)
-        };
+        let width = if c == '\t' { TAB_STOP - cells % TAB_STOP } else { cell_width(c) };
         if c == '\t' {
             text.push_str(&" ".repeat(width));
         } else {
@@ -60,11 +56,7 @@ pub fn diagnostic_line(source: &str, column: usize, length: usize) -> Diagnostic
         }
         cells += width;
     }
-    DiagnosticLine {
-        text,
-        caret_offset,
-        caret_width: caret_width.max(1),
-    }
+    DiagnosticLine { text, caret_offset, caret_width: caret_width.max(1) }
 }
 
 #[cfg(test)]

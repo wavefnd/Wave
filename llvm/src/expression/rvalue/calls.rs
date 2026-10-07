@@ -67,7 +67,7 @@ fn callsite_to_ret<'ctx>(
                 panic!("Expected a return value from {}", what);
             }
             None
-        }
+        },
     }
 }
 
@@ -79,16 +79,10 @@ fn pack_agg_to_int<'ctx, 'a>(
 ) -> BasicValueEnum<'ctx> {
     let agg_ty = agg.get_type();
 
-    let agg_tmp = env
-        .builder
-        .build_alloca(agg_ty, &format!("{}_agg_tmp", tag))
-        .unwrap();
+    let agg_tmp = env.builder.build_alloca(agg_ty, &format!("{}_agg_tmp", tag)).unwrap();
     env.builder.build_store(agg_tmp, agg).unwrap();
 
-    let int_tmp = env
-        .builder
-        .build_alloca(dst, &format!("{}_int_tmp", tag))
-        .unwrap();
+    let int_tmp = env.builder.build_alloca(dst, &format!("{}_int_tmp", tag)).unwrap();
 
     // The ABI transport slot may be wider than the aggregate object (for
     // example a 3-byte RV64 aggregate transported in i64). Keep padding bits
@@ -98,14 +92,9 @@ fn pack_agg_to_int<'ctx, 'a>(
     let bytes = env.target_data.get_store_size(&agg_ty) as u64;
     let size_v = env.context.i64_type().const_int(bytes, false);
 
-    env.builder
-        .build_memcpy(int_tmp, 1, agg_tmp, 1, size_v)
-        .unwrap();
+    env.builder.build_memcpy(int_tmp, 1, agg_tmp, 1, size_v).unwrap();
 
-    env.builder
-        .build_load(dst, int_tmp, &format!("{}_agg_i", tag))
-        .unwrap()
-        .as_basic_value_enum()
+    env.builder.build_load(dst, int_tmp, &format!("{}_agg_i", tag)).unwrap().as_basic_value_enum()
 }
 
 fn unpack_int_to_agg<'ctx, 'a>(
@@ -114,23 +103,15 @@ fn unpack_int_to_agg<'ctx, 'a>(
     dst_agg_ty: BasicTypeEnum<'ctx>,
     tag: &str,
 ) -> BasicValueEnum<'ctx> {
-    let agg_tmp = env
-        .builder
-        .build_alloca(dst_agg_ty, &format!("{}_agg_tmp", tag))
-        .unwrap();
-    let int_tmp = env
-        .builder
-        .build_alloca(iv.get_type(), &format!("{}_int_tmp", tag))
-        .unwrap();
+    let agg_tmp = env.builder.build_alloca(dst_agg_ty, &format!("{}_agg_tmp", tag)).unwrap();
+    let int_tmp = env.builder.build_alloca(iv.get_type(), &format!("{}_int_tmp", tag)).unwrap();
 
     env.builder.build_store(int_tmp, iv).unwrap();
 
     let bytes = env.target_data.get_store_size(&dst_agg_ty) as u64;
     let size_v = env.context.i64_type().const_int(bytes, false);
 
-    env.builder
-        .build_memcpy(agg_tmp, 1, int_tmp, 1, size_v)
-        .unwrap();
+    env.builder.build_memcpy(agg_tmp, 1, int_tmp, 1, size_v).unwrap();
 
     env.builder
         .build_load(dst_agg_ty, agg_tmp, &format!("{}_i2agg_load", tag))
@@ -151,11 +132,7 @@ fn lower_c_variadic_argument<'ctx, 'a>(
     match value {
         BasicValueEnum::FloatValue(float) if float.get_type() == env.context.f32_type() => env
             .builder
-            .build_float_ext(
-                float,
-                env.context.f64_type(),
-                &format!("vararg{}_f64", index),
-            )
+            .build_float_ext(float, env.context.f64_type(), &format!("vararg{}_f64", index))
             .unwrap()
             .as_basic_value_enum(),
         BasicValueEnum::IntValue(integer) if integer.get_type().get_bit_width() < 32 => {
@@ -172,7 +149,7 @@ fn lower_c_variadic_argument<'ctx, 'a>(
                     .unwrap()
                     .as_basic_value_enum()
             }
-        }
+        },
         BasicValueEnum::IntValue(_)
         | BasicValueEnum::FloatValue(_)
         | BasicValueEnum::PointerValue(_) => value,
@@ -197,10 +174,8 @@ pub(crate) fn gen_method_call<'ctx, 'a>(
         },
         _ => None,
     };
-    let method = owner.and_then(|owner| {
-        env.module
-            .get_function(&parser::ast::method_symbol(owner, name))
-    });
+    let method =
+        owner.and_then(|owner| env.module.get_function(&parser::ast::method_symbol(owner, name)));
     let function = method
         .or_else(|| env.module.get_function(name))
         .expect("validated method must have a lowered function");
@@ -223,16 +198,9 @@ pub(crate) fn gen_method_call<'ctx, 'a>(
         };
         call_args.push(value.into());
     }
-    let call = env
-        .builder
-        .build_call(function, &call_args, "method_call")
-        .unwrap();
-    callsite_to_ret(
-        call,
-        function.get_type().get_return_type().is_some(),
-        "method call",
-    )
-    .unwrap_or_else(|| env.context.i32_type().const_zero().as_basic_value_enum())
+    let call = env.builder.build_call(function, &call_args, "method_call").unwrap();
+    callsite_to_ret(call, function.get_type().get_return_type().is_some(), "method call")
+        .unwrap_or_else(|| env.context.i32_type().const_zero().as_basic_value_enum())
 }
 
 pub(crate) fn gen_function_call<'ctx, 'a>(
@@ -260,10 +228,7 @@ pub(crate) fn gen_function_call<'ctx, 'a>(
         return super::async_runtime::gen(env, name, type_args, args);
     }
     if !type_args.is_empty() {
-        panic!(
-            "generic call '{}<...>(...)' reached codegen without monomorphization",
-            name
-        );
+        panic!("generic call '{}<...>(...)' reached codegen without monomorphization", name);
     }
 
     if env.extern_c_info.contains_key(name) {
@@ -279,26 +244,16 @@ fn gen_wave_call<'ctx, 'a>(
     args: &[Expression],
     expected_type: Option<BasicTypeEnum<'ctx>>,
 ) -> BasicValueEnum<'ctx> {
-    let function = env
-        .module
-        .get_function(name)
-        .unwrap_or_else(|| panic!("Function '{}' not found", name));
+    let function =
+        env.module.get_function(name).unwrap_or_else(|| panic!("Function '{}' not found", name));
 
     let fn_type = function.get_type();
-    let param_types: Vec<BasicTypeEnum<'ctx>> = fn_type
-        .get_param_types()
-        .into_iter()
-        .map(meta_to_basic)
-        .collect();
+    let param_types: Vec<BasicTypeEnum<'ctx>> =
+        fn_type.get_param_types().into_iter().map(meta_to_basic).collect();
     let ret_type: Option<BasicTypeEnum> = fn_type.get_return_type();
 
     if args.len() != param_types.len() {
-        panic!(
-            "Function `{}` expects {} arguments, got {}",
-            name,
-            param_types.len(),
-            args.len()
-        );
+        panic!("Function `{}` expects {} arguments, got {}", name, param_types.len(), args.len());
     }
 
     let mut call_args: Vec<BasicMetadataValueEnum> = Vec::with_capacity(args.len());
@@ -311,28 +266,18 @@ fn gen_wave_call<'ctx, 'a>(
         call_args.push(val.into());
     }
 
-    let call_name = if ret_type.is_some() {
-        format!("call_{}", name)
-    } else {
-        String::new()
-    };
+    let call_name = if ret_type.is_some() { format!("call_{}", name) } else { String::new() };
 
-    let call_site = env
-        .builder
-        .build_call(function, &call_args, &call_name)
-        .unwrap();
+    let call_site = env.builder.build_call(function, &call_args, &call_name).unwrap();
 
     match ret_type {
         Some(_) => callsite_to_ret(call_site, true, "function call").unwrap(),
         None => {
             if expected_type.is_some() {
-                panic!(
-                    "Function '{}' returns void and cannot be used as a value",
-                    name
-                );
+                panic!("Function '{}' returns void and cannot be used as a value", name);
             }
             env.context.i32_type().const_zero().as_basic_value_enum()
-        }
+        },
     }
 }
 
@@ -345,10 +290,7 @@ fn gen_extern_call<'ctx, 'a>(
     let info = env.extern_c_info.get(name).expect("extern ABI was checked");
 
     let function = env.module.get_function(&info.llvm_name).unwrap_or_else(|| {
-        panic!(
-            "Extern function '{}' not found in module (symbol alias?)",
-            name
-        )
+        panic!("Extern function '{}' not found in module (symbol alias?)", name)
     });
 
     if (!info.variadic && args.len() != info.params.len())
@@ -374,10 +316,7 @@ fn gen_extern_call<'ctx, 'a>(
     let mut sret_tmp: Option<PointerValue<'ctx>> = None;
     if let RetLowering::SRet { ty, .. } = &info.ret {
         let agg = any_agg_to_basic(*ty);
-        let tmp = env
-            .builder
-            .build_alloca(agg, &format!("{}_sret_tmp", name))
-            .unwrap();
+        let tmp = env.builder.build_alloca(agg, &format!("{}_sret_tmp", name)).unwrap();
 
         let expected_ptr = meta_into_ptr(llvm_param_types[0]);
         let tmp2 = coerce_ptr_to(env, tmp, expected_ptr, &format!("{}_sret_ptrcast", name));
@@ -392,22 +331,20 @@ fn gen_extern_call<'ctx, 'a>(
         match p {
             ParamLowering::Ignore => {
                 env.gen(arg_expr, None);
-            }
+            },
             ParamLowering::Direct(t) => {
                 let source_unsigned = wave_type_is_unsigned(env.wave_type(arg_expr).as_ref());
                 let mut v = env.gen(arg_expr, Some(*t));
                 v = coerce_to_expected(env, v, *t, name, i, source_unsigned);
                 lowered_args.push(v.into());
                 llvm_pi += 1;
-            }
+            },
 
             ParamLowering::Indirect { ty } | ParamLowering::ByVal { ty, .. } => {
                 let agg = any_agg_to_basic(*ty);
                 let v = env.gen(arg_expr, Some(agg));
-                let tmp = env
-                    .builder
-                    .build_alloca(agg, &format!("{}_byval_tmp_{}", name, i))
-                    .unwrap();
+                let tmp =
+                    env.builder.build_alloca(agg, &format!("{}_byval_tmp_{}", name, i)).unwrap();
                 // Windows x64 passes odd-sized aggregates through a caller
                 // temporary aligned to at least 16 bytes, without byval.
                 if matches!(
@@ -422,15 +359,11 @@ fn gen_extern_call<'ctx, 'a>(
                 env.builder.build_store(tmp, v).unwrap();
 
                 let expected_ptr = meta_into_ptr(llvm_param_types[llvm_pi]);
-                let tmp2 = coerce_ptr_to(
-                    env,
-                    tmp,
-                    expected_ptr,
-                    &format!("{}_byval_ptrcast_{}", name, i),
-                );
+                let tmp2 =
+                    coerce_ptr_to(env, tmp, expected_ptr, &format!("{}_byval_ptrcast_{}", name, i));
                 lowered_args.push(tmp2.as_basic_value_enum().into());
                 llvm_pi += 1;
-            }
+            },
 
             ParamLowering::Split(parts) => {
                 let agg_val = env.gen(arg_expr, None);
@@ -451,7 +384,7 @@ fn gen_extern_call<'ctx, 'a>(
                     lowered_args.push(vv.into());
                     llvm_pi += 1;
                 }
-            }
+            },
             ParamLowering::CoerceAndExpand(parts) => {
                 let aggregate = env.gen(arg_expr, None);
                 for value in coerce_and_expand_agg_parts(
@@ -463,7 +396,7 @@ fn gen_extern_call<'ctx, 'a>(
                     lowered_args.push(value.into());
                     llvm_pi += 1;
                 }
-            }
+            },
         }
     }
 
@@ -478,10 +411,7 @@ fn gen_extern_call<'ctx, 'a>(
         _ => format!("call_{}", name),
     };
 
-    let call_site = env
-        .builder
-        .build_call(function, &lowered_args, &call_name)
-        .unwrap();
+    let call_site = env.builder.build_call(function, &lowered_args, &call_name).unwrap();
     apply_extern_c_callsite_attrs(env.context, call_site, info);
     apply_extern_c_variadic_callsite_attrs(env.context, call_site, info, &variadic_args);
 
@@ -495,21 +425,15 @@ fn gen_extern_call<'ctx, 'a>(
                 );
             }
             if expected_type.is_some() {
-                panic!(
-                    "Extern '{}' returns void and cannot be used as a value",
-                    name
-                );
+                panic!("Extern '{}' returns void and cannot be used as a value", name);
             }
             return env.context.i32_type().const_zero().as_basic_value_enum();
-        }
+        },
 
         RetLowering::SRet { ty, .. } => {
             let tmp = sret_tmp.expect("SRet lowering requires sret tmp");
             let agg = any_agg_to_basic(*ty);
-            let v = env
-                .builder
-                .build_load(agg, tmp, &format!("{}_sret_load", name))
-                .unwrap();
+            let v = env.builder.build_load(agg, tmp, &format!("{}_sret_load", name)).unwrap();
 
             if let Some(et) = expected_type {
                 return coerce_lowered_ret_to_expected(
@@ -520,7 +444,7 @@ fn gen_extern_call<'ctx, 'a>(
                 );
             }
             return v.as_basic_value_enum();
-        }
+        },
 
         RetLowering::Direct(_t) => {
             let rv = callsite_to_ret(call_site, true, "extern direct ret").unwrap();
@@ -529,7 +453,7 @@ fn gen_extern_call<'ctx, 'a>(
                 return coerce_lowered_ret_to_expected(env, rv, et, "direct_ret");
             }
             return rv;
-        }
+        },
     }
 }
 
@@ -556,7 +480,7 @@ fn coerce_to_expected<'ctx, 'a>(
                 .build_ptr_to_int(pv, dst, &format!("arg{}_p2i", arg_index))
                 .unwrap()
                 .as_basic_value_enum()
-        }
+        },
 
         // 0.1) int -> ptr (inttoptr) (useful when passing raw addresses)
         (BasicTypeEnum::IntType(src), BasicTypeEnum::PointerType(dst))
@@ -567,17 +491,14 @@ fn coerce_to_expected<'ctx, 'a>(
                 .build_int_to_ptr(iv, dst, &format!("arg{}_i2p", arg_index))
                 .unwrap()
                 .as_basic_value_enum()
-        }
+        },
 
         // The only scalar adaptation left here is bool's C storage width.
         (BasicTypeEnum::IntType(src), BasicTypeEnum::IntType(dst))
             if src.get_bit_width() == 1 && dst.get_bit_width() == 8 =>
         {
-            env.builder
-                .build_int_z_extend(val.into_int_value(), dst, "bool.abi")
-                .unwrap()
-                .into()
-        }
+            env.builder.build_int_z_extend(val.into_int_value(), dst, "bool.abi").unwrap().into()
+        },
 
         // 2) ptr -> array value (load)
         (BasicTypeEnum::PointerType(_), BasicTypeEnum::ArrayType(a)) => {
@@ -586,7 +507,7 @@ fn coerce_to_expected<'ctx, 'a>(
                 .build_load(a, ptr, &format!("arg{}_arr_load", arg_index))
                 .unwrap()
                 .as_basic_value_enum()
-        }
+        },
 
         // 3) ptr -> struct value (load)
         (BasicTypeEnum::PointerType(_), BasicTypeEnum::StructType(s)) => {
@@ -595,7 +516,7 @@ fn coerce_to_expected<'ctx, 'a>(
                 .build_load(s, ptr, &format!("arg{}_st_load", arg_index))
                 .unwrap()
                 .as_basic_value_enum()
-        }
+        },
 
         // 3.1) a single-pointer aggregate transported as the pointer value
         // itself by x86_64 SysV and AArch64 argument lowering.
@@ -603,16 +524,14 @@ fn coerce_to_expected<'ctx, 'a>(
             got_agg @ (BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_)),
             BasicTypeEnum::PointerType(dst),
         ) => {
-            let source = env
-                .builder
-                .build_alloca(got_agg, &format!("arg{}_ptr_agg", arg_index))
-                .unwrap();
+            let source =
+                env.builder.build_alloca(got_agg, &format!("arg{}_ptr_agg", arg_index)).unwrap();
             env.builder.build_store(source, val).unwrap();
             env.builder
                 .build_load(dst, source, &format!("arg{}_ptr_transport", arg_index))
                 .unwrap()
                 .as_basic_value_enum()
-        }
+        },
 
         // 4) ptr -> ptr (bitcast)
         (BasicTypeEnum::PointerType(_), BasicTypeEnum::PointerType(dst)) => env
@@ -640,7 +559,7 @@ fn coerce_to_expected<'ctx, 'a>(
                 arg_index,
                 name
             );
-        }
+        },
 
         // 4.45) object aggregate -> aggregate-shaped ABI transport slot.
         // AArch64 and RV64 represent 9..16-byte integer aggregates as a
@@ -659,18 +578,14 @@ fn coerce_to_expected<'ctx, 'a>(
                 );
             }
 
-            let source = env
-                .builder
-                .build_alloca(got_agg, &format!("arg{}_agg_source", arg_index))
-                .unwrap();
+            let source =
+                env.builder.build_alloca(got_agg, &format!("arg{}_agg_source", arg_index)).unwrap();
             env.builder.build_store(source, val).unwrap();
             let transport = env
                 .builder
                 .build_alloca(dst_agg, &format!("arg{}_agg_transport", arg_index))
                 .unwrap();
-            env.builder
-                .build_store(transport, dst_agg.const_zero())
-                .unwrap();
+            env.builder.build_store(transport, dst_agg.const_zero()).unwrap();
             let bytes = env.context.i64_type().const_int(got_size, false);
             env.builder
                 .build_memcpy(
@@ -682,14 +597,10 @@ fn coerce_to_expected<'ctx, 'a>(
                 )
                 .unwrap();
             env.builder
-                .build_load(
-                    dst_agg,
-                    transport,
-                    &format!("arg{}_agg_transport_load", arg_index),
-                )
+                .build_load(dst_agg, transport, &format!("arg{}_agg_transport_load", arg_index))
                 .unwrap()
                 .as_basic_value_enum()
-        }
+        },
 
         // 4.5) agg(struct/array) -> vector (HFA/ABI: e.g. Vector2 passed as <2 x float>)
         (
@@ -698,9 +609,7 @@ fn coerce_to_expected<'ctx, 'a>(
         ) => {
             // size check (ABI layout must match)
             let got_sz = env.target_data.get_store_size(&got_agg);
-            let exp_sz = env
-                .target_data
-                .get_store_size(&BasicTypeEnum::VectorType(vt));
+            let exp_sz = env.target_data.get_store_size(&BasicTypeEnum::VectorType(vt));
             if got_sz != exp_sz {
                 panic!(
                     "Cannot coerce agg->vector: size mismatch {} vs {} (arg {} of {})",
@@ -708,26 +617,22 @@ fn coerce_to_expected<'ctx, 'a>(
                 );
             }
 
-            let tmp = env
-                .builder
-                .build_alloca(got_agg, &format!("arg{}_agg_tmp", arg_index))
-                .unwrap();
+            let tmp =
+                env.builder.build_alloca(got_agg, &format!("arg{}_agg_tmp", arg_index)).unwrap();
             env.builder.build_store(tmp, val).unwrap();
 
             env.builder
                 .build_load(vt, tmp, &format!("arg{}_agg2v", arg_index))
                 .unwrap()
                 .as_basic_value_enum()
-        }
+        },
 
         // 4.6) vector -> agg(struct/array) (reverse of above)
         (
             BasicTypeEnum::VectorType(vt),
             dst_agg @ (BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_)),
         ) => {
-            let got_sz = env
-                .target_data
-                .get_store_size(&BasicTypeEnum::VectorType(vt));
+            let got_sz = env.target_data.get_store_size(&BasicTypeEnum::VectorType(vt));
             let exp_sz = env.target_data.get_store_size(&dst_agg);
             if got_sz != exp_sz {
                 panic!(
@@ -736,10 +641,8 @@ fn coerce_to_expected<'ctx, 'a>(
                 );
             }
 
-            let tmp = env
-                .builder
-                .build_alloca(dst_agg, &format!("arg{}_v2agg_tmp", arg_index))
-                .unwrap();
+            let tmp =
+                env.builder.build_alloca(dst_agg, &format!("arg{}_v2agg_tmp", arg_index)).unwrap();
 
             env.builder.build_store(tmp, val).unwrap();
 
@@ -747,7 +650,7 @@ fn coerce_to_expected<'ctx, 'a>(
                 .build_load(dst_agg, tmp, &format!("arg{}_v2agg", arg_index))
                 .unwrap()
                 .as_basic_value_enum()
-        }
+        },
 
         // 4.7) ptr -> vector  (used for ptr-to-agg cases)
         (BasicTypeEnum::PointerType(_), BasicTypeEnum::VectorType(vt)) => {
@@ -756,7 +659,7 @@ fn coerce_to_expected<'ctx, 'a>(
                 .build_load(vt, pv, &format!("arg{}_p2v", arg_index))
                 .unwrap()
                 .as_basic_value_enum()
-        }
+        },
 
         (
             BasicTypeEnum::IntType(src),
@@ -775,14 +678,14 @@ fn coerce_to_expected<'ctx, 'a>(
                 arg_index,
                 name
             );
-        }
+        },
 
         _ => {
             panic!(
                 "Type mismatch for arg {} of '{}': expected {:?}, got {:?}",
                 arg_index, name, expected, got
             );
-        }
+        },
     }
 }
 
@@ -790,10 +693,7 @@ fn any_agg_to_basic<'ctx>(ty: AnyTypeEnum<'ctx>) -> BasicTypeEnum<'ctx> {
     match ty {
         AnyTypeEnum::StructType(st) => st.as_basic_type_enum(),
         AnyTypeEnum::ArrayType(at) => at.as_basic_type_enum(),
-        _ => panic!(
-            "Expected aggregate AnyTypeEnum (struct/array), got {:?}",
-            ty
-        ),
+        _ => panic!("Expected aggregate AnyTypeEnum (struct/array), got {:?}", ty),
     }
 }
 
@@ -807,11 +707,7 @@ fn coerce_ptr_to<'ctx, 'a>(
         return pv;
     }
     env.builder
-        .build_bit_cast(
-            pv.as_basic_value_enum(),
-            expected_ptr_ty.as_basic_type_enum(),
-            tag,
-        )
+        .build_bit_cast(pv.as_basic_value_enum(), expected_ptr_ty.as_basic_type_enum(), tag)
         .unwrap()
         .into_pointer_value()
 }
@@ -823,10 +719,7 @@ fn split_agg_parts_from_agg<'ctx, 'a>(
     tag: &str,
 ) -> Vec<BasicValueEnum<'ctx>> {
     let mut out = Vec::with_capacity(parts.len());
-    let total_bytes: u64 = parts
-        .iter()
-        .map(|t| env.target_data.get_store_size(t) as u64)
-        .sum();
+    let total_bytes: u64 = parts.iter().map(|t| env.target_data.get_store_size(t) as u64).sum();
     if total_bytes == 0 {
         panic!("Split lowering got zero-sized parts");
     }
@@ -834,18 +727,10 @@ fn split_agg_parts_from_agg<'ctx, 'a>(
     let aggregate_type = agg_val.get_type();
     let aggregate_size = env.target_data.get_store_size(&aggregate_type);
     let staging_type = env.context.i8_type().array_type(total_bytes as u32);
-    let staging = env
-        .builder
-        .build_alloca(staging_type, &format!("{tag}_staging"))
-        .unwrap();
-    env.builder
-        .build_store(staging, staging_type.const_zero())
-        .unwrap();
+    let staging = env.builder.build_alloca(staging_type, &format!("{tag}_staging")).unwrap();
+    env.builder.build_store(staging, staging_type.const_zero()).unwrap();
 
-    let aggregate = env
-        .builder
-        .build_alloca(aggregate_type, &format!("{tag}_aggregate"))
-        .unwrap();
+    let aggregate = env.builder.build_alloca(aggregate_type, &format!("{tag}_aggregate")).unwrap();
     env.builder.build_store(aggregate, agg_val).unwrap();
     env.builder
         .build_memcpy(
@@ -853,29 +738,19 @@ fn split_agg_parts_from_agg<'ctx, 'a>(
             1,
             aggregate,
             env.target_data.get_abi_alignment(&aggregate_type),
-            env.context
-                .i64_type()
-                .const_int(aggregate_size.min(total_bytes), false),
+            env.context.i64_type().const_int(aggregate_size.min(total_bytes), false),
         )
         .unwrap();
 
     let mut offset: u64 = 0;
     for (pi, part_ty) in parts.iter().enumerate() {
         let part_size = env.target_data.get_store_size(part_ty) as u64;
-        let dst = env
-            .builder
-            .build_alloca(*part_ty, &format!("{tag}_part_dst_{pi}"))
-            .unwrap();
+        let dst = env.builder.build_alloca(*part_ty, &format!("{tag}_part_dst_{pi}")).unwrap();
 
         let off = env.context.i64_type().const_int(offset, false);
         let src_off = unsafe {
             env.builder
-                .build_gep(
-                    env.context.i8_type(),
-                    staging,
-                    &[off],
-                    &format!("{tag}_src_gep_{pi}"),
-                )
+                .build_gep(env.context.i8_type(), staging, &[off], &format!("{tag}_src_gep_{pi}"))
                 .unwrap()
         };
 
@@ -902,10 +777,7 @@ fn coerce_and_expand_agg_parts<'ctx, 'a>(
 ) -> Vec<BasicValueEnum<'ctx>> {
     let aggregate_type = aggregate.get_type();
     let aggregate_size = env.target_data.get_store_size(&aggregate_type);
-    let source = env
-        .builder
-        .build_alloca(aggregate_type, &format!("{tag}_aggregate"))
-        .unwrap();
+    let source = env.builder.build_alloca(aggregate_type, &format!("{tag}_aggregate")).unwrap();
     env.builder.build_store(source, aggregate).unwrap();
 
     parts
@@ -917,10 +789,8 @@ fn coerce_and_expand_agg_parts<'ctx, 'a>(
                 part.offset + size <= aggregate_size,
                 "LoongArch ABI part extends past its aggregate"
             );
-            let destination = env
-                .builder
-                .build_alloca(part.ty, &format!("{tag}_part_{index}"))
-                .unwrap();
+            let destination =
+                env.builder.build_alloca(part.ty, &format!("{tag}_part_{index}")).unwrap();
             let offset = env.context.i64_type().const_int(part.offset, false);
             // SAFETY: classification derives every offset from the target data
             // layout and verifies the complete part remains in the allocation.
@@ -966,51 +836,43 @@ fn coerce_lowered_ret_to_expected<'ctx, 'a>(
             BasicTypeEnum::PointerType(_),
             BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_),
         ) => {
-            let destination = env
-                .builder
-                .build_alloca(expected, &format!("{tag}_ptr_agg"))
-                .unwrap();
+            let destination =
+                env.builder.build_alloca(expected, &format!("{tag}_ptr_agg")).unwrap();
             env.builder.build_store(destination, lowered_ret).unwrap();
             env.builder
                 .build_load(expected, destination, &format!("{tag}_ptr_agg_load"))
                 .unwrap()
                 .as_basic_value_enum()
-        }
+        },
         (BasicTypeEnum::IntType(_), BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_)) => {
             let iv = lowered_ret.into_int_value();
             unpack_int_to_agg(env, iv, expected, tag)
-        }
+        },
 
         // vector(float) -> struct/array (HFA ret)
         (
             BasicTypeEnum::VectorType(_vt),
             BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_),
         ) => {
-            let tmp = env
-                .builder
-                .build_alloca(expected, &format!("{tag}_v2agg_tmp"))
-                .unwrap();
+            let tmp = env.builder.build_alloca(expected, &format!("{tag}_v2agg_tmp")).unwrap();
             env.builder.build_store(tmp, lowered_ret).unwrap();
             env.builder
                 .build_load(expected, tmp, &format!("{tag}_v2agg_load"))
                 .unwrap()
                 .as_basic_value_enum()
-        }
+        },
 
         (
             BasicTypeEnum::FloatType(_ft),
             BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_),
         ) => {
-            let tmp = env
-                .builder
-                .build_alloca(expected, &format!("{tag}_f2agg_tmp"))
-                .unwrap();
+            let tmp = env.builder.build_alloca(expected, &format!("{tag}_f2agg_tmp")).unwrap();
             env.builder.build_store(tmp, lowered_ret).unwrap();
             env.builder
                 .build_load(expected, tmp, &format!("{tag}_f2agg_load"))
                 .unwrap()
                 .as_basic_value_enum()
-        }
+        },
 
         // lowered tuple-struct (e.g. {double,double}, {<2xf>,float}) -> expected aggregate
         (
@@ -1025,16 +887,10 @@ fn coerce_lowered_ret_to_expected<'ctx, 'a>(
                 return lowered_ret;
             }
 
-            let src = env
-                .builder
-                .build_alloca(got, &format!("{tag}_agg_src"))
-                .unwrap();
+            let src = env.builder.build_alloca(got, &format!("{tag}_agg_src")).unwrap();
             env.builder.build_store(src, lowered_ret).unwrap();
 
-            let dst = env
-                .builder
-                .build_alloca(expected, &format!("{tag}_agg_dst"))
-                .unwrap();
+            let dst = env.builder.build_alloca(expected, &format!("{tag}_agg_dst")).unwrap();
 
             let bytes = env.context.i64_type().const_int(exp_sz as u64, false);
             env.builder.build_memcpy(dst, 1, src, 1, bytes).unwrap();
@@ -1043,7 +899,7 @@ fn coerce_lowered_ret_to_expected<'ctx, 'a>(
                 .build_load(expected, dst, &format!("{tag}_agg_cast"))
                 .unwrap()
                 .as_basic_value_enum()
-        }
+        },
 
         _ => lowered_ret,
     }

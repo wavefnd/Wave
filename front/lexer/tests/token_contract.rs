@@ -166,26 +166,15 @@ fn operators_take_the_longest_token_even_at_eof() {
     ] {
         let mut tokens = Lexer::new(source).tokenize().unwrap();
         tokens.pop();
-        assert_eq!(
-            tokens
-                .iter()
-                .map(|t| t.token_type.clone())
-                .collect::<Vec<_>>(),
-            expected
-        );
-        assert_eq!(
-            tokens.iter().map(|t| t.lexeme.as_str()).collect::<String>(),
-            source
-        );
+        assert_eq!(tokens.iter().map(|t| t.token_type.clone()).collect::<Vec<_>>(), expected);
+        assert_eq!(tokens.iter().map(|t| t.lexeme.as_str()).collect::<String>(), source);
     }
 }
 
 #[test]
 fn unicode_identifiers_and_lookahead_preserve_spelling_and_character_columns() {
     let source = "이름+=é;\n变量!=\"값\";";
-    let tokens = Lexer::new_with_file(source, "unicode.wave")
-        .tokenize()
-        .unwrap();
+    let tokens = Lexer::new_with_file(source, "unicode.wave").tokenize().unwrap();
     for (index, spelling, line, column) in [
         (0, "이름", 1, 1),
         (1, "+=", 1, 3),
@@ -198,14 +187,9 @@ fn unicode_identifiers_and_lookahead_preserve_spelling_and_character_columns() {
         assert_eq!(t.lexeme, spelling);
         assert_eq!(t.line, line);
         assert_eq!(t.span.as_ref().unwrap().column, column);
-        assert_eq!(
-            &source[t.span.as_ref().unwrap().start..t.span.as_ref().unwrap().end],
-            spelling
-        );
+        assert_eq!(&source[t.span.as_ref().unwrap().start..t.span.as_ref().unwrap().end], spelling);
     }
-    let error = Lexer::new_with_file("é한 @", "unicode.wave")
-        .tokenize()
-        .unwrap_err();
+    let error = Lexer::new_with_file("é한 @", "unicode.wave").tokenize().unwrap_err();
     assert_eq!(error.line, 1);
     assert_eq!(error.column, 4);
     assert_eq!(error.code.as_deref(), Some("E1001"));

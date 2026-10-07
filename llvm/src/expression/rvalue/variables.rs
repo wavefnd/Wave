@@ -29,17 +29,9 @@ pub(crate) fn gen<'ctx, 'a>(
     expected_type: Option<BasicTypeEnum<'ctx>>,
 ) -> BasicValueEnum<'ctx> {
     if var_name == "true" {
-        return env
-            .context
-            .bool_type()
-            .const_int(1, false)
-            .as_basic_value_enum();
+        return env.context.bool_type().const_int(1, false).as_basic_value_enum();
     } else if var_name == "false" {
-        return env
-            .context
-            .bool_type()
-            .const_int(0, false)
-            .as_basic_value_enum();
+        return env.context.bool_type().const_int(0, false).as_basic_value_enum();
     }
 
     if let Some(var_info) = env.variables.get(var_name) {
@@ -47,10 +39,8 @@ pub(crate) fn gen<'ctx, 'a>(
 
         if let Some(et) = expected_type {
             if et.is_pointer_type() {
-                let loaded = env
-                    .builder
-                    .build_load(et, ptr, &format!("load_{}", var_name))
-                    .unwrap();
+                let loaded =
+                    env.builder.build_load(et, ptr, &format!("load_{}", var_name)).unwrap();
 
                 let expected_ptr = et.into_pointer_type();
                 if loaded.get_type() != BasicTypeEnum::from(expected_ptr) {
@@ -80,7 +70,7 @@ pub(crate) fn gen<'ctx, 'a>(
                     .build_load(load_ty, ptr, &format!("load_{}", var_name))
                     .unwrap()
                     .as_basic_value_enum()
-            }
+            },
         }
     } else if let Some(const_val) = env.global_consts.get(var_name) {
         *const_val

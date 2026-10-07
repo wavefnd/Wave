@@ -57,10 +57,7 @@ pub fn generate_statement_ir<'ctx>(
 ) {
     // A return, break, continue, or unconditional branch may have terminated the
     // block while walking a source-level list. LLVM rejects a second terminator.
-    if builder
-        .get_insert_block()
-        .is_some_and(|block| block.get_terminator().is_some())
-    {
+    if builder.get_insert_block().is_some_and(|block| block.get_terminator().is_some()) {
         return;
     }
 
@@ -79,12 +76,12 @@ pub fn generate_statement_ir<'ctx>(
                 extern_c_info,
                 program,
             );
-        }
+        },
 
         ASTNode::Statement(StatementNode::Println(message))
         | ASTNode::Statement(StatementNode::Print(message)) => {
             io::gen_print_literal_ir(context, builder, module, string_counter, message);
-        }
+        },
 
         ASTNode::Statement(StatementNode::PrintlnFormat { format, args })
         | ASTNode::Statement(StatementNode::PrintFormat { format, args }) => {
@@ -104,7 +101,7 @@ pub fn generate_statement_ir<'ctx>(
                 extern_c_info,
                 program,
             );
-        }
+        },
 
         ASTNode::Statement(StatementNode::Input { format, args }) => {
             io::gen_input_ir(
@@ -123,14 +120,9 @@ pub fn generate_statement_ir<'ctx>(
                 extern_c_info,
                 program,
             );
-        }
+        },
 
-        ASTNode::Statement(StatementNode::If {
-            condition,
-            body,
-            else_if_blocks,
-            else_block,
-        }) => {
+        ASTNode::Statement(StatementNode::If { condition, body, else_if_blocks, else_block }) => {
             control::gen_if_ir(
                 context,
                 builder,
@@ -152,7 +144,7 @@ pub fn generate_statement_ir<'ctx>(
                 extern_c_info,
                 program,
             );
-        }
+        },
 
         ASTNode::Statement(StatementNode::While { condition, body }) => {
             control::gen_while_ir(
@@ -174,7 +166,7 @@ pub fn generate_statement_ir<'ctx>(
                 extern_c_info,
                 program,
             );
-        }
+        },
 
         ASTNode::Statement(StatementNode::Match { value, arms }) => {
             control::gen_match_ir(
@@ -196,14 +188,9 @@ pub fn generate_statement_ir<'ctx>(
                 extern_c_info,
                 program,
             );
-        }
+        },
 
-        ASTNode::Statement(StatementNode::For {
-            initialization,
-            condition,
-            increment,
-            body,
-        }) => {
+        ASTNode::Statement(StatementNode::For { initialization, condition, increment, body }) => {
             control::gen_for_ir(
                 context,
                 builder,
@@ -225,14 +212,9 @@ pub fn generate_statement_ir<'ctx>(
                 extern_c_info,
                 program,
             );
-        }
+        },
 
-        ASTNode::Statement(StatementNode::AsmBlock {
-            instructions,
-            inputs,
-            outputs,
-            clobbers,
-        }) => {
+        ASTNode::Statement(StatementNode::AsmBlock { instructions, inputs, outputs, clobbers }) => {
             asm::gen_asm_stmt_ir(
                 program,
                 context,
@@ -261,7 +243,7 @@ pub fn generate_statement_ir<'ctx>(
                     )
                 },
             );
-        }
+        },
 
         ASTNode::Statement(StatementNode::Expression(expr)) => {
             expr_stmt::gen_expr_stmt_ir(
@@ -279,16 +261,12 @@ pub fn generate_statement_ir<'ctx>(
             );
             if matches!(
                 program.type_of(expr),
-                Some(hir::HirExpressionType::Resolved(
-                    parser::ast::WaveType::Never
-                ))
-            ) && builder
-                .get_insert_block()
-                .is_some_and(|block| block.get_terminator().is_none())
+                Some(hir::HirExpressionType::Resolved(parser::ast::WaveType::Never))
+            ) && builder.get_insert_block().is_some_and(|block| block.get_terminator().is_none())
             {
                 builder.build_unreachable().unwrap();
             }
-        }
+        },
 
         ASTNode::Statement(StatementNode::Assign { variable, value }) => {
             assign::gen_assign_ir(
@@ -305,15 +283,15 @@ pub fn generate_statement_ir<'ctx>(
                 extern_c_info,
                 program,
             );
-        }
+        },
 
         ASTNode::Statement(StatementNode::Break) => {
             control::gen_break_ir(builder, loop_exit_stack);
-        }
+        },
 
         ASTNode::Statement(StatementNode::Continue) => {
             control::gen_continue_ir(builder, loop_continue_stack);
-        }
+        },
 
         ASTNode::Statement(StatementNode::Return(expr_opt)) => {
             control::gen_return_ir(
@@ -330,8 +308,8 @@ pub fn generate_statement_ir<'ctx>(
                 extern_c_info,
                 program,
             );
-        }
+        },
 
-        _ => {}
+        _ => {},
     }
 }

@@ -45,6 +45,7 @@ impl Number {
             _ => unreachable!("aggregate is not a numeric truth value"),
         }
     }
+
     fn normalize(self, ty: &WaveType) -> Self {
         match (self, ty) {
             (Self::Int(n), WaveType::Float(32)) => Self::Float(n.to_f32() as f64),
@@ -52,7 +53,7 @@ impl Number {
             (Self::Int(n), ty) if integer_width(ty).is_some() => {
                 let bits = integer_width(ty).unwrap();
                 Self::Int(n.normalize(bits, !unsigned(ty)))
-            }
+            },
             (Self::Float(n), WaveType::Float(32)) => Self::Float((n as f32) as f64),
             (n, _) => n,
         }
@@ -84,29 +85,29 @@ impl Checker<'_> {
                     values.push(self.eval(item, scope)?);
                 }
                 Some(Number::Array(values))
-            }
+            },
             Expression::StructLiteral { fields, .. } => {
                 let mut values = HashMap::new();
                 for (name, item) in fields {
                     values.insert(name.clone(), self.eval(item, scope)?);
                 }
                 Some(Number::Struct(values))
-            }
+            },
             Expression::FieldAccess { object, field } => {
                 if let Some(Number::Struct(fields)) = self.eval(object, scope)? {
                     fields.get(field).cloned().flatten()
                 } else {
                     None
                 }
-            }
+            },
             Expression::IndexAccess { target, index } => {
                 match (self.eval(target, scope)?, self.eval(index, scope)?) {
-                    (Some(Number::Array(items)), Some(Number::Int(index))) => index
-                        .to_usize()
-                        .and_then(|i| items.get(i).cloned().flatten()),
+                    (Some(Number::Array(items)), Some(Number::Int(index))) => {
+                        index.to_usize().and_then(|i| items.get(i).cloned().flatten())
+                    },
                     _ => None,
                 }
-            }
+            },
             Expression::Literal(Literal::Int(raw)) => {
                 let parsed = lexer::number::IntegerLiteral::parse(raw).unwrap();
                 let mut n =
@@ -122,43 +123,42 @@ impl Checker<'_> {
                     n = n.negated();
                 }
                 Some(Number::Int(n))
-            }
+            },
             Expression::Literal(Literal::Float(n)) => Some(Number::Float(*n)),
             Expression::Literal(Literal::Bool(n)) => {
                 Some(Number::Int(ConstInt::from_u64((*n) as u64)))
-            }
+            },
             Expression::Literal(Literal::Byte(n)) => {
                 Some(Number::Int(ConstInt::from_u64((*n) as u64)))
-            }
+            },
             Expression::Literal(Literal::Char(n)) => {
                 Some(Number::Int(ConstInt::from_u64((*n as u32) as u64)))
-            }
+            },
             Expression::Variable(name) => {
                 if let Some(value) = scope.get(name) {
                     value.clone()
                 } else {
                     self.globals.get(name).cloned().flatten()
                 }
-            }
+            },
 
             Expression::Cast { expr, .. } | Expression::Grouped(expr) => self.eval(expr, scope)?,
-            Expression::Unary {
-                operator,
-                expr: inner,
-            } => match (operator, self.eval(inner, scope)?) {
-                (Operator::Neg, Some(Number::Int(n))) => Some(Number::Int(n.negated())),
-                (Operator::Neg, Some(Number::Float(n))) => Some(Number::Float(-n)),
-                (Operator::BitwiseNot, Some(Number::Int(n))) => n.checked_not().map(Number::Int),
-                (Operator::Not | Operator::LogicalNot, Some(n)) => {
-                    Some(Number::Int(ConstInt::from_u64((!n.truth()) as u64)))
+            Expression::Unary { operator, expr: inner } => {
+                match (operator, self.eval(inner, scope)?) {
+                    (Operator::Neg, Some(Number::Int(n))) => Some(Number::Int(n.negated())),
+                    (Operator::Neg, Some(Number::Float(n))) => Some(Number::Float(-n)),
+                    (Operator::BitwiseNot, Some(Number::Int(n))) => {
+                        n.checked_not().map(Number::Int)
+                    },
+                    (Operator::Not | Operator::LogicalNot, Some(n)) => {
+                        Some(Number::Int(ConstInt::from_u64((!n.truth()) as u64)))
+                    },
+                    _ => None,
                 }
-                _ => None,
             },
-            Expression::BinaryExpression {
-                left,
-                operator,
-                right,
-            } => self.eval_binary(expr, left, operator, right, scope)?,
+            Expression::BinaryExpression { left, operator, right } => {
+                self.eval_binary(expr, left, operator, right, scope)?
+            },
             _ => {
                 let mut result = Ok(());
                 parser::ast::visit::walk_expression_children(expr, &mut |child| {
@@ -168,7 +168,7 @@ impl Checker<'_> {
                 });
                 result?;
                 None
-            }
+            },
         })
     }
 
@@ -186,11 +186,7 @@ impl Checker<'_> {
             (Some(n), Operator::LogicalOr) if n.truth() => Some(true),
             _ => None,
         };
-        let b = if short.is_some() {
-            None
-        } else {
-            self.eval(right, scope)?
-        };
+        let b = if short.is_some() { None } else { self.eval(right, scope)? };
         self.binary_value(expr, right, operator, a, b, short)
     }
 
@@ -262,43 +258,31 @@ impl Checker<'_> {
                         GreaterEqual => Some(ConstInt::from_u64((a >= b) as u64)),
                         LogicalAnd => {
                             Some(ConstInt::from_u64((!a.is_zero() && !b.is_zero()) as u64))
-                        }
+                        },
                         LogicalOr => {
                             Some(ConstInt::from_u64((!a.is_zero() || !b.is_zero()) as u64))
-                        }
+                        },
                         _ => None,
                     };
                     n.map(Number::Int)
-                }
+                },
                 (Some(Number::Float(a)), Some(Number::Float(b))) => {
                     use Operator::*;
                     let single = fact.computation_type == Some(WaveType::Float(32));
                     let result = match operator {
-                        Add => Some(if single {
-                            ((a as f32) + (b as f32)) as f64
-                        } else {
-                            a + b
-                        }),
-                        Subtract => Some(if single {
-                            ((a as f32) - (b as f32)) as f64
-                        } else {
-                            a - b
-                        }),
-                        Multiply => Some(if single {
-                            ((a as f32) * (b as f32)) as f64
-                        } else {
-                            a * b
-                        }),
-                        Divide => Some(if single {
-                            ((a as f32) / (b as f32)) as f64
-                        } else {
-                            a / b
-                        }),
-                        Remainder => Some(if single {
-                            ((a as f32) % (b as f32)) as f64
-                        } else {
-                            a % b
-                        }),
+                        Add => Some(if single { ((a as f32) + (b as f32)) as f64 } else { a + b }),
+                        Subtract => {
+                            Some(if single { ((a as f32) - (b as f32)) as f64 } else { a - b })
+                        },
+                        Multiply => {
+                            Some(if single { ((a as f32) * (b as f32)) as f64 } else { a * b })
+                        },
+                        Divide => {
+                            Some(if single { ((a as f32) / (b as f32)) as f64 } else { a / b })
+                        },
+                        Remainder => {
+                            Some(if single { ((a as f32) % (b as f32)) as f64 } else { a % b })
+                        },
                         _ => None,
                     };
                     match operator {
@@ -310,7 +294,7 @@ impl Checker<'_> {
                         GreaterEqual => Some(Number::Int(ConstInt::from_u64((a >= b) as u64))),
                         _ => result.map(Number::Float),
                     }
-                }
+                },
                 _ => None,
             }
         })
@@ -366,12 +350,12 @@ impl Checker<'_> {
                 _ => None,
             };
             if let Some(constant) = constant {
-                self.constants
-                    .insert(self.program.expression_id(expr).unwrap(), constant);
+                self.constants.insert(self.program.expression_id(expr).unwrap(), constant);
             }
         }
         Ok(Some(value))
     }
+
     fn inspect(&mut self, expr: &Expression, scope: &Scope) -> Result<(), Failure> {
         self.eval(expr, scope).map(|_| ())
     }
@@ -396,7 +380,7 @@ impl Checker<'_> {
             Expression::Variable(name) => {
                 self.globals.contains_key(name)
                     || self.program.variant_construction_of(expr).is_some()
-            }
+            },
             Expression::FunctionCall { .. } => self.program.variant_construction_of(expr).is_some(),
             _ => false,
         };
@@ -411,6 +395,7 @@ impl Checker<'_> {
         });
         result
     }
+
     fn function(&mut self, f: &FunctionNode) -> Result<(), Failure> {
         let mut scope = Scope::new();
         for p in &f.parameters {
@@ -421,12 +406,14 @@ impl Checker<'_> {
         }
         self.nodes(&f.body, &mut scope)
     }
+
     fn nodes(&mut self, nodes: &[ASTNode], scope: &mut Scope) -> Result<(), Failure> {
         for node in nodes {
             self.node(node, scope)?;
         }
         Ok(())
     }
+
     fn node(&mut self, node: &ASTNode, scope: &mut Scope) -> Result<(), Failure> {
         match node {
             ASTNode::Located { value, .. } => self.node(value, scope)?,
@@ -435,12 +422,12 @@ impl Checker<'_> {
                 for f in &s.methods {
                     self.function(f)?;
                 }
-            }
+            },
             ASTNode::ProtoImpl(p) => {
                 for f in &p.methods {
                     self.function(f)?;
                 }
-            }
+            },
             ASTNode::Variable(v) => {
                 let mut value = None;
                 if let Some(expr) = &v.initial_value {
@@ -450,7 +437,7 @@ impl Checker<'_> {
                     }
                 }
                 scope.insert(v.name.clone(), value);
-            }
+            },
             ASTNode::Statement(StatementNode::If {
                 condition,
                 body,
@@ -468,11 +455,11 @@ impl Checker<'_> {
                 if let Some(b) = else_block {
                     self.nodes(b, &mut scope.clone())?;
                 }
-            }
+            },
             ASTNode::Statement(StatementNode::While { condition, body }) => {
                 self.inspect(condition, scope)?;
                 self.nodes(body, &mut scope.clone())?;
-            }
+            },
             ASTNode::Statement(StatementNode::For {
                 initialization,
                 condition,
@@ -484,7 +471,7 @@ impl Checker<'_> {
                 self.inspect(condition, &scope)?;
                 self.inspect(increment, &scope)?;
                 self.nodes(body, &mut scope)?;
-            }
+            },
             ASTNode::Statement(StatementNode::Match { value, arms }) => {
                 self.inspect(value, scope)?;
                 for arm in arms {
@@ -496,7 +483,7 @@ impl Checker<'_> {
                     });
                     self.nodes(&arm.body, &mut scope)?;
                 }
-            }
+            },
             _ => {
                 let mut result = Ok(());
                 let mut visited = HashSet::new();
@@ -510,7 +497,7 @@ impl Checker<'_> {
                     }
                 });
                 result?;
-            }
+            },
         }
         Ok(())
     }
@@ -535,16 +522,12 @@ pub(super) fn validate(
         .filter_map(|(i, node)| match node {
             ASTNode::Variable(v) if v.mutability == Mutability::Const => {
                 v.initial_value.as_ref().map(|e| (v.name.clone(), (i, e)))
-            }
+            },
             _ => None,
         })
         .collect();
-    let mut checker = Checker {
-        program,
-        globals: Scope::new(),
-        constants: HashMap::new(),
-        required: true,
-    };
+    let mut checker =
+        Checker { program, globals: Scope::new(), constants: HashMap::new(), required: true };
     for node in program.syntax() {
         if let ASTNode::Enum(e) = node {
             let mut next = ConstInt::zero();
@@ -575,12 +558,8 @@ pub(super) fn validate(
         while let Some((name, ready)) = stack.pop() {
             let &(index, expr) = &definitions[&name];
             if ready {
-                checker
-                    .require_constant(expr)
-                    .map_err(|e| diagnostic(index, e))?;
-                let value = checker
-                    .eval(expr, &Scope::new())
-                    .map_err(|e| diagnostic(index, e))?;
+                checker.require_constant(expr).map_err(|e| diagnostic(index, e))?;
+                let value = checker.eval(expr, &Scope::new()).map_err(|e| diagnostic(index, e))?;
                 checker.globals.insert(name, value);
             } else if visited.insert(name.clone()) {
                 stack.push((name, true));
@@ -598,21 +577,15 @@ pub(super) fn validate(
         if let ASTNode::Variable(v) = node {
             if v.mutability == Mutability::Static {
                 if let Some(expr) = &v.initial_value {
-                    checker
-                        .require_constant(expr)
-                        .map_err(|e| diagnostic(index, e))?;
-                    checker
-                        .eval(expr, &Scope::new())
-                        .map_err(|e| diagnostic(index, e))?;
+                    checker.require_constant(expr).map_err(|e| diagnostic(index, e))?;
+                    checker.eval(expr, &Scope::new()).map_err(|e| diagnostic(index, e))?;
                 }
             }
         }
     }
     checker.required = false;
     for (index, node) in program.syntax().iter().enumerate() {
-        checker
-            .node(node, &mut Scope::new())
-            .map_err(|e| diagnostic(index, e))?;
+        checker.node(node, &mut Scope::new()).map_err(|e| diagnostic(index, e))?;
     }
     Ok(checker.constants)
 }

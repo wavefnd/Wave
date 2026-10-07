@@ -2,10 +2,9 @@
 use llvm::backend::msvc_link_args;
 #[test]
 fn msvc_machine_crt_and_output_modes_are_independent() {
-    for (target, machine) in [
-        ("x86_64-pc-windows-msvc", "X64"),
-        ("aarch64-pc-windows-msvc", "ARM64"),
-    ] {
+    for (target, machine) in
+        [("x86_64-pc-windows-msvc", "X64"), ("aarch64-pc-windows-msvc", "ARM64")]
+    {
         for static_crt in [false, true] {
             for shared in [false, true] {
                 for no_default in [false, true] {

@@ -36,52 +36,41 @@ pub(crate) fn gen_expr<'ctx, 'a>(
             } else {
                 variables::gen(env, name, expected_type)
             }
-        }
+        },
 
         Expression::Deref(inner) => pointers::gen_deref(env, inner),
         Expression::AddressOf(inner) => pointers::gen_addressof(env, inner, expected_type),
 
-        Expression::MethodCall {
-            object, name, args, ..
-        } => calls::gen_method_call(env, object, name, args),
-        Expression::FunctionCall {
-            name,
-            type_args,
-            args,
-        } => {
+        Expression::MethodCall { object, name, args, .. } => {
+            calls::gen_method_call(env, object, name, args)
+        },
+        Expression::FunctionCall { name, type_args, args } => {
             if env.program.variant_construction_of(expr).is_some() {
                 variants::gen_constructor(env, expr, args)
             } else {
                 calls::gen_function_call(env, name, type_args, args, expected_type)
             }
-        }
+        },
         Expression::Cast { .. } => panic!("ICE: cast missing verified HIR conversion sequence"),
 
-        Expression::AssignOperation {
-            target,
-            operator,
-            value,
-        } => assign::gen_assign_operation(env, target, operator, value),
+        Expression::AssignOperation { target, operator, value } => {
+            assign::gen_assign_operation(env, target, operator, value)
+        },
         Expression::Assignment { target, value } => assign::gen_assignment(env, target, value),
 
-        Expression::BinaryExpression {
-            left,
-            operator,
-            right,
-        } => binary::gen(env, left, operator, right, expected_type),
+        Expression::BinaryExpression { left, operator, right } => {
+            binary::gen(env, left, operator, right, expected_type)
+        },
 
         Expression::IndexAccess { target, index } => index::gen(env, expr, target, index),
 
-        Expression::AsmBlock {
-            instructions,
-            inputs,
-            outputs,
-            clobbers,
-        } => asm::gen(env, instructions, inputs, outputs, clobbers),
+        Expression::AsmBlock { instructions, inputs, outputs, clobbers } => {
+            asm::gen(env, instructions, inputs, outputs, clobbers)
+        },
 
         Expression::StructLiteral { name, fields } => {
             structs::gen_struct_literal(env, name, fields)
-        }
+        },
         Expression::FieldAccess { object, field } => structs::gen_field_access(env, object, field),
 
         Expression::Unary { operator, expr } => unary::gen(env, operator, expr, expected_type),
@@ -89,10 +78,10 @@ pub(crate) fn gen_expr<'ctx, 'a>(
 
         Expression::Await(_) => {
             unreachable!("async lowering must remove await before LLVM emission")
-        }
+        },
         Expression::Grouped(inner) => env.gen(inner, expected_type),
         Expression::ArrayLiteral(elements) => {
             arrays::gen_array_literal(env, elements, expected_type)
-        }
+        },
     }
 }

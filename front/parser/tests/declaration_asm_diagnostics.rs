@@ -5,9 +5,7 @@ fn failure(marked: &str, expected: &str, context: &str) {
     let marked = format!("// 한글\r\n{marked}");
     let start = marked.find('@').unwrap();
     let source = marked.replace('@', "");
-    let tokens = Lexer::new_with_file(&source, "diagnostics.wave")
-        .tokenize()
-        .unwrap();
+    let tokens = Lexer::new_with_file(&source, "diagnostics.wave").tokenize().unwrap();
     let error = parse_syntax_with_spans(&tokens).unwrap_err();
     assert_eq!(error.span().unwrap().start, start, "{source}: {error:?}");
     assert_eq!(error.expected(), [expected], "{source}: {error:?}");
@@ -27,11 +25,7 @@ fn declaration_errors_keep_the_failing_token_for_private_and_public_forms() {
         ("enum E -> @{}", "type", "enum representation type"),
         ("enum E -> i32 @X", "'{'", "enum declaration"),
         ("enum E -> i32 { @1 }", "identifier", "enum case"),
-        (
-            "enum E -> i32 { A = @true }",
-            "integer literal",
-            "enum case value",
-        ),
+        ("enum E -> i32 { A = @true }", "integer literal", "enum case value"),
         ("enum E -> i32 { A @B }", "',' or '}'", "enum declaration"),
         ("variant @{ A }", "identifier", "variant declaration"),
         ("variant V @A", "'{'", "variant declaration"),
@@ -53,42 +47,18 @@ fn declaration_errors_keep_the_failing_token_for_private_and_public_forms() {
 fn both_asm_forms_share_precise_clause_errors() {
     for (body, expected, context) in [
         ("@;", "'{'", "asm block"),
-        (
-            "{ @123 }",
-            "instruction string, in, out, clobber, or '}'",
-            "asm block",
-        ),
+        ("{ @123 }", "instruction string, in, out, clobber, or '}'", "asm block"),
         ("{ in @rax }", "'('", "asm input clause"),
-        (
-            "{ in(@123) value }",
-            "register string or identifier",
-            "asm input clause",
-        ),
+        ("{ in(@123) value }", "register string or identifier", "asm input clause"),
         ("{ in(rax @value }", "')'", "asm input clause"),
-        (
-            "{ out(rax) @123 }",
-            "assignable expression",
-            "asm output clause",
-        ),
+        ("{ out(rax) @123 }", "assignable expression", "asm output clause"),
         ("{ clobber @rax }", "'('", "asm clobber clause"),
-        (
-            "{ clobber(@1) }",
-            "register string or identifier",
-            "asm clobber clause",
-        ),
+        ("{ clobber(@1) }", "register string or identifier", "asm clobber clause"),
         ("{ clobber(rax @rcx) }", "',' or ')'", "asm clobber clause"),
-        (
-            "{ clobber(rax, @) }",
-            "register string or identifier",
-            "asm clobber clause",
-        ),
+        ("{ clobber(rax, @) }", "register string or identifier", "asm clobber clause"),
     ] {
         failure(&format!("fun f() {{ asm {body}; }}"), expected, context);
-        failure(
-            &format!("fun f() {{ var x: i32 = asm {body}; }}"),
-            expected,
-            context,
-        );
+        failure(&format!("fun f() {{ var x: i32 = asm {body}; }}"), expected, context);
     }
     failure("fun f() { asm { @", "'}'", "asm block");
     failure("fun f() { var x: i32 = asm { @", "'}'", "asm block");

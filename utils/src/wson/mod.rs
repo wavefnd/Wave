@@ -37,9 +37,11 @@ impl Number {
     pub fn as_str(&self) -> &str {
         &self.raw
     }
+
     pub fn as_integer(&self) -> Option<&ConstInt> {
         self.integer.as_ref()
     }
+
     pub fn as_u64(&self) -> Option<u64> {
         self.raw.parse().ok()
     }
@@ -68,51 +70,58 @@ impl Value {
     pub fn object<K: Into<String>>(fields: impl IntoIterator<Item = (K, Self)>) -> Self {
         Self::Object(fields.into_iter().map(|(k, v)| (k.into(), v)).collect())
     }
+
     pub fn string(value: impl AsRef<str>) -> Self {
         Self::String(value.as_ref().into())
     }
+
     pub fn strings<S: AsRef<str>>(values: impl IntoIterator<Item = S>) -> Self {
         Self::Array(values.into_iter().map(Self::string).collect())
     }
+
     pub fn optional_string(value: Option<impl AsRef<str>>) -> Self {
         value.map(Self::string).unwrap_or(Self::Null)
     }
+
     pub fn get(&self, key: &str) -> Option<&Self> {
         match self {
             Self::Object(fields) => fields.iter().find(|(k, _)| k == key).map(|(_, v)| v),
             _ => None,
         }
     }
+
     pub fn get_str(&self, key: &str) -> Option<&str> {
         match self.get(key) {
             Some(Self::String(s)) => Some(s),
             _ => None,
         }
     }
+
     pub fn get_num(&self, key: &str) -> Option<f64> {
         match self.get(key) {
             Some(Self::Number(n)) => n.as_f64(),
             _ => None,
         }
     }
+
     pub fn get_u64(&self, key: &str) -> Option<u64> {
         match self.get(key) {
             Some(Self::Number(n)) => n.as_u64(),
             _ => None,
         }
     }
+
     pub fn get_arr(&self, key: &str) -> Option<&[Self]> {
         match self.get(key) {
             Some(Self::Array(a)) => Some(a),
             _ => None,
         }
     }
+
     pub fn integer(value: u64) -> Self {
-        Self::Number(Number {
-            raw: value.to_string(),
-            integer: Some(ConstInt::from_u64(value)),
-        })
+        Self::Number(Number { raw: value.to_string(), integer: Some(ConstInt::from_u64(value)) })
     }
+
     pub fn write_to(
         &self,
         mut output: impl Write,
@@ -121,9 +130,7 @@ impl Value {
     ) -> Result<(), Error> {
         // Validate completely before producing bytes on the caller's stream.
         let encoded = dumps(self, format, pretty)?;
-        output
-            .write_all(encoded.as_bytes())
-            .map_err(|e| Error::at(&encoded, 0, e.to_string()))
+        output.write_all(encoded.as_bytes()).map_err(|e| Error::at(&encoded, 0, e.to_string()))
     }
 }
 
@@ -144,22 +151,17 @@ impl Error {
                 '\r' => {
                     line += 1;
                     column = 1;
-                }
-                '\n' if after_cr => {}
+                },
+                '\n' if after_cr => {},
                 '\n' => {
                     line += 1;
                     column = 1;
-                }
+                },
                 _ => column += 1,
             }
             after_cr = ch == '\r';
         }
-        Self {
-            message: message.into(),
-            offset,
-            line,
-            column,
-        }
+        Self { message: message.into(), offset, line, column }
     }
 }
 impl fmt::Display for Error {
@@ -176,15 +178,19 @@ impl std::error::Error for Error {}
 pub fn parse(input: &str, format: Format) -> Result<Value, Error> {
     parser::parse(input, format)
 }
+
 pub fn parse_json(input: &str) -> Result<Value, Error> {
     parse(input, Format::Json)
 }
+
 pub fn loads(input: &str) -> Result<Value, Error> {
     parse(input, Format::Wson)
 }
+
 pub fn validate(input: &str, format: Format) -> Result<(), Error> {
     parse(input, format).map(|_| ())
 }
+
 pub fn dumps(value: &Value, format: Format, pretty: bool) -> Result<String, Error> {
     writer::serialize(value, format, pretty, MAX_DEPTH)
 }
@@ -209,28 +215,17 @@ fn number(raw: &str) -> Result<Value, String> {
         let digits = raw.strip_prefix('-').unwrap_or(raw);
         let value = ConstInt::from_digits(digits, 10)
             .ok_or("integer exceeds supported 2048-bit capacity")?;
-        Some(if raw.starts_with('-') {
-            value.negated()
-        } else {
-            value
-        })
+        Some(if raw.starts_with('-') { value.negated() } else { value })
     } else {
         let value = raw.parse::<f64>().map_err(|_| "invalid decimal")?;
-        let nonzero_mantissa = raw
-            .split(['e', 'E'])
-            .next()
-            .unwrap_or(raw)
-            .bytes()
-            .any(|b| matches!(b, b'1'..=b'9'));
+        let nonzero_mantissa =
+            raw.split(['e', 'E']).next().unwrap_or(raw).bytes().any(|b| matches!(b, b'1'..=b'9'));
         if !value.is_finite() || (value == 0.0 && nonzero_mantissa) {
             return Err("number is outside the supported finite f64 range".into());
         }
         None
     };
-    Ok(Value::Number(Number {
-        raw: raw.into(),
-        integer,
-    }))
+    Ok(Value::Number(Number { raw: raw.into(), integer }))
 }
 
 fn valid_date(raw: &str) -> bool {
@@ -238,10 +233,7 @@ fn valid_date(raw: &str) -> bool {
     if b.len() != 10
         || b[4] != b'-'
         || b[7] != b'-'
-        || !b
-            .iter()
-            .enumerate()
-            .all(|(i, c)| i == 4 || i == 7 || c.is_ascii_digit())
+        || !b.iter().enumerate().all(|(i, c)| i == 4 || i == 7 || c.is_ascii_digit())
     {
         return false;
     }
@@ -249,21 +241,7 @@ fn valid_date(raw: &str) -> bool {
     let month: usize = raw[5..7].parse().unwrap();
     let day: u32 = raw[8..].parse().unwrap();
     let leap = year % 4 == 0 && (year % 100 != 0 || year % 400 == 0);
-    let days = [
-        0,
-        31,
-        28 + u32::from(leap),
-        31,
-        30,
-        31,
-        30,
-        31,
-        31,
-        30,
-        31,
-        30,
-        31,
-    ];
+    let days = [0, 31, 28 + u32::from(leap), 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
     (1..=12).contains(&month) && day > 0 && day <= days[month]
 }
 fn valid_datetime(raw: &str) -> bool {
@@ -272,10 +250,7 @@ fn valid_datetime(raw: &str) -> bool {
         || b[10] != b' '
         || b[13] != b':'
         || b[16] != b':'
-        || !b[11..]
-            .iter()
-            .enumerate()
-            .all(|(i, c)| i == 2 || i == 5 || c.is_ascii_digit())
+        || !b[11..].iter().enumerate().all(|(i, c)| i == 2 || i == 5 || c.is_ascii_digit())
         || !raw.is_char_boundary(10)
         || !valid_date(&raw[..10])
     {

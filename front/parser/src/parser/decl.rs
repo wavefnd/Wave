@@ -42,7 +42,7 @@ where
                 depth += 1;
                 inner.push('<');
                 continue;
-            }
+            },
             TokenType::Rchevr => {
                 depth -= 1;
                 if depth == 0 {
@@ -50,8 +50,8 @@ where
                 }
                 inner.push('>');
                 continue;
-            }
-            _ => {}
+            },
+            _ => {},
         }
 
         let text: &str = if !t.lexeme.is_empty() {
@@ -67,14 +67,14 @@ where
                 '<' => {
                     depth += 1;
                     inner.push('<');
-                }
+                },
                 '>' => {
                     depth -= 1;
                     if depth == 0 {
                         return Some(inner);
                     }
                     inner.push('>');
-                }
+                },
                 _ => inner.push(ch),
             }
         }
@@ -89,14 +89,11 @@ pub fn parse_const_decl(tokens: &mut Peekable<Iter<'_, Token>>) -> Result<ASTNod
     let mutability = Mutability::Const;
     skip_ws(tokens);
     let name = match tokens.next() {
-        Some(Token {
-            token_type: TokenType::Identifier(name),
-            ..
-        }) => name.clone(),
+        Some(Token { token_type: TokenType::Identifier(name), .. }) => name.clone(),
         _ => {
             println!("Expected identifier after `const`");
             return Err(invalid(tokens.peek().copied()));
-        }
+        },
     };
 
     skip_ws(tokens);
@@ -110,15 +107,11 @@ pub fn parse_const_decl(tokens: &mut Peekable<Iter<'_, Token>>) -> Result<ASTNod
         None => {
             println!("Expected a valid type after ':'");
             return Err(invalid(tokens.peek().copied()));
-        }
+        },
     };
 
     skip_ws(tokens);
-    let initial_value = if let Some(Token {
-        token_type: TokenType::Equal,
-        ..
-    }) = tokens.peek()
-    {
+    let initial_value = if let Some(Token { token_type: TokenType::Equal, .. }) = tokens.peek() {
         tokens.next(); // consume '='
         let expr = parse_expression(tokens)?;
         Some(expr)
@@ -132,10 +125,9 @@ pub fn parse_const_decl(tokens: &mut Peekable<Iter<'_, Token>>) -> Result<ASTNod
     }
     tokens.next();
 
-    if let (WaveType::Array(_, expected_len), Some(Expression::ArrayLiteral(elements))) = (
-        &wave_type,
-        &initial_value.as_ref().map(Expression::unspanned),
-    ) {
+    if let (WaveType::Array(_, expected_len), Some(Expression::ArrayLiteral(elements))) =
+        (&wave_type, &initial_value.as_ref().map(Expression::unspanned))
+    {
         if *expected_len != elements.len() as u32 {
             println!(
                 "❌ Error: Array length mismatch. Expected {}, but got {} elements",
@@ -178,14 +170,11 @@ pub fn parse_var(tokens: &mut Peekable<Iter<'_, Token>>) -> Result<ASTNode, Pars
 
     skip_ws(tokens);
     let name = match tokens.next() {
-        Some(Token {
-            token_type: TokenType::Identifier(name),
-            ..
-        }) => name.clone(),
+        Some(Token { token_type: TokenType::Identifier(name), .. }) => name.clone(),
         _ => {
             println!("Expected identifier");
             return Err(invalid(tokens.peek().copied()));
-        }
+        },
     };
 
     skip_ws(tokens);
@@ -202,15 +191,11 @@ pub fn parse_var(tokens: &mut Peekable<Iter<'_, Token>>) -> Result<ASTNode, Pars
         None => {
             println!("Expected a valid type after ':'");
             return Err(invalid(tokens.peek().copied()));
-        }
+        },
     };
 
     skip_ws(tokens);
-    let initial_value = if let Some(Token {
-        token_type: TokenType::Equal,
-        ..
-    }) = tokens.peek()
-    {
+    let initial_value = if let Some(Token { token_type: TokenType::Equal, .. }) = tokens.peek() {
         tokens.next(); // consume '='
         let expr = parse_expression(tokens)?;
         Some(expr)
@@ -224,10 +209,9 @@ pub fn parse_var(tokens: &mut Peekable<Iter<'_, Token>>) -> Result<ASTNode, Pars
     }
     tokens.next();
 
-    if let (WaveType::Array(_, expected_len), Some(Expression::ArrayLiteral(elements))) = (
-        &wave_type,
-        &initial_value.as_ref().map(Expression::unspanned),
-    ) {
+    if let (WaveType::Array(_, expected_len), Some(Expression::ArrayLiteral(elements))) =
+        (&wave_type, &initial_value.as_ref().map(Expression::unspanned))
+    {
         if *expected_len != elements.len() as u32 {
             println!(
                 "❌ Error: Array length mismatch. Expected {}, but got {} elements",
@@ -252,7 +236,7 @@ fn skip_ws(tokens: &mut Peekable<Iter<'_, Token>>) {
         match t.token_type {
             TokenType::Whitespace | TokenType::Newline => {
                 tokens.next();
-            }
+            },
             _ => break,
         }
     }
@@ -275,28 +259,18 @@ pub(super) fn parse_ffi_header(
 ) -> Option<(String, Option<String>)> {
     skip_ws(tokens);
 
-    if !expect(
-        tokens,
-        TokenType::Lparen,
-        &format!("Expected '(' after '{}'", keyword),
-    ) {
+    if !expect(tokens, TokenType::Lparen, &format!("Expected '(' after '{}'", keyword)) {
         return None;
     }
 
     skip_ws(tokens);
 
     let abi = match tokens.next() {
-        Some(Token {
-            token_type: TokenType::Identifier(name),
-            ..
-        }) => name.clone(),
+        Some(Token { token_type: TokenType::Identifier(name), .. }) => name.clone(),
         other => {
-            println!(
-                "Error: Expected ABI identifier in {}(...), found {:?}",
-                keyword, other
-            );
+            println!("Error: Expected ABI identifier in {}(...), found {:?}", keyword, other);
             return None;
-        }
+        },
     };
 
     skip_ws(tokens);
@@ -308,27 +282,22 @@ pub(super) fn parse_ffi_header(
         skip_ws(tokens);
 
         global_symbol = match tokens.next() {
-            Some(Token {
-                token_type: TokenType::String(s),
-                ..
-            }) => Some(String::from_utf8(s.clone()).ok()?),
+            Some(Token { token_type: TokenType::String(s), .. }) => {
+                Some(String::from_utf8(s.clone()).ok()?)
+            },
             other => {
                 println!(
                     "Error: Expected string literal after ',' in {}(...), found {:?}",
                     keyword, other
                 );
                 return None;
-            }
+            },
         };
 
         skip_ws(tokens);
     }
 
-    if !expect(
-        tokens,
-        TokenType::Rparen,
-        &format!("Expected ')' to close {}(...)", keyword),
-    ) {
+    if !expect(tokens, TokenType::Rparen, &format!("Expected ')' to close {}(...)", keyword)) {
         return None;
     }
 
@@ -346,7 +315,7 @@ fn peek_non_ws_token_type(tokens: &Peekable<Iter<'_, Token>>) -> Option<TokenTyp
         match t.token_type {
             TokenType::Whitespace | TokenType::Newline => {
                 it.next();
-            }
+            },
             _ => return Some(t.token_type.clone()),
         }
     }
@@ -371,37 +340,27 @@ fn parse_extern_fun_decl(
 
     // 'fun'
     match tokens.peek() {
-        Some(Token {
-            token_type: TokenType::Fun,
-            ..
-        }) => {
+        Some(Token { token_type: TokenType::Fun, .. }) => {
             tokens.next();
-        }
+        },
         _ => {
             return Err(invalid(tokens.peek().copied()));
-        }
+        },
     }
 
     skip_ws(tokens);
 
     // name
     let name = match tokens.next() {
-        Some(Token {
-            token_type: TokenType::Identifier(n),
-            ..
-        }) => n.clone(),
+        Some(Token { token_type: TokenType::Identifier(n), .. }) => n.clone(),
         _ => {
             return Err(invalid(tokens.peek().copied()));
-        }
+        },
     };
 
     skip_ws(tokens);
 
-    if !expect(
-        tokens,
-        TokenType::Lparen,
-        "Expected '(' after extern function name",
-    ) {
+    if !expect(tokens, TokenType::Lparen, "Expected '(' after extern function name") {
         return Err(invalid(tokens.peek().copied()));
     }
 
@@ -420,10 +379,7 @@ fn parse_extern_fun_decl(
 
         let mut lookahead = tokens.clone();
         let is_variadic = (0..3).all(|_| {
-            matches!(
-                lookahead.next().map(|token| &token.token_type),
-                Some(TokenType::Dot)
-            )
+            matches!(lookahead.next().map(|token| &token.token_type), Some(TokenType::Dot))
         });
         if is_variadic {
             if params.is_empty() {
@@ -446,10 +402,7 @@ fn parse_extern_fun_decl(
 
         // named param? (Identifier ... :)
         let is_named = match tokens.peek() {
-            Some(Token {
-                token_type: TokenType::Identifier(_),
-                ..
-            }) => {
+            Some(Token { token_type: TokenType::Identifier(_), .. }) => {
                 let _next_ty = peek_non_ws_token_type(tokens);
                 if let Some(TokenType::Identifier(_)) = tokens.peek().map(|t| t.token_type.clone())
                 {
@@ -459,7 +412,7 @@ fn parse_extern_fun_decl(
                         match t.token_type {
                             TokenType::Whitespace | TokenType::Newline => {
                                 la.next();
-                            }
+                            },
                             _ => break,
                         }
                     }
@@ -467,21 +420,18 @@ fn parse_extern_fun_decl(
                 } else {
                     false
                 }
-            }
+            },
             _ => false,
         };
 
         if is_named {
             // name :
-            let param_name = if let Some(Token {
-                token_type: TokenType::Identifier(n),
-                ..
-            }) = tokens.next()
-            {
-                n.clone()
-            } else {
-                unreachable!();
-            };
+            let param_name =
+                if let Some(Token { token_type: TokenType::Identifier(n), .. }) = tokens.next() {
+                    n.clone()
+                } else {
+                    unreachable!();
+                };
 
             skip_ws(tokens);
 
@@ -513,14 +463,14 @@ fn parse_extern_fun_decl(
             Some(TokenType::Comma) => {
                 tokens.next();
                 continue;
-            }
+            },
             Some(TokenType::Rparen) => {
                 tokens.next();
                 break;
-            }
+            },
             _ => {
                 return Err(invalid(tokens.peek().copied()));
-            }
+            },
         }
     }
 
@@ -533,7 +483,7 @@ fn parse_extern_fun_decl(
             skip_ws(tokens);
 
             crate::parser::types::parse_type_checked(tokens, "extern return type")?
-        }
+        },
         _ => WaveType::Void,
     };
 
@@ -541,11 +491,7 @@ fn parse_extern_fun_decl(
 
     // per-function symbol: optional string literal
     let mut symbol: Option<String> = None;
-    if let Some(Token {
-        token_type: TokenType::String(s),
-        ..
-    }) = tokens.peek()
-    {
+    if let Some(Token { token_type: TokenType::String(s), .. }) = tokens.peek() {
         let s = String::from_utf8(s.clone()).map_err(|_| {
             ParseError::expected_at(
                 tokens.peek().copied(),
@@ -565,33 +511,17 @@ fn parse_extern_fun_decl(
 
     skip_ws(tokens);
 
-    if !expect(
-        tokens,
-        TokenType::SemiColon,
-        "Expected ';' after extern function declaration",
-    ) {
+    if !expect(tokens, TokenType::SemiColon, "Expected ';' after extern function declaration") {
         return Err(invalid(tokens.peek().copied()));
     }
 
-    Ok(ExternFunctionNode {
-        name,
-        abi,
-        symbol,
-        params,
-        variadic,
-        return_type,
-    })
+    Ok(ExternFunctionNode { name, abi, symbol, params, variadic, return_type })
 }
 
 pub fn parse_extern(tokens: &mut Peekable<Iter<'_, Token>>) -> Result<Vec<ASTNode>, ParseError> {
     let anchor = tokens.peek().copied();
     let invalid = |token| {
-        ParseError::expected_at(
-            token,
-            anchor,
-            "extern function or block",
-            "extern declaration",
-        )
+        ParseError::expected_at(token, anchor, "extern function or block", "extern declaration")
     };
     let (abi, global_symbol) =
         parse_extern_header(tokens).ok_or_else(|| invalid(tokens.peek().copied()))?;
@@ -611,17 +541,17 @@ pub fn parse_extern(tokens: &mut Peekable<Iter<'_, Token>>) -> Result<Vec<ASTNod
                 Some(TokenType::Rbrace) => {
                     tokens.next(); // consume '}'
                     break;
-                }
+                },
                 Some(TokenType::Fun) => {
                     let ef = parse_extern_fun_decl(tokens, abi.clone(), global_symbol.as_ref())?;
                     nodes.push(ASTNode::ExternFunction(ef));
-                }
+                },
                 Some(TokenType::Whitespace) | Some(TokenType::Newline) => {
                     tokens.next();
-                }
+                },
                 _ => {
                     return Err(invalid(tokens.peek().copied()));
-                }
+                },
             }
         }
 
@@ -646,11 +576,7 @@ pub fn parse_type_alias(tokens: &mut Peekable<Iter<'_, Token>>) -> Result<ASTNod
     crate::expr::expect_token(tokens, anchor, TokenType::Equal, "'='", context)?;
     let target = crate::types::parse_type_checked(tokens, context)?;
     crate::expr::expect_token(tokens, anchor, TokenType::SemiColon, "';'", context)?;
-    Ok(ASTNode::TypeAlias(TypeAliasNode {
-        name,
-        target,
-        visibility: Visibility::Private,
-    }))
+    Ok(ASTNode::TypeAlias(TypeAliasNode { name, target, visibility: Visibility::Private }))
 }
 
 pub fn parse_enum(tokens: &mut Peekable<Iter<'_, Token>>) -> Result<ASTNode, ParseError> {
@@ -661,16 +587,10 @@ pub fn parse_enum(tokens: &mut Peekable<Iter<'_, Token>>) -> Result<ASTNode, Par
     let repr_type = crate::types::parse_type_checked(tokens, "enum representation type")?;
     crate::expr::expect_token(tokens, anchor, TokenType::Lbrace, "'{'", context)?;
     let mut variants = vec![];
-    while !tokens
-        .peek()
-        .is_some_and(|t| t.token_type == TokenType::Rbrace)
-    {
+    while !tokens.peek().is_some_and(|t| t.token_type == TokenType::Rbrace) {
         let before = tokens.clone();
         let vname = crate::expr::identifier(tokens, anchor, "enum case")?;
-        let explicit_value = if tokens
-            .peek()
-            .is_some_and(|t| t.token_type == TokenType::Equal)
-        {
+        let explicit_value = if tokens.peek().is_some_and(|t| t.token_type == TokenType::Equal) {
             tokens.next();
             let at = tokens.peek().copied();
             let value = parse_expression(tokens)?;
@@ -694,8 +614,8 @@ pub fn parse_enum(tokens: &mut Peekable<Iter<'_, Token>>) -> Result<ASTNode, Par
         match tokens.peek().map(|t| &t.token_type) {
             Some(TokenType::Comma) => {
                 tokens.next();
-            }
-            Some(TokenType::Rbrace) => {}
+            },
+            Some(TokenType::Rbrace) => {},
             _ => {
                 return Err(ParseError::expected_at(
                     tokens.peek().copied(),
@@ -703,16 +623,11 @@ pub fn parse_enum(tokens: &mut Peekable<Iter<'_, Token>>) -> Result<ASTNode, Par
                     "',' or '}'",
                     context,
                 ))
-            }
+            },
         }
     }
     tokens.next();
-    Ok(ASTNode::Enum(EnumNode {
-        name,
-        repr_type,
-        variants,
-        visibility: Visibility::Private,
-    }))
+    Ok(ASTNode::Enum(EnumNode { name, repr_type, variants, visibility: Visibility::Private }))
 }
 
 pub fn parse_variant(tokens: &mut Peekable<Iter<'_, Token>>) -> Result<ASTNode, ParseError> {
@@ -726,10 +641,7 @@ pub fn parse_variant(tokens: &mut Peekable<Iter<'_, Token>>) -> Result<ASTNode, 
     let mut cases = vec![];
     loop {
         skip_ws(tokens);
-        if tokens
-            .peek()
-            .is_some_and(|t| t.token_type == TokenType::Rbrace)
-        {
+        if tokens.peek().is_some_and(|t| t.token_type == TokenType::Rbrace) {
             tokens.next();
             break;
         }
@@ -737,29 +649,18 @@ pub fn parse_variant(tokens: &mut Peekable<Iter<'_, Token>>) -> Result<ASTNode, 
         let case_name = crate::expr::identifier(tokens, anchor, "variant case")?;
         skip_ws(tokens);
         let mut payload_types = vec![];
-        if tokens
-            .peek()
-            .is_some_and(|t| t.token_type == TokenType::Lparen)
-        {
+        if tokens.peek().is_some_and(|t| t.token_type == TokenType::Lparen) {
             tokens.next();
             loop {
                 skip_ws(tokens);
-                if tokens
-                    .peek()
-                    .is_some_and(|t| t.token_type == TokenType::Rparen)
-                {
+                if tokens.peek().is_some_and(|t| t.token_type == TokenType::Rparen) {
                     tokens.next();
                     break;
                 }
-                payload_types.push(crate::types::parse_type_checked(
-                    tokens,
-                    "variant payload type",
-                )?);
+                payload_types
+                    .push(crate::types::parse_type_checked(tokens, "variant payload type")?);
                 skip_ws(tokens);
-                if tokens
-                    .peek()
-                    .is_some_and(|t| t.token_type == TokenType::Comma)
-                {
+                if tokens.peek().is_some_and(|t| t.token_type == TokenType::Comma) {
                     tokens.next();
                 } else {
                     crate::expr::expect_token(
@@ -782,8 +683,8 @@ pub fn parse_variant(tokens: &mut Peekable<Iter<'_, Token>>) -> Result<ASTNode, 
         match tokens.peek().map(|t| &t.token_type) {
             Some(TokenType::Comma) => {
                 tokens.next();
-            }
-            Some(TokenType::Rbrace) => {}
+            },
+            Some(TokenType::Rbrace) => {},
             _ => {
                 return Err(ParseError::expected_at(
                     tokens.peek().copied(),
@@ -791,7 +692,7 @@ pub fn parse_variant(tokens: &mut Peekable<Iter<'_, Token>>) -> Result<ASTNode, 
                     "',' or '}'",
                     context,
                 ))
-            }
+            },
         }
     }
     Ok(ASTNode::Variant(VariantNode {

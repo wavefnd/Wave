@@ -19,10 +19,7 @@ fn quote(argument: &str) -> String {
             slashes += 1;
             continue;
         }
-        quoted.extend(std::iter::repeat_n(
-            '\\',
-            if ch == '"' { slashes * 2 + 1 } else { slashes },
-        ));
+        quoted.extend(std::iter::repeat_n('\\', if ch == '"' { slashes * 2 + 1 } else { slashes }));
         quoted.push(ch);
         slashes = 0;
     }
@@ -42,15 +39,9 @@ impl LinkArguments {
         let lines: Vec<_> = arguments.iter().map(|arg| quote(arg)).collect();
         let length = program.encode_utf16().count()
             + 3
-            + lines
-                .iter()
-                .map(|arg| arg.encode_utf16().count() + 1)
-                .sum::<usize>();
+            + lines.iter().map(|arg| arg.encode_utf16().count() + 1).sum::<usize>();
         if length < COMMAND_BUDGET {
-            return Ok(Self {
-                arguments: arguments.to_vec(),
-                _response: None,
-            });
+            return Ok(Self { arguments: arguments.to_vec(), _response: None });
         }
         let response = PendingOutput::new(output)?;
         // Both MSVC LINK and LLVM's response-file reader accept UTF-16LE BOM.
@@ -90,14 +81,8 @@ mod tests {
         unsafe extern "system" {
             fn LocalFree(memory: *mut std::ffi::c_void) -> *mut std::ffi::c_void;
         }
-        let original = [
-            "link.exe",
-            "",
-            "한글 object.obj",
-            "a\\\"b",
-            "C:\\space here\\",
-            "literal\"quote",
-        ];
+        let original =
+            ["link.exe", "", "한글 object.obj", "a\\\"b", "C:\\space here\\", "literal\"quote"];
         let command: Vec<u16> = original
             .iter()
             .map(|arg| quote(arg))
@@ -119,9 +104,7 @@ mod tests {
                 while *value.add(length) != 0 {
                     length += 1;
                 }
-                values.push(String::from_utf16_lossy(std::slice::from_raw_parts(
-                    value, length,
-                )));
+                values.push(String::from_utf16_lossy(std::slice::from_raw_parts(value, length)));
             }
             LocalFree(argv.cast());
             values
@@ -144,13 +127,7 @@ mod tests {
                 .collect::<Vec<_>>(),
         )
         .unwrap();
-        assert_eq!(
-            decoded,
-            args.iter()
-                .map(|arg| quote(arg))
-                .collect::<Vec<_>>()
-                .join("\n")
-        );
+        assert_eq!(decoded, args.iter().map(|arg| quote(arg)).collect::<Vec<_>>().join("\n"));
         drop(response);
         assert!(!path.exists());
         let short = LinkArguments::prepare("lld-link", &["/NOLOGO".into()], &output).unwrap();

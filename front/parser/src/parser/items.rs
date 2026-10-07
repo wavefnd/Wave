@@ -31,7 +31,7 @@ fn skip_ws(tokens: &mut Peekable<Iter<Token>>) {
         match t.token_type {
             TokenType::Whitespace | TokenType::Newline => {
                 tokens.next();
-            }
+            },
             _ => break,
         }
     }
@@ -43,17 +43,8 @@ pub fn parse_import(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, Parse
     crate::expr::expect_token(tokens, anchor, TokenType::Lparen, "'('", context)?;
     skip_ws(tokens);
     let path_token = tokens.peek().copied();
-    let Some(Token {
-        token_type: TokenType::String(bytes),
-        ..
-    }) = path_token
-    else {
-        return Err(ParseError::expected_at(
-            path_token,
-            anchor,
-            "string literal",
-            context,
-        ));
+    let Some(Token { token_type: TokenType::String(bytes), .. }) = path_token else {
+        return Err(ParseError::expected_at(path_token, anchor, "string literal", context));
     };
     let import_path = String::from_utf8(bytes.clone()).map_err(|_| {
         ParseError::syntax_at(path_token, "import path must be valid UTF-8").with_context(context)
@@ -69,10 +60,7 @@ pub fn parse_import(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, Parse
     crate::expr::expect_token(tokens, anchor, TokenType::Rparen, "')'", context)?;
     skip_ws(tokens);
     let mut selections = Vec::new();
-    if tokens
-        .peek()
-        .is_some_and(|t| t.token_type == TokenType::DoubleColon)
-    {
+    if tokens.peek().is_some_and(|t| t.token_type == TokenType::DoubleColon) {
         if alias.is_some() {
             return Err(ParseError::syntax_at(
                 tokens.peek().copied(),
@@ -85,16 +73,10 @@ pub fn parse_import(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, Parse
         loop {
             selections.push(crate::expr::identifier(tokens, anchor, "selective import")?);
             skip_ws(tokens);
-            if tokens
-                .peek()
-                .is_some_and(|t| t.token_type == TokenType::Comma)
-            {
+            if tokens.peek().is_some_and(|t| t.token_type == TokenType::Comma) {
                 tokens.next();
                 skip_ws(tokens);
-                if !tokens
-                    .peek()
-                    .is_some_and(|t| t.token_type == TokenType::Rbrace)
-                {
+                if !tokens.peek().is_some_and(|t| t.token_type == TokenType::Rbrace) {
                     continue;
                 }
             }
@@ -127,24 +109,15 @@ pub fn parse_proto(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, ParseE
             .with_help("check braces and method declarations inside proto")
     };
     let target_struct = match tokens.next() {
-        Some(Token {
-            token_type: TokenType::Identifier(name),
-            ..
-        }) => name.clone(),
+        Some(Token { token_type: TokenType::Identifier(name), .. }) => name.clone(),
         other => {
-            println!(
-                "Error: Expected struct name after 'proto', found {:?}",
-                other
-            );
+            println!("Error: Expected struct name after 'proto', found {:?}", other);
             return Err(invalid(tokens.peek().copied()));
-        }
+        },
     };
 
     if tokens.peek().ok_or_else(|| invalid(None))?.token_type != TokenType::Lbrace {
-        println!(
-            "Error: Expected '{{' after proto target '{}'",
-            target_struct
-        );
+        println!("Error: Expected '{{' after proto target '{}'", target_struct);
         return Err(invalid(tokens.peek().copied()));
     }
     tokens.next(); // consume '{'
@@ -155,10 +128,7 @@ pub fn parse_proto(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, ParseE
         let token_type = if let Some(t) = tokens.peek() {
             t.token_type.clone()
         } else {
-            println!(
-                "Error: Unexpected end of file inside proto '{}' definition.",
-                target_struct
-            );
+            println!("Error: Unexpected end of file inside proto '{}' definition.", target_struct);
             return Err(invalid(tokens.peek().copied()));
         };
 
@@ -166,7 +136,7 @@ pub fn parse_proto(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, ParseE
             TokenType::Rbrace => {
                 tokens.next();
                 break;
-            }
+            },
 
             TokenType::Fun | TokenType::Async => {
                 if let ASTNode::Function(mut func_node) = parse_function(tokens)? {
@@ -175,42 +145,30 @@ pub fn parse_proto(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, ParseE
                     }
                     methods.push(func_node);
                 } else {
-                    println!(
-                        "Error: Failed to parse method inside proto '{}'.",
-                        target_struct
-                    );
+                    println!("Error: Failed to parse method inside proto '{}'.", target_struct);
                     return Err(invalid(tokens.peek().copied()));
                 }
-            }
+            },
 
             TokenType::Whitespace | TokenType::Newline => {
                 tokens.next();
-            }
+            },
 
             other => {
                 println!("Error: Unexpected token inside proto body: {:?}", other);
                 return Err(invalid(tokens.peek().copied()));
-            }
+            },
         }
     }
 
-    Ok(ASTNode::ProtoImpl(ProtoImplNode {
-        target: target_struct,
-        methods,
-    }))
+    Ok(ASTNode::ProtoImpl(ProtoImplNode { target: target_struct, methods }))
 }
 
 pub fn parse_struct(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, ParseError> {
     let anchor = tokens.peek().copied();
     let name = crate::expr::identifier(tokens, anchor, "struct name")?;
     let generic_params = parse_generic_param_names(tokens)?;
-    crate::expr::expect_token(
-        tokens,
-        anchor,
-        TokenType::Lbrace,
-        "'{'",
-        "struct declaration",
-    )?;
+    crate::expr::expect_token(tokens, anchor, TokenType::Lbrace, "'{'", "struct declaration")?;
     let mut fields = Vec::new();
     let mut field_spans = Vec::new();
     let mut methods = Vec::new();
@@ -220,16 +178,14 @@ pub fn parse_struct(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, Parse
             Some(TokenType::Rbrace) => {
                 tokens.next();
                 break;
-            }
+            },
             Some(TokenType::Fun | TokenType::Async) => {
-                let ASTNode::Function(mut method) = parse_function(tokens)? else {
-                    unreachable!()
-                };
+                let ASTNode::Function(mut method) = parse_function(tokens)? else { unreachable!() };
                 if method.return_type.is_none() {
                     method.return_type = Some(WaveType::Void);
                 }
                 methods.push(method);
-            }
+            },
             Some(_) => {
                 let before = tokens.clone();
                 let field_name = crate::expr::identifier(tokens, anchor, "struct field name")?;
@@ -245,15 +201,8 @@ pub fn parse_struct(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, Parse
                 )?;
                 field_spans.push(lexer::consumed_span(before, tokens));
                 fields.push((field_name, ty));
-            }
-            None => {
-                return Err(ParseError::expected_at(
-                    None,
-                    anchor,
-                    "'}'",
-                    "struct declaration",
-                ))
-            }
+            },
+            None => return Err(ParseError::expected_at(None, anchor, "'}'", "struct declaration")),
         }
     }
     Ok(ASTNode::Struct(StructNode {

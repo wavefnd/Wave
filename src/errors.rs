@@ -50,7 +50,7 @@ impl CliError {
                 } else {
                     "command-failed"
                 }
-            }
+            },
             CliError::StdAlreadyInstalled { .. } => "std-already-installed",
             CliError::ExternalToolMissing(_) => "external-tool-missing",
             CliError::CommandFailed(_) => "command-failed",
@@ -65,7 +65,7 @@ impl CliError {
             CliError::Backend(error) => error.to_string(),
             CliError::StdAlreadyInstalled { path } => {
                 format!("std already installed at '{}'", path.display())
-            }
+            },
             CliError::ExternalToolMissing(t) => format!("required tool not found: {}", t),
             CliError::CommandFailed(msg) => format!("command failed: {}", msg),
             CliError::HomeNotSet => utils::paths::missing_home_message().to_string(),
@@ -83,12 +83,8 @@ impl CliError {
             fields.push(("phase", Value::string(error.phase.to_string())));
             fields.push(("operation", Value::string(&error.operation)));
         }
-        wson::dumps(
-            &Value::object([("error", Value::object(fields))]),
-            wson::Format::Json,
-            false,
-        )
-        .expect("CLI diagnostic schema contains only shallow JSON values")
+        wson::dumps(&Value::object([("error", Value::object(fields))]), wson::Format::Json, false)
+            .expect("CLI diagnostic schema contains only shallow JSON values")
     }
 
     pub fn exit_code(&self) -> i32 {
@@ -100,7 +96,7 @@ impl CliError {
                 } else {
                     1
                 }
-            }
+            },
             CliError::ExternalToolMissing(_) | CliError::HomeNotSet | CliError::Io(_) => 3,
             CliError::StdAlreadyInstalled { .. } | CliError::CommandFailed(_) => 1,
         }
@@ -114,7 +110,7 @@ impl fmt::Display for CliError {
             CliError::Backend(error) => write!(f, "Error: {error}"),
             CliError::StdAlreadyInstalled { path } => {
                 write!(f, "Error: std already installed at '{}'", path.display())
-            }
+            },
             CliError::ExternalToolMissing(t) => write!(f, "Error: required tool not found: {}", t),
             CliError::CommandFailed(msg) => write!(f, "Error: command failed: {}", msg),
             CliError::HomeNotSet => write!(f, "Error: {}", utils::paths::missing_home_message()),

@@ -84,16 +84,13 @@ impl<'ctx, 'a> ExprGenEnv<'ctx, 'a> {
             let mut value = match expr {
                 Expression::Cast { expr: inner, .. } | Expression::Grouped(inner) => {
                     self.gen(inner, None)
-                }
-                Expression::BinaryExpression {
-                    left,
-                    operator,
-                    right,
-                } if fact.computation_type.is_some()
-                    && !matches!(
-                        operator,
-                        parser::ast::Operator::LogicalAnd | parser::ast::Operator::LogicalOr
-                    ) =>
+                },
+                Expression::BinaryExpression { left, operator, right }
+                    if fact.computation_type.is_some()
+                        && !matches!(
+                            operator,
+                            parser::ast::Operator::LogicalAnd | parser::ast::Operator::LogicalOr
+                        ) =>
                 {
                     let left = self.gen(left, None);
                     let right = self.gen(right, None);
@@ -107,7 +104,7 @@ impl<'ctx, 'a> ExprGenEnv<'ctx, 'a> {
                         fact.computation_type.as_ref().unwrap(),
                         fact.shift_count_type.as_ref(),
                     )
-                }
+                },
                 _ => dispatch::gen_expr(self, expr, Some(native)),
             };
             // Bool's memory/C-ABI representation is i8; its semantic value is i1.

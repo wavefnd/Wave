@@ -54,23 +54,16 @@ pub fn parse_function_call(
         match tokens.peek().map(|t| &t.token_type) {
             Some(TokenType::Comma) => {
                 tokens.next(); // consume ','
-            }
+            },
             Some(TokenType::Rparen) => continue,
             _ => {
-                println!(
-                    "❌ Unexpected token in function arguments: {:?}",
-                    tokens.peek()
-                );
+                println!("❌ Unexpected token in function arguments: {:?}", tokens.peek());
                 return Err(invalid(tokens.peek().copied()));
-            }
+            },
         }
     }
 
-    Ok(Expression::FunctionCall {
-        name,
-        type_args: Vec::new(),
-        args,
-    })
+    Ok(Expression::FunctionCall { name, type_args: Vec::new(), args })
 }
 
 pub fn parse_parentheses(tokens: &mut Peekable<Iter<Token>>) -> Vec<Token> {
@@ -85,8 +78,8 @@ pub fn parse_parentheses(tokens: &mut Peekable<Iter<Token>>) -> Vec<Token> {
                 if paren_depth == 0 {
                     break;
                 }
-            }
-            _ => {}
+            },
+            _ => {},
         }
         param_tokens.push(token.clone());
     }

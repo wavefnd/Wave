@@ -34,7 +34,7 @@ pub(crate) fn register_group(token: &str) -> Option<String> {
         "ip1" => return Some("x17".to_string()),
         "sp" => return Some("sp".to_string()),
         "xzr" | "wzr" => return Some("xzr".to_string()),
-        _ => {}
+        _ => {},
     }
     let (prefix, num) = token.split_at_checked(1)?;
     if !matches!(prefix, "x" | "w") || num.is_empty() || !num.chars().all(|c| c.is_ascii_digit()) {
@@ -66,10 +66,7 @@ pub(crate) fn default_clobbers() -> Vec<String> {
 }
 
 pub(crate) fn allocatable_registers() -> Vec<String> {
-    (0..=30)
-        .filter(|number| *number != 18)
-        .map(|number| format!("x{}", number))
-        .collect()
+    (0..=30).filter(|number| *number != 18).map(|number| format!("x{}", number)).collect()
 }
 
 pub(crate) fn normalize_special_clobber(token: &str) -> Option<String> {

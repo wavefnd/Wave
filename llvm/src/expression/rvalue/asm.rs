@@ -77,23 +77,14 @@ pub(crate) fn gen<'ctx, 'a>(
         // context and function signature used by `build_indirect_call` below.
         let callee = unsafe { PointerValue::new(inline_asm.as_value_ref()) };
 
-        env.builder
-            .build_indirect_call(fn_type, callee, &operand_vals, "inline_asm_void")
-            .unwrap();
+        env.builder.build_indirect_call(fn_type, callee, &operand_vals, "inline_asm_void").unwrap();
 
-        return env
-            .context
-            .i64_type()
-            .const_int(0, false)
-            .as_basic_value_enum();
+        return env.context.i64_type().const_int(0, false).as_basic_value_enum();
     }
 
     // asm expr must have exactly 1 output
     if plan.outputs.len() != 1 {
-        panic!(
-            "asm expression requires exactly 1 output (got {})",
-            plan.outputs.len()
-        );
+        panic!("asm expression requires exactly 1 output (got {})", plan.outputs.len());
     }
 
     let out_ty = resolve_expr_out_type(env, plan.outputs[0].target);
@@ -113,16 +104,14 @@ pub(crate) fn gen<'ctx, 'a>(
     // which is also supplied to the indirect call immediately below.
     let callee = unsafe { PointerValue::new(inline_asm.as_value_ref()) };
 
-    let call = env
-        .builder
-        .build_indirect_call(fn_type, callee, &operand_vals, "inline_asm_expr")
-        .unwrap();
+    let call =
+        env.builder.build_indirect_call(fn_type, callee, &operand_vals, "inline_asm_expr").unwrap();
 
     match call.try_as_basic_value() {
         ValueKind::Basic(v) => v,
         ValueKind::Instruction(_) => {
             panic!("inline asm expr expected to return a value, but got instruction-only result");
-        }
+        },
     }
 }
 
@@ -134,11 +123,7 @@ fn resolve_expr_out_type<'ctx, 'a>(
     env: &ExprGenEnv<'ctx, 'a>,
     target: &Expression,
 ) -> BasicTypeEnum<'ctx> {
-    llvm_type_of_wave(
-        env,
-        &env.wave_type(target)
-            .expect("asm output has a validated HIR type"),
-    )
+    llvm_type_of_wave(env, &env.wave_type(target).expect("asm output has a validated HIR type"))
 }
 
 fn eval_asm_in_expr<'ctx, 'a>(
@@ -163,6 +148,6 @@ fn meta_val_type<'ctx>(v: &BasicMetadataValueEnum<'ctx>) -> BasicMetadataTypeEnu
         BasicMetadataValueEnum::ScalableVectorValue(svv) => svv.get_type().into(),
         BasicMetadataValueEnum::MetadataValue(_) => {
             panic!("MetadataValue cannot be used as an inline asm operand");
-        }
+        },
     }
 }

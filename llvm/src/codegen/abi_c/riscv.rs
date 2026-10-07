@@ -41,7 +41,7 @@ fn float_fields<'ctx>(
                     return false;
                 }
             }
-        }
+        },
         BasicTypeEnum::ArrayType(array) => {
             let element = array.get_element_type();
             for i in 0..array.len() {
@@ -55,13 +55,13 @@ fn float_fields<'ctx>(
                     return false;
                 }
             }
-        }
+        },
         BasicTypeEnum::FloatType(_) if flen > 0 && td.get_store_size(&ty) <= flen => {
             fields.push(AbiPart { ty, offset })
-        }
+        },
         BasicTypeEnum::IntType(integer) if integer.get_bit_width() <= 64 => {
             fields.push(AbiPart { ty, offset })
-        }
+        },
         // The hardware FP convention accepts integer fields, not pointer fields.
         BasicTypeEnum::PointerType(_) => return false,
         _ => return false,
@@ -81,10 +81,7 @@ fn eligible<'ctx>(
     if !float_fields(td, ty, 0, flen, &mut fields) {
         return None;
     }
-    let fp = fields
-        .iter()
-        .filter(|f| matches!(f.ty, BasicTypeEnum::FloatType(_)))
-        .count();
+    let fp = fields.iter().filter(|f| matches!(f.ty, BasicTypeEnum::FloatType(_))).count();
     let gp = fields.len() - fp;
     (fp > 0 && gp <= 1).then_some((fields, gp, fp))
 }
@@ -98,10 +95,7 @@ pub(super) fn classify_param_riscv64<'ctx>(
     fp_left: &mut usize,
 ) -> ParamLowering<'ctx> {
     let size = td.get_store_size(&ty);
-    let aggregate = matches!(
-        ty,
-        BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_)
-    );
+    let aggregate = matches!(ty, BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_));
     if aggregate && size == 0 {
         return ParamLowering::Ignore;
     }
@@ -119,9 +113,7 @@ pub(super) fn classify_param_riscv64<'ctx>(
     *gp_left = gp_left.saturating_sub(if size > 8 && size <= 16 { 2 } else { 1 });
     if aggregate {
         if size > 16 {
-            return ParamLowering::Indirect {
-                ty: ty.as_any_type_enum(),
-            };
+            return ParamLowering::Indirect { ty: ty.as_any_type_enum() };
         }
         return ParamLowering::Direct(if size <= 8 {
             context.i64_type().as_basic_type_enum()
@@ -142,10 +134,7 @@ pub(super) fn classify_ret_riscv64<'ctx>(
         return RetLowering::Void;
     };
     let size = td.get_store_size(&ty);
-    let aggregate = matches!(
-        ty,
-        BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_)
-    );
+    let aggregate = matches!(ty, BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_));
     if aggregate && size == 0 {
         return RetLowering::Void;
     }

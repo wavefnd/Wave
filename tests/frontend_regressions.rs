@@ -14,11 +14,9 @@ fn directory() -> PathBuf {
     std::fs::create_dir_all(&path).unwrap();
     path
 }
+
 fn wave(args: &[&OsStr]) -> Output {
-    Command::new(env!("CARGO_BIN_EXE_wavec"))
-        .args(args)
-        .output()
-        .unwrap()
+    Command::new(env!("CARGO_BIN_EXE_wavec")).args(args).output().unwrap()
 }
 // Exercise the public host default, including MSVC on Windows.
 #[cfg(any(feature = "llvm-target-core64", feature = "llvm-target-all"))]
@@ -36,14 +34,11 @@ fn frontend_target() -> String {
         .expect("at least one LLVM target must be enabled")
         .to_owned()
 }
+
 fn check(path: &Path, target: &str) -> Output {
-    wave(&[
-        OsStr::new("check"),
-        path.as_os_str(),
-        OsStr::new("--target"),
-        OsStr::new(target),
-    ])
+    wave(&[OsStr::new("check"), path.as_os_str(), OsStr::new("--target"), OsStr::new(target)])
 }
+
 fn successful(output: &Output) {
     assert!(
         output.status.success(),
@@ -59,11 +54,7 @@ fn imported_variants_respect_active_and_inactive_target_attributes() {
     let dir = directory();
     let target = frontend_target();
     let active_arch = target.split('-').next().unwrap();
-    let inactive_arch = if active_arch == "wasm64" {
-        "arm64"
-    } else {
-        "wasm64"
-    };
+    let inactive_arch = if active_arch == "wasm64" { "arm64" } else { "wasm64" };
     let declarations = |value_arch: &str, missing_arch: &str| {
         format!(
             r#"
@@ -120,14 +111,8 @@ fn json_diagnostics_preserve_imported_byte_ranges() {
         human.find('^').unwrap() < human.find("var after").unwrap(),
         "the marker must immediately follow the failing source line: {human}"
     );
-    assert!(
-        stderr.contains(&format!("\"start\":{}", text.find("missing").unwrap())),
-        "{stderr}"
-    );
-    assert!(
-        stderr.contains(&format!("\"end\":{}", text.find("missing").unwrap() + 7)),
-        "{stderr}"
-    );
+    assert!(stderr.contains(&format!("\"start\":{}", text.find("missing").unwrap())), "{stderr}");
+    assert!(stderr.contains(&format!("\"end\":{}", text.find("missing").unwrap() + 7)), "{stderr}");
 }
 
 #[cfg(any(feature = "llvm-target-core64", feature = "llvm-target-all"))]
@@ -173,19 +158,9 @@ fn pointer_sized_integer_ranges_follow_wasm_target_width() {
     let output = check(&source, "wasm32-unknown-unknown");
     assert!(!output.status.success());
     let stderr = String::from_utf8_lossy(&output.stderr);
-    assert!(
-        stderr.contains("u32") && !stderr.contains("panicked"),
-        "{stderr}"
-    );
-    std::fs::write(
-        &source,
-        "fun word(x: isz) -> isz { return x; }\nfun main() {}\n",
-    )
-    .unwrap();
-    for (target, bits) in [
-        ("wasm32-unknown-unknown", 32),
-        ("wasm64-unknown-unknown", 64),
-    ] {
+    assert!(stderr.contains("u32") && !stderr.contains("panicked"), "{stderr}");
+    std::fs::write(&source, "fun word(x: isz) -> isz { return x; }\nfun main() {}\n").unwrap();
+    for (target, bits) in [("wasm32-unknown-unknown", 32), ("wasm64-unknown-unknown", 64)] {
         let output_dir = dir.join(target);
         successful(&wave(&[
             OsStr::new("build"),
@@ -197,10 +172,7 @@ fn pointer_sized_integer_ranges_follow_wasm_target_width() {
             output_dir.as_os_str(),
         ]));
         let ir = std::fs::read_to_string(output_dir.join("word.ll")).unwrap();
-        assert!(
-            ir.contains(&format!("define i{bits} @word(i{bits}")),
-            "{ir}"
-        );
+        assert!(ir.contains(&format!("define i{bits} @word(i{bits}")), "{ir}");
     }
 }
 
@@ -224,17 +196,8 @@ fn never_returning_calls_lower_to_noreturn_and_unreachable() {
     let ir = std::fs::read_to_string(dir.join("never.ll")).unwrap();
     assert!(ir.contains("define void @stop()"), "{ir}");
     assert!(ir.contains("noreturn"), "{ir}");
-    let value = ir
-        .split("define i32 @value()")
-        .nth(1)
-        .unwrap()
-        .split("\n}")
-        .next()
-        .unwrap();
-    assert!(
-        value.contains("call void @stop()") && value.contains("unreachable"),
-        "{value}"
-    );
+    let value = ir.split("define i32 @value()").nth(1).unwrap().split("\n}").next().unwrap();
+    assert!(value.contains("call void @stop()") && value.contains("unreachable"), "{value}");
 }
 
 #[test]
@@ -274,11 +237,8 @@ fn windows_std_import_and_print_use_userprofile_without_home() {
         ),
     )
     .unwrap();
-    std::fs::write(
-        root.join("location_probe.wave"),
-        "pub fun located() -> i32 { return 17; }\n",
-    )
-    .unwrap();
+    std::fs::write(root.join("location_probe.wave"), "pub fun located() -> i32 { return 17; }\n")
+        .unwrap();
     let source = profile.join("probe.wave");
     std::fs::write(
         &source,
@@ -292,16 +252,9 @@ fn windows_std_import_and_print_use_userprofile_without_home() {
     };
     let printed = command().args(["print", "std-path"]).output().unwrap();
     successful(&printed);
-    assert_eq!(
-        String::from_utf8(printed.stdout).unwrap().trim(),
-        root.to_string_lossy()
-    );
-    let imported = command()
-        .arg("check")
-        .arg(source)
-        .args(["--target", &frontend_target()])
-        .output()
-        .unwrap();
+    assert_eq!(String::from_utf8(printed.stdout).unwrap().trim(), root.to_string_lossy());
+    let imported =
+        command().arg("check").arg(source).args(["--target", &frontend_target()]).output().unwrap();
     successful(&imported);
     std::fs::remove_dir_all(profile).unwrap();
 }
@@ -318,12 +271,7 @@ fn control_header_diagnostics_agree_in_human_and_json_output() {
         ("if (1) {} else if (0 {}", "else if header", "')'", "{"),
         ("if (1) {} else return;", "else header", "'{'", "return"),
         ("while (1 {}", "while header", "')'", "{"),
-        (
-            "for (i = 0 i < 2; i += 1) {}",
-            "for initializer",
-            "';'",
-            "i <",
-        ),
+        ("for (i = 0 i < 2; i += 1) {}", "for initializer", "';'", "i <"),
     ] {
         let text = format!("fun broken() {{\n    {body}\n}}\n");
         std::fs::write(&library, &text).unwrap();
@@ -337,35 +285,19 @@ fn control_header_diagnostics_agree_in_human_and_json_output() {
         ]);
         for output in [&human, &json] {
             assert!(!output.status.success());
-            assert!(
-                output.stdout.is_empty(),
-                "legacy parser output: {:?}",
-                output.stdout
-            );
+            assert!(output.stdout.is_empty(), "legacy parser output: {:?}", output.stdout);
             let stderr = String::from_utf8_lossy(&output.stderr);
             assert!(stderr.contains("E2001"), "{stderr}");
             assert!(stderr.contains("broken.wave"), "{stderr}");
-            assert!(
-                stderr.contains(&format!("expected {expected} in {context}")),
-                "{stderr}"
-            );
-            assert!(
-                !stderr.contains("failed to parse function declaration"),
-                "{stderr}"
-            );
+            assert!(stderr.contains(&format!("expected {expected} in {context}")), "{stderr}");
+            assert!(!stderr.contains("failed to parse function declaration"), "{stderr}");
         }
         let json = String::from_utf8_lossy(&json.stderr);
         let start = text.find(body).unwrap() + body.rfind(unexpected).unwrap();
         assert_eq!(json.lines().count(), 1, "{json}");
         assert!(json.contains(&format!("\"start\":{start},")), "{json}");
-        assert!(
-            json.contains(&format!("\"expected\":[\"{expected}\"]")),
-            "{json}"
-        );
-        assert!(
-            json.contains(&format!("\"context\":\"{context}\"")),
-            "{json}"
-        );
+        assert!(json.contains(&format!("\"expected\":[\"{expected}\"]")), "{json}");
+        assert!(json.contains(&format!("\"context\":\"{context}\"")), "{json}");
     }
 }
 
@@ -409,10 +341,7 @@ fn lexer_escape_diagnostics_keep_labels_and_point_at_the_escape() {
     let target = frontend_target();
     for (escape, label) in [
         ("\\q", "unsupported escape sequence"),
-        (
-            "\\xGG",
-            "hex escapes must be exactly two hexadecimal digits",
-        ),
+        ("\\xGG", "hex escapes must be exactly two hexadecimal digits"),
     ] {
         let text = format!("// 한글\r\nfun main() {{ \"앞{escape}\"; }}\r\n");
         std::fs::write(&source, &text).unwrap();
@@ -433,10 +362,7 @@ fn lexer_escape_diagnostics_keep_labels_and_point_at_the_escape() {
         assert!(json.contains(&format!("\"label\":\"{label}\"")), "{json}");
         let start = text.find(escape).unwrap();
         assert!(
-            json.contains(&format!(
-                "\"start\":{start},\"end\":{}",
-                start + escape.len()
-            )),
+            json.contains(&format!("\"start\":{start},\"end\":{}", start + escape.len())),
             "{json}"
         );
         assert!(json.contains("\"code\":\"E1004\""), "{json}");
@@ -497,19 +423,13 @@ fn imported_expression_errors_keep_their_location_in_both_output_formats() {
             assert!(!output.status.success());
             assert!(output.stdout.is_empty());
             let stderr = String::from_utf8_lossy(&output.stderr);
-            assert!(
-                stderr.contains(&format!("expected {expected} in {context}")),
-                "{stderr}"
-            );
+            assert!(stderr.contains(&format!("expected {expected} in {context}")), "{stderr}");
             assert!(stderr.contains("broken.wave"), "{stderr}");
             assert!(stderr.contains("E2001"), "{stderr}");
         }
         let stderr = String::from_utf8_lossy(&json.stderr);
         assert!(stderr.contains(&format!("\"start\":{start},")), "{stderr}");
-        assert!(
-            stderr.contains(&format!("\"context\":\"{context}\"")),
-            "{stderr}"
-        );
+        assert!(stderr.contains(&format!("\"context\":\"{context}\"")), "{stderr}");
     }
 }
 
@@ -563,11 +483,9 @@ fn eof_diagnostics_link_the_unmatched_opener_in_main_and_imported_sources() {
     let source = dir.join("main.wave");
     let library = dir.join("unclosed.wave");
     let target = frontend_target();
-    for (marked, closer) in [
-        ("fun f@(", ")"),
-        ("fun f() @{\r\n", "}"),
-        ("fun f() { call(@[1,", "]"),
-    ] {
+    for (marked, closer) in
+        [("fun f@(", ")"), ("fun f() @{\r\n", "}"), ("fun f() { call(@[1,", "]")]
+    {
         let marked = format!("// 한글\r\n{marked}");
         let opener = marked.find('@').unwrap();
         let text = marked.replace('@', "");
@@ -586,20 +504,14 @@ fn eof_diagnostics_link_the_unmatched_opener_in_main_and_imported_sources() {
             let json = utils::wson::parse_json(&String::from_utf8(output.stderr).unwrap()).unwrap();
             let error = json.get("error").unwrap();
             assert_eq!(error.get_str("code"), Some("E2001"));
-            assert_eq!(
-                error.get("span").unwrap().get_num("start"),
-                Some(text.len() as f64)
-            );
+            assert_eq!(error.get("span").unwrap().get_num("start"), Some(text.len() as f64));
             let related = error.get_arr("related").unwrap();
             assert_eq!(related.len(), 1);
             assert!(related[0]
                 .get_str("message")
                 .unwrap()
                 .contains(&format!("expected '{closer}'")));
-            assert_eq!(
-                related[0].get("span").unwrap().get_num("start"),
-                Some(opener as f64)
-            );
+            assert_eq!(related[0].get("span").unwrap().get_num("start"), Some(opener as f64));
             assert!(related[0]
                 .get("span")
                 .unwrap()
@@ -703,11 +615,7 @@ fn backend_errors_keep_imported_spans_without_panic_message_guessing() {
     let source = dir.join("main.wave");
     let text = "pub fun helper() { asm { in(\"invalid_register\") 1 } }";
     std::fs::write(&library, text).unwrap();
-    std::fs::write(
-        &source,
-        "import(\"./assembly\")::{helper}; fun main() { helper(); }",
-    )
-    .unwrap();
+    std::fs::write(&source, "import(\"./assembly\")::{helper}; fun main() { helper(); }").unwrap();
     for format in ["human", "json"] {
         let output = wave(&[
             OsStr::new(&format!("--error-format={format}")),
@@ -727,10 +635,7 @@ fn backend_errors_keep_imported_spans_without_panic_message_guessing() {
                 && diagnostic.contains("lowering-validation"),
             "{diagnostic}"
         );
-        assert!(
-            !diagnostic.contains("panic") && !diagnostic.contains("inferred"),
-            "{diagnostic}"
-        );
+        assert!(!diagnostic.contains("panic") && !diagnostic.contains("inferred"), "{diagnostic}");
         if format == "json" {
             assert_eq!(diagnostic.lines().count(), 1);
         }
@@ -789,14 +694,8 @@ fn terminal_carets_use_display_cells_without_changing_json_locations() {
         .unwrap();
     assert!(!human.status.success());
     let text = String::from_utf8(human.stderr).unwrap();
-    assert!(
-        text.contains("  2 |     println(\"한e\u{301}\"); @"),
-        "{text}"
-    );
-    assert!(
-        text.contains(&format!("    | {}^", " ".repeat(20))),
-        "{text}"
-    );
+    assert!(text.contains("  2 |     println(\"한e\u{301}\"); @"), "{text}");
+    assert!(text.contains(&format!("    | {}^", " ".repeat(20))), "{text}");
     let json = wave(&[
         OsStr::new("check"),
         path.as_os_str(),
@@ -809,14 +708,8 @@ fn terminal_carets_use_display_cells_without_changing_json_locations() {
     let error = parsed.get("error").unwrap();
     assert_eq!(error.get_num("column"), Some(18.0));
     let span = error.get("span").unwrap();
-    assert_eq!(
-        span.get_num("start"),
-        Some(source.find('@').unwrap() as f64)
-    );
-    assert_eq!(
-        span.get_num("end"),
-        Some((source.find('@').unwrap() + 1) as f64)
-    );
+    assert_eq!(span.get_num("start"), Some(source.find('@').unwrap() as f64));
+    assert_eq!(span.get_num("end"), Some((source.find('@').unwrap() + 1) as f64));
     assert_eq!(span.get_num("column"), Some(18.0));
     assert_eq!(span.get_num("end_column"), Some(19.0));
     let _ = std::fs::remove_dir_all(dir);
@@ -827,9 +720,8 @@ fn expression_depth_is_bounded_across_check_build_and_ast() {
     let dir = directory();
     let target = frontend_target();
     let source = dir.join("depth.wave");
-    for kind in [
-        "group", "unary", "bitwise", "binary", "cast", "call", "array", "field", "struct",
-    ] {
+    for kind in ["group", "unary", "bitwise", "binary", "cast", "call", "array", "field", "struct"]
+    {
         for depth in [128, 129, 5000] {
             let expr = match kind {
                 "group" => format!("{}1{}", "(".repeat(depth), ")".repeat(depth)),
@@ -862,10 +754,11 @@ fn expression_depth_is_bounded_across_check_build_and_ast() {
                 };
                 #[cfg(not(target_os = "linux"))]
                 let mut command = Command::new(env!("CARGO_BIN_EXE_wavec"));
-                command
-                    .args([if entry == "ast" { "build" } else { entry }])
-                    .arg(&source)
-                    .args(["--target", &target, "--error-format=json"]);
+                command.args([if entry == "ast" { "build" } else { entry }]).arg(&source).args([
+                    "--target",
+                    &target,
+                    "--error-format=json",
+                ]);
                 if entry != "check" {
                     command.arg("--out-dir").arg(&dir);
                 }
@@ -898,14 +791,8 @@ fn expression_depth_is_bounded_across_check_build_and_ast() {
                     );
                     let json = utils::wson::parse_json(diagnostic.trim()).unwrap();
                     assert!(json.get("error").is_some(), "{diagnostic}");
-                    assert!(
-                        diagnostic.contains("depth.wave"),
-                        "missing source: {diagnostic}"
-                    );
-                    assert!(
-                        diagnostic.contains("\"line\""),
-                        "missing location: {diagnostic}"
-                    );
+                    assert!(diagnostic.contains("depth.wave"), "missing source: {diagnostic}");
+                    assert!(diagnostic.contains("\"line\""), "missing location: {diagnostic}");
                 }
             }
         }

@@ -40,10 +40,7 @@ pub fn apply_extern_c_attrs<'ctx>(
     let mut llvm_param_index: u32 = 0;
 
     if let Some(extension) = info.ret_extension {
-        f.add_attribute(
-            AttributeLoc::Return,
-            integer_extension_attr(context, extension),
-        );
+        f.add_attribute(AttributeLoc::Return, integer_extension_attr(context, extension));
     }
 
     // sret first param
@@ -61,7 +58,7 @@ pub fn apply_extern_c_attrs<'ctx>(
 
     for (p, extension) in info.params.iter().zip(info.param_extensions.iter()) {
         match p {
-            ParamLowering::Ignore => {}
+            ParamLowering::Ignore => {},
             ParamLowering::Direct(_) => {
                 if let Some(extension) = extension {
                     f.add_attribute(
@@ -70,16 +67,16 @@ pub fn apply_extern_c_attrs<'ctx>(
                     );
                 }
                 llvm_param_index += 1;
-            }
+            },
             ParamLowering::Split(parts) => {
                 llvm_param_index += parts.len() as u32;
-            }
+            },
             ParamLowering::CoerceAndExpand(parts) => {
                 llvm_param_index += parts.len() as u32;
-            }
+            },
             ParamLowering::Indirect { .. } => {
                 llvm_param_index += 1;
-            }
+            },
             ParamLowering::ByVal { ty, align } => {
                 let byval_kind = Attribute::get_named_enum_kind_id("byval");
                 let byval_attr = context.create_type_attribute(byval_kind, *ty);
@@ -90,7 +87,7 @@ pub fn apply_extern_c_attrs<'ctx>(
                 f.add_attribute(AttributeLoc::Param(llvm_param_index), align_attr);
 
                 llvm_param_index += 1;
-            }
+            },
         }
     }
 }
@@ -103,18 +100,12 @@ pub fn apply_extern_c_callsite_attrs<'ctx>(
     let mut llvm_param_index: u32 = 0;
 
     if let Some(extension) = info.ret_extension {
-        call.add_attribute(
-            AttributeLoc::Return,
-            integer_extension_attr(context, extension),
-        );
+        call.add_attribute(AttributeLoc::Return, integer_extension_attr(context, extension));
     }
 
     if let RetLowering::SRet { ty, align } = &info.ret {
         let sret_kind = Attribute::get_named_enum_kind_id("sret");
-        call.add_attribute(
-            AttributeLoc::Param(0),
-            context.create_type_attribute(sret_kind, *ty),
-        );
+        call.add_attribute(AttributeLoc::Param(0), context.create_type_attribute(sret_kind, *ty));
 
         let align_kind = Attribute::get_named_enum_kind_id("align");
         call.add_attribute(
@@ -127,7 +118,7 @@ pub fn apply_extern_c_callsite_attrs<'ctx>(
 
     for (p, extension) in info.params.iter().zip(info.param_extensions.iter()) {
         match p {
-            ParamLowering::Ignore => {}
+            ParamLowering::Ignore => {},
             ParamLowering::Direct(_) => {
                 if let Some(extension) = extension {
                     call.add_attribute(
@@ -136,16 +127,16 @@ pub fn apply_extern_c_callsite_attrs<'ctx>(
                     );
                 }
                 llvm_param_index += 1;
-            }
+            },
             ParamLowering::Split(parts) => {
                 llvm_param_index += parts.len() as u32;
-            }
+            },
             ParamLowering::CoerceAndExpand(parts) => {
                 llvm_param_index += parts.len() as u32;
-            }
+            },
             ParamLowering::Indirect { .. } => {
                 llvm_param_index += 1;
-            }
+            },
             ParamLowering::ByVal { ty, align } => {
                 let byval_kind = Attribute::get_named_enum_kind_id("byval");
                 call.add_attribute(
@@ -160,7 +151,7 @@ pub fn apply_extern_c_callsite_attrs<'ctx>(
                 );
 
                 llvm_param_index += 1;
-            }
+            },
         }
     }
 }

@@ -46,7 +46,7 @@ fn flatten_loongarch_fields<'ctx>(
                 }
             }
             true
-        }
+        },
         BasicTypeEnum::ArrayType(array_ty) => {
             let element = array_ty.get_element_type();
             let stride = td.get_abi_size(&element);
@@ -62,23 +62,17 @@ fn flatten_loongarch_fields<'ctx>(
                 }
             }
             true
-        }
+        },
         BasicTypeEnum::IntType(int_ty) if int_ty.get_bit_width() <= 64 => {
-            fields.push(AbiPart {
-                ty,
-                offset: base_offset,
-            });
+            fields.push(AbiPart { ty, offset: base_offset });
             fields.len() <= 2
-        }
+        },
         BasicTypeEnum::FloatType(_)
             if frlen_bytes != 0 && td.get_store_size(&ty) <= frlen_bytes =>
         {
-            fields.push(AbiPart {
-                ty,
-                offset: base_offset,
-            });
+            fields.push(AbiPart { ty, offset: base_offset });
             fields.len() <= 2
-        }
+        },
         _ => false,
     }
 }
@@ -95,10 +89,8 @@ fn loongarch_fars_eligible_struct<'ctx>(
     if !flatten_loongarch_fields(td, ty, 0, frlen_bytes, &mut fields) || fields.is_empty() {
         return None;
     }
-    let fars = fields
-        .iter()
-        .filter(|field| matches!(field.ty, BasicTypeEnum::FloatType(_)))
-        .count();
+    let fars =
+        fields.iter().filter(|field| matches!(field.ty, BasicTypeEnum::FloatType(_))).count();
     let gars = fields.len() - fars;
     if fars == 0 || gars > 1 {
         return None;
@@ -136,10 +128,7 @@ pub(super) fn classify_param_loongarch64<'ctx>(
     fars_left: &mut usize,
 ) -> ParamLowering<'ctx> {
     let size = td.get_store_size(&ty);
-    let is_aggregate = matches!(
-        ty,
-        BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_)
-    );
+    let is_aggregate = matches!(ty, BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_));
     if is_aggregate && size == 0 {
         return ParamLowering::Ignore;
     }
@@ -165,9 +154,7 @@ pub(super) fn classify_param_loongarch64<'ctx>(
 
     consume_loongarch_gars(td, ty, gars_left);
     if is_aggregate && size > 16 {
-        return ParamLowering::Indirect {
-            ty: ty.as_any_type_enum(),
-        };
+        return ParamLowering::Indirect { ty: ty.as_any_type_enum() };
     }
     if is_aggregate {
         return if size <= 8 {
@@ -189,10 +176,7 @@ pub(super) fn classify_ret_loongarch64<'ctx>(
         return RetLowering::Void;
     };
     let size = td.get_store_size(&ty);
-    let is_aggregate = matches!(
-        ty,
-        BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_)
-    );
+    let is_aggregate = matches!(ty, BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_));
     if is_aggregate && size == 0 {
         return RetLowering::Void;
     }
@@ -205,19 +189,13 @@ pub(super) fn classify_ret_loongarch64<'ctx>(
             }
             return RetLowering::Direct(
                 context
-                    .struct_type(
-                        &fields.iter().map(|field| field.ty).collect::<Vec<_>>(),
-                        false,
-                    )
+                    .struct_type(&fields.iter().map(|field| field.ty).collect::<Vec<_>>(), false)
                     .as_basic_type_enum(),
             );
         }
     }
     if is_aggregate && size > 16 {
-        return RetLowering::SRet {
-            ty: ty.as_any_type_enum(),
-            align: td.get_abi_alignment(&ty),
-        };
+        return RetLowering::SRet { ty: ty.as_any_type_enum(), align: td.get_abi_alignment(&ty) };
     }
     if is_aggregate {
         return if size <= 8 {

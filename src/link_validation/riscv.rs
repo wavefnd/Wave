@@ -62,14 +62,8 @@ impl fmt::Display for RiscvFloatAbi {
 #[derive(Debug)]
 pub enum AbiValidationError {
     Inspection(LinkInputInspectionError),
-    Unsupported {
-        input: String,
-    },
-    Mismatch {
-        target: RiscvFloatAbi,
-        input: String,
-        input_abi: RiscvFloatAbi,
-    },
+    Unsupported { input: String },
+    Mismatch { target: RiscvFloatAbi, input: String, input_abi: RiscvFloatAbi },
 }
 
 impl fmt::Display for AbiValidationError {
@@ -113,11 +107,8 @@ pub fn validate_riscv_link_inputs(
         if metadata.machine != EM_RISCV {
             continue;
         }
-        let input_abi = RiscvFloatAbi::from_elf_flags(metadata.flags).ok_or_else(|| {
-            AbiValidationError::Unsupported {
-                input: metadata.input.clone(),
-            }
-        })?;
+        let input_abi = RiscvFloatAbi::from_elf_flags(metadata.flags)
+            .ok_or_else(|| AbiValidationError::Unsupported { input: metadata.input.clone() })?;
         if input_abi != target_abi {
             return Err(AbiValidationError::Mismatch {
                 target: target_abi,

@@ -32,28 +32,18 @@ pub(crate) fn gen_constructor<'ctx, 'a>(
     let WaveType::Variant(name) = &construction.variant_type else {
         panic!("variant constructor metadata has a non-variant type");
     };
-    let variant_ty = *env
-        .struct_types
-        .get(name)
-        .unwrap_or_else(|| panic!("variant type '{}' not found", name));
-    let value_ptr = env
-        .builder
-        .build_alloca(variant_ty, &format!("variant.{}.value", name))
-        .unwrap();
-    env.builder
-        .build_store(value_ptr, variant_ty.const_zero())
-        .unwrap();
+    let variant_ty =
+        *env.struct_types.get(name).unwrap_or_else(|| panic!("variant type '{}' not found", name));
+    let value_ptr =
+        env.builder.build_alloca(variant_ty, &format!("variant.{}.value", name)).unwrap();
+    env.builder.build_store(value_ptr, variant_ty.const_zero()).unwrap();
 
-    let tag_ptr = env
-        .builder
-        .build_struct_gep(variant_ty, value_ptr, 0, "variant.tag.ptr")
-        .unwrap();
+    let tag_ptr =
+        env.builder.build_struct_gep(variant_ty, value_ptr, 0, "variant.tag.ptr").unwrap();
     env.builder
         .build_store(
             tag_ptr,
-            env.context
-                .i32_type()
-                .const_int(construction.discriminant as u64, false),
+            env.context.i32_type().const_int(construction.discriminant as u64, false),
         )
         .unwrap();
 
@@ -68,13 +58,8 @@ pub(crate) fn gen_constructor<'ctx, 'a>(
             name, construction.case_name
         );
     }
-    let payload_ptr = env
-        .builder
-        .build_alloca(payload_ty, "variant.payload.value")
-        .unwrap();
-    env.builder
-        .build_store(payload_ptr, payload_ty.const_zero())
-        .unwrap();
+    let payload_ptr = env.builder.build_alloca(payload_ty, "variant.payload.value").unwrap();
+    env.builder.build_store(payload_ptr, payload_ty.const_zero()).unwrap();
 
     for (index, (argument, payload_wave_type)) in
         args.iter().zip(&construction.payload_types).enumerate()
@@ -104,16 +89,10 @@ pub(crate) fn gen_constructor<'ctx, 'a>(
 
     let payload = env
         .builder
-        .build_load(
-            payload_ty.as_basic_type_enum(),
-            payload_ptr,
-            "variant.payload",
-        )
+        .build_load(payload_ty.as_basic_type_enum(), payload_ptr, "variant.payload")
         .unwrap();
-    let case_ptr = env
-        .builder
-        .build_struct_gep(variant_ty, value_ptr, 2, "variant.case.ptr")
-        .unwrap();
+    let case_ptr =
+        env.builder.build_struct_gep(variant_ty, value_ptr, 2, "variant.case.ptr").unwrap();
     env.builder.build_store(case_ptr, payload).unwrap();
     env.builder
         .build_load(variant_ty.as_basic_type_enum(), value_ptr, "variant.value")

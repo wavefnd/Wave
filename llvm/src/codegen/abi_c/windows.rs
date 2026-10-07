@@ -27,13 +27,9 @@ pub(super) fn classify_param_x86_64_windows<'ctx>(
         BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_) => match size {
             0 => ParamLowering::Ignore,
             1 | 2 | 4 | 8 => ParamLowering::Direct(
-                context
-                    .custom_width_int_type((size * 8) as u32)
-                    .as_basic_type_enum(),
+                context.custom_width_int_type((size * 8) as u32).as_basic_type_enum(),
             ),
-            _ => ParamLowering::Indirect {
-                ty: t.as_any_type_enum(),
-            },
+            _ => ParamLowering::Indirect { ty: t.as_any_type_enum() },
         },
         _ => ParamLowering::Direct(t),
     }
@@ -53,9 +49,7 @@ pub(super) fn classify_ret_x86_64_windows<'ctx>(
         BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_) => match size {
             0 => RetLowering::Void,
             1 | 2 | 4 | 8 => RetLowering::Direct(
-                context
-                    .custom_width_int_type((size * 8) as u32)
-                    .as_basic_type_enum(),
+                context.custom_width_int_type((size * 8) as u32).as_basic_type_enum(),
             ),
             _ => RetLowering::SRet {
                 ty: t.as_any_type_enum(),

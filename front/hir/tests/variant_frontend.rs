@@ -88,9 +88,7 @@ fun unwrap_bit(item: WrappedBit) -> i32 {
         .expect("outer variant pattern metadata");
     assert_eq!(outer.discriminant, 0);
     assert_eq!(outer.payload_types, [WaveType::Variant("Cell<i32>".into())]);
-    let MatchPattern::Variant { payloads, .. } = &arms[0].pattern else {
-        unreachable!()
-    };
+    let MatchPattern::Variant { payloads, .. } = &arms[0].pattern else { unreachable!() };
     let nested = program
         .variant_pattern(program.pattern_id(&payloads[0]).unwrap())
         .expect("nested variant pattern metadata");
@@ -125,9 +123,7 @@ fun none() -> Option<i32> {
         };
         assert_eq!(
             program.type_of(expression),
-            Some(&HirExpressionType::Resolved(WaveType::Variant(
-                "Option<i32>".into()
-            )))
+            Some(&HirExpressionType::Resolved(WaveType::Variant("Option<i32>".into())))
         );
         let construction = program
             .variant_construction(program.expression_id(expression).unwrap())
@@ -135,11 +131,7 @@ fun none() -> Option<i32> {
         assert_eq!(construction.discriminant, (index - 1) as u32);
         assert_eq!(
             construction.payload_types,
-            if index == 1 {
-                vec![WaveType::Int(32)]
-            } else {
-                Vec::new()
-            }
+            if index == 1 { vec![WaveType::Int(32)] } else { Vec::new() }
         );
     }
 }
@@ -170,9 +162,7 @@ fun make() {
     };
     assert_eq!(
         program.type_of(initializer),
-        Some(&HirExpressionType::Resolved(WaveType::Variant(
-            "Outer<i32>".into()
-        )))
+        Some(&HirExpressionType::Resolved(WaveType::Variant("Outer<i32>".into())))
     );
 }
 

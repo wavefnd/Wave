@@ -124,7 +124,7 @@ impl<'a> Lexer<'a> {
                                     .with_help(
                                         "valid string byte range: `01` to `FF`; NUL is not allowed",
                                     ));
-                            }
+                            },
                         };
 
                         if value == 0 {
@@ -139,7 +139,7 @@ impl<'a> Lexer<'a> {
                                 .with_help("use a byte array for data containing zero bytes"));
                         }
                         string_literal.push(value);
-                    }
+                    },
                     _ => {
                         return Err(self
                             .make_error(
@@ -154,7 +154,7 @@ impl<'a> Lexer<'a> {
                             .with_code("E1004")
                             .with_label("unsupported escape sequence")
                             .with_help("supported escapes: \\\\, \\\", \\n, \\t, \\r, \\xNN"));
-                    }
+                    },
                 }
             } else {
                 if c == '\0' {
@@ -287,10 +287,10 @@ impl<'a> Lexer<'a> {
                                 )
                                 .with_code("E1005")
                                 .with_help("hex escapes must be two hexadecimal digits"));
-                        }
+                        },
                     };
                     value as char
-                }
+                },
                 _ => {
                     return Err(self
                         .make_error(
@@ -304,7 +304,7 @@ impl<'a> Lexer<'a> {
                         )
                         .with_code("E1005")
                         .with_help("supported escapes: \\\\, \\\', \\n, \\t, \\r, \\xNN"));
-                }
+                },
             }
         } else {
             self.advance()

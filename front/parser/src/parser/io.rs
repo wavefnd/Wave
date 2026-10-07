@@ -35,16 +35,13 @@ pub fn parse_println(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, Pars
     tokens.next(); // Consume '('
 
     let content_token = tokens.peek().copied();
-    let mut content = if let Some(Token {
-        token_type: TokenType::String(content),
-        ..
-    }) = tokens.next()
-    {
-        content.clone()
-    } else {
-        println!("Error: Expected string literal in 'println'");
-        return Err(invalid(tokens.peek().copied()));
-    };
+    let mut content =
+        if let Some(Token { token_type: TokenType::String(content), .. }) = tokens.next() {
+            content.clone()
+        } else {
+            println!("Error: Expected string literal in 'println'");
+            return Err(invalid(tokens.peek().copied()));
+        };
 
     validate_placeholder_text(&content, content_token, false)?;
     let placeholder_count = count_placeholders(&content);
@@ -67,11 +64,7 @@ pub fn parse_println(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, Pars
     }
 
     let mut args = Vec::new();
-    while let Some(Token {
-        token_type: TokenType::Comma,
-        ..
-    }) = tokens.peek()
-    {
+    while let Some(Token { token_type: TokenType::Comma, .. }) = tokens.peek() {
         tokens.next(); // Consume ','
         args.push(parse_expression(tokens)?);
     }
@@ -89,26 +82,16 @@ pub fn parse_println(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, Pars
     tokens.next();
 
     if placeholder_count != args.len() {
-        println!(
-            "Error: Expected {} arguments, found {}",
-            placeholder_count,
-            args.len()
-        );
+        println!("Error: Expected {} arguments, found {}", placeholder_count, args.len());
         return Err(ParseError::syntax_at(
             content_token,
-            format!(
-                "expected {placeholder_count} format arguments, found {}",
-                args.len()
-            ),
+            format!("expected {placeholder_count} format arguments, found {}", args.len()),
         )
         .with_context("format arguments"));
     }
 
     content.push(b'\n');
-    Ok(ASTNode::Statement(StatementNode::PrintlnFormat {
-        format: content,
-        args,
-    }))
+    Ok(ASTNode::Statement(StatementNode::PrintlnFormat { format: content, args }))
 }
 
 // PRINT parsing
@@ -122,10 +105,7 @@ pub fn parse_print(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, ParseE
     tokens.next(); // Consume '('
 
     let content_token = tokens.peek().copied();
-    let content = if let Some(Token {
-        token_type: TokenType::String(content),
-        ..
-    }) = tokens.next()
+    let content = if let Some(Token { token_type: TokenType::String(content), .. }) = tokens.next()
     {
         content.clone()
     } else {
@@ -154,11 +134,7 @@ pub fn parse_print(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, ParseE
     }
 
     let mut args = Vec::new();
-    while let Some(Token {
-        token_type: TokenType::Comma,
-        ..
-    }) = tokens.peek()
-    {
+    while let Some(Token { token_type: TokenType::Comma, .. }) = tokens.peek() {
         tokens.next(); // Consume ','
         args.push(parse_expression(tokens)?);
     }
@@ -176,25 +152,15 @@ pub fn parse_print(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, ParseE
     tokens.next();
 
     if placeholder_count != args.len() {
-        println!(
-            "Error: Expected {} arguments, found {}",
-            placeholder_count,
-            args.len()
-        );
+        println!("Error: Expected {} arguments, found {}", placeholder_count, args.len());
         return Err(ParseError::syntax_at(
             content_token,
-            format!(
-                "expected {placeholder_count} format arguments, found {}",
-                args.len()
-            ),
+            format!("expected {placeholder_count} format arguments, found {}", args.len()),
         )
         .with_context("format arguments"));
     }
 
-    Ok(ASTNode::Statement(StatementNode::PrintFormat {
-        format: content,
-        args,
-    }))
+    Ok(ASTNode::Statement(StatementNode::PrintFormat { format: content, args }))
 }
 
 pub fn parse_input(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, ParseError> {
@@ -207,10 +173,7 @@ pub fn parse_input(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, ParseE
     tokens.next(); // Consume '('
 
     let content_token = tokens.peek().copied();
-    let content = if let Some(Token {
-        token_type: TokenType::String(content),
-        ..
-    }) = tokens.next()
+    let content = if let Some(Token { token_type: TokenType::String(content), .. }) = tokens.next()
     {
         content.clone() // Need clone() because it is String
     } else {
@@ -222,11 +185,7 @@ pub fn parse_input(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, ParseE
     let placeholder_count = count_placeholders(&content);
 
     let mut args = Vec::new();
-    while let Some(Token {
-        token_type: TokenType::Comma,
-        ..
-    }) = tokens.peek()
-    {
+    while let Some(Token { token_type: TokenType::Comma, .. }) = tokens.peek() {
         tokens.next(); // Consume ','
         args.push(parse_expression(tokens)?);
     }
@@ -244,18 +203,11 @@ pub fn parse_input(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, ParseE
     tokens.next();
 
     if placeholder_count != args.len() {
-        println!(
-            "Error: Expected {} arguments, found {}",
-            placeholder_count,
-            args.len()
-        );
+        println!("Error: Expected {} arguments, found {}", placeholder_count, args.len());
         return Err(invalid(tokens.peek().copied()));
     }
 
-    Ok(ASTNode::Statement(StatementNode::Input {
-        format: content,
-        args,
-    }))
+    Ok(ASTNode::Statement(StatementNode::Input { format: content, args }))
 }
 
 // Literal bytes outside placeholders are unrestricted. Placeholder names are
@@ -274,9 +226,7 @@ fn validate_placeholder_text(
     for part in parts {
         if let FormatFragment::Placeholder(spec) = part {
             if !(spec.is_empty() || !input && matches!(spec, "c" | "x" | "p" | "s" | "d")) {
-                return Err(invalid(format!(
-                    "unsupported format placeholder `{{{spec}}}`"
-                )));
+                return Err(invalid(format!("unsupported format placeholder `{{{spec}}}`")));
             }
         }
     }

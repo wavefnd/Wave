@@ -37,10 +37,7 @@ fun check(value: u64) -> bool {
     let Expression::Grouped(arithmetic) = right.as_ref() else {
         panic!("group");
     };
-    assert_eq!(
-        program.type_of(arithmetic),
-        Some(&HirExpressionType::Resolved(WaveType::Uint(64)))
-    );
+    assert_eq!(program.type_of(arithmetic), Some(&HirExpressionType::Resolved(WaveType::Uint(64))));
     let Expression::BinaryExpression { left, right, .. } = arithmetic.as_ref() else {
         panic!("arithmetic");
     };
@@ -77,10 +74,7 @@ fun calculate(left: i64, right: i64) -> i64 {
         panic!("expected total variable");
     };
     let binary = total.initial_value.as_ref().expect("expected initializer");
-    assert_eq!(
-        program.type_of(binary),
-        Some(&HirExpressionType::Resolved(WaveType::Int(64)))
-    );
+    assert_eq!(program.type_of(binary), Some(&HirExpressionType::Resolved(WaveType::Int(64))));
 
     let Expression::BinaryExpression { left, right, .. } = binary else {
         panic!("expected binary expression");
@@ -124,10 +118,7 @@ fun invalid() -> i32 {
     let tokens = lexer.tokenize().expect("lex should succeed");
     let syntax = parse_syntax_only(&tokens).expect("parse should succeed");
     let error = TypedProgram::lower(syntax).expect_err("lowering must reject invalid input");
-    assert!(error
-        .diagnostic()
-        .message
-        .contains("undeclared identifier `missing`"));
+    assert!(error.diagnostic().message.contains("undeclared identifier `missing`"));
 }
 
 #[test]
@@ -153,10 +144,7 @@ fun convert(value: Count) -> Status {
     let ASTNode::Variable(pointer) = &function.body[0] else {
         panic!("expected pointer variable");
     };
-    assert_eq!(
-        pointer.type_name,
-        WaveType::Pointer(Box::new(WaveType::Int(64)))
-    );
+    assert_eq!(pointer.type_name, WaveType::Pointer(Box::new(WaveType::Int(64))));
 
     let ASTNode::Statement(parser::ast::StatementNode::Return(Some(Expression::Cast {
         target_type,
@@ -179,9 +167,7 @@ fun check(value: u8) {
 "#,
     );
     program.verify_conversions().unwrap();
-    let ASTNode::Function(function) = &program.syntax()[0] else {
-        panic!()
-    };
+    let ASTNode::Function(function) = &program.syntax()[0] else { panic!() };
     let ASTNode::Statement(parser::ast::StatementNode::Expression(Expression::AssignOperation {
         value,
         ..
@@ -191,33 +177,19 @@ fun check(value: u8) {
     };
     let pointer_type =
         WaveType::Pointer(Box::new(WaveType::Array(Box::new(WaveType::Uint(64)), 3)));
-    assert_eq!(
-        program.numeric_expression_of(value).unwrap().result_type,
-        pointer_type
-    );
-    let Expression::AddressOf(array) = value.as_ref() else {
-        panic!()
-    };
+    assert_eq!(program.numeric_expression_of(value).unwrap().result_type, pointer_type);
+    let Expression::AddressOf(array) = value.as_ref() else { panic!() };
     assert_eq!(
         program.expected_type_of(array),
         Some(&WaveType::Array(Box::new(WaveType::Uint(64)), 3))
     );
-    let Expression::ArrayLiteral(elements) = array.as_ref() else {
-        panic!()
-    };
+    let Expression::ArrayLiteral(elements) = array.as_ref() else { panic!() };
     for element in elements {
         assert_eq!(program.expected_type_of(element), Some(&WaveType::Uint(64)));
-        assert_eq!(
-            program.numeric_expression_of(element).unwrap().result_type,
-            WaveType::Uint(64)
-        );
+        assert_eq!(program.numeric_expression_of(element).unwrap().result_type, WaveType::Uint(64));
     }
     assert_eq!(
-        program
-            .numeric_expression_of(&elements[0])
-            .unwrap()
-            .conversions[0]
-            .kind,
+        program.numeric_expression_of(&elements[0]).unwrap().conversions[0].kind,
         hir::conversions::ConversionKind::ZeroExtend
     );
 }

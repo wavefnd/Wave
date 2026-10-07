@@ -1,4 +1,6 @@
 *.wave linguist-language=Wave
 tests/** linguist-detectable=false
+# Match rustfmt's Unix newline style even with core.autocrlf enabled on Windows.
+*.rs text eol=lf
 # AST snapshots assert UTF-8 byte offsets, independently of checkout defaults.
 tests/fixtures/ast/* text eol=lf

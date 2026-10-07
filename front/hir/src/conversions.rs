@@ -79,18 +79,19 @@ pub fn integer_width(ty: &WaveType) -> Option<u16> {
         _ => None,
     }
 }
+
 pub fn unsigned(ty: &WaveType) -> bool {
-    matches!(
-        ty,
-        WaveType::Uint(_) | WaveType::Bool | WaveType::Byte | WaveType::Char
-    )
+    matches!(ty, WaveType::Uint(_) | WaveType::Bool | WaveType::Byte | WaveType::Char)
 }
+
 pub fn numeric(ty: &WaveType) -> bool {
     integer_width(ty).is_some() || matches!(ty, WaveType::Float(_))
 }
+
 fn pointer(ty: &WaveType) -> bool {
     matches!(ty, WaveType::Pointer(_) | WaveType::String)
 }
+
 pub(super) fn scalar(ty: &WaveType) -> bool {
     numeric(ty) || pointer(ty)
 }
@@ -123,17 +124,13 @@ pub fn conversion_kind(source: &WaveType, target: &WaveType) -> Option<Conversio
     match (source, target) {
         (WaveType::Float(a), WaveType::Float(b)) => {
             Some(if a < b { FloatExtend } else { FloatTruncate })
-        }
-        (_, WaveType::Float(_)) if integer_width(source).is_some() => Some(if unsigned(source) {
-            UnsignedToFloat
-        } else {
-            SignedToFloat
-        }),
-        (WaveType::Float(_), _) if integer_width(target).is_some() => Some(if unsigned(target) {
-            FloatToUnsigned
-        } else {
-            FloatToSigned
-        }),
+        },
+        (_, WaveType::Float(_)) if integer_width(source).is_some() => {
+            Some(if unsigned(source) { UnsignedToFloat } else { SignedToFloat })
+        },
+        (WaveType::Float(_), _) if integer_width(target).is_some() => {
+            Some(if unsigned(target) { FloatToUnsigned } else { FloatToSigned })
+        },
         _ if pointer(source) && integer_width(target).is_some() => Some(PointerToInteger),
         _ if integer_width(source).is_some() && pointer(target) => Some(IntegerToPointer),
         _ if pointer(source) && pointer(target) => Some(PointerCast),
@@ -152,17 +149,11 @@ impl FloatIntegerRange {
     pub fn contains(&self, value: f64) -> bool {
         value.is_finite()
             && value < self.upper
-            && if self.lower_inclusive {
-                value >= self.lower
-            } else {
-                value > self.lower
-            }
+            && if self.lower_inclusive { value >= self.lower } else { value > self.lower }
     }
 }
 pub fn float_integer_range(source: &WaveType, target: &WaveType) -> FloatIntegerRange {
-    let WaveType::Float(source_bits) = source else {
-        panic!("non-float conversion source")
-    };
+    let WaveType::Float(source_bits) = source else { panic!("non-float conversion source") };
     let round = |v: f64| {
         if *source_bits == 32 {
             (v as f32) as f64
@@ -175,11 +166,7 @@ pub fn float_integer_range(source: &WaveType, target: &WaveType) -> FloatInteger
     let upper = round(2f64.powi(i32::from(bits - u16::from(signed))));
     let minimum = if signed { -upper } else { 0.0 };
     let before_minimum = round(minimum - 1.0);
-    FloatIntegerRange {
-        lower: before_minimum,
-        lower_inclusive: before_minimum == minimum,
-        upper,
-    }
+    FloatIntegerRange { lower: before_minimum, lower_inclusive: before_minimum == minimum, upper }
 }
 
 impl NumericExpressionInfo {
@@ -200,11 +187,7 @@ impl NumericExpressionInfo {
         if previous != &self.result_type {
             return Err("conversion chain does not reach its result type".into());
         }
-        if self
-            .context_type
-            .as_ref()
-            .is_some_and(|target| target != &self.result_type)
-        {
+        if self.context_type.as_ref().is_some_and(|target| target != &self.result_type) {
             return Err("conversion chain does not satisfy its contextual destination".into());
         }
         Ok(())
@@ -222,24 +205,20 @@ fn comparison(op: &Operator) -> bool {
             | Operator::GreaterEqual
     )
 }
+
 fn literal(expr: &Expression) -> bool {
     match expr {
         Expression::Literal(Literal::Int(_) | Literal::Float(_)) => true,
-        Expression::Grouped(inner)
-        | Expression::Unary {
-            operator: Operator::Neg,
-            expr: inner,
-        } => literal(inner),
+        Expression::Grouped(inner) | Expression::Unary { operator: Operator::Neg, expr: inner } => {
+            literal(inner)
+        },
         _ => false,
     }
 }
 
 pub(super) fn build(program: &TypedProgram) -> Vec<Option<NumericExpressionInfo>> {
-    let mut planner = Planner {
-        program,
-        facts: vec![None; program.expression_count()],
-        seen: HashSet::new(),
-    };
+    let mut planner =
+        Planner { program, facts: vec![None; program.expression_count()], seen: HashSet::new() };
     super::walk_nodes(program.syntax(), &mut |expr| {
         if !planner.seen.contains(&program.expression_id(expr).unwrap()) {
             planner.plan(expr, program.expected_type_of(expr).cloned(), None);
@@ -273,6 +252,7 @@ impl Planner<'_> {
             _ => None,
         }
     }
+
     fn span(&self, expr: &Expression) -> SourceSpan {
         self.program
             .expression_id(expr)
@@ -290,6 +270,7 @@ impl Planner<'_> {
                 focus: None,
             })
     }
+
     fn append(
         &self,
         fact: &mut NumericExpressionInfo,
@@ -311,6 +292,7 @@ impl Planner<'_> {
         }
         fact.result_type = target;
     }
+
     fn plan(
         &mut self,
         expr: &Expression,
@@ -330,10 +312,7 @@ impl Planner<'_> {
             shift_count_type: None,
         };
         match expr {
-            Expression::Cast {
-                expr: inner,
-                target_type,
-            } => {
+            Expression::Cast { expr: inner, target_type } => {
                 let hint = if matches!(self.program.type_of(inner), Some(HirExpressionType::Null)) {
                     Some(target_type.clone())
                 } else {
@@ -350,23 +329,14 @@ impl Planner<'_> {
                 let inner_type = self.plan(inner, None, hint)?;
                 fact.evaluation_type = inner_type.clone();
                 fact.result_type = inner_type;
-                self.append(
-                    &mut fact,
-                    target_type.clone(),
-                    ConversionMode::Explicit,
-                    expr,
-                );
-            }
+                self.append(&mut fact, target_type.clone(), ConversionMode::Explicit, expr);
+            },
             Expression::Grouped(inner) => {
                 let inner_type = self.plan(inner, demand.clone(), literal_hint)?;
                 fact.evaluation_type = inner_type.clone();
                 fact.result_type = inner_type;
-            }
-            Expression::BinaryExpression {
-                left,
-                operator,
-                right,
-            } => {
+            },
+            Expression::BinaryExpression { left, operator, right } => {
                 let left_hint = self.program.expected_type_of(left);
                 let right_hint = self.program.expected_type_of(right);
                 let mut lt = self.source_type(left, left_hint);
@@ -383,17 +353,13 @@ impl Planner<'_> {
                 }
                 // A floating literal borrows a concrete floating operand's
                 // width, including when the literal is on the left of a comparison.
-                if matches!(
-                    self.program.type_of(left),
-                    Some(HirExpressionType::FloatLiteral)
-                ) && matches!(rt, Some(WaveType::Float(_)))
+                if matches!(self.program.type_of(left), Some(HirExpressionType::FloatLiteral))
+                    && matches!(rt, Some(WaveType::Float(_)))
                 {
                     lt = rt.clone();
                 }
-                if matches!(
-                    self.program.type_of(right),
-                    Some(HirExpressionType::FloatLiteral)
-                ) && matches!(lt, Some(WaveType::Float(_)))
+                if matches!(self.program.type_of(right), Some(HirExpressionType::FloatLiteral))
+                    && matches!(lt, Some(WaveType::Float(_)))
                 {
                     rt = lt.clone();
                 }
@@ -454,21 +420,14 @@ impl Planner<'_> {
                         }
                     }
                 }
-            }
-            Expression::AssignOperation {
-                target,
-                value,
-                operator,
-            } => {
+            },
+            Expression::AssignOperation { target, value, operator } => {
                 let ty = self.source_type(target, None)?;
                 self.plan(target, None, None);
                 self.plan(value, Some(ty.clone()), None);
                 fact.computation_type = (!matches!(operator, AssignOperator::Assign)).then_some(ty);
-            }
-            Expression::Unary {
-                operator,
-                expr: inner,
-            } => {
+            },
+            Expression::Unary { operator, expr: inner } => {
                 let input = if matches!(operator, Operator::Not | Operator::LogicalNot) {
                     self.plan(inner, None, None)?
                 } else {
@@ -481,8 +440,8 @@ impl Planner<'_> {
                     input
                 };
                 fact.result_type = fact.evaluation_type.clone();
-            }
-            _ => {}
+            },
+            _ => {},
         }
         if let Some(target) = demand.filter(scalar) {
             self.append(&mut fact, target, ConversionMode::Implicit, expr);
@@ -517,10 +476,7 @@ pub(super) fn verify_expression(
             .ok_or_else(|| "missing scalar operand facts".to_string())
     };
     match expr {
-        Expression::Cast {
-            expr: inner,
-            target_type,
-        } => {
+        Expression::Cast { expr: inner, target_type } => {
             if child(inner)?.result_type != fact.evaluation_type {
                 return Err("cast input differs from operand result".into());
             }
@@ -530,17 +486,13 @@ pub(super) fn verify_expression(
             if step.mode != ConversionMode::Explicit || &step.target_type != target_type {
                 return Err("cast lost its explicit conversion".into());
             }
-        }
+        },
         Expression::Grouped(inner) => {
             if child(inner)?.result_type != fact.evaluation_type {
                 return Err("group input differs from operand result".into());
             }
-        }
-        Expression::BinaryExpression {
-            left,
-            operator,
-            right,
-        } => {
+        },
+        Expression::BinaryExpression { left, operator, right } => {
             for operand in [left.as_ref(), right.as_ref()] {
                 if matches!(program.type_of(operand), Some(HirExpressionType::Null))
                     || program.type_of(operand).is_some_and(|ty| match ty {
@@ -552,10 +504,8 @@ pub(super) fn verify_expression(
                     child(operand)?;
                 }
             }
-            let operands = (
-                program.numeric_expression_of(left),
-                program.numeric_expression_of(right),
-            );
+            let operands =
+                (program.numeric_expression_of(left), program.numeric_expression_of(right));
             if let (Some(left), Some(right)) = operands {
                 if numeric(&left.result_type) && numeric(&right.result_type) {
                     let Some(computation) = &fact.computation_type else {
@@ -584,22 +534,16 @@ pub(super) fn verify_expression(
                         if &left.result_type != computation || &right.result_type != computation {
                             return Err("operand conversion does not reach computation type".into());
                         }
-                        let result = if comparison(operator) {
-                            &WaveType::Bool
-                        } else {
-                            computation
-                        };
+                        let result =
+                            if comparison(operator) { &WaveType::Bool } else { computation };
                         if &fact.evaluation_type != result {
                             return Err("binary result disagrees with computation".into());
                         }
                     }
                 }
             }
-        }
-        Expression::Unary {
-            operator,
-            expr: inner,
-        } => {
+        },
+        Expression::Unary { operator, expr: inner } => {
             let input = &child(inner)?.result_type;
             if fact.computation_type.as_ref() != Some(input) {
                 return Err("unary computation differs from operand result".into());
@@ -612,12 +556,8 @@ pub(super) fn verify_expression(
             if &fact.evaluation_type != result {
                 return Err("unary result disagrees with computation".into());
             }
-        }
-        Expression::AssignOperation {
-            target,
-            value,
-            operator,
-        } => {
+        },
+        Expression::AssignOperation { target, value, operator } => {
             let lhs = &child(target)?.result_type;
             if (!matches!(operator, AssignOperator::Assign)
                 && fact.computation_type.as_ref() != Some(lhs))
@@ -625,8 +565,8 @@ pub(super) fn verify_expression(
             {
                 return Err("compound assignment operands differ from computation type".into());
             }
-        }
-        _ => {}
+        },
+        _ => {},
     }
     Ok(())
 }
@@ -636,18 +576,13 @@ mod tests {
     use super::*;
     use parser::ast::ASTNode;
     fn program(source: &str) -> TypedProgram {
-        let tokens = lexer::Lexer::new_with_file(source, "conversions.wave")
-            .tokenize()
-            .unwrap();
+        let tokens = lexer::Lexer::new_with_file(source, "conversions.wave").tokenize().unwrap();
         TypedProgram::lower(parser::parse_syntax_with_spans(&tokens).unwrap()).unwrap()
     }
+
     fn initializer(p: &TypedProgram, index: usize) -> &Expression {
-        let ASTNode::Function(f) = &p.syntax()[0] else {
-            panic!()
-        };
-        let ASTNode::Variable(v) = &f.body[index] else {
-            panic!()
-        };
+        let ASTNode::Function(f) = &p.syntax()[0] else { panic!() };
+        let ASTNode::Variable(v) = &f.body[index] else { panic!() };
         v.initial_value.as_ref().unwrap()
     }
     #[test]
@@ -656,11 +591,7 @@ mod tests {
         for source_bits in [32, 64] {
             for bits in [8, 16, 32, 64, 128, 256, 512, 1024] {
                 for signed in [false, true] {
-                    let target = if signed {
-                        WaveType::Int(bits)
-                    } else {
-                        WaveType::Uint(bits)
-                    };
+                    let target = if signed { WaveType::Int(bits) } else { WaveType::Uint(bits) };
                     let range = float_integer_range(&WaveType::Float(source_bits), &target);
                     let edge = 2f64.powi(i32::from(bits - u16::from(signed)));
                     let mut values = vec![
@@ -693,11 +624,7 @@ mod tests {
                         }
                     }
                     for value in values {
-                        let value = if source_bits == 32 {
-                            (value as f32) as f64
-                        } else {
-                            value
-                        };
+                        let value = if source_bits == 32 { (value as f32) as f64 } else { value };
                         let exact = ConstInt::from_f64(value).is_some_and(|n| n.fits(bits, signed));
                         assert_eq!(
                             range.contains(value),
@@ -719,10 +646,7 @@ mod tests {
         assert_eq!(shift.shift_count_type, Some(WaveType::Uint(64)));
         assert_eq!(shift.computation_type, Some(WaveType::Uint(8)));
         assert_eq!(
-            p.numeric_expression_of(initializer(&p, 1))
-                .unwrap()
-                .conversions[0]
-                .kind,
+            p.numeric_expression_of(initializer(&p, 1)).unwrap().conversions[0].kind,
             ConversionKind::IntegerToBool
         );
     }
@@ -733,9 +657,7 @@ mod tests {
         let p = program(source);
         p.verify_conversions().unwrap();
         let outer = initializer(&p, 0);
-        let Expression::Cast { expr: inner, .. } = outer else {
-            panic!()
-        };
+        let Expression::Cast { expr: inner, .. } = outer else { panic!() };
         let small = p.numeric_expression_of(inner).unwrap();
         assert_eq!(
             small.conversions.iter().map(|c| c.kind).collect::<Vec<_>>(),
@@ -754,17 +676,11 @@ mod tests {
             assert!(source[conversion.span.start..conversion.span.end].contains("as"));
         }
         assert_eq!(
-            p.numeric_expression_of(initializer(&p, 1))
-                .unwrap()
-                .conversions[0]
-                .kind,
+            p.numeric_expression_of(initializer(&p, 1)).unwrap().conversions[0].kind,
             ConversionKind::ReinterpretInteger
         );
         assert_eq!(
-            p.numeric_expression_of(initializer(&p, 2))
-                .unwrap()
-                .conversions[0]
-                .kind,
+            p.numeric_expression_of(initializer(&p, 2)).unwrap().conversions[0].kind,
             ConversionKind::Identity
         );
     }
@@ -776,9 +692,7 @@ mod tests {
         assert_eq!(f.computation_type, Some(WaveType::Int(32)));
         assert_eq!(f.conversions[0].kind, ConversionKind::SignedToFloat);
         let sum = initializer(&p, 1);
-        let Expression::BinaryExpression { left, right, .. } = sum else {
-            panic!()
-        };
+        let Expression::BinaryExpression { left, right, .. } = sum else { panic!() };
         assert_eq!(
             p.numeric_expression_of(sum).unwrap().computation_type,
             Some(WaveType::Uint(32))
@@ -787,19 +701,14 @@ mod tests {
             p.numeric_expression_of(left).unwrap().conversions[0].kind,
             ConversionKind::SignExtend
         );
-        assert_eq!(
-            p.numeric_expression_of(right).unwrap().result_type,
-            WaveType::Uint(32)
-        );
+        assert_eq!(p.numeric_expression_of(right).unwrap().result_type, WaveType::Uint(32));
     }
     #[test]
     fn verifier_rejects_missing_facts_disconnected_chains_wrong_kind_and_wrong_computation() {
         for mutation in 0..6 {
             let mut p =
                 program("fun check(x: i32) { var y: i64 = x as u8 as i32; var z: i64 = x + x; }");
-            let id = p
-                .expression_id(initializer(&p, if mutation == 4 { 1 } else { 0 }))
-                .unwrap();
+            let id = p.expression_id(initializer(&p, if mutation == 4 { 1 } else { 0 })).unwrap();
             let fact = p.numeric_expressions[id.index()].as_mut().unwrap();
             match mutation {
                 0 => p.numeric_expressions[id.index()] = None,
@@ -810,13 +719,10 @@ mod tests {
                 5 => {
                     fact.conversions.pop();
                     fact.result_type = WaveType::Int(32);
-                }
+                },
                 _ => unreachable!(),
             }
-            assert!(
-                p.verify_conversions().is_err(),
-                "mutation {mutation} escaped verifier"
-            );
+            assert!(p.verify_conversions().is_err(), "mutation {mutation} escaped verifier");
         }
     }
 }

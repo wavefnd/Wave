@@ -17,6 +17,7 @@ impl Case {
         fs::create_dir_all(&p).unwrap();
         Self(p)
     }
+
     fn command(&self) -> Command {
         let mut c = Command::new(env!("CARGO_BIN_EXE_wavec"));
         c.current_dir(&self.0)
@@ -24,15 +25,18 @@ impl Case {
             .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("std"));
         c
     }
+
     fn source(&self, source: &str) {
         fs::write(self.0.join("case.wave"), source).unwrap();
     }
+
     fn build(&self, opt: &str) -> Output {
         self.command()
             .args(["build", "case.wave", opt, "--emit=ir,bin", "-o", "case.exe"])
             .output()
             .unwrap()
     }
+
     fn run(&self, source: &str) {
         self.source(source);
         for opt in ["-O0", "-O2"] {
@@ -55,6 +59,7 @@ fn ok(o: Output) {
         String::from_utf8_lossy(&o.stderr)
     );
 }
+
 fn native() -> bool {
     let o = Command::new(env!("CARGO_BIN_EXE_wavec"))
         .args(["print", "default-target"])
@@ -76,28 +81,13 @@ fn constant_errors_agree_between_check_and_build() {
     for (source, message) in [
         ("const N: i32 = 1 / 0;", "division or remainder by zero"),
         ("const N: i32 = 1 % 0;", "division or remainder by zero"),
-        (
-            "const N: i8 = (-128 as i8) / (-1 as i8);",
-            "signed division overflows",
-        ),
+        ("const N: i8 = (-128 as i8) / (-1 as i8);", "signed division overflows"),
         ("const N: i32 = 1 << 32;", "shift count"),
         ("const N: i32 = (0.0 / 0.0) as i32;", "NaN or infinity"),
-        (
-            "fun f() -> i32 { return 3; } const N: i32 = f();",
-            "unsupported constant expression",
-        ),
-        (
-            "static N: i32 = 1; const M: i32 = N;",
-            "unsupported constant expression",
-        ),
-        (
-            "const A: array<i32, 1> = [1]; const N: i32 = A[0];",
-            "unsupported constant expression",
-        ),
-        (
-            "const P: ptr<i32> = null; const Q: ptr<i32> = P + 1;",
-            "unsupported constant expression",
-        ),
+        ("fun f() -> i32 { return 3; } const N: i32 = f();", "unsupported constant expression"),
+        ("static N: i32 = 1; const M: i32 = N;", "unsupported constant expression"),
+        ("const A: array<i32, 1> = [1]; const N: i32 = A[0];", "unsupported constant expression"),
+        ("const P: ptr<i32> = null; const Q: ptr<i32> = P + 1;", "unsupported constant expression"),
         (
             "fun f() -> bool { return true; } const N: bool = false && f();",
             "unsupported constant expression",
@@ -112,10 +102,7 @@ fn constant_errors_agree_between_check_and_build() {
                     .output()
                     .unwrap();
                 let err = String::from_utf8_lossy(&out.stderr);
-                assert!(
-                    !out.status.success() && err.contains(message),
-                    "{source}: {out:?}"
-                );
+                assert!(!out.status.success() && err.contains(message), "{source}: {out:?}");
                 if format == "json" {
                     let value = utils::wson::parse_json(err.trim()).unwrap();
                     let error = value.get("error").unwrap();
@@ -137,10 +124,7 @@ fn cli_preserves_signal_and_regular_child_status() {
     case.source(
         "extern(c) fun raise(signal: i32) -> i32; fun main() -> i32 { raise(15); return 0; }",
     );
-    for args in [
-        vec!["run", "case.wave"],
-        vec!["build", "case.wave", "--run"],
-    ] {
+    for args in [vec!["run", "case.wave"], vec!["build", "case.wave", "--run"]] {
         let out = case.command().args(args).output().unwrap();
         assert_eq!(out.status.code(), Some(143), "{out:?}");
     }
@@ -159,12 +143,7 @@ fn webassembly_mmap_rejects_without_allocator_effects() {
             .command()
             .arg("build")
             .arg(root.join("tests/fixtures/release_constants/mmap.wave"))
-            .args([
-                "--target=wasm64-unknown-unknown",
-                "--emit=obj",
-                opt,
-                "--out-dir",
-            ])
+            .args(["--target=wasm64-unknown-unknown", "--emit=obj", opt, "--out-dir"])
             .arg(&case.0)
             .output()
             .unwrap());

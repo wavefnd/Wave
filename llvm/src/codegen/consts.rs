@@ -34,11 +34,7 @@ use super::types::{wave_type_to_llvm_type, TypeFlavor};
 #[derive(Debug, Clone)]
 pub enum ConstEvalError {
     UnknownIdentifier(String),
-    TypeMismatch {
-        expected: String,
-        got: String,
-        note: String,
-    },
+    TypeMismatch { expected: String, got: String, note: String },
     InvalidLiteral(String),
     Unsupported(String),
 }
@@ -47,17 +43,9 @@ impl fmt::Display for ConstEvalError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             ConstEvalError::UnknownIdentifier(n) => write!(f, "unknown const identifier `{}`", n),
-            ConstEvalError::TypeMismatch {
-                expected,
-                got,
-                note,
-            } => {
-                write!(
-                    f,
-                    "type mismatch (expected {}, got {}): {}",
-                    expected, got, note
-                )
-            }
+            ConstEvalError::TypeMismatch { expected, got, note } => {
+                write!(f, "type mismatch (expected {}, got {}): {}", expected, got, note)
+            },
             ConstEvalError::InvalidLiteral(s) => write!(f, "invalid literal: {}", s),
             ConstEvalError::Unsupported(s) => write!(f, "unsupported const expression: {}", s),
         }
@@ -101,15 +89,15 @@ fn const_from_expected<'ctx>(
                 return Ok(ty
                     .const_int_arbitrary_precision(&n.to_le_words(ty.get_bit_width() as u16))
                     .into());
-            }
+            },
             (hir::ConstantValue::Float(n), BasicTypeEnum::FloatType(ty)) => {
                 return Ok(ty.const_float(*n).into());
-            }
+            },
             _ => {
                 return Err(ConstEvalError::Unsupported(
                     "ICE: folded constant differs from HIR storage type".into(),
                 ))
-            }
+            },
         }
     }
     let Some(fact) = program.numeric_expression_of(expr) else {
@@ -125,12 +113,8 @@ fn const_from_expected<'ctx>(
             target_data,
         );
     };
-    let native = wave_type_to_llvm_type(
-        context,
-        &fact.evaluation_type,
-        struct_types,
-        TypeFlavor::Value,
-    );
+    let native =
+        wave_type_to_llvm_type(context, &fact.evaluation_type, struct_types, TypeFlavor::Value);
     let mut value = match expr {
         Expression::Cast { expr: inner, .. } | Expression::Grouped(inner) => const_from_expected(
             context,
@@ -187,9 +171,7 @@ fn const_from_expected<'ctx>(
         }
     }
     if value.as_instruction_value().is_some() {
-        return Err(ConstEvalError::Unsupported(
-            "conversion did not fold to a constant".into(),
-        ));
+        return Err(ConstEvalError::Unsupported("conversion did not fold to a constant".into()));
     }
     Ok(value)
 }
@@ -222,7 +204,7 @@ fn const_raw<'ctx>(
                     note: "variant constructor used where a non-variant constant is expected"
                         .to_string(),
                 });
-            }
+            },
         };
         let args: &[Expression] = match expr {
             Expression::FunctionCall { args, .. } => args,
@@ -236,7 +218,7 @@ fn const_raw<'ctx>(
                     },
                     construction.case_name
                 )));
-            }
+            },
         };
         if args.len() != construction.payload_types.len() {
             return Err(ConstEvalError::Unsupported(format!(
@@ -259,14 +241,12 @@ fn const_raw<'ctx>(
 
         let mut payload_values = Vec::with_capacity(args.len());
         for (index, argument) in args.iter().enumerate() {
-            let field_type = payload_ty
-                .get_field_type_at_index(index as u32)
-                .ok_or_else(|| {
-                    ConstEvalError::Unsupported(format!(
-                        "variant case '{}' has no payload field {}",
-                        construction.case_name, index
-                    ))
-                })?;
+            let field_type = payload_ty.get_field_type_at_index(index as u32).ok_or_else(|| {
+                ConstEvalError::Unsupported(format!(
+                    "variant case '{}' has no payload field {}",
+                    construction.case_name, index
+                ))
+            })?;
             payload_values.push(const_from_expected(
                 context,
                 module,
@@ -293,10 +273,7 @@ fn const_raw<'ctx>(
             .const_int(construction.discriminant as u64, false)
             .as_basic_value_enum();
         let payload_value = payload_ty.const_named_struct(&payload_values);
-        let storage_ty = variant_ty
-            .get_field_type_at_index(2)
-            .unwrap()
-            .into_array_type();
+        let storage_ty = variant_ty.get_field_type_at_index(2).unwrap().into_array_type();
         let mut bytes = vec![0; storage_ty.len() as usize];
         super::variants::constant_storage_bytes(
             context,
@@ -321,7 +298,7 @@ fn const_raw<'ctx>(
                 program,
                 target_data,
             );
-        }
+        },
 
         Expression::Variable(name) => {
             let v = match const_env.get(name) {
@@ -346,7 +323,7 @@ fn const_raw<'ctx>(
             }
 
             Ok(v)
-        }
+        },
 
         Expression::Null => match expected {
             BasicTypeEnum::PointerType(pt) => Ok(pt.const_null().as_basic_value_enum()),
@@ -357,9 +334,9 @@ fn const_raw<'ctx>(
             }),
         },
 
-        Expression::Cast { .. } => Err(ConstEvalError::Unsupported(
-            "ICE: cast missing HIR conversion facts".into(),
-        )),
+        Expression::Cast { .. } => {
+            Err(ConstEvalError::Unsupported("ICE: cast missing HIR conversion facts".into()))
+        },
         Expression::Literal(Literal::String(bytes)) => {
             let value = context.const_string(bytes, true);
             let global = module.add_global(value.get_type(), None, "$const$str");
@@ -367,17 +344,17 @@ fn const_raw<'ctx>(
             global.set_constant(true);
             global.set_linkage(Linkage::Private);
             Ok(global.as_pointer_value().into())
-        }
+        },
         Expression::Literal(Literal::Char(value)) => {
             Ok(context.i8_type().const_int(*value as u64, false).into())
-        }
+        },
         Expression::Literal(Literal::Byte(value)) => {
             Ok(context.i8_type().const_int(u64::from(*value), false).into())
-        }
+        },
         Expression::Literal(Literal::Bool(value)) => match expected {
             BasicTypeEnum::IntType(ty) => {
                 Ok(ty.const_int(u64::from(*value), false).as_basic_value_enum())
-            }
+            },
             _ => Err(ConstEvalError::TypeMismatch {
                 expected: type_name(expected),
                 got: "bool".into(),
@@ -387,15 +364,11 @@ fn const_raw<'ctx>(
         // --- ints ---
         Expression::Literal(Literal::Int(s)) => match expected {
             BasicTypeEnum::FloatType(float_ty) => {
-                let bits = if float_ty == context.f32_type() {
-                    32
-                } else {
-                    64
-                };
+                let bits = if float_ty == context.f32_type() { 32 } else { 64 };
                 let value = hir::integer_literal_float(s, bits)
                     .ok_or_else(|| ConstEvalError::InvalidLiteral(s.clone()))?;
                 Ok(float_ty.const_float(value).as_basic_value_enum())
-            }
+            },
             BasicTypeEnum::IntType(int_ty) => {
                 let (neg, radix, digits) = parse_signed_and_radix(s);
                 let mut iv = int_ty
@@ -406,7 +379,7 @@ fn const_raw<'ctx>(
                     iv = iv.const_neg();
                 }
                 Ok(iv.as_basic_value_enum())
-            }
+            },
             BasicTypeEnum::PointerType(ptr_ty) => {
                 if is_zero_like(s) {
                     Ok(ptr_ty.const_null().as_basic_value_enum())
@@ -417,7 +390,7 @@ fn const_raw<'ctx>(
                         note: "only 0 can be used as a const null pointer literal".to_string(),
                     })
                 }
-            }
+            },
             _ => Err(ConstEvalError::TypeMismatch {
                 expected: type_name(expected),
                 got: format!("int({})", s),
@@ -429,7 +402,7 @@ fn const_raw<'ctx>(
         Expression::Literal(Literal::Float(fv)) => match expected {
             BasicTypeEnum::FloatType(float_ty) => {
                 Ok(float_ty.const_float(*fv).as_basic_value_enum())
-            }
+            },
             _ => Err(ConstEvalError::TypeMismatch {
                 expected: type_name(expected),
                 got: "float".to_string(),
@@ -447,7 +420,7 @@ fn const_raw<'ctx>(
                         got: "struct-literal".to_string(),
                         note: format!("StructLiteral '{}' used where non-struct expected", name),
                     })
-                }
+                },
             };
 
             let field_count = st.count_fields() as usize;
@@ -455,10 +428,7 @@ fn const_raw<'ctx>(
             let struct_name = if !name.is_empty() {
                 name.as_str()
             } else {
-                st.get_name()
-                    .and_then(|c| c.to_str().ok())
-                    .map(strip_struct_prefix)
-                    .unwrap_or("")
+                st.get_name().and_then(|c| c.to_str().ok()).map(strip_struct_prefix).unwrap_or("")
             };
 
             let positional = fields.iter().all(|(n, _)| n.is_empty());
@@ -540,7 +510,7 @@ fn const_raw<'ctx>(
             }
 
             Ok(st.const_named_struct(&ordered).as_basic_value_enum())
-        }
+        },
 
         // --- array literal ---
         Expression::ArrayLiteral(elems) => match expected {
@@ -585,11 +555,11 @@ fn const_raw<'ctx>(
                                         got: value_type_name(other),
                                         note: "array element expected int".to_string(),
                                     })
-                                }
+                                },
                             }
                         }
                         Ok(int_ty.const_array(&vs).as_basic_value_enum())
-                    }
+                    },
 
                     BasicTypeEnum::FloatType(float_ty) => {
                         let mut vs = Vec::with_capacity(len);
@@ -602,11 +572,11 @@ fn const_raw<'ctx>(
                                         got: value_type_name(other),
                                         note: "array element expected float".to_string(),
                                     })
-                                }
+                                },
                             }
                         }
                         Ok(float_ty.const_array(&vs).as_basic_value_enum())
-                    }
+                    },
 
                     BasicTypeEnum::PointerType(ptr_ty) => {
                         let mut vs = Vec::with_capacity(len);
@@ -619,11 +589,11 @@ fn const_raw<'ctx>(
                                         got: value_type_name(other),
                                         note: "array element expected pointer".to_string(),
                                     })
-                                }
+                                },
                             }
                         }
                         Ok(ptr_ty.const_array(&vs).as_basic_value_enum())
-                    }
+                    },
 
                     BasicTypeEnum::StructType(st_ty) => {
                         let mut vs = Vec::with_capacity(len);
@@ -636,11 +606,11 @@ fn const_raw<'ctx>(
                                         got: value_type_name(other),
                                         note: "array element expected struct".to_string(),
                                     })
-                                }
+                                },
                             }
                         }
                         Ok(st_ty.const_array(&vs).as_basic_value_enum())
-                    }
+                    },
 
                     BasicTypeEnum::ArrayType(inner_at) => {
                         let mut vs = Vec::with_capacity(len);
@@ -653,18 +623,18 @@ fn const_raw<'ctx>(
                                         got: value_type_name(other),
                                         note: "array element expected array".to_string(),
                                     })
-                                }
+                                },
                             }
                         }
                         Ok(inner_at.const_array(&vs).as_basic_value_enum())
-                    }
+                    },
 
                     other => Err(ConstEvalError::Unsupported(format!(
                         "Unsupported const array element type: {:?}",
                         other
                     ))),
                 }
-            }
+            },
             _ => Err(ConstEvalError::TypeMismatch {
                 expected: type_name(expected),
                 got: "array-literal".to_string(),

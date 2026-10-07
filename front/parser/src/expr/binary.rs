@@ -72,23 +72,16 @@ where
     ) -> Result<(), ParseError> {
         let right = values.pop().expect("binary right operand");
         let left = values.pop().expect("binary left operand");
-        values.push(crate::expression_depth::parsed(
-            Expression::binary(left, op, right),
-            token,
-        )?);
+        values.push(crate::expression_depth::parsed(Expression::binary(left, op, right), token)?);
         Ok(())
     }
     let mut values = vec![first];
     let mut operators: Vec<(Operator, u8)> = Vec::new();
-    while let Some((op, precedence)) = tokens
-        .peek()
-        .and_then(|token| binary_operator(&token.token_type))
+    while let Some((op, precedence)) =
+        tokens.peek().and_then(|token| binary_operator(&token.token_type))
     {
         let anchor = tokens.next();
-        while operators
-            .last()
-            .is_some_and(|(_, previous)| *previous >= precedence)
-        {
+        while operators.last().is_some_and(|(_, previous)| *previous >= precedence) {
             let (previous, _) = operators.pop().unwrap();
             fold(&mut values, previous, anchor)?;
         }
@@ -126,11 +119,7 @@ where
         let target_type = parse_type_from_stream(tokens).ok_or_else(|| {
             ParseError::expected_at(tokens.peek().copied(), anchor, "type", "cast expression")
         })?;
-        expr = Expression::Cast {
-            expr: Box::new(expr),
-            target_type,
-        }
-        .with_span(
+        expr = Expression::Cast { expr: Box::new(expr), target_type }.with_span(
             first
                 .as_ref()
                 .zip(lexer::consumed_span(before, tokens))

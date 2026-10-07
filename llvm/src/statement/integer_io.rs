@@ -29,18 +29,12 @@ fn install<'ctx>(
     ir: &str,
 ) -> FunctionValue<'ctx> {
     let buffer = MemoryBuffer::create_from_memory_range_copy(ir.as_bytes(), "integer.io");
-    let helper = context
-        .create_module_from_ir(buffer)
-        .expect("valid integer I/O helper IR");
+    let helper = context.create_module_from_ir(buffer).expect("valid integer I/O helper IR");
     helper.set_triple(&module.get_triple());
     helper.set_data_layout(&module.get_data_layout());
     helper.verify().expect("valid integer I/O helper");
-    module
-        .link_in_module(helper)
-        .expect("link integer I/O helper");
-    let function = module
-        .get_function(name)
-        .expect("installed integer I/O helper");
+    module.link_in_module(helper).expect("link integer I/O helper");
+    let function = module.get_function(name).expect("installed integer I/O helper");
     function.set_linkage(Linkage::Internal);
     function
 }
@@ -191,22 +185,15 @@ pub(super) fn scanner<'ctx>(
     let negative = limit(bits, signed, true, boolean);
     let split = |text: &str| {
         (
-            if text.len() == 1 {
-                "0".to_string()
-            } else {
-                text[..text.len() - 1].to_string()
-            },
+            if text.len() == 1 { "0".to_string() } else { text[..text.len() - 1].to_string() },
             text.as_bytes()[text.len() - 1] - b'0',
         )
     };
     let (posq, posr) = split(&positive);
     let (negq, negr) = split(&negative);
     let signed_literal = if signed { "true" } else { "false" };
-    let cast = if bits > 8 {
-        format!("zext i8 %digit to i{bits}")
-    } else {
-        "add i8 %digit, 0".into()
-    };
+    let cast =
+        if bits > 8 { format!("zext i8 %digit to i{bits}") } else { "add i8 %digit, 0".into() };
     let ir = format!(
         r#"
 @{name}.first = private constant [11 x i8] c" %1[-+0-9]\00"

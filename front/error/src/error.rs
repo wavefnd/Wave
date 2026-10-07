@@ -285,12 +285,8 @@ impl WaveError {
             ("help", Value::optional_string(self.help.as_deref())),
             ("suggestions", Value::strings(&self.suggestions)),
         ]);
-        wson::dumps(
-            &Value::object([("error", error)]),
-            wson::Format::Json,
-            false,
-        )
-        .expect("diagnostic schema contains only shallow JSON values")
+        wson::dumps(&Value::object([("error", error)]), wson::Format::Json, false)
+            .expect("diagnostic schema contains only shallow JSON values")
     }
 
     pub fn display_auto(&self) {
@@ -305,10 +301,7 @@ impl WaveError {
     pub fn stdlib_requires_vex(module: &str, file: &str, line: usize, column: usize) -> Self {
         Self::new(
             WaveErrorKind::VexIntegrationRequired(module.to_string()),
-            format!(
-                "standard library module 'std::{}' requires Vex package manager",
-                module
-            ),
+            format!("standard library module 'std::{}' requires Vex package manager", module),
             file,
             line,
             column,
@@ -334,10 +327,7 @@ impl WaveError {
                 expected: expected.to_string(),
                 found: found.to_string(),
             },
-            format!(
-                "mismatched types: expected `{}`, found `{}`",
-                expected, found
-            ),
+            format!("mismatched types: expected `{}`, found `{}`", expected, found),
             file,
             line,
             column,
@@ -380,10 +370,8 @@ impl WaveError {
 
         if let Some(source_code) = &self.source_code {
             // `lines()` drops the empty line containing EOF after a final newline.
-            let lines: Vec<&str> = crate::span::source_lines(source_code)
-                .into_iter()
-                .map(|(_, line)| line)
-                .collect();
+            let lines: Vec<&str> =
+                crate::span::source_lines(source_code).into_iter().map(|(_, line)| line).collect();
             if line <= lines.len() {
                 let idx = line - 1;
                 let start = idx.saturating_sub(1);
@@ -395,23 +383,16 @@ impl WaveError {
                         utils::display_width::diagnostic_line(source_line, col, self.span_len);
                     let ln = i + 1;
                     let ln_str = format!("{:>width$}", ln, width = width);
-                    eprintln!(
-                        " {} {} {}",
-                        ln_str.color("38,139,235").bold(),
-                        pipe,
-                        rendered.text
-                    );
+                    eprintln!(" {} {} {}", ln_str.color("38,139,235").bold(), pipe, rendered.text);
                     if ln == line {
                         let pad = " ".repeat(width);
                         let spaces = " ".repeat(rendered.caret_offset);
-                        let marks = "^"
-                            .repeat(rendered.caret_width)
-                            .color(self.severity_color())
-                            .bold();
+                        let marks =
+                            "^".repeat(rendered.caret_width).color(self.severity_color()).bold();
                         match &self.label {
                             Some(label) => {
                                 eprintln!(" {} {} {}{} {}", pad, pipe, spaces, marks, label.dim())
-                            }
+                            },
                             None => eprintln!(" {} {} {}{}", pad, pipe, spaces, marks),
                         }
                     }
@@ -424,19 +405,11 @@ impl WaveError {
             let rendered = utils::display_width::diagnostic_line(source_line, col, self.span_len);
             let width = line.to_string().len().max(2);
             let ln_str = format!("{:>width$}", line, width = width);
-            eprintln!(
-                " {} {} {}",
-                ln_str.color("38,139,235").bold(),
-                pipe,
-                rendered.text
-            );
+            eprintln!(" {} {} {}", ln_str.color("38,139,235").bold(), pipe, rendered.text);
 
             let pad = " ".repeat(width);
             let spaces = " ".repeat(rendered.caret_offset);
-            let marks = "^"
-                .repeat(rendered.caret_width)
-                .color(self.severity_color())
-                .bold();
+            let marks = "^".repeat(rendered.caret_width).color(self.severity_color()).bold();
             match &self.label {
                 Some(label) => eprintln!(" {} {} {}{} {}", pad, pipe, spaces, marks, label.dim()),
                 None => eprintln!(" {} {} {}{}", pad, pipe, spaces, marks),
@@ -458,12 +431,7 @@ impl WaveError {
         let code = self
             .code
             .as_ref()
-            .map(|c| {
-                format!("[{}]", c)
-                    .color(self.severity_color())
-                    .bold()
-                    .to_string()
-            })
+            .map(|c| format!("[{}]", c).color(self.severity_color()).bold().to_string())
             .unwrap_or_default();
 
         if code.is_empty() {
@@ -585,14 +553,10 @@ impl WaveError {
         }
 
         if errors.len() > 1 {
-            let error_count = errors
-                .iter()
-                .filter(|e| matches!(e.severity, ErrorSeverity::Error))
-                .count();
-            let warning_count = errors
-                .iter()
-                .filter(|e| matches!(e.severity, ErrorSeverity::Warning))
-                .count();
+            let error_count =
+                errors.iter().filter(|e| matches!(e.severity, ErrorSeverity::Error)).count();
+            let warning_count =
+                errors.iter().filter(|e| matches!(e.severity, ErrorSeverity::Warning)).count();
 
             eprintln!();
             if error_count > 0 {
