@@ -6,18 +6,34 @@ Wave welcomes contributions through GitHub Pull Requests and email-based
 patches. This document explains how to contribute in both ways, the required
 development setup, and contribution rules.
 
+## Choosing a first contribution
+
+Documentation fixes, clearer examples, and small bug fixes are welcome. Start
+with the [open good first issues](https://github.com/wavefnd/Wave/issues?q=is%3Aissue%20is%3Aopen%20label%3A%22good%20first%20issue%22),
+then read the issue, recent comments, and linked pull requests before choosing
+one. Check whether someone is already working on it, and comment with your
+proposed approach or questions about the scope before starting substantial work.
+
+If no listed issue fits, ask in [GitHub Discussions](https://github.com/wavefnd/Wave/discussions)
+for a small task that matches your experience. You can also submit a focused
+typo or broken-link fix directly. Read the [Code of Conduct](CODE_OF_CONDUCT.md)
+before participating.
+
 ---
 
 ## 1. Development Setup
 
 Wave uses a dedicated setup repository for tools and environment preparation.
 
-Before contributing, please follow:
+Before building or testing the compiler, please follow:
 
 https://github.com/wavefnd/setup
 
 This includes installation instructions for Rust, LLVM, Clang tools, and other
 dependencies required to build Wave.
+
+For prose or link changes only, you do not need to install Rust, LLVM, or Clang.
+Start with the [documentation-only checks](#documentation-only-changes) below.
 
 ---
 
@@ -82,19 +98,52 @@ Commits without DCO will be rejected.
 
 ---
 
-## 4. Local Verification (mirrors CI)
+## 4. Local Verification
 
-CI job names follow `<operation> <OS> <architecture> (<mode when relevant>)`,
-for example `Build Windows amd64 (MSVC)` and `Cases Linux riscv64 (QEMU)`.
+Choose local checks that match your change, and list what you ran in the PR
+description. If you could not run a relevant check, say which one and why.
+CI still runs the repository's configured checks; the guidance below describes
+what to verify locally.
+
+### Documentation-only changes
+
+For changes limited to prose, spelling, or links in Markdown files:
+
+1. Preview the changed Markdown and check headings, lists, and code-block layout.
+2. Open changed links and verify relative paths and section anchors.
+3. Run `git diff --check` from the repository root to catch whitespace errors.
+
+You do not need to build the compiler for these edits. If you change a code
+example, command, or documented behavior, also verify it against the current
+implementation and run the affected example or command when possible. Rust
+documentation comments and doctests need the relevant Rust checks below.
+
+### Code and tooling changes
+
+For compiler or standard-library changes, complete the development setup and
+run the common checks below from the repository root. For Python-only tooling
+changes, start with `python3 -m py_compile` on the changed files and the relevant
+unit tests, then run any compiler or runtime checks affected by the change.
+
+The current CI entry point is [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
+Its [plans](tools/ci/plans.json) and [procedures](tools/ci/procedures.json) are the
+source of truth for the full target-specific checks. To inspect the Linux amd64
+build-and-test plan without installing tools or running its checks:
+
+```bash
+python3 -m tools.ci.test --target linux-amd64 --lane rust/build-linux-amd64 --plan
+```
+
+CI job names follow `<OS> / <architecture> / <operation>`,
+for example `Linux / amd64 / Build & test`.
 Use `amd64`, `arm64`, `loong64`, and `riscv64` consistently in display names;
 target triples and artifact names retain their toolchain spelling. Group platform
 jobs as Linux, macOS, Windows, other cross targets, and WebAssembly, with a
 consistent architecture order within each group. Keep job IDs stable when
 renaming checks, and check required status contexts before merging a rename.
 
-From the repository root, run the same gates the Linux amd64 job in
-`.github/workflows/rust.yml` uses before you open a PR. Prefer `--jobs 2` on
-resource-intensive Cargo commands (CI sets `CARGO_BUILD_JOBS=2`).
+Prefer `--jobs 2` on resource-intensive Cargo commands
+(CI sets `CARGO_BUILD_JOBS=2`). Common local checks include:
 
 ```bash
 cargo fmt --all --check
@@ -192,7 +241,8 @@ Maintainers must verify incoming email patches using:
 tools/verify_patch.sh your_patch.patch
 ```
 
-Prefer the full local verification block above when reviewing GitHub PRs.
+When reviewing GitHub PRs, use the checks appropriate to the change above and
+confirm the configured CI checks pass.
 
 ---
 
@@ -221,7 +271,7 @@ Wave follows standard Rust conventions:
 - Opening braces on the same line (K&R style)
 - No trailing whitespace
 
-All formatting and lint rules must pass:
+For Rust changes, formatting and lint rules must pass:
 
 ```bash
 cargo fmt --all --check
@@ -268,6 +318,7 @@ A PR should include:
 
 - A clear description of the change
 - Why the change is needed
+- Checks run and their results, including any relevant checks not run and why
 - Tests if applicable
 - Documentation updates if necessary
 - Signed-off commits (`-s`)
@@ -280,9 +331,12 @@ Small, focused PRs are preferred. Target the `master` branch.
 
 ## 10. Communication
 
-- GitHub Issues: bug reports, proposals, questions
-- GitHub Discussions: design conversations, feedback
-- Discord community: informal communication and help
+- [GitHub Issues](https://github.com/wavefnd/Wave/issues/new/choose): bug reports,
+  performance reports, and concrete feature requests using the available templates
+- [GitHub Discussions](https://github.com/wavefnd/Wave/discussions): usage and
+  contribution questions, design conversations, feedback, and ideas before
+  opening an implementation issue
+- [Discord community](https://discord.gg/3nev5nHqq9): informal communication and help
 
 ---
 

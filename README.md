@@ -210,14 +210,9 @@ cd Wave
 cargo build --locked
 ```
 
-The development compiler is written to `target/debug/wavec`. Before submitting compiler changes, run:
-
-```shell
-cargo fmt --all --check
-cargo test --locked --all-targets
-cargo clippy --locked --all-targets -- -D warnings
-python3 tools/run_tests.py
-```
+The development compiler is written to `target/debug/wavec`. Before submitting
+compiler changes, follow the [local verification guide](CONTRIBUTING.md#4-local-verification)
+for the relevant checks and current CI commands.
 
 ## Ecosystem
 
@@ -239,6 +234,12 @@ Useful project references:
 ## Contributing
 
 Contributions are welcome through GitHub pull requests and email patches. Read [CONTRIBUTING.md](CONTRIBUTING.md) before submitting changes; all commits require a DCO `Signed-off-by` line.
+
+New to Wave? See [choosing a first contribution](CONTRIBUTING.md#choosing-a-first-contribution)
+for help finding a small task. Prose and link fixes do not require a compiler
+toolchain; use the [documentation-only checks](CONTRIBUTING.md#documentation-only-changes).
+Ask usage and contribution questions in [GitHub Discussions](https://github.com/wavefnd/Wave/discussions),
+or get informal help on [Discord](https://discord.gg/3nev5nHqq9).
 
 ## License
 
