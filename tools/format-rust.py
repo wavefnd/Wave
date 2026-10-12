@@ -17,14 +17,17 @@ SKIP_DIRS = {
 
 def rust_files():
     result = subprocess.run(
-        ["git", "ls-files", "*.rs"],
+        ["git", "ls-files", "-z", "*.rs"],
         cwd=ROOT,
         check=True,
         capture_output=True,
-        text=True,
     )
 
-    for name in result.stdout.splitlines():
+    for entry in result.stdout.split(b"\x00"):
+        if not entry:
+            continue;
+
+        name = entry.decode("utf-8")
         path = ROOT / name
 
         if any(part in SKIP_DIRS for part in path.parts):
