@@ -57,7 +57,7 @@ def strip_lexical_content(line, state):
             continue
 
         if state["string"] is not None:
-            if isinstance(state["string"], int):
+            if type(state["string"]) is int:
                 hashes = "#" * state["string"]
                 terminator = '"' + hashes
                 if line.startswith(terminator, i):
