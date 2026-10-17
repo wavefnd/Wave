@@ -290,7 +290,9 @@ def package_smoke(r, _):
         source.write_text(
             'import("std::mem::layout")::{size_of};\nfun main() -> i32 { if (size_of<i64>() != 8) { return 7; } println("release smoke"); return 0; }\n'
         )
-        command = [compiler, "run", source, "--std-root", package / "std"]
+        # Exercise the same bundled-std discovery as an ordinary installation.
+        # An explicit override would hide a broken default lookup.
+        command = [compiler, "run", source]
         if r.target.id in ("linux-riscv64", "linux-loong64"):
             # QEMU_LD_PREFIX selects the emulator's loader, not Wave's linker
             # search paths. The isolated package test must select both.

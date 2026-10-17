@@ -11,7 +11,7 @@ const LESS: bool = 2.5 < 3.0;
 const UNEQUAL: bool = (0.0 / 0.0) != 1.0;
 const DEAD: bool = false && (1 / 0 == 1);
 const DEAD_SHIFT: bool = true || (1 << 32 == 0);
-const DEAD_CAST: bool = true || ((1e300 as i32) == 0);
+const DEAD_CAST: bool = true || (((1e300 as f64) as i32) == 0);
 const WIDE: u1024 = ((1 as u1024) << 1000) + 17;
 const WIDE_NEG: i1024 = -(((1 as i1024) << 999) + 7);
 const WIDE_QUOT: u1024 = WIDE / (3 as u1024);

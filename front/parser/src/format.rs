@@ -47,4 +47,4 @@ pub fn parse_format_string(s: &str) -> Vec<FormatPart> {
 }
 
 // One byte-level interpretation is shared with code generation.
-pub use utils::formatx::{format_fragments, FormatFragment};
+pub use utils::formatx::{float_precision, format_fragments, FormatFragment};

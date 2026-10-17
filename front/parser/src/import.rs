@@ -821,10 +821,13 @@ fn validate_installed_std(std_root: &Path, imported_file: &Path) -> Result<(), W
 }
 
 fn std_root_dir(import_path: &str) -> Result<PathBuf, WaveError> {
-    utils::paths::std_root_dir().ok_or_else(|| {
+    utils::paths::default_std_root_dir().ok_or_else(|| {
         WaveError::new(
             WaveErrorKind::SyntaxError("std not installed".to_string()),
-            format!("{}; cannot locate std", utils::paths::missing_home_message()),
+            format!(
+                "no bundled standard library found; {}; cannot locate std; use --std-root <path>",
+                utils::paths::missing_home_message()
+            ),
             import_path,
             0,
             0,

@@ -434,6 +434,7 @@ impl<'a> Validator<'a> {
                     let concrete = canonical_expression_type(self.program, &ty);
                     let generic =
                         concrete.as_ref().is_some_and(|t| self.program.is_generic_placeholder(t));
+                    let precision = crate::format::float_precision(spec).map_err(str::to_string)?;
                     let valid = generic
                         || match spec {
                             "" => true,
@@ -448,6 +449,10 @@ impl<'a> Validator<'a> {
                             "s" => {
                                 matches!(concrete, Some(WaveType::String))
                                     || matches!(concrete, Some(WaveType::Pointer(ref t)) if matches!(t.as_ref(), WaveType::Byte | WaveType::Char))
+                            },
+                            _ if precision.is_some() => {
+                                matches!(ty, ExpressionType::FloatLiteral)
+                                    || matches!(concrete, Some(WaveType::Float(32 | 64)))
                             },
                             _ => false,
                         };

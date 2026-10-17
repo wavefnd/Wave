@@ -29,7 +29,7 @@ pub fn escape_percent(bytes: &[u8]) -> Vec<u8> {
 }
 
 /// Argument formats are selected from semantic types and lowered values.
-pub fn wave_format_to_c(format: &[u8], arg_formats: &[&str]) -> Vec<u8> {
+pub fn wave_format_to_c(format: &[u8], arg_formats: &[String]) -> Vec<u8> {
     let mut result = Vec::new();
     let mut formats = arg_formats.iter();
     for part in format_fragments(format).expect("validated format") {

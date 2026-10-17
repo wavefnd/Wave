@@ -37,6 +37,44 @@ fn format_checks_happen_before_backend_lowering() {
 }
 
 #[test]
+fn float_precision_is_checked_before_backend_lowering() {
+    for source in [
+        r#"fun main() { print("{:.}", 1.0); }"#,
+        r#"fun main() { print("{:.-1}", 1.0); }"#,
+        r#"fun main() { print("{:.+1}", 1.0); }"#,
+        r#"fun main() { print("{:.1e2}", 1.0); }"#,
+        r#"fun main() { print("{:.1 2}", 1.0); }"#,
+        r#"fun main() { print("{:.2f}", 1.0); }"#,
+        r#"fun main() { print("{:.٢}", 1.0); }"#,
+        r#"fun main() { print("{:.2147483648}", 1.0); }"#,
+        r#"fun main() { print("{:.99999999999999999999999999999999999}", 1.0); }"#,
+        r#"fun main() { var value: f64 = 0.0; input("{:.2}", value); }"#,
+        r#"fun main() { print("{:8.2}", 1.0); }"#,
+        r#"fun main() { print("{:.2}"); }"#,
+        r#"fun main() { print("{:.2}", 1.0, 2.0); }"#,
+    ] {
+        let error = validate(source).unwrap_err();
+        assert!(!error.contains("<unknown>"), "{source}: {error}");
+    }
+    for value in ["1", "true", "'A'", "\"text\"", "null"] {
+        let source = format!(r#"fun main() {{ print("{{:.2}}", {value}); }}"#);
+        let error = validate(&source).unwrap_err();
+        assert!(error.contains("incompatible"), "{source}: {error}");
+    }
+    for source in [
+        r#"fun f(x: f32, y: f64) { print("{:.0} {:.12} {}", x, y, x); }"#,
+        r#"type Real = f64; fun f(x: Real) { println("{:.2}", x); }"#,
+        r#"fun main() { println("{:.2147483647} {:.0002}", 1.0, 1.0); }"#,
+        r#"fun f<T>(x: T) { print("{:.2}", x); } fun main() { f<f64>(1.0); }"#,
+    ] {
+        validate(source).unwrap();
+    }
+    let error =
+        validate(r#"fun f<T>(x: T) { print("{:.2}", x); } fun main() { f<i32>(1); }"#).unwrap_err();
+    assert!(error.contains("incompatible"), "{error}");
+}
+
+#[test]
 fn integer_patterns_are_range_checked_and_deduplicated_in_the_scrutinee_type() {
     for source in [
         "fun f(n: u8) { match (n) { 256 => {} _ => {} } }",

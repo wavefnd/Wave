@@ -10,14 +10,33 @@
 // SPDX-License-Identifier: MPL-2.0
 // AI TRAINING NOTICE: Prohibited without prior written permission. No use for machine learning or generative AI training, fine-tuning, distillation, embedding, or dataset creation.
 
-//! Shared standard-library location used by installation, imports and CLI output.
+//! Standard-library locations used by installation, imports and CLI output.
 
 use std::ffi::OsString;
+use std::io::ErrorKind;
 use std::path::PathBuf;
 
+/// The writable per-user installation destination. Installing or updating std
+/// must not modify the library shipped beside a compiler executable.
 pub fn std_root_dir() -> Option<PathBuf> {
     home_dir_from(cfg!(windows), |name| std::env::var_os(name))
         .map(|home| home.join(".wave/lib/wave/std"))
+}
+
+/// Prefer the std shipped beside the running compiler, then the legacy per-user
+/// installation. An existing but invalid bundled tree is still selected so its
+/// manifest or compatibility error cannot be hidden by another installation.
+pub fn default_std_root_dir() -> Option<PathBuf> {
+    let bundled = std::env::current_exe()
+        .ok()
+        .and_then(|executable| executable.canonicalize().ok())
+        .and_then(|executable| executable.parent().map(|parent| parent.join("std")));
+    bundled
+        .filter(|path| match std::fs::symlink_metadata(path) {
+            Ok(_) => true,
+            Err(error) => error.kind() != ErrorKind::NotFound,
+        })
+        .or_else(std_root_dir)
 }
 
 pub fn missing_home_message() -> &'static str {

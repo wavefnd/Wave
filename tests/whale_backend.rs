@@ -452,6 +452,36 @@ fn invalid_numeric_constants_keep_frontend_diagnostics_and_previous_output() {
 }
 
 #[test]
+fn default_float_literal_ranges_are_checked_before_whale_lowering() {
+    let case = Case::new("float-literal-range", "");
+    let output = case.root.join("main.wir");
+    for expression in ["1e39", "-1e39", "1e39 + 0.0", "true || (1e39 as bool)"] {
+        let source = format!("fun main() {{\n    {expression};\n}}\n");
+        fs::write(case.root.join("main.wave"), &source).unwrap();
+        fs::write(&output, "previous verified IR").unwrap();
+        for command in ["check", "build"] {
+            let mut args = vec!["--whale", command, "main.wave", "--error-format=json"];
+            if command == "build" {
+                args.push("--emit=ir");
+            }
+            let result = case.run(&args);
+            assert_eq!(result.status.code(), Some(1), "{source}");
+            let stderr = String::from_utf8_lossy(&result.stderr);
+            let diagnostic = wson::parse_json(stderr.trim()).unwrap();
+            let span = diagnostic.get("error").unwrap().get("span").unwrap();
+            let token = if expression == "-1e39" { "-1e39" } else { "1e39" };
+            let start = source.find(token).unwrap();
+            assert_eq!(span.get_num("start"), Some(start as f64), "{stderr}");
+            assert_eq!(span.get_num("end"), Some((start + token.len()) as f64), "{stderr}");
+            assert!(stderr.contains("floating-point literal is out of range"), "{stderr}");
+            assert!(!stderr.contains("does not yet support"), "{stderr}");
+            assert!(!stderr.contains("internal compiler error"), "{stderr}");
+            assert_eq!(fs::read_to_string(&output).unwrap(), "previous verified IR");
+        }
+    }
+}
+
+#[test]
 fn short_circuited_invalid_numeric_operations_stay_in_the_rhs_block() {
     let case = Case::new(
         "numeric-short-circuit",

@@ -4342,7 +4342,7 @@ fn default_std_path(global: &Global) -> Option<String> {
     if let Some(Ok(root)) = &global.dep.resolved_std_root {
         return Some(root.path().to_string_lossy().into_owned());
     }
-    utils::paths::std_root_dir().map(|path| path.to_string_lossy().into_owned())
+    utils::paths::default_std_root_dir().map(|path| path.to_string_lossy().into_owned())
 }
 
 pub fn print_usage() {
@@ -4485,7 +4485,11 @@ pub fn print_help() {
     println!("  {:<24} {}", "--no-pie".color("38,139,235"), "Disable PIE mode");
 
     println!("\nGlobal options:");
-    println!("  {:<24} {}", "-O0..-O3/-Os/-Oz/-Ofast".color("38,139,235"), "Optimization level");
+    println!(
+        "  {:<24} {}",
+        "-O0..-O3/-Os/-Oz/-Ofast".color("38,139,235"),
+        "Optimization level (default: -O0)"
+    );
     println!("  {:<24} {}", "--debug-wave=...".color("38,139,235"), "tokens,ast,ir,mc,hex,all");
     println!("  {:<24} {}", "--link=<lib>".color("38,139,235"), "Link library");
     println!("  {:<24} {}", "-L <path>".color("38,139,235"), "Library search path");

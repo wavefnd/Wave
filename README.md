@@ -55,6 +55,30 @@ Save this as `main.wave`, then run it directly:
 wavec run main.wave
 ```
 
+Floating-point literals use their floating type context, such as an `f64`
+declaration, parameter, or explicit cast. Without a floating type context, they
+default to `f32`, including arguments passed directly to `print` or `println`.
+Both `f32` and `f64` use binary floating-point rounding: decimal values such as
+`0.1` need not be exact, and `f64` provides more precision rather than exact
+decimal arithmetic. A literal that overflows its selected type to infinity is
+a compilation error; ordinary rounding is allowed. Converting an existing
+`f32` value to `f64` cannot recover precision already lost.
+
+```wave
+fun main() {
+    var value: f64 = 1.23456789;
+    println("{}", value);
+    println("{}", 1.23456789 as f64);
+    println("{:.2}", value);
+}
+```
+
+For floating-point output, `{:.N}` selects `N` digits after the decimal point
+(`{:.2}` prints `1.23` above), where `N` is a nonnegative decimal integer.
+It controls display precision, not the stored type. Existing `{d}`, `{x}`, `{c}`,
+`{s}`, and `{p}` placeholders remain available. Width, alignment, and fill
+options are not supported.
+
 ## Modules and Vex packages
 
 Wave keeps each imported file in its own module namespace. A bare import names
@@ -92,6 +116,42 @@ which controls the C ABI boundary. `main` is always a private entry point, so
 `pub fun main()` is rejected. A module can deliberately forward public API with
 `pub import("module")::{symbol};`.
 
+Local imports stay within the importing file's directory and its descendants.
+Parent traversal (`../` or `./../`) and symlinks that escape that directory are
+rejected. For sibling `src` and `tests` directories, map the project root as a
+dependency instead:
+
+```text
+project/
+    src/number.wave
+    tests/number_test.wave
+```
+
+In `src/number.wave`, expose the function to other modules:
+
+```wave
+pub fun double(value: i32) -> i32 {
+    return value * 2;
+}
+```
+
+In `tests/number_test.wave`, import the source module through that dependency:
+
+```wave
+import("pkg::number");
+
+fun main() -> i32 {
+    if (pkg::number::double(21) != 42) {
+        return 1;
+    }
+    return 0;
+}
+```
+
+Run from `project/` with `wavec run tests/number_test.wave --dep=pkg=.`.
+This resolves `pkg::number` directly to `src/number.wave`; no `src/lib.wave`
+entry or re-export is required. The imported declarations still need `pub`.
+
 ## Install
 
 Linux and macOS:
@@ -108,6 +168,13 @@ irm https://wave-lang.dev/install.ps1 -OutFile install.ps1; powershell -Executio
 
 See the [installation guide](https://wave-lang.dev/docs/getting-started/install) for platform requirements and release selection.
 
+The compiler uses the `std/` directory beside its executable when present,
+then falls back to the legacy `~/.wave/lib/wave/std` installation. An explicit
+`--std-root <path>` takes precedence over both. The selected library must pass
+compatibility validation; an invalid selection does not silently fall back to
+another installation. `wavec install std` and `wavec update std` continue to
+manage the legacy per-user location.
+
 Release archives are built and smoke-tested natively for Linux x86-64 and
 AArch64, macOS x86-64 and AArch64, and Windows x86-64 and ARM64. Linux
 RISC-V64 archives are built inside a native-architecture userspace under QEMU
@@ -116,6 +183,11 @@ official Loongson cross-toolchain to build a native compiler and execute that
 compiler through QEMU before publication.
 
 ## Use `wavec`
+
+`wavec build` and `wavec run` default to `-O0` (unoptimized). For performance
+comparisons, select an explicit optimization level such as `-O2` and compare
+equivalent targets, inputs, and compiler settings. Results depend on the program
+and workload.
 
 ```shell
 # Check without producing a binary.
@@ -127,6 +199,9 @@ wavec run main.wave -- arg1 arg2
 # Build an optimized hosted executable.
 wavec -O2 build main.wave -o app
 
+# Build and run with optimization.
+wavec run main.wave -O2 -- arg1 arg2
+
 # Emit a freestanding RISC-V object.
 wavec --target=riscv64-unknown-none-elf build kernel.wave --freestanding --emit=obj
 
@@ -136,6 +211,9 @@ wavec --target=wasm32-wasip1 build command.wave
 wavec --target=wasm32-wasip1 run command.wave
 wavec --target=wasm64-unknown-unknown run memory64-module.wave
 ```
+
+Optimization flags can appear before or after the subcommand, before `--`.
+Arguments after `--` are passed to the program.
 
 The compiler exposes its current capabilities instead of requiring tools to maintain hard-coded lists:
 

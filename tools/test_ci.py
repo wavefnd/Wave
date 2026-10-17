@@ -138,11 +138,38 @@ class PlatformSmokeTests(unittest.TestCase):
                     package.package_smoke(runner, {})
                 invocation = runner.run.call_args_list[-1]
                 command = invocation.args[0]
+                self.assertNotIn("--std-root", command)
                 self.assertEqual(command[command.index("--sysroot") + 1], sysroot)
                 self.assertTrue(invocation.kwargs["clean_env"])
                 self.assertEqual(invocation.kwargs["env"]["QEMU_LD_PREFIX"], sysroot)
                 self.assertEqual(invocation.kwargs["env"]["PATH"], "/usr/bin:/bin")
                 self.assertNotIn("LLVM_SYS_211_PREFIX", invocation.kwargs["env"])
+
+    def test_native_package_smoke_uses_default_bundled_std_discovery(self):
+        for target_id in ("linux-amd64", "linux-arm64", "macos-amd64", "macos-arm64"):
+            with self.subTest(target=target_id), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                payload = root / "payload"
+                payload.mkdir()
+                (payload / "wavec").write_bytes(b"compiler")
+                (payload / "std").mkdir()
+                archive = root / "package.tar.gz"
+                with tarfile.open(archive, "w:gz") as stream:
+                    stream.add(payload, arcname="package")
+                runner = SimpleNamespace(
+                    target=targets.resolve(target_id), env={},
+                    run=Mock(side_effect=["0.0.1-alpha-dev", "release smoke\n"]),
+                )
+                with patch.object(package, "archive_for", return_value=archive), \
+                     patch.object(ci_test, "crt_check"), patch.object(package, "checksums"):
+                    package.package_smoke(runner, {})
+                invocation = runner.run.call_args_list[-1]
+                command = invocation.args[0]
+                self.assertEqual(command[1], "run")
+                self.assertEqual(len(command), 3)
+                self.assertTrue(invocation.kwargs["clean_env"])
+                home = Path(invocation.kwargs["env"]["HOME"])
+                self.assertFalse((home / ".wave/lib/wave/std").exists())
 
     def test_windows_probe_requires_only_the_enabled_cargo_backends(self):
         for target_id, architecture, backends in [

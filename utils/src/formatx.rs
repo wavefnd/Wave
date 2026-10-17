@@ -27,6 +27,27 @@ pub enum FormatFragment<'a> {
     Placeholder(&'a str),
 }
 
+/// Parse the fixed fractional precision in `{:.N}` output placeholders.
+///
+/// Other placeholder kinds return `None`. Precision is bounded by C printf's
+/// signed int range, shared by native output and the WebAssembly output host.
+pub fn float_precision(spec: &str) -> Result<Option<i32>, &'static str> {
+    let Some(digits) = spec.strip_prefix(":.") else {
+        return Ok(None);
+    };
+    if digits.is_empty() || !digits.bytes().all(|digit| digit.is_ascii_digit()) {
+        return Err("float precision must be a nonnegative decimal integer in `{:.N}`");
+    }
+    let mut precision = 0i32;
+    for digit in digits.bytes() {
+        precision = precision
+            .checked_mul(10)
+            .and_then(|value| value.checked_add(i32::from(digit - b'0')))
+            .ok_or("float precision exceeds 2147483647")?;
+    }
+    Ok(Some(precision))
+}
+
 pub fn format_fragments(input: &[u8]) -> Result<Vec<FormatFragment<'_>>, &'static str> {
     let mut parts = Vec::new();
     let mut start = 0;

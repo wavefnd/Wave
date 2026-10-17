@@ -281,7 +281,7 @@ def guest_smoke():
         source.write_text(
             'import("std::mem::layout")::{size_of}; fun main() -> i32 { if (size_of<i64>() != 8) { return 7; } println("release smoke"); return 0; }'
         )
-        run(compiler, "run", source, "--std-root", package / "std")
+        run(compiler, "run", source)
         object_file = Path(folder) / "smoke.o"
         run(
             compiler,

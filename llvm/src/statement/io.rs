@@ -24,7 +24,7 @@ use inkwell::types::{BasicType, StructType};
 use inkwell::values::{BasicMetadataValueEnum, BasicValueEnum, IntValue, PointerValue};
 use inkwell::{AddressSpace, IntPredicate};
 use parser::ast::{Expression, WaveType};
-use parser::format::{format_fragments, FormatFragment};
+use parser::format::{float_precision, format_fragments, FormatFragment};
 use std::collections::HashMap;
 
 fn semantic_type(program: &TypedProgram, expression: &Expression) -> WaveType {
@@ -161,7 +161,7 @@ pub(super) fn gen_print_format_ir<'ctx>(
                     integer =
                         builder.build_int_cast(integer, context.i32_type(), "print.char").unwrap();
                     values.push(integer.into());
-                    formats.push("%c");
+                    formats.push("%c".to_string());
                 } else {
                     let bits = integer.get_type().get_bit_width().max(8);
                     if integer.get_type().get_bit_width() < bits {
@@ -189,20 +189,26 @@ pub(super) fn gen_print_format_ir<'ctx>(
                         .basic()
                         .unwrap();
                     values.push(text.into());
-                    formats.push("%s");
+                    formats.push("%s".to_string());
                 }
             },
             BasicValueEnum::FloatValue(number) => {
                 let number =
                     builder.build_float_cast(number, context.f64_type(), "print.double").unwrap();
                 values.push(number.into());
-                formats.push("%f");
+                let format = match float_precision(spec).expect("validated float precision") {
+                    Some(precision) => format!("%.{precision}f"),
+                    None => "%f".to_string(),
+                };
+                formats.push(format);
             },
             BasicValueEnum::PointerValue(pointer) => {
                 let string = matches!(ty, WaveType::String)
                     || matches!(ty, WaveType::Pointer(ref t) if matches!(t.as_ref(), WaveType::Byte | WaveType::Char));
                 values.push(pointer.into());
-                formats.push(if spec == "s" || spec.is_empty() && string { "%s" } else { "%p" });
+                formats.push(
+                    if spec == "s" || spec.is_empty() && string { "%s" } else { "%p" }.to_string(),
+                );
             },
             _ => unreachable!("frontend validates scalar output"),
         }

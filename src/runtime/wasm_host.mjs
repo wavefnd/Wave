@@ -14,10 +14,13 @@ function stdout(bytes) {
   }
 }
 
-// printf's default %f precision, rounded from the exact binary value with
+// printf's fixed %f precision, rounded from the exact binary value with
 // ties to even. Number.toFixed loses fixed notation at 1e21 and rounds ties
 // differently; integer arithmetic also preserves negative zero and subnormals.
-export function fixedDouble(value) {
+export function fixedDouble(value, precision = 6) {
+  if (!Number.isInteger(precision) || precision < 0 || precision > 2147483647) {
+    throw new RangeError("WebAssembly float precision must be between 0 and 2147483647");
+  }
   const bits = new DataView(new ArrayBuffer(8));
   bits.setFloat64(0, value, true);
   const raw = bits.getBigUint64(0, true);
@@ -25,7 +28,8 @@ export function fixedDouble(value) {
   const exponent = Number((raw >> 52n) & 2047n);
   const fraction = raw & ((1n << 52n) - 1n);
   if (exponent === 2047) return sign + (fraction ? "nan" : "inf");
-  let scaled = (exponent ? fraction | (1n << 52n) : fraction) * 1000000n;
+  const scale = 10n ** BigInt(precision);
+  let scaled = (exponent ? fraction | (1n << 52n) : fraction) * scale;
   const shift = exponent ? exponent - 1023 - 52 : -1074;
   if (shift >= 0) {
     scaled <<= BigInt(shift);
@@ -36,8 +40,11 @@ export function fixedDouble(value) {
     scaled = quotient + BigInt(twiceRemainder > divisor ||
       (twiceRemainder === divisor && (quotient & 1n) !== 0n));
   }
-  return sign + (scaled / 1000000n) + "." +
-    (scaled % 1000000n).toString().padStart(6, "0");
+  if (precision === 0) {
+    return sign + scaled;
+  }
+  return sign + (scaled / scale) + "." +
+    (scaled % scale).toString().padStart(precision, "0");
 }
 
 // These are the output formats emitted by Wave's typed I/O lowering. This is
@@ -88,12 +95,28 @@ export function createOutputHost(getMemory, memory64, write = stdout) {
       for (let i = 0; i < formatBytes.length; i++) {
         if (formatBytes[i] !== 37) continue;
         chunks.push(formatBytes.subarray(start, i));
-        const spec = formatBytes[++i];
+        const formatStart = i;
+        let spec = formatBytes[++i];
+        let precision = 6;
+        if (spec === 46) {
+          const digitsStart = ++i;
+          precision = 0;
+          while (formatBytes[i] >= 48 && formatBytes[i] <= 57) {
+            precision = precision * 10 + formatBytes[i++] - 48;
+            if (precision > 2147483647) {
+              throw new RangeError("WebAssembly float precision exceeds 2147483647");
+            }
+          }
+          if (i === digitsStart || formatBytes[i] !== 102) {
+            throw new Error("unsupported WebAssembly printf format at byte " + formatStart);
+          }
+          spec = formatBytes[i];
+        }
         switch (spec) {
           case 37: chunks.push(Buffer.from("%")); break;
           case 115: chunks.push(string(argument(pointerWidth))); break;
           case 99: chunks.push(Buffer.from([Number(argument(4)) & 255])); break;
-          case 102: chunks.push(Buffer.from(fixedDouble(argument(8, "float")))); break;
+          case 102: chunks.push(Buffer.from(fixedDouble(argument(8, "float"), precision))); break;
           case 112: {
             const pointer = argument(pointerWidth);
             chunks.push(Buffer.from(BigInt(pointer) === 0n ? "(nil)" : "0x" + pointer.toString(16)));

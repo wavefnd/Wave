@@ -225,7 +225,10 @@ fn validate_placeholder_text(
     let parts = format_fragments(content).map_err(|e| invalid(e.into()))?;
     for part in parts {
         if let FormatFragment::Placeholder(spec) = part {
-            if !(spec.is_empty() || !input && matches!(spec, "c" | "x" | "p" | "s" | "d")) {
+            let precision = float_precision(spec).map_err(|error| invalid(error.into()))?;
+            if !(spec.is_empty()
+                || !input && (matches!(spec, "c" | "x" | "p" | "s" | "d") || precision.is_some()))
+            {
                 return Err(invalid(format!("unsupported format placeholder `{{{spec}}}`")));
             }
         }

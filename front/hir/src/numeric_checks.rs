@@ -70,6 +70,27 @@ impl Checker<'_> {
     fn fail(&self, expr: &Expression, message: &str) -> Failure {
         (self.program.expression_id(expr).unwrap(), message.into())
     }
+
+    fn literal_range(&self, expr: &Expression) -> Result<(), Failure> {
+        let Expression::Literal(Literal::Float(value)) = expr else {
+            return Ok(());
+        };
+        // A literal's source representation is selected after contextual type
+        // analysis. Its result may already be bool or a narrowed float, so only
+        // the evaluation type describes where the token is first materialized.
+        let fact = self.program.numeric_expression_of(expr).expect("typed floating literal");
+        let finite = match fact.evaluation_type {
+            WaveType::Float(32) => (*value as f32).is_finite(),
+            WaveType::Float(64) => value.is_finite(),
+            _ => unreachable!("floating literal has a floating evaluation type"),
+        };
+        if finite {
+            Ok(())
+        } else {
+            Err(self.fail(expr, "floating-point literal is out of range for its evaluation type"))
+        }
+    }
+
     // The evaluator recurses only through compact dispatch frames. Conversion
     // and arithmetic temporaries are materialized after operands have returned.
     fn eval(&mut self, expr: &Expression, scope: &Scope) -> Result<Option<Number>, Failure> {
@@ -528,6 +549,18 @@ pub(super) fn validate(
         .collect();
     let mut checker =
         Checker { program, globals: Scope::new(), constants: HashMap::new(), required: true };
+    // Source literals must fit their materialization width even in a skipped
+    // operand. Keep this separate from checked arithmetic evaluation, whose
+    // errors still follow short-circuiting and whose overflow policy is unchanged.
+    for (index, node) in program.syntax().iter().enumerate() {
+        let mut result = Ok(());
+        super::walk_node(node, &mut |expr| {
+            if result.is_ok() {
+                result = checker.literal_range(expr);
+            }
+        });
+        result.map_err(|e| diagnostic(index, e))?;
+    }
     for node in program.syntax() {
         if let ASTNode::Enum(e) = node {
             let mut next = ConstInt::zero();

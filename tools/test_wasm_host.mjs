@@ -51,7 +51,45 @@ test("fixed floating output retains precision, ties, signs and fixed notation", 
   assert.equal(fixedDouble(Infinity), "inf");
   assert.equal(fixedDouble(-Infinity), "-inf");
   assert.equal(fixedDouble(NaN), "nan");
+  for (const [value, precision, expected] of [
+    [2.5, 0, "2"], [3.5, 0, "4"], [-2.5, 0, "-2"], [-3.5, 0, "-4"],
+    [1.125, 2, "1.12"], [1.375, 2, "1.38"], [-1.125, 2, "-1.12"],
+    [1.005, 2, "1.00"], [2.675, 2, "2.67"],
+    [-0, 0, "-0"], [-0, 2, "-0.00"], [-Number.MIN_VALUE, 2, "-0.00"],
+    [1e21, 2, "1000000000000000000000.00"], [1.5, 12, "1.500000000000"],
+  ]) {
+    assert.equal(fixedDouble(value, precision), expected, `${value} at precision ${precision}`);
+  }
+  for (const precision of [-1, 1.5, NaN, Infinity, 2147483648]) {
+    assert.throws(() => fixedDouble(1, precision), /precision/);
+  }
 });
+
+for (const memory64 of [false, true]) {
+  test(`fixed precision formats keep argument order (${memory64 ? 64 : 32}-bit pointers)`, () => {
+    const memory = new WebAssembly.Memory({ initial: 1 });
+    const bytes = new Uint8Array(memory.buffer);
+    const view = new DataView(memory.buffer);
+    bytes.set(Buffer.from("%.0f %.2f %s %.9f %% %f\0"), 16);
+    bytes.set(Buffer.from("next\0"), 128);
+    view.setFloat64(256, 2.5, true);
+    view.setFloat64(264, 1.375, true);
+    if (memory64) view.setBigUint64(272, 128n, true);
+    else view.setUint32(272, 128, true);
+    view.setFloat64(280, -0, true);
+    view.setFloat64(288, 0.0078125, true);
+    const chunks = [];
+    const host = createOutputHost(() => memory, memory64, data => chunks.push(data));
+    const pointer = value => memory64 ? BigInt(value) : value;
+    const expected = "2 1.38 next -0.000000000 % 0.007812";
+    assert.equal(host.printf(pointer(16), pointer(256)), Buffer.byteLength(expected));
+    assert.equal(Buffer.concat(chunks).toString(), expected);
+    for (const format of ["%.f", "%.-1f", "%.+1f", "%.2s", "%.2e", "%.2", "%.2147483648f"]) {
+      bytes.set(Buffer.from(format + "\0"), 16);
+      assert.throws(() => host.printf(pointer(16), pointer(256)), /unsupported.*format|precision/);
+    }
+  });
+}
 
 test("invalid memory, unterminated strings and unsupported formats fail explicitly", () => {
   const memory = new WebAssembly.Memory({ initial: 1 });
