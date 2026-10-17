@@ -56,22 +56,33 @@ def strip_lexical_content(line, state):
                 i += 1
             continue
 
-        if state["string"]:
-            if state["escape"]:
-                state["escape"] = False
-                result.append(" ")
-                i += 1
-            elif line[i] == "\\":
-                state["escape"] = True
-                result.append(" ")
-                i += 1
-            elif line[i] == '"':
-                state["string"] = False
-                result.append(" ")
-                i += 1
+        if state["string"] is not None:
+            if isinstance(state["string"], int):
+                hashes = "#" * state["string"]
+                terminator = '"' + hashes
+                if line.startswith(terminator, i):
+                    state["string"] = None
+                    result.extend(" " * len(terminator))
+                    i += len(terminator)
+                else:
+                    result.append(" ")
+                    i += 1
             else:
-                result.append(" ")
-                i += 1
+                if state["escape"]:
+                    state["escape"] = False
+                    result.append(" ")
+                    i += 1
+                elif line[i] == "\\":
+                    state["escape"] = True
+                    result.append(" ")
+                    i += 1
+                elif line[i] == '"':
+                    state["string"] = False
+                    result.append(" ")
+                    i += 1
+                else:
+                    result.append(" ")
+                    i += 1
             continue
 
         if state["char"]:
@@ -102,6 +113,41 @@ def strip_lexical_content(line, state):
             i += 2
             continue
 
+        raw_prefix_matched = False
+
+        if line.startswith("br\"", i):
+            state["string"] = 0
+            result.extend("   ")
+            i += 3
+            raw_prefix_matched = True
+        elif line.startswith("r\"", i):
+            state["string"] = 0
+            result.extend("  ")
+            i += 2
+            raw_prefix_matched = True
+        else:
+            # Check hashed raw strings like r#"..."# or br##"..."##
+            j = i
+            is_byte = False
+            if j < len(line) and line[j] == 'b':
+                is_byte = True
+                j += 1
+
+            if j < len(line) and line[j] == 'r':
+                j += 1
+                hash_count = 0
+                while j < len(line) and line[j] == '#':
+                    hash_count += 1
+                    j += 1
+                if j < len(line) and line[j] == '"':
+                    prefix_len = j + 1 - i
+                    state["string"] = hash_count
+                    result.extend(" " * prefix_len)
+                    i = j + 1
+                    raw_prefix_matched = True
+
+        if raw_prefix_matched:
+            continue
         if line[i] == '"':
             state["string"] = True
             result.append(" ")
@@ -158,7 +204,7 @@ def is_function_start(text):
 def function_ranges(lines):
     state = {
         "block_comment": 0,
-        "string": False,
+        "string": None,
         "char": False,
         "escape": False,
     }
