@@ -336,6 +336,11 @@ def _test_number(path):
 def _has_legacy_platform_metadata(path: Path) -> bool:
     try:
         lines = path.read_text(encoding="utf-8").splitlines()
+    except UnicodeDecodeError as error:
+        relative = path.relative_to(CASES_ROOT).as_posix()
+        raise CaseManifestError(
+            f"cannot decode case '{relative}' as UTF-8: {error}"
+        ) from error
     except OSError:
         return False
 

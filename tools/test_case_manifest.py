@@ -10,6 +10,7 @@
 # SPDX-License-Identifier: MPL-2.0
 # AI TRAINING NOTICE: Prohibited without prior written permission. No use for machine learning or generative AI training, fine-tuning, distillation, embedding, or dataset creation.
 
+import io
 import tempfile
 import unittest
 from pathlib import Path
@@ -217,6 +218,81 @@ class CaseManifestTests(unittest.TestCase):
                             str(context.exception),
                             "case 'shared/test1.wave' uses legacy platform metadata; use its directory",
                         )
+
+    def test_case_layout_rejects_invalid_utf8_case_sources(self):
+        invalid_cases = (
+            b"// wave-test: mode=run\n\xff",
+            b"fun main() {}\n\xff",
+        )
+        for content in invalid_cases:
+            with self.subTest(content=content):
+                with tempfile.TemporaryDirectory() as temporary:
+                    root = Path(temporary)
+                    suite = root / "shared"
+                    suite.mkdir()
+                    for number in range(1, 11):
+                        (suite / f"test{number}.wave").write_text(
+                            "fun main() {}\n", encoding="utf-8"
+                        )
+                    (suite / "test1.wave").write_bytes(content)
+                    target = SimpleNamespace(suite="shared", suites=())
+                    with patch.object(case_manifest, "CASES_ROOT", root):
+                        with self.assertRaises(CaseManifestError) as context:
+                            _validate_case_layout((target,))
+                    self.assertIn(
+                        "cannot decode case 'shared/test1.wave' as UTF-8",
+                        str(context.exception),
+                    )
+                    self.assertIsInstance(
+                        context.exception.__cause__, UnicodeDecodeError
+                    )
+
+    def test_case_layout_accepts_non_ascii_utf8_case_sources(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            suite = root / "shared"
+            suite.mkdir()
+            content = "// wave-test: mode=run\n// café 測試\nfun main() {}\n"
+            for number in range(1, 11):
+                (suite / f"test{number}.wave").write_text(
+                    content, encoding="utf-8"
+                )
+            target = SimpleNamespace(suite="shared", suites=())
+            with patch.object(case_manifest, "CASES_ROOT", root):
+                _validate_case_layout((target,))
+
+    def test_invalid_utf8_case_cli_exits_two_without_traceback(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            suite = root / "shared"
+            suite.mkdir()
+            for number in range(1, 11):
+                (suite / f"test{number}.wave").write_text(
+                    "fun main() {}\n", encoding="utf-8"
+                )
+            (suite / "test1.wave").write_bytes(b"// wave-test: mode=run\n\xff")
+            target = SimpleNamespace(suite="shared", suites=())
+
+            def load_invalid_cases():
+                with patch.object(case_manifest, "CASES_ROOT", root):
+                    _validate_case_layout((target,))
+
+            errors = io.StringIO()
+            with (
+                patch.object(case_manifest, "load_case_manifest", side_effect=load_invalid_cases),
+                patch.object(
+                    case_manifest,
+                    "parse_args",
+                    return_value=SimpleNamespace(command="validate"),
+                ),
+                patch("sys.stderr", errors),
+            ):
+                with self.assertRaises(SystemExit) as context:
+                    case_manifest.main()
+            self.assertEqual(context.exception.code, 2)
+            self.assertIn("invalid case manifest:", errors.getvalue())
+            self.assertIn("shared/test1.wave", errors.getvalue())
+            self.assertNotIn("Traceback", errors.getvalue())
 
     def test_manifest_accepts_non_ascii_utf8_comments(self):
         contents = case_manifest.DEFAULT_MANIFEST.read_text(encoding="utf-8")
