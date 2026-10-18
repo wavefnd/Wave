@@ -278,7 +278,7 @@ class TargetTests(unittest.TestCase):
         )
         self.assertEqual(targets.resolve("wasm64").triple, "wasm64-unknown-unknown")
         self.assertEqual(len(plans), 31)
-        self.assertEqual(sum(len(p["stages"]) for p in plans.values()), 227)
+        self.assertEqual(sum(len(p["stages"]) for p in plans.values()), 228)
         handlers = build.OPERATIONS | package.OPERATIONS | release.OPERATIONS
         from tools.ci.test import OPERATIONS
 
@@ -292,6 +292,40 @@ class TargetTests(unittest.TestCase):
                 self.assertGreater(stage["timeout_seconds"], 0)
                 if operation["operation"] != "commands":
                     self.assertIn(operation["operation"], handlers)
+
+    def test_formatter_and_webassembly_host_unit_suites_are_ci_gated(self):
+        plans, procedures = common.inventory()
+        python_validation_procedures = (
+            "validate_python_tooling",
+            "validate_python_tooling_2",
+            "validate_windows_python_tooling",
+            "validate_python_tooling_3",
+        )
+        for name in python_validation_procedures:
+            with self.subTest(procedure=name):
+                commands = procedures[name]["commands"]
+                unit_commands = [
+                    command for command in commands
+                    if command[:3] == ["@python", "-m", "unittest"]
+                ]
+                self.assertEqual(len(unit_commands), 1)
+                self.assertIn("tools.test_format_rust", unit_commands[0])
+
+        stages = plans["rust/build-wasm"]["stages"]
+        names = [stage["procedure"] for stage in stages]
+        self.assertEqual(names.count("validate_webassembly_output_host"), 1)
+        self.assertLess(
+            names.index("verify_webassembly_tools"),
+            names.index("validate_webassembly_output_host"),
+        )
+        self.assertLess(
+            names.index("validate_webassembly_output_host"),
+            names.index("build_compiler_with_the_webassembly_backend_only"),
+        )
+        self.assertEqual(
+            procedures["validate_webassembly_output_host"]["commands"],
+            [["node", "tools/test_wasm_host.mjs"]],
+        )
 
     def test_invalid_targets_lanes_and_publication_fail_before_execution(self):
         with (
@@ -511,6 +545,29 @@ class RunnerTests(unittest.TestCase):
             [row["status"] for row in data["stages"]], ["cancelled", "not_run"]
         )
         self.assertEqual(data["summary"]["cancelled"], 1)
+
+    def test_webassembly_host_unit_failure_stops_following_ci_stages(self):
+        plans, procedures = self.plan([("commands", ""), ("commands", "")])
+        procedures["0"]["commands"] = [["node", "tools/test_wasm_host.mjs"]]
+        procedures["1"]["commands"] = [["cargo", "build"]]
+        with (
+            patch.object(common, "inventory", return_value=(plans, procedures)),
+            patch.object(
+                common,
+                "run_process",
+                return_value=SimpleNamespace(
+                    returncode=1, stdout="", stderr="output host tests failed"
+                ),
+            ) as run,
+            contextlib.redirect_stdout(io.StringIO()),
+            contextlib.redirect_stderr(io.StringIO()),
+        ):
+            self.assertEqual(self.runner.execute(["fixture"]), 1)
+        self.assertEqual(run.call_count, 1)
+        self.assertEqual(run.call_args.args[0], ["node", "tools/test_wasm_host.mjs"])
+        rows = json.loads(self.runner.report.read_text())["stages"]
+        self.assertEqual([row["status"] for row in rows], ["fail", "not_run"])
+        self.assertEqual(rows[0]["commands"][0]["actual_exit"], 1)
 
     def test_child_timeout_and_launch_failure_are_distinct(self):
         for failure, status in [

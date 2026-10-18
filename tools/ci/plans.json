@@ -933,6 +933,14 @@
         "timeout_seconds": 1800
       },
       {
+        "id": "test-wasm-output-host",
+        "name": "Validate WebAssembly output host",
+        "condition": "",
+        "procedure": "validate_webassembly_output_host",
+        "phase": "validation",
+        "timeout_seconds": 1800
+      },
+      {
         "id": "stage-5",
         "name": "Build compiler with the WebAssembly backend only",
         "condition": "",

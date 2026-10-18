@@ -110,7 +110,8 @@
         "tools.test_verify_patch",
         "tools.test_release_final",
         "tools.test_freebsd_cache",
-        "tools.test_llvm_bundle"
+        "tools.test_llvm_bundle",
+        "tools.test_format_rust"
       ]
     ]
   },
@@ -238,7 +239,8 @@
         "tools.test_verify_patch",
         "tools.test_release_final",
         "tools.test_freebsd_cache",
-        "tools.test_llvm_bundle"
+        "tools.test_llvm_bundle",
+        "tools.test_format_rust"
       ]
     ]
   },
@@ -818,7 +820,8 @@
         "tools.test_verify_patch",
         "tools.test_release_final",
         "tools.test_freebsd_cache",
-        "tools.test_llvm_bundle"
+        "tools.test_llvm_bundle",
+        "tools.test_format_rust"
       ]
     ]
   },
@@ -1139,6 +1142,16 @@
   "verify_webassembly_tools": {
     "env": {},
     "operation": "wasm_tools"
+  },
+  "validate_webassembly_output_host": {
+    "env": {},
+    "operation": "commands",
+    "commands": [
+      [
+        "node",
+        "tools/test_wasm_host.mjs"
+      ]
+    ]
   },
   "build_compiler_with_the_webassembly_backend_only": {
     "env": {},
@@ -1511,7 +1524,8 @@
         "tools.test_verify_patch",
         "tools.test_release_final",
         "tools.test_freebsd_cache",
-        "tools.test_llvm_bundle"
+        "tools.test_llvm_bundle",
+        "tools.test_format_rust"
       ]
     ]
   },
