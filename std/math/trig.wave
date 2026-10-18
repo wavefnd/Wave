@@ -149,17 +149,17 @@ pub fun sin_cos_f32(value: f32) -> SinCosF32 {
 }
 
 pub fun radians_f64(degrees: f64) -> f64 {
-    return degrees * MATH_PI_F64 / 180.0;
+    return degrees * (MATH_PI_F64 / 180.0);
 }
 
 pub fun degrees_f64(radians: f64) -> f64 {
-    return radians * 180.0 / MATH_PI_F64;
+    return radians * (180.0 / MATH_PI_F64);
 }
 
 pub fun radians_f32(degrees: f32) -> f32 {
-    return degrees * MATH_PI_F32 / 180.0;
+    return degrees * (MATH_PI_F32 / 180.0);
 }
 
 pub fun degrees_f32(radians: f32) -> f32 {
-    return radians * 180.0 / MATH_PI_F32;
+    return radians * (180.0 / MATH_PI_F32);
 }

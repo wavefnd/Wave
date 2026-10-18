@@ -13,6 +13,7 @@ import("std::math::bits")::{
 };
 import("std::math::constants")::{
     MATH_I32_MIN,
+    MATH_PI_F32,
     MATH_PI_F64,
     MATH_U32_MAX,
     MATH_U64_MAX,
@@ -31,13 +32,18 @@ import("std::math::float")::{
     floor_f64,
     fract_f64,
     hypot_f64,
+    infinity_f32,
     infinity_f64,
+    is_finite_f32,
     is_finite_f64,
+    is_infinite_f32,
     is_infinite_f64,
+    is_nan_f32,
     is_nan_f64,
     is_subnormal_f32,
     max_f64,
     min_f64,
+    nan_f32,
     nan_f64,
     round_f64,
     sign_bit_f64,
@@ -67,7 +73,9 @@ import("std::math::result")::{
 };
 import("std::math::trig")::{
     cos_f64,
+    degrees_f32,
     degrees_f64,
+    radians_f32,
     radians_f64,
     sin_f64,
     tan_f64,
@@ -155,6 +163,44 @@ fun main() -> i32 {
     if (!approx_eq_f64(tan_f64(MATH_PI_F64 / 4.0), 1.0, 0.000000001, 0.000000001)) { failed += 1; }
     if (!approx_eq_f64(radians_f64(180.0), MATH_PI_F64, 0.000000000001, 0.0)) { failed += 1; }
     if (!approx_eq_f64(degrees_f64(MATH_PI_F64), 180.0, 0.000000000001, 0.0)) { failed += 1; }
+    if (!approx_eq_f32(radians_f32(180.0), MATH_PI_F32, 0.000001, 0.000001)) { failed += 1; }
+    if (!approx_eq_f32(degrees_f32(MATH_PI_F32), 180.0, 0.00001, 0.000001)) { failed += 1; }
+
+    // The final results fit even though multiplying by pi or 180 first would overflow.
+    var large_degrees32: f32 = 2e38;
+    var large_radians32: f32 = 2e36;
+    var large_degrees64: f64 = 1e308;
+    var large_radians64: f64 = 1e306;
+    if (!is_finite_f32(radians_f32(large_degrees32))
+        || !approx_eq_f32(radians_f32(large_degrees32), 3.4906585e36, 0.0, 0.000001)
+        || !approx_eq_f32(radians_f32(-large_degrees32), -3.4906585e36, 0.0, 0.000001)) { failed += 1; }
+    if (!is_finite_f32(degrees_f32(large_radians32))
+        || !approx_eq_f32(degrees_f32(large_radians32), 1.1459156e38, 0.0, 0.000001)
+        || !approx_eq_f32(degrees_f32(-large_radians32), -1.1459156e38, 0.0, 0.000001)) { failed += 1; }
+    if (!is_finite_f64(radians_f64(large_degrees64))
+        || !approx_eq_f64(radians_f64(large_degrees64), 1.7453292519943296e306, 0.0, 0.000000000001)
+        || !approx_eq_f64(radians_f64(-large_degrees64), -1.7453292519943296e306, 0.0, 0.000000000001)) { failed += 1; }
+    if (!is_finite_f64(degrees_f64(large_radians64))
+        || !approx_eq_f64(degrees_f64(large_radians64), 5.729577951308233e307, 0.0, 0.000000000001)
+        || !approx_eq_f64(degrees_f64(-large_radians64), -5.729577951308233e307, 0.0, 0.000000000001)) { failed += 1; }
+
+    // Multiplication by the scale preserves signed zero and tiny values.
+    var negative_zero32: f32 = float_from_bits_f32(0x80000000 as u32);
+    if (float_to_bits_f32(radians_f32(negative_zero32)) != (0x80000000 as u32)
+        || float_to_bits_f32(degrees_f32(negative_zero32)) != (0x80000000 as u32)
+        || !sign_bit_f64(radians_f64(negative_zero))
+        || !sign_bit_f64(degrees_f64(negative_zero))) { failed += 1; }
+    if (degrees_f32(float_from_bits_f32(1)) == 0.0
+        || degrees_f64(float_from_bits_f64(1)) == 0.0) { failed += 1; }
+
+    // Results that cannot fit must still overflow; non-finite values must propagate.
+    if (!is_infinite_f32(degrees_f32(large_degrees32))
+        || !is_infinite_f64(degrees_f64(large_degrees64))
+        || !is_infinite_f32(radians_f32(infinity_f32()))
+        || !is_infinite_f64(radians_f64(infinity))) { failed += 1; }
+    if (!is_nan_f32(radians_f32(nan_f32()))
+        || !is_nan_f64(degrees_f64(quiet_nan))) { failed += 1; }
+
     var huge_angle: f64 = pow_f64_i32(10.0, 300);
     var reduced_huge_angle: f64 = wrap_angle_pi_f64(huge_angle);
     var huge_sine: f64 = sin_f64(huge_angle);
