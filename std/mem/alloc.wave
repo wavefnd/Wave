@@ -190,12 +190,12 @@ pub fun mem_pages_for_size(size: i64) -> i64 {
     }
 
     var page_size: i64 = mem_page_size();
-    var rounded: i64 = 0;
-    if (mem_size_add_checked(size, page_size - 1, &rounded) < 0) {
-        return MEM_ERR_OVERFLOW;
+    var pages: i64 = size / page_size;
+    if (size % page_size != 0) {
+        pages += 1;
     }
 
-    return rounded / page_size;
+    return pages;
 }
 
 pub fun mem_size_align_page(size: i64) -> i64 {

@@ -25,7 +25,9 @@ import("std::mem::alloc")::{
     mem_alloc_items,
     mem_alloc_aligned,
     mem_free,
+    mem_page_size,
     mem_pages_for_size,
+    mem_size_align_page,
     mem_realloc,
 };
 import("std::mem::consts")::{
@@ -56,8 +58,30 @@ fun main() -> i32 {
     if (mem_alloc_items<u32>(4611686018427387905, 4) != null) {
         return 4;
     }
-    if (mem_pages_for_size(9223372036854775807) != MEM_ERR_OVERFLOW) {
+    var page_size: i64 = mem_page_size();
+    var max_size: i64 = 9223372036854775807;
+    var max_pages: i64 = max_size / page_size;
+    if (max_size % page_size != 0) {
+        max_pages += 1;
+    }
+    if (mem_pages_for_size(max_size) != max_pages) {
         return 5;
+    }
+    if (mem_pages_for_size(-1) != MEM_ERR_INVALID || mem_pages_for_size(0) != 0) {
+        return 33;
+    }
+    if (mem_pages_for_size(page_size - 1) != 1
+        || mem_pages_for_size(page_size) != 1
+        || mem_pages_for_size(page_size + 1) != 2) {
+        return 34;
+    }
+    var last_aligned: i64 = (max_size / page_size) * page_size;
+    if (mem_pages_for_size(last_aligned) != max_size / page_size
+        || mem_size_align_page(last_aligned) != last_aligned) {
+        return 35;
+    }
+    if (mem_size_align_page(max_size) != MEM_ERR_OVERFLOW) {
+        return 36;
     }
     if (mem_alloc_aligned(32, 3) != null) {
         return 6;

@@ -1,7 +1,21 @@
-import("std::mem::alloc")::{mem_alloc, mem_free, mem_page_size};
+import("std::mem::alloc")::{
+    mem_alloc, mem_free, mem_page_size, mem_pages_for_size, mem_size_align_page,
+};
+import("std::mem::consts")::{MEM_ERR_INVALID, MEM_ERR_OVERFLOW};
 
 fun main() -> i32 {
-    if (mem_page_size() != 65536) { return 1; }
+    var page_size: i64 = mem_page_size();
+    if (page_size != 65536) { return 1; }
+    if (mem_pages_for_size(-1) != MEM_ERR_INVALID || mem_pages_for_size(0) != 0) { return 5; }
+    if (mem_pages_for_size(page_size - 1) != 1
+        || mem_pages_for_size(page_size) != 1
+        || mem_pages_for_size(page_size + 1) != 2) { return 6; }
+    var max_size: i64 = 9223372036854775807;
+    if (mem_pages_for_size(max_size) != 140737488355328) { return 7; }
+    if (mem_size_align_page(max_size) != MEM_ERR_OVERFLOW) { return 8; }
+    var last_aligned: i64 = (max_size / page_size) * page_size;
+    if (mem_size_align_page(last_aligned) != last_aligned) { return 9; }
+
     var memory: ptr<u8> = mem_alloc(32);
     if (memory == null) { return 2; }
     deref memory[0] = 64;
