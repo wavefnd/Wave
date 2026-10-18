@@ -77,7 +77,7 @@ def strip_lexical_content(line, state):
                     result.append(" ")
                     i += 1
                 elif line[i] == '"':
-                    state["string"] = False
+                    state["string"] = None
                     result.append(" ")
                     i += 1
                 else:

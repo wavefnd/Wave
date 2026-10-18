@@ -65,6 +65,47 @@ class TestFormatRustRegressions(unittest.TestCase):
         # Should parse normally without treating identifier_r as a raw string keyword
         self.assertIn("identifier_r", stripped)
 
+    def test_code_after_ordinary_and_byte_strings(self):
+        code = (
+            r'let text = "brace } and \"quote\""; let number = 7;' + "\n"
+            + 'let bytes = b"payload { }"; fn recovered() {}\n'
+        )
+        stripped = self._strip_lines(code)
+        self.assertIn("let number = 7;", stripped)
+        self.assertIn("fn recovered() {}", stripped)
+        self.assertNotIn("brace", stripped)
+        self.assertNotIn("payload", stripped)
+
+    def test_function_ranges_after_plain_string(self):
+        source = (
+            'fn first() {\n'
+            '    let text = "hello";\n'
+            '}\n'
+            'fn second() {}\n'
+        )
+        self.assertEqual(
+            format_rust.function_ranges(source.splitlines(keepends=True)),
+            [(0, 2, 0), (3, 3, 0)],
+        )
+
+    def test_spacing_after_mixed_string_literals(self):
+        source = (
+            'fn first() {\n'
+            + r'    let plain = "escaped \" brace { }";' + "\n"
+            + '    let raw = r#"raw } { text"#;\n'
+            + '    let bytes = b"byte } {";\n'
+            + '    let byte_raw = br##"raw bytes } {"##;\n'
+            + '}\n'
+            + 'fn second() {}\n'
+        )
+        expected = source.replace('}\nfn second()', '}\n\nfn second()')
+        self.assertEqual(
+            format_rust.function_ranges(source.splitlines(keepends=True)),
+            [(0, 5, 0), (6, 6, 0)],
+        )
+        self.assertEqual(format_rust.add_function_spacing(source), expected)
+        self.assertEqual(format_rust.add_function_spacing(expected), expected)
+
     def test_formatting_idempotency(self):
         sample = (
             "pub fn first() -> i32 {\n"
