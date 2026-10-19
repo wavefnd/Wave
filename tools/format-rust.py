@@ -155,9 +155,13 @@ def strip_lexical_content(line, state):
             continue
 
         if line[i] == "'":
-            # Rust lifetimes such as 'a must not be treated as char literals.
-            if i + 1 < len(line) and (
-                line[i + 1].isalpha() or line[i + 1] == "_"
+            # A single scalar followed by a closing quote is a character,
+            # including alphabetic/underscore characters and byte literals.
+            # Without that quote, an identifier starts a lifetime or label.
+            if (
+                i + 1 < len(line)
+                and line[i + 1].isidentifier()
+                and not (i + 2 < len(line) and line[i + 2] == "'")
             ):
                 result.append("'")
                 i += 1
@@ -254,6 +258,50 @@ def function_ranges(lines):
     return ranges
 
 
+def attached_item_start(lines, previous_end, function_start):
+    """Find outer attributes and comments belonging to the next function."""
+    state = {"block_comment": 0, "string": None, "char": False, "escape": False}
+    start = previous_end + 1
+    brackets = 0
+    anchored = False
+
+    for index in range(start, function_start):
+        line = lines[index]
+        in_comment = state["block_comment"] > 0
+        stripped = line.lstrip()
+        if not in_comment and brackets == 0:
+            # Inner documentation describes the surrounding scope.
+            if stripped.startswith(("//!", "/*!")):
+                return function_start
+            if stripped.startswith(("///", "/**")) and not stripped.startswith(("////", "/***")):
+                anchored = True
+            if not line.strip() and not anchored:
+                start = index + 1
+
+        lexical = strip_lexical_content(line, state)
+        i = 0
+        while i < len(lexical):
+            if brackets:
+                if lexical[i] == "[":
+                    brackets += 1
+                elif lexical[i] == "]":
+                    brackets -= 1
+                i += 1
+            elif lexical[i].isspace():
+                i += 1
+            elif lexical.startswith("#[", i):
+                anchored = True
+                brackets = 1
+                i += 2
+            else:
+                # An intervening item or scope boundary is not an attachment.
+                return function_start
+
+    if brackets or state["block_comment"] or state["string"] is not None or state["char"]:
+        return function_start
+    return start
+
+
 def add_function_spacing(text):
     lines = text.splitlines(keepends=True)
     ranges = function_ranges(lines)
@@ -270,7 +318,8 @@ def add_function_spacing(text):
         if parent_depth != next_parent_depth:
             continue
 
-        between = lines[end + 1:next_start]
+        item_start = attached_item_start(lines, end, next_start)
+        between = lines[end + 1:item_start]
 
         if any(line.strip() for line in between):
             continue
