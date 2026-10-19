@@ -27,20 +27,8 @@ impl<'a> Lexer<'a> {
             return '\0';
         }
 
-        let rest = &self.source[self.current..];
-        let (ch, size) = match std::str::from_utf8(rest.as_ref()) {
-            Ok(s) => {
-                let mut chars = s.chars();
-                if let Some(c) = chars.next() {
-                    (c, c.len_utf8())
-                } else {
-                    ('\0', 1)
-                }
-            },
-            Err(_) => ('\0', 1),
-        };
-
-        self.current += size;
+        let ch = self.peek();
+        self.current += ch.len_utf8();
         ch
     }
 
@@ -48,11 +36,9 @@ impl<'a> Lexer<'a> {
         if self.is_at_end() {
             '\0'
         } else {
-            let rest = &self.source[self.current..];
-            match std::str::from_utf8(rest.as_ref()) {
-                Ok(s) => s.chars().next().unwrap_or('\0'),
-                Err(_) => '\0',
-            }
+            // `source` is already valid UTF-8 and `current` is a character
+            // boundary. Decode only the next scalar, not the whole suffix.
+            self.source[self.current..].chars().next().unwrap_or('\0')
         }
     }
 

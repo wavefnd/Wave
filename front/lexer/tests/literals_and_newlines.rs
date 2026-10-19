@@ -1,6 +1,31 @@
 use lexer::{token::TokenType, Lexer};
 
 #[test]
+fn long_ascii_and_multibyte_comments_preserve_tokens_and_spans() {
+    for newline in ["\n", "\r\n", "\r"] {
+        let source = format!(
+            "// {}{newline}/* {} /* nested */{newline}*/{newline}  café += \"λ🦀\";",
+            "a".repeat(32_768),
+            "é界🦀".repeat(4_096),
+        );
+        let tokens = Lexer::new_with_file(&source, "long.wave").tokenize().unwrap();
+        assert_eq!(tokens.len(), 5);
+        for (token, (spelling, column)) in
+            tokens.iter().zip([("café", 3), ("+=", 8), ("\"λ🦀\"", 11), (";", 15)])
+        {
+            assert_eq!(token.lexeme, spelling);
+            assert_eq!(token.line, 4);
+            let span = token.span.as_ref().unwrap();
+            assert_eq!(span.file, "long.wave");
+            assert_eq!(span.column, column);
+            assert_eq!(&source[span.start..span.end], spelling);
+        }
+        assert_eq!(tokens[2].token_type, TokenType::String("λ🦀".as_bytes().to_vec()));
+        assert_eq!(tokens[4].token_type, TokenType::Eof);
+    }
+}
+
+#[test]
 fn every_source_newline_has_the_same_tokens_and_logical_positions() {
     for newline in ["\n", "\r\n", "\r"] {
         let source = ["// comment", "/* outer", "/* nested */ ordinary", "*/", "  이름", "  + 1"]
