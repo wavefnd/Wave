@@ -24,13 +24,17 @@ class SourceCheckTests(unittest.TestCase):
             std.mkdir()
             (std / "layout.wave").write_text("STD SENTINEL")
             (std / "manifest.json").write_text("MANIFEST SENTINEL")
-            for source in (helper, std / "layout.wave", std / "manifest.json"):
+            manifest = cases / "cases.toml"
+            manifest.write_text("CASE MANIFEST SENTINEL")
+            for source in (helper, std / "layout.wave", std / "manifest.json", manifest):
                 expected = source.read_bytes()
-                for kind in ("direct", "hardlink", "symlink"):
+                for kind in ("direct", "normalized", "hardlink", "symlink"):
                     with self.subTest(input=source.name, alias=kind):
                         report = root / f"{source.name}-{kind}"
                         if kind == "direct":
                             report = source
+                        elif kind == "normalized":
+                            report = source.parent / ".." / source.parent.name / source.name
                         elif kind == "hardlink":
                             os.link(source, report)
                         else:
@@ -40,7 +44,7 @@ class SourceCheckTests(unittest.TestCase):
                                 continue
                         with patch.object(checker, "ROOT", root), \
                              patch.object(checker, "CASES_ROOT", cases), \
-                             patch.object(checker, "run_process") as run:
+                             patch.object(checker, "run_process", side_effect=AssertionError("compiler must not run")) as run:
                             status = checker.check_sources("missing", ["main.wave"], report)
                             self.assertEqual(status, 1)
                             run.assert_not_called()

@@ -21,15 +21,17 @@ class TestRunTestsCLI(unittest.TestCase):
             compiler.touch()
             if os.name != "nt":
                 compiler.chmod(0o755)
-            for name in ("std/manifest.json", "tests/cases/helper.wave"):
+            for name in ("std/manifest.json", "tests/cases/helper.wave", "tests/cases/cases.toml"):
                 source = root / name
                 source.parent.mkdir(parents=True, exist_ok=True)
                 source.write_text("INPUT SENTINEL")
-                for kind in ("direct", "hardlink", "symlink"):
+                for kind in ("direct", "normalized", "hardlink", "symlink"):
                     with self.subTest(input=name, alias=kind):
-                        report = root / f"{source.parent.name}-{kind}"
+                        report = root / f"{source.name}-{kind}"
                         if kind == "direct":
                             report = source
+                        elif kind == "normalized":
+                            report = source.parent / ".." / source.parent.name / source.name
                         elif kind == "hardlink":
                             os.link(source, report)
                         else:
@@ -40,10 +42,12 @@ class TestRunTestsCLI(unittest.TestCase):
                         with (
                             patch.object(runner, "ROOT", root),
                             patch.object(runner, "resolve_wavec", return_value=compiler),
+                            patch.object(runner, "compiler_default_target", return_value="x86_64-unknown-linux-gnu"),
+                            patch.object(runner, "command_for_test", return_value=[str(compiler)]),
                             patch.object(runner, "iter_test_entries", return_value=[
                                 ("main", "tests/cases/main.wave"),
                             ]),
-                            patch.object(runner, "run_and_classify") as run,
+                            patch.object(runner, "run_and_classify", side_effect=AssertionError("compiler must not run")) as run,
                             self.assertRaises(SystemExit) as error,
                         ):
                             main([

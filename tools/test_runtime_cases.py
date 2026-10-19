@@ -21,15 +21,17 @@ class RuntimeReportTests(unittest.TestCase):
     def test_reports_do_not_clobber_std_or_unselected_imports_before_selection(self):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
-            for name in ("std/mem/layout.wave", "tests/cases/helper.wave"):
+            for name in ("std/mem/layout.wave", "tests/cases/helper.wave", "tests/cases/cases.toml"):
                 source = root / name
                 source.parent.mkdir(parents=True, exist_ok=True)
                 source.write_text("INPUT SENTINEL")
-                for kind in ("direct", "hardlink", "symlink"):
+                for kind in ("direct", "normalized", "hardlink", "symlink"):
                     with self.subTest(input=name, alias=kind):
-                        report = root / f"{source.parent.name}-{kind}"
+                        report = root / f"{source.name}-{kind}"
                         if kind == "direct":
                             report = source
+                        elif kind == "normalized":
+                            report = source.parent / ".." / source.parent.name / source.name
                         elif kind == "hardlink":
                             os.link(source, report)
                         else:
@@ -42,7 +44,7 @@ class RuntimeReportTests(unittest.TestCase):
                             sources=["main.wave"], target_id="not-a-target",
                         )
                         with patch.object(runner, "ROOT", root), \
-                             patch.object(runner, "load_case_manifest") as manifest, \
+                             patch.object(runner, "load_case_manifest", side_effect=ValueError("invalid manifest")) as manifest, \
                              patch.object(runner, "run_process") as run:
                             self.assertEqual(runner.execute(options), 2)
                             manifest.assert_not_called()
