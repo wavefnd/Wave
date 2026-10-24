@@ -120,5 +120,120 @@ class TestFormatRustRegressions(unittest.TestCase):
         pass2 = format_rust.add_function_spacing(pass1)
         self.assertEqual(pass1, pass2, "Formatting must be strictly idempotent")
 
+    def test_spacing_after_character_literals(self):
+        for literal in ["'a'", "'_'", "'é'", "'🦀'", "'{'", "'}'",
+                        r"'\''", r"'\\'", r"'\n'", r"'\x61'", r"'\u{1F980}'",
+                        "b'a'", "b'_'", "b'{'", r"b'\''", r"b'\\'", r"b'\x61'"]:
+            with self.subTest(literal=literal):
+                source = f"fn first() {{\n    let c = {literal};\n}}\nfn second() {{}}\n"
+                expected = source.replace("}\nfn second", "}\n\nfn second")
+                self.assertEqual(format_rust.add_function_spacing(source), expected)
+                self.assertEqual(format_rust.add_function_spacing(expected), expected)
+                self.assertEqual(
+                    format_rust.function_ranges(source.splitlines(keepends=True)),
+                    [(0, 2, 0), (3, 3, 0)],
+                )
+
+    def test_lifetimes_and_loop_labels_survive_character_literals(self):
+        source = (
+            "fn first<'a>(text: &'a str, other: &'_ str) -> &'a str {\n"
+            "    let _: &'static str = other;\n"
+            "    'outer: loop { let c = 'a'; break 'outer; }\n"
+            "    text\n"
+            "}\n"
+            "fn second<'℘>(text: &'℘ str) {}\n"
+            "fn third() {}\n"
+        )
+        expected = source.replace("}\nfn ", "}\n\nfn ")
+        self.assertEqual(format_rust.add_function_spacing(source), expected)
+        self.assertEqual(format_rust.add_function_spacing(expected), expected)
+
+    def test_spacing_before_attached_function_metadata(self):
+        for attachment in [
+            "#[test]\n",
+            '#[cfg_attr(\n    test,\n    doc = "brackets [ ] and braces { }",\n)]\n#[test]\n',
+            "/// Documentation\n/// More documentation\n",
+            "/** Documentation\n * with a nested /* comment */\n */\n",
+            "// An ordinary attached comment\n",
+            "/* An ordinary\n * block comment */\n",
+            "/// Documentation\n#[test]\n// A comment\n",
+            "#[test]\n\n",
+            "/// Documentation\n\n",
+        ]:
+            with self.subTest(attachment=attachment):
+                source = "fn first() {}\n" + attachment + "fn second() {}\n"
+                expected = "fn first() {}\n\n" + attachment + "fn second() {}\n"
+                self.assertEqual(format_rust.add_function_spacing(source), expected)
+                self.assertEqual(format_rust.add_function_spacing(expected), expected)
+
+    def test_multiline_ordinary_comments_attach_to_functions(self):
+        # Keep the block-comment state across lines, even blank lines and
+        # nested comments, instead of mistaking comment text for Rust code.
+        for attachment in [
+            "/* ordinary first line\n * ordinary second line\n */\n",
+            "/* text\n\n * after a blank line */\n",
+            "/* outer /* nested */ outer again\n * continued */\n",
+            "/* ordinary\n * continued */ #[inline]\n",
+            "#[inline]\n/* ordinary\n * continued */\n",
+        ]:
+            with self.subTest(attachment=attachment):
+                source = "fn first() {}\n" + attachment + "fn second() {}\n"
+                expected = "fn first() {}\n\n" + attachment + "fn second() {}\n"
+                lines = source.splitlines(keepends=True)
+                self.assertEqual(format_rust.attached_item_start(lines, 0, len(lines) - 1), 1)
+                self.assertEqual(format_rust.add_function_spacing(source), expected)
+                self.assertEqual(format_rust.add_function_spacing(expected), expected)
+
+    def test_unicode_lifetime_identifier_continuations(self):
+        # Multiscalar identifiers and combining characters must not leave
+        # the lexer in character-literal mode.
+        for name in ["αβ", "école", "℘x", "a\u0301", "Ω\u0308_β2", "a·β", "字\u0301_語"]:
+            with self.subTest(lifetime=name):
+                source = (
+                    f"fn first<'{name}>(value: &'{name} str) {{\n"
+                    "    let ch = '℘';\n"
+                    "}\nfn second() {}\n"
+                )
+                expected = source.replace("}\nfn second()", "}\n\nfn second()")
+                self.assertEqual(
+                    format_rust.function_ranges(source.splitlines(keepends=True)),
+                    [(0, 2, 0), (3, 3, 0)],
+                )
+                self.assertEqual(format_rust.add_function_spacing(source), expected)
+                self.assertEqual(format_rust.add_function_spacing(expected), expected)
+
+    def test_metadata_spacing_in_nested_scopes(self):
+        source = (
+            "impl Example {\n"
+            "    fn first() {}\n"
+            "    /// The second method\n"
+            "    #[inline]\n"
+            "    fn second() {}\n"
+            "}\n"
+        )
+        expected = source.replace("    ///", "\n    ///")
+        self.assertEqual(format_rust.add_function_spacing(source), expected)
+        self.assertEqual(format_rust.add_function_spacing(expected), expected)
+
+    def test_spacing_preserves_unrelated_items_and_comment_association(self):
+        for between in [
+            "const VALUE: i32 = 1;\n#[test]\n",
+            "struct Other {}\n/// Documentation\n",
+            "}\nimpl Other {\n#[test]\n",
+            "//! Inner documentation\n",
+            "/*! Inner documentation */\n",
+            "// A comment about the previous function\n\n",
+            "\n// Already separated\n",
+            "\n#[test]\n",
+        ]:
+            with self.subTest(between=between):
+                source = "fn first() {}\n" + between + "fn second() {}\n"
+                self.assertEqual(format_rust.add_function_spacing(source), source)
+
+    def test_trailing_comment_stays_with_previous_function(self):
+        source = "fn first() {} // First function\n// Second function\nfn second() {}\n"
+        expected = source.replace("\n// Second", "\n\n// Second")
+        self.assertEqual(format_rust.add_function_spacing(source), expected)
+
 if __name__ == "__main__":
     unittest.main()

@@ -3,6 +3,7 @@
 import argparse
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 
 
@@ -35,6 +36,42 @@ def rust_files():
 
         if path.is_file():
             yield path
+
+
+# Only lexical classification is needed here, not full rustc validation.
+# Rust's Unicode identifier tables can differ from Python's isidentifier().
+# Recognize letters and identifier continuations, including combining marks.
+_RUST_IDENT_START_CATEGORIES = frozenset(("Lu", "Ll", "Lt", "Lm", "Lo", "Nl"))
+_RUST_IDENT_CONTINUE_CATEGORIES = _RUST_IDENT_START_CATEGORIES | {"Mn", "Mc", "Nd", "Pc"}
+_RUST_OTHER_IDENT_START = frozenset("\u1885\u1886\u2118\u212e\u309b\u309c")
+_RUST_OTHER_IDENT_CONTINUE = frozenset("\u00b7\u0387\u1369\u136a\u136b\u136c\u136d\u136e\u136f\u1370\u1371\u19da")
+
+
+def rust_lifetime_identifier_end(line, start):
+    """Return the end of a potential Rust lifetime/label identifier."""
+    if start >= len(line):
+        return start
+
+    first = line[start]
+    if not (
+        first == "_"
+        or unicodedata.category(first) in _RUST_IDENT_START_CATEGORIES
+        or first in _RUST_OTHER_IDENT_START
+    ):
+        return start
+
+    end = start + 1
+    while end < len(line):
+        char = line[end]
+        if not (
+            char == "_"
+            or unicodedata.category(char) in _RUST_IDENT_CONTINUE_CATEGORIES
+            or char in _RUST_OTHER_IDENT_START
+            or char in _RUST_OTHER_IDENT_CONTINUE
+        ):
+            break
+        end += 1
+    return end
 
 
 def strip_lexical_content(line, state):
@@ -155,9 +192,13 @@ def strip_lexical_content(line, state):
             continue
 
         if line[i] == "'":
-            # Rust lifetimes such as 'a must not be treated as char literals.
-            if i + 1 < len(line) and (
-                line[i + 1].isalpha() or line[i + 1] == "_"
+            # Preserve Unicode lifetime/label continuations (including marks).
+            # A single scalar followed by a quote is a character literal.
+            lifetime_end = rust_lifetime_identifier_end(line, i + 1)
+            if lifetime_end > i + 1 and not (
+                lifetime_end == i + 2
+                and lifetime_end < len(line)
+                and line[lifetime_end] == "'"
             ):
                 result.append("'")
                 i += 1
@@ -254,6 +295,50 @@ def function_ranges(lines):
     return ranges
 
 
+def attached_item_start(lines, previous_end, function_start):
+    """Find outer attributes and comments belonging to the next function."""
+    state = {"block_comment": 0, "string": None, "char": False, "escape": False}
+    start = previous_end + 1
+    brackets = 0
+    anchored = False
+
+    for index in range(start, function_start):
+        line = lines[index]
+        in_comment = state["block_comment"] > 0
+        stripped = line.lstrip()
+        if not in_comment and brackets == 0:
+            # Inner documentation describes the surrounding scope.
+            if stripped.startswith(("//!", "/*!")):
+                return function_start
+            if stripped.startswith(("///", "/**")) and not stripped.startswith(("////", "/***")):
+                anchored = True
+            if not line.strip() and not anchored:
+                start = index + 1
+
+        lexical = strip_lexical_content(line, state)
+        i = 0
+        while i < len(lexical):
+            if brackets:
+                if lexical[i] == "[":
+                    brackets += 1
+                elif lexical[i] == "]":
+                    brackets -= 1
+                i += 1
+            elif lexical[i].isspace():
+                i += 1
+            elif lexical.startswith("#[", i):
+                anchored = True
+                brackets = 1
+                i += 2
+            else:
+                # An intervening item or scope boundary is not an attachment.
+                return function_start
+
+    if brackets or state["block_comment"] or state["string"] is not None or state["char"]:
+        return function_start
+    return start
+
+
 def add_function_spacing(text):
     lines = text.splitlines(keepends=True)
     ranges = function_ranges(lines)
@@ -270,7 +355,8 @@ def add_function_spacing(text):
         if parent_depth != next_parent_depth:
             continue
 
-        between = lines[end + 1:next_start]
+        item_start = attached_item_start(lines, end, next_start)
+        between = lines[end + 1:item_start]
 
         if any(line.strip() for line in between):
             continue
