@@ -166,6 +166,42 @@ class TestFormatRustRegressions(unittest.TestCase):
                 self.assertEqual(format_rust.add_function_spacing(source), expected)
                 self.assertEqual(format_rust.add_function_spacing(expected), expected)
 
+    def test_multiline_ordinary_comments_attach_to_functions(self):
+        # Keep the block-comment state across lines, even blank lines and
+        # nested comments, instead of mistaking comment text for Rust code.
+        for attachment in [
+            "/* ordinary first line\n * ordinary second line\n */\n",
+            "/* text\n\n * after a blank line */\n",
+            "/* outer /* nested */ outer again\n * continued */\n",
+            "/* ordinary\n * continued */ #[inline]\n",
+            "#[inline]\n/* ordinary\n * continued */\n",
+        ]:
+            with self.subTest(attachment=attachment):
+                source = "fn first() {}\n" + attachment + "fn second() {}\n"
+                expected = "fn first() {}\n\n" + attachment + "fn second() {}\n"
+                lines = source.splitlines(keepends=True)
+                self.assertEqual(format_rust.attached_item_start(lines, 0, len(lines) - 1), 1)
+                self.assertEqual(format_rust.add_function_spacing(source), expected)
+                self.assertEqual(format_rust.add_function_spacing(expected), expected)
+
+    def test_unicode_lifetime_identifier_continuations(self):
+        # Multiscalar identifiers and combining characters must not leave
+        # the lexer in character-literal mode.
+        for name in ["αβ", "école", "℘x", "a\u0301", "Ω\u0308_β2", "a·β", "字\u0301_語"]:
+            with self.subTest(lifetime=name):
+                source = (
+                    f"fn first<'{name}>(value: &'{name} str) {{\n"
+                    "    let ch = '℘';\n"
+                    "}\nfn second() {}\n"
+                )
+                expected = source.replace("}\nfn second()", "}\n\nfn second()")
+                self.assertEqual(
+                    format_rust.function_ranges(source.splitlines(keepends=True)),
+                    [(0, 2, 0), (3, 3, 0)],
+                )
+                self.assertEqual(format_rust.add_function_spacing(source), expected)
+                self.assertEqual(format_rust.add_function_spacing(expected), expected)
+
     def test_metadata_spacing_in_nested_scopes(self):
         source = (
             "impl Example {\n"
