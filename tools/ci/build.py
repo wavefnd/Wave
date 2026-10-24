@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 import sys
 import tarfile
+import tempfile
 
 from tools.ci.common import ROOT, main
 from tools.ci.targets import LLVM_MAJOR, RUST_VERSION
@@ -123,28 +124,31 @@ def stdlib(r, _):
 
 def download(r, url, path, digest, timeout=900):
     path = Path(path)
-    r.run(
-        [
-            "curl",
-            "--ipv4",
-            "--fail",
-            "--location",
-            "--retry",
-            "3",
-            "--connect-timeout",
-            "30",
-            "--max-time",
-            str(timeout),
-            url,
-            "-o",
-            path,
-        ],
-        timeout=timeout + 30,
-    )
-    with path.open("rb") as stream:
-        actual = hashlib.file_digest(stream, "sha256").hexdigest()
-    if actual != digest:
-        raise ValueError(f"checksum mismatch for {path.name}")
+    with tempfile.TemporaryDirectory(prefix=f".{path.name}.", dir=path.parent) as directory:
+        candidate = Path(directory) / path.name
+        r.run(
+            [
+                "curl",
+                "--ipv4",
+                "--fail",
+                "--location",
+                "--retry",
+                "3",
+                "--connect-timeout",
+                "30",
+                "--max-time",
+                str(timeout),
+                url,
+                "-o",
+                candidate,
+            ],
+            timeout=timeout + 30,
+        )
+        with candidate.open("rb") as stream:
+            actual = hashlib.file_digest(stream, "sha256").hexdigest()
+        if actual != digest:
+            raise ValueError(f"checksum mismatch for {path.name}")
+        candidate.replace(path)
 
 
 def loongarch_tools(r, _):
