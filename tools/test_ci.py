@@ -19,6 +19,87 @@ from unittest.mock import Mock, patch
 from tools.ci import common, targets, build, package, release, test as ci_test
 
 
+class DownloadPreservationTests(unittest.TestCase):
+    def exercise(self, *, old=b"old artifact", new=b"verified artifact", digest=None,
+                 fail_download=False, fail_activation=False):
+        with tempfile.TemporaryDirectory() as directory:
+            destination = Path(directory) / "archive.tar.gz"
+            if old is not None:
+                destination.write_bytes(old)
+            checksum = digest or hashlib.sha256(new).hexdigest()
+            staged = []
+
+            def curl(command, *, timeout):
+                self.assertEqual(timeout, 47)
+                self.assertEqual(command[0], "curl")
+                self.assertEqual(command[command.index("--retry") + 1], "3")
+                self.assertEqual(command[command.index("--max-time") + 1], "17")
+                self.assertEqual(command[command.index("--connect-timeout") + 1], "30")
+                candidate = Path(command[command.index("-o") + 1])
+                staged.append(candidate)
+                self.assertEqual(destination.read_bytes() if destination.exists() else None, old)
+                candidate.write_bytes(new[:4] if fail_download else new)
+                if fail_download:
+                    raise RuntimeError("curl interrupted")
+                return ""
+
+            runner = Mock()
+            runner.run.side_effect = curl
+            if fail_activation:
+                with patch.object(Path, "replace", side_effect=OSError("activation denied")) as replace:
+                    with self.assertRaisesRegex(OSError, "activation denied"):
+                        build.download(runner, "https://example.test/archive", destination,
+                                       checksum, timeout=17)
+                    replace.assert_called_once()
+                expected = old
+            elif fail_download:
+                with self.assertRaisesRegex(RuntimeError, "curl interrupted"):
+                    build.download(runner, "https://example.test/archive", destination,
+                                   checksum, timeout=17)
+                expected = old
+            elif checksum != hashlib.sha256(new).hexdigest():
+                with patch.object(Path, "replace") as replace:
+                    with self.assertRaisesRegex(ValueError, "checksum mismatch for archive.tar.gz"):
+                        build.download(runner, "https://example.test/archive", destination,
+                                       checksum, timeout=17)
+                    replace.assert_not_called()
+                expected = old
+            else:
+                build.download(runner, "https://example.test/archive", destination,
+                               checksum, timeout=17)
+                expected = new
+            self.assertEqual(destination.read_bytes() if destination.exists() else None, expected)
+            self.assertEqual(list(Path(directory).iterdir()), [destination] if expected is not None else [])
+            self.assertEqual(len(staged), 1)
+            self.assertFalse(staged[0].exists())
+            runner.run.assert_called_once()
+
+
+    def test_valid_download_replaces_existing_destination(self):
+        self.exercise()
+
+    def test_valid_download_creates_new_destination(self):
+        self.exercise(old=None)
+
+    def test_checksum_mismatch_keeps_existing_destination(self):
+        self.exercise(digest=hashlib.sha256(b"different").hexdigest())
+
+    def test_checksum_mismatch_leaves_missing_destination_missing(self):
+        self.exercise(old=None, digest=hashlib.sha256(b"different").hexdigest())
+
+    def test_interrupted_download_keeps_existing_destination(self):
+        self.exercise(fail_download=True)
+
+    def test_interrupted_download_does_not_create_destination(self):
+        self.exercise(old=None, fail_download=True)
+
+    def test_activation_failure_keeps_existing_destination(self):
+        self.exercise(fail_activation=True)
+
+    def test_activation_failure_does_not_create_destination(self):
+        self.exercise(old=None, fail_activation=True)
+
+
 class MacOSProvisioningTests(unittest.TestCase):
     def runner(self, target_id, *, provision=True):
         runner = SimpleNamespace(
