@@ -3,6 +3,7 @@
 import argparse
 import subprocess
 import sys
+import unicodedata
 from pathlib import Path
 
 
@@ -35,6 +36,42 @@ def rust_files():
 
         if path.is_file():
             yield path
+
+
+# Only lexical classification is needed here, not full rustc validation.
+# Rust's Unicode identifier tables can differ from Python's isidentifier().
+# Recognize letters and identifier continuations, including combining marks.
+_RUST_IDENT_START_CATEGORIES = frozenset(("Lu", "Ll", "Lt", "Lm", "Lo", "Nl"))
+_RUST_IDENT_CONTINUE_CATEGORIES = _RUST_IDENT_START_CATEGORIES | {"Mn", "Mc", "Nd", "Pc"}
+_RUST_OTHER_IDENT_START = frozenset("\u1885\u1886\u2118\u212e\u309b\u309c")
+_RUST_OTHER_IDENT_CONTINUE = frozenset("\u00b7\u0387\u1369\u136a\u136b\u136c\u136d\u136e\u136f\u1370\u1371\u19da")
+
+
+def rust_lifetime_identifier_end(line, start):
+    """Return the end of a potential Rust lifetime/label identifier."""
+    if start >= len(line):
+        return start
+
+    first = line[start]
+    if not (
+        first == "_"
+        or unicodedata.category(first) in _RUST_IDENT_START_CATEGORIES
+        or first in _RUST_OTHER_IDENT_START
+    ):
+        return start
+
+    end = start + 1
+    while end < len(line):
+        char = line[end]
+        if not (
+            char == "_"
+            or unicodedata.category(char) in _RUST_IDENT_CONTINUE_CATEGORIES
+            or char in _RUST_OTHER_IDENT_START
+            or char in _RUST_OTHER_IDENT_CONTINUE
+        ):
+            break
+        end += 1
+    return end
 
 
 def strip_lexical_content(line, state):
@@ -155,13 +192,13 @@ def strip_lexical_content(line, state):
             continue
 
         if line[i] == "'":
-            # A single scalar followed by a closing quote is a character,
-            # including alphabetic/underscore characters and byte literals.
-            # Without that quote, an identifier starts a lifetime or label.
-            if (
-                i + 1 < len(line)
-                and line[i + 1].isidentifier()
-                and not (i + 2 < len(line) and line[i + 2] == "'")
+            # Preserve Unicode lifetime/label continuations (including marks).
+            # A single scalar followed by a quote is a character literal.
+            lifetime_end = rust_lifetime_identifier_end(line, i + 1)
+            if lifetime_end > i + 1 and not (
+                lifetime_end == i + 2
+                and lifetime_end < len(line)
+                and line[lifetime_end] == "'"
             ):
                 result.append("'")
                 i += 1
