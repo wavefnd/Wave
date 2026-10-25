@@ -725,6 +725,84 @@ class MetadataTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "metadata"):
             release.verify_metadata(self.root, self.version, self.source)
 
+    def test_metadata_rejects_non_object_roots_with_filename(self):
+        path = self.root / (self.names[0] + ".metadata.json")
+        for invalid in ([], None, 17, "text", False):
+            with self.subTest(value=invalid):
+                path.write_text(json.dumps(invalid))
+                with self.assertRaises(ValueError) as failure:
+                    release.verify_metadata(self.root, self.version, self.source)
+                self.assertIn(path.name, str(failure.exception))
+                self.assertIn("object", str(failure.exception))
+
+    def test_metadata_rejects_wrong_identity_field_types(self):
+        path = self.root / (self.names[0] + ".metadata.json")
+        original = json.loads(path.read_text())
+        cases = (
+            ("schema_version", True),
+            ("schema_version", 1.0),
+            ("compiler_version", 123),
+            ("source_sha", []),
+            ("target", {}),
+            ("archive", []),
+            ("sha256", None),
+            ("std_compatibility_revision", "4"),
+            ("std_compatibility_revision", True),
+            ("abi", []),
+            ("paths", []),
+            ("paths", {"compiler": 123}),
+            ("external_prerequisites", "sdk"),
+            ("external_prerequisites", [None]),
+        )
+        for field, value in cases:
+            with self.subTest(field=field, value=value):
+                path.write_text(json.dumps(dict(original, **{field: value})))
+                with self.assertRaises(ValueError) as failure:
+                    release.verify_metadata(self.root, self.version, self.source)
+                self.assertIn(path.name, str(failure.exception))
+                self.assertIn(field, str(failure.exception))
+        path.write_text(json.dumps(original))
+        release.verify_metadata(self.root, self.version, self.source)
+
+    def test_malformed_metadata_stops_publication_before_remote_actions(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            assets = root / "release-assets"
+            assets.mkdir()
+            for name in self.names:
+                for suffix in ("", ".sha256", ".metadata.json"):
+                    filename = name + suffix
+                    shutil.copy2(self.root / filename, assets / filename)
+            path = assets / (self.names[0] + ".metadata.json")
+            path.write_text("[]")
+            (root / "std").mkdir()
+            (root / "std/manifest.json").write_text(
+                json.dumps({"compatibility_revision": 4})
+            )
+            runner = SimpleNamespace(
+                publish_authorized=True,
+                run=Mock(),
+                env={
+                    "GITHUB_REPOSITORY": "wavefnd/Wave",
+                    "GITHUB_SHA": self.source,
+                    "RELEASE_VERSION": self.version,
+                },
+                temp=root,
+                context={},
+            )
+            with patch.object(release, "ROOT", root):
+                with self.assertRaisesRegex(ValueError, path.name):
+                    release.publish(runner, {})
+            runner.run.assert_not_called()
+
+    def test_invalid_metadata_json_names_file(self):
+        path = self.root / (self.names[0] + ".metadata.json")
+        path.write_text("{ malformed")
+        with self.assertRaises(ValueError) as failure:
+            release.verify_metadata(self.root, self.version, self.source)
+        self.assertIn(path.name, str(failure.exception))
+        self.assertIn("JSON", str(failure.exception))
+
     def test_no_publication_without_authorization_or_valid_identity(self):
         runner = SimpleNamespace(
             publish_authorized=False, run=Mock(), env={}, context={}

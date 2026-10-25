@@ -56,7 +56,36 @@ def verify_metadata(directory, version, source, expected_revision=None):
         raise ValueError("incomplete or unexpected artifact metadata")
     revision = None
     for name in expected:
-        metadata = json.loads((directory / (name + ".metadata.json")).read_text())
+        metadata_path = directory / (name + ".metadata.json")
+        try:
+            metadata = json.loads(metadata_path.read_text())
+        except json.JSONDecodeError as error:
+            raise ValueError(f"{metadata_path.name}: invalid JSON metadata: {error.msg}") from error
+        if not isinstance(metadata, dict):
+            raise ValueError(f"{metadata_path.name}: metadata must be a JSON object")
+        field_types = {
+            "schema_version": int,
+            "compiler_version": str,
+            "source_sha": str,
+            "archive": str,
+            "sha256": str,
+            "target": str,
+            "std_compatibility_revision": int,
+            "abi": str,
+            "paths": dict,
+            "external_prerequisites": list,
+        }
+        for field, expected_type in field_types.items():
+            if type(metadata.get(field)) is not expected_type:
+                raise ValueError(
+                    f"{metadata_path.name}: invalid {field}: expected {expected_type.__name__}"
+                )
+        if any(type(value) is not str for value in metadata["paths"].values()):
+            raise ValueError(f"{metadata_path.name}: paths entries must be strings")
+        if any(type(value) is not str for value in metadata["external_prerequisites"]):
+            raise ValueError(
+                f"{metadata_path.name}: external_prerequisites entries must be strings"
+            )
         digest = (directory / (name + ".sha256")).read_text().split()[0]
         if (
             metadata.get("schema_version") != 1
