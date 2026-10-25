@@ -90,14 +90,8 @@ fn type_mismatch_serializes_supplied_facts_without_changing_diagnostics() {
         .with_span(Some(&span));
     assert_eq!(diagnostic.expected, vec!["array<i32>".to_string()]);
     assert_eq!(diagnostic.found.as_deref(), Some("str"));
-    assert_eq!(
-        diagnostic.message,
-        "mismatched types: expected `array<i32>`, found `str`"
-    );
-    assert_eq!(
-        diagnostic.label.as_deref(),
-        Some("expected `array<i32>`, found `str`")
-    );
+    assert_eq!(diagnostic.message, "mismatched types: expected `array<i32>`, found `str`");
+    assert_eq!(diagnostic.label.as_deref(), Some("expected `array<i32>`, found `str`"));
     let record = wson::parse_json(&diagnostic.to_json()).unwrap();
     let err = record.get("error").unwrap();
     assert_eq!(err.get_str("kind"), Some("type-mismatch"));
