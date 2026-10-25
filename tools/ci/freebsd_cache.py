@@ -24,7 +24,7 @@ def identity(root=ROOT, pins=None):
     # sources: Cargo checks those against the fresh checkout on every run.
     paths = ["Cargo.lock", ".cargo/config.toml", "tools/ci/freebsd_cache.py",
              "tools/ci/freebsd_package.py", "x.py"]
-    manifests = [root / "Cargo.toml", root / "llvm/Cargo.toml", root / "utils/Cargo.toml",
+    manifests = [root / "Cargo.toml", root / "llvm/Cargo.toml", root / "utils/Cargo.toml", root / "whale/Cargo.toml",
                  *(root / "front").glob("*/Cargo.toml")]
     paths.extend(p.relative_to(root).as_posix() for p in manifests)
     inputs = {name: digest(root / name) for name in sorted(set(paths))}

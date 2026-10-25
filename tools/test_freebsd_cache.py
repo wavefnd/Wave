@@ -31,7 +31,7 @@ class FreeBSDCacheTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as folder:
             root = Path(folder)
             names = ["Cargo.lock", "Cargo.toml", "front/parser/Cargo.toml",
-                     "llvm/Cargo.toml", "utils/Cargo.toml", ".cargo/config.toml",
+                     "llvm/Cargo.toml", "utils/Cargo.toml", "whale/Cargo.toml", ".cargo/config.toml",
                      "tools/ci/freebsd_cache.py", "tools/ci/freebsd_package.py", "x.py"]
             for name in names:
                 path = root / name
