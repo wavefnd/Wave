@@ -250,15 +250,6 @@ class Runner:
                 self.current.get("timeout_seconds", 1800) if self.current else 1800
             )
         command = [self.expand(a) for a in args]
-        if (
-            command
-            and command[0] == "cargo"
-            and command[1] in ("build", "test", "check", "clippy", "doc")
-        ):
-            if "--jobs" not in command:
-                command[2:2] = ["--jobs", "2"]
-            if "--locked" not in command:
-                command.insert(2, "--locked")
         record = {
             "command": command,
             "cwd": str(cwd or ROOT),
@@ -275,6 +266,16 @@ class Runner:
         )
         record["log"] = str(log)
         try:
+            if not command:
+                raise ValueError("command vector cannot be empty")
+            if command[0] == "cargo":
+                if len(command) < 2:
+                    raise ValueError("cargo command requires a subcommand")
+                if command[1] in ("build", "test", "check", "clippy", "doc"):
+                    if "--jobs" not in command:
+                        command[2:2] = ["--jobs", "2"]
+                    if "--locked" not in command:
+                        command.insert(2, "--locked")
             result = run_process(
                 command,
                 cwd=cwd or ROOT,
@@ -303,6 +304,9 @@ class Runner:
                     f"command exited {result.returncode}, expected {expected}: {command}\n{(result.stdout+result.stderr)[-6000:]}"
                 )
             return result.stdout
+        except ValueError as error:
+            record.update(status="fail", error=str(error))
+            raise
         except subprocess.TimeoutExpired as error:
             log = (
                 self.temp
@@ -323,8 +327,9 @@ class Runner:
             raise
         finally:
             record["elapsed_seconds"] = round(time.monotonic() - started, 3)
+            cmd_display = command[0] if command else "<empty>"
             print(
-                f"Command {record['status']} after {record['elapsed_seconds']:.1f}s: {command[0]}",
+                f"Command {record['status']} after {record['elapsed_seconds']:.1f}s: {cmd_display}",
                 flush=True,
             )
             self.save()

@@ -755,6 +755,32 @@ class RunnerTests(unittest.TestCase):
             copied.read_bytes(), (common.ROOT / "std/manifest.json").read_bytes()
         )
 
+    def test_empty_and_incomplete_cargo_commands_produce_configuration_errors(self):
+        with contextlib.redirect_stdout(io.StringIO()):
+            with self.assertRaisesRegex(ValueError, "command vector cannot be empty"):
+                self.runner.run([])
+            with self.assertRaisesRegex(ValueError, "cargo command requires a subcommand"):
+                self.runner.run(["cargo"])
+
+    def test_execute_records_malformed_command_diagnostics_without_subprocess(self):
+        plans, procedures = self.plan([("commands", ""), ("commands", "")])
+        procedures["0"]["commands"] = [["cargo"]]
+        procedures["1"]["commands"] = [["cargo", "check"]]
+        with (
+            patch.object(common, "inventory", return_value=(plans, procedures)),
+            patch.object(common, "run_process") as run_proc,
+            contextlib.redirect_stdout(io.StringIO()),
+            contextlib.redirect_stderr(io.StringIO()),
+        ):
+            self.assertEqual(self.runner.execute(["fixture"]), 1)
+        run_proc.assert_not_called()
+        rows = json.loads(self.runner.report.read_text())["stages"]
+        self.assertEqual([row["status"] for row in rows], ["fail", "not_run"])
+        self.assertEqual(rows[0]["reason"], "cargo command requires a subcommand")
+        self.assertEqual(rows[0]["commands"][0]["command"], ["cargo"])
+        self.assertEqual(rows[0]["commands"][0]["status"], "fail")
+        self.assertEqual(rows[0]["commands"][0]["error"], "cargo command requires a subcommand")
+
 
 class MetadataTests(unittest.TestCase):
     def setUp(self):
