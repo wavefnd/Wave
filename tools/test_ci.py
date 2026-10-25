@@ -690,6 +690,77 @@ class PackageTests(unittest.TestCase):
                     package.replace_set(candidates)
                 self.assertEqual([p.read_text() for _, p in candidates], ["old"] * 3)
 
+    def test_archive_triplet_keeps_backup_when_restore_fails(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            candidates = []
+            for index in range(3):
+                source = root / f"candidate{index}"
+                destination = root / f"published{index}"
+                source.write_text(f"new{index}")
+                destination.write_text(f"old{index}")
+                candidates.append((source, destination))
+            original = os.replace
+
+            def replace(source, destination):
+                if Path(source) == candidates[1][0]:
+                    raise OSError("activation failed")
+                if Path(source).name == "1" and Path(destination) == candidates[1][1]:
+                    raise OSError("restore failed")
+                return original(source, destination)
+
+            with patch.object(package.os, "replace", side_effect=replace):
+                with self.assertRaises(RuntimeError) as failure:
+                    package.replace_set(candidates)
+            message = str(failure.exception)
+            self.assertIn("activation failed", message)
+            self.assertIn("restore failed", message)
+            self.assertIsInstance(failure.exception.__cause__, OSError)
+            backup = next(root.glob(".previous-*/1"))
+            self.assertIn(str(backup), message)
+            self.assertEqual(backup.read_text(), "old1")
+            self.assertEqual(candidates[0][1].read_text(), "old0")
+            self.assertEqual(candidates[2][1].read_text(), "old2")
+            os.replace(backup, candidates[1][1])
+            self.assertEqual(candidates[1][1].read_text(), "old1")
+
+    def test_archive_triplet_cleanup_failure_attempts_all_restores(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            candidates = []
+            for index in range(3):
+                source = root / f"candidate{index}"
+                destination = root / f"published{index}"
+                source.write_text(f"new{index}")
+                destination.write_text(f"old{index}")
+                candidates.append((source, destination))
+            original_replace = os.replace
+            original_unlink = Path.unlink
+
+            def replace(source, destination):
+                if Path(source) == candidates[2][0]:
+                    raise OSError("activation failed")
+                return original_replace(source, destination)
+
+            def unlink(path, *args, **kwargs):
+                if path == candidates[1][1]:
+                    raise OSError("cleanup failed")
+                return original_unlink(path, *args, **kwargs)
+
+            with (
+                patch.object(package.os, "replace", side_effect=replace),
+                patch.object(Path, "unlink", unlink),
+                self.assertRaises(RuntimeError) as failure,
+            ):
+                package.replace_set(candidates)
+            self.assertIn("activation failed", str(failure.exception))
+            self.assertIn("cleanup failed", str(failure.exception))
+            self.assertEqual(
+                [destination.read_text() for _, destination in candidates],
+                ["old0", "old1", "old2"],
+            )
+            self.assertFalse(list(root.glob(".previous-*")))
+
     def test_all_distribution_layouts_include_matching_std_and_identity(self):
         import shutil, zipfile
 
