@@ -92,26 +92,45 @@ def replace_set(candidates):
             raise FileNotFoundError(source)
         if destination.exists() and not destination.is_file():
             raise ValueError(f"not a file: {destination}")
-    with tempfile.TemporaryDirectory(
-        prefix=".previous-", dir=candidates[0][1].parent
-    ) as directory:
-        backups = []
-        published = []
-        try:
-            for index, (source, destination) in enumerate(candidates):
-                if destination.exists():
-                    backup = Path(directory) / str(index)
-                    os.replace(destination, backup)
-                    backups.append((backup, destination))
-                os.replace(source, destination)
-                published.append(destination)
-        except BaseException:
-            for destination in reversed(published):
+    directory = Path(tempfile.mkdtemp(prefix=".previous-", dir=candidates[0][1].parent))
+    backups = []
+    published = []
+    try:
+        for index, (source, destination) in enumerate(candidates):
+            if destination.exists():
+                backup = directory / str(index)
+                os.replace(destination, backup)
+                backups.append((backup, destination))
+            os.replace(source, destination)
+            published.append(destination)
+    except BaseException as error:
+        recovery_errors = []
+        for destination in reversed(published):
+            try:
                 destination.unlink(missing_ok=True)
-            for backup, destination in reversed(backups):
+            except OSError as exc:
+                recovery_errors.append(f"remove {destination}: {exc}")
+        for backup, destination in reversed(backups):
+            try:
                 os.replace(backup, destination)
-            raise
-
+            except OSError as exc:
+                recovery_errors.append(f"restore {destination} from {backup}: {exc}")
+        retained = [backup for backup, _ in backups if os.path.lexists(backup)]
+        if not retained:
+            try:
+                shutil.rmtree(directory)
+            except OSError as exc:
+                recovery_errors.append(f"clean up {directory}: {exc}")
+        if recovery_errors:
+            detail = "; ".join(recovery_errors)
+            if retained:
+                detail += "; recoverable backups: " + ", ".join(map(str, retained))
+            raise RuntimeError(
+                f"package replacement failed ({error}); recovery failed: {detail}"
+            ) from error
+        raise
+    else:
+        shutil.rmtree(directory)
 
 def sidecars(directory, archive, metadata):
     checksum = directory / (archive.name + ".sha256")
