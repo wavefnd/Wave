@@ -1,5 +1,5 @@
 // Instantiates the compiler's minimal browser-hosted WebAssembly fixture.
-import { readFile } from "node:fs/promises";
+import { readModuleBytes, validateNoPrivateExports } from "./wasm_smoke_common.mjs";
 
 const modulePath = process.argv[2];
 if (!modulePath) {
@@ -7,7 +7,7 @@ if (!modulePath) {
   process.exit(2);
 }
 
-const bytes = await readFile(modulePath);
+const bytes = readModuleBytes(modulePath);
 const imports = {
   env: {
     host_add(a, b) {
@@ -22,10 +22,7 @@ const {
   main,
   memory,
 } = instance.exports;
-const leaked = Object.keys(instance.exports).filter((name) => name.startsWith("__wave_"));
-if (leaked.length !== 0 || "add" in instance.exports) {
-  throw new Error(`private Wave functions leaked into exports: ${leaked.join(", ")}`);
-}
+validateNoPrivateExports(instance, ["add"]);
 
 if (typeof add !== "function" || add(7, 5) !== 12) {
   throw new Error("exported add function returned an unexpected value");

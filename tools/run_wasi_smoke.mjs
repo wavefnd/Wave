@@ -1,6 +1,6 @@
 // Runs a WASI Preview 1 command with the supplied directory preopened as fd 3.
-import { readFileSync } from "node:fs";
 import { WASI } from "node:wasi";
+import { readModuleBytes, validateNoPrivateExports } from "./wasm_smoke_common.mjs";
 
 const modulePath = process.argv[2];
 const preopenPath = process.argv[3] ?? process.cwd();
@@ -19,12 +19,9 @@ const wasi = new WASI({
 // This is a synchronous command runner. Avoid asynchronous module compilation
 // and top-level await so startup and termination do not depend on worker/event
 // loop progress while a preloaded host handle is keeping the process alive.
-const module = new WebAssembly.Module(readFileSync(modulePath));
+const module = new WebAssembly.Module(readModuleBytes(modulePath));
 const instance = new WebAssembly.Instance(module, wasi.getImportObject());
-const leaked = Object.keys(instance.exports).filter((name) => name.startsWith("__wave_"));
-if (leaked.length !== 0) {
-  throw new Error(`private Wave functions leaked into exports: ${leaked.join(", ")}`);
-}
+validateNoPrivateExports(instance);
 // WASI commands perform synchronous fd writes and finish when _start returns
 // or proc_exit unwinds it. Host handles must not keep a completed command alive.
 process.exit(wasi.start(instance));
