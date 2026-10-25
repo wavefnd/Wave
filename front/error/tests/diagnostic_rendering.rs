@@ -73,6 +73,69 @@ fn json_preserves_labels_and_escapes_them() {
 }
 
 #[test]
+fn type_mismatch_serializes_supplied_facts_without_changing_diagnostics() {
+    let span = error::SourceSpan {
+        file: "module.wave".into(),
+        start: 9,
+        end: 12,
+        line: 3,
+        column: 5,
+        end_line: 3,
+        end_column: 8,
+        expansion: Vec::new(),
+        focus: None,
+    };
+    let diagnostic = WaveError::type_mismatch("array<i32>", "str", "input.wave", 2, 1)
+        .with_code("E3001")
+        .with_span(Some(&span));
+    assert_eq!(diagnostic.expected, vec!["array<i32>".to_string()]);
+    assert_eq!(diagnostic.found.as_deref(), Some("str"));
+    assert_eq!(
+        diagnostic.message,
+        "mismatched types: expected `array<i32>`, found `str`"
+    );
+    assert_eq!(
+        diagnostic.label.as_deref(),
+        Some("expected `array<i32>`, found `str`")
+    );
+    let record = wson::parse_json(&diagnostic.to_json()).unwrap();
+    let err = record.get("error").unwrap();
+    assert_eq!(err.get_str("kind"), Some("type-mismatch"));
+    assert_eq!(err.get_str("message"), Some(diagnostic.message.as_str()));
+    assert_eq!(err.get_str("code"), Some("E3001"));
+    assert_eq!(err.get_str("file"), Some("module.wave"));
+    assert_eq!(err.get_u64("line"), Some(3));
+    assert_eq!(err.get_u64("column"), Some(5));
+    assert_eq!(err.get("span").unwrap().get_u64("start"), Some(9));
+    assert_eq!(err.get("span").unwrap().get_u64("end"), Some(12));
+    let Some(Value::Array(expected)) = err.get("expected") else {
+        panic!("type mismatch expected facts must be a JSON array");
+    };
+    assert_eq!(expected.as_slice(), &[Value::String("array<i32>".to_string())]);
+    assert_eq!(err.get_str("found"), Some("str"));
+}
+
+#[test]
+fn text_only_semantic_error_is_not_inferred_from_its_message() {
+    // Some semantic producers still supply only human-readable messages.
+    // Fixing type_mismatch must not pretend to fill their structured fields.
+    let diagnostic = WaveError::new(
+        WaveErrorKind::InvalidStatement("incompatible type".to_string()),
+        "semantic validation failed: expected i32, found str",
+        "input.wave",
+        4,
+        2,
+    )
+    .with_code("E3001");
+    let record = wson::parse_json(&diagnostic.to_json()).unwrap();
+    let err = record.get("error").unwrap();
+    assert_eq!(err.get_str("message"), Some(diagnostic.message.as_str()));
+    assert_eq!(err.get_str("code"), Some("E3001"));
+    assert!(matches!(err.get("expected"), Some(Value::Array(items)) if items.is_empty()));
+    assert!(matches!(err.get("found"), Some(Value::Null)));
+}
+
+#[test]
 fn json_batches_contain_only_one_json_record_per_diagnostic() {
     for (case, count) in [("empty-batch", 0), ("single-batch", 1), ("batch", 2)] {
         let output = rendered(case, "json");

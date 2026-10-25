@@ -333,6 +333,8 @@ impl WaveError {
             column,
         )
         .with_label(format!("expected `{}`, found `{}`", expected, found))
+        .with_expected(expected)
+        .with_found(found)
     }
 
     /// Create an undefined variable error
