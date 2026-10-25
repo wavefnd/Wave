@@ -422,6 +422,48 @@ class TargetTests(unittest.TestCase):
         for name, matrix in original.items():
             self.assertEqual(json.loads(actual[name]), matrix)
 
+    def test_expression_literals_preserve_operators_functions_and_context_names(self):
+        literal_values = (
+            "a!b", "a&&b", "a||b", "always()", "cancelled()",
+            "matrix.arch", "steps.build.outcome", "runner.temp",
+            "inputs.value", "github.ref", "a'quoted && b",
+            "mix 'single' and \"double\" || ! always()",
+            "slash \\\\ and && !",
+        )
+        for value in literal_values:
+            with self.subTest(value=value):
+                self.assertTrue(common.evaluate(
+                    f"inputs.value == {value!r}", {"inputs.value": value}
+                ))
+                self.assertFalse(common.evaluate(
+                    f"inputs.value != {value!r}", {"inputs.value": value}
+                ))
+                self.assertFalse(common.evaluate(
+                    f"inputs.value == {value!r}", {"inputs.value": "different"}
+                ))
+
+    def test_expression_still_supports_live_operators_and_short_circuiting(self):
+        context = {
+            "inputs.value": "a&&b",
+            "matrix.arch": "linux-amd64",
+            "steps.build.outcome": "success",
+            "cancelled": False,
+        }
+        self.assertTrue(common.evaluate(
+            "${{ !cancelled() && steps.build.outcome == 'success' && "
+            "inputs.value == 'a&&b' && matrix.arch == 'linux-amd64' }}", context
+        ))
+        self.assertTrue(common.evaluate(
+            "cancelled() || always() && inputs.value != 'a||b'", context
+        ))
+        self.assertFalse(common.evaluate(
+            "!always() || inputs.value == 'a||b'", context
+        ))
+        self.assertTrue(common.evaluate("always() || open('secret')", context))
+        self.assertFalse(common.evaluate("!always() && open('secret')", context))
+        with self.assertRaises(ValueError):
+            common.evaluate("always() && open('secret')", context)
+
     def test_expression_language_rejects_code_and_tracks_dependencies(self):
         context = {"steps.llvm_setup.outcome": "failure"}
         self.assertFalse(

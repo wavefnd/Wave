@@ -39,16 +39,32 @@ def inventory():
 def evaluate(expression, context):
     """Evaluate the small, checked expression subset used by the migrated plans."""
     expression = expression.strip().removeprefix("${{").removesuffix("}}").strip()
-    expression = expression.replace("&&", " and ").replace("||", " or ")
-    expression = re.sub(r"!(?!=)", " not ", expression)
-    expression = expression.replace("always()", "True").replace(
-        "cancelled()", repr(context.get("cancelled", False))
+    # Rewrite only tokens outside string literals. Substituting into quoted
+    # text also corrupts comparisons and can turn literal context names into
+    # Python source, so tokenize strings and operators in a single pass.
+    tokens = re.compile(
+        r"""'(?:\\.|[^'\\])*'|"(?:\\.|[^"\\])*"|&&|\|\||!(?!=)|"""
+        r"""\b(?:always|cancelled)\(\)|"""
+        r"""\b(?:matrix|steps|runner|inputs|github)\.[A-Za-z0-9_.-]+"""
     )
-    expression = re.sub(
-        r"\b(?:matrix|steps|runner|inputs|github)\.[A-Za-z0-9_.-]+",
-        lambda m: repr(context.get(m[0], "")),
-        expression,
-    )
+
+    def replace_token(match):
+        token = match[0]
+        if token.startswith(("'", '"')):
+            return token
+        if token == "&&":
+            return " and "
+        if token == "||":
+            return " or "
+        if token == "!":
+            return " not "
+        if token == "always()":
+            return "True"
+        if token == "cancelled()":
+            return repr(context.get("cancelled", False))
+        return repr(context.get(token, ""))
+
+    expression = tokens.sub(replace_token, expression)
 
     def visit(node):
         if isinstance(node, ast.Constant):
