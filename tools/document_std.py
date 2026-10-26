@@ -8,23 +8,68 @@ import re
 ROOT = Path(__file__).resolve().parent.parent
 
 
+def _masked_source(source):
+    # Keep source offsets in both views. Signatures retain quoted literals,
+    # but comments and quoted delimiters are hidden from declaration parsing
+    clean = list(source)
+    structure = list(source)
+    index = 0
+    while index < len(source):
+        if source.startswith('//', index):
+            end = source.find('\n', index)
+            if end < 0:
+                end = len(source)
+            for pos in range(index, end):
+                clean[pos] = structure[pos] = ' '
+            index = end
+        elif source.startswith('/*', index):
+            depth = 1
+            end = index + 2
+            while end < len(source) and depth:
+                if source.startswith('/*', end):
+                    depth += 1
+                    end += 2
+                elif source.startswith('*/', end):
+                    depth -= 1
+                    end += 2
+                else:
+                    end += 1
+            for pos in range(index, end):
+                if source[pos] != '\n':
+                    clean[pos] = structure[pos] = ' '
+            index = end
+        elif source[index] in ('"', "'"):
+            quote = source[index]
+            end = index + 1
+            while end < len(source):
+                if source[end] == '\\':
+                    end += 2
+                elif source[end] == quote:
+                    end += 1
+                    break
+                else:
+                    end += 1
+            for pos in range(index, min(end, len(source))):
+                if source[pos] != '\n':
+                    structure[pos] = ' '
+            index = end
+        else:
+            index += 1
+    return ''.join(clean), ''.join(structure)
+
+
 def declarations(source):
-    # Keep line offsets while masking comments. Quoted strings are preserved.
-    pattern = r'"(?:\\.|[^"\\])*"|//[^\n]*|/\*[\s\S]*?\*/'
-    clean = re.sub(pattern, lambda m: m[0] if m[0].startswith('"') else re.sub(r'[^\n]', ' ', m[0]), source)
+    clean, structure = _masked_source(source)
     public = re.compile(r'(?m)^\s*pub\s+(?:(async)\s+)?(fun|struct|enum|variant|type|const|var|import)\b')
-    for match in public.finditer(clean):
+    for match in public.finditer(structure):
         start = match.start()
-        # Whitespace in the regex can include preceding newlines.
-        start += len(clean[start:match.end()]) - len(clean[start:match.end()].lstrip())
+        start += len(structure[start:match.end()]) - len(structure[start:match.end()].lstrip())
         kind = match[2]
         tail = clean[start:]
         parentheses = braces = 0
         stop = None
-        for token in re.finditer(r'"(?:\\.|[^"\\])*"|[(){};]', tail):
+        for token in re.finditer(r'[(){};]', structure[start:]):
             value = token[0]
-            if value.startswith('"'):
-                continue
             if value == '(':
                 parentheses += 1
             elif value == ')':

@@ -28,6 +28,51 @@ pub const COUNT: i32 = 3;
         self.assertIn('right: i32;', entries[2][2])
         self.assertEqual(entries[3][0], 8)
 
+    def test_nested_comments_do_not_export_fake_declarations(self):
+        source = '''pub fun first() {}
+/* outer
+    /* inner */
+pub fun ghost() {}
+*/
+#[target(os="linux")]
+pub fun real() {}
+'''
+        entries = list(declarations(source))
+        self.assertEqual([line for line, _, _ in entries], [1, 7])
+        self.assertEqual(entries[1][1], ['#[target(os="linux")]'])
+        self.assertEqual(entries[1][2], 'pub fun real()')
+
+    def test_character_literals_do_not_end_declarations(self):
+        source = '''pub const OPEN: char = '{';
+pub const CLOSE: char = '}';
+pub const SEMICOLON: char = ';';
+pub const QUOTE: char = '\\'';
+pub const BACKSLASH: char = '\\\\';
+pub const URL: str = "https://example.test/* not a comment */";
+pub struct Example { marker: char = '}'; }
+'''
+        entries = list(declarations(source))
+        self.assertEqual(len(entries), 7)
+        self.assertEqual([line for line, _, _ in entries], list(range(1, 8)))
+        self.assertEqual(entries[3][2], "pub const QUOTE: char = '\\'';")
+        self.assertEqual(entries[4][2], "pub const BACKSLASH: char = '\\\\';")
+        self.assertIn("marker: char = '}'", entries[6][2])
+
+    def test_multiline_literals_and_crlf_keep_source_lines(self):
+        source = (
+            'pub const TEXT: str = "hello\r\n'
+            'pub fun not_real() {}\r\n'
+            'world";\r\n'
+            '/* nested /* inside */\r\n'
+            'pub fun hidden() {}\r\n'
+            '*/\r\n'
+            '#[target(os="linux")]\r\n'
+            'pub fun real() {}\r\n'
+        )
+        entries = list(declarations(source))
+        self.assertEqual([line for line, _, _ in entries], [1, 8])
+        self.assertEqual(entries[1][1], ['#[target(os="linux")]'])
+
     def test_checked_in_inventory_matches_public_sources(self):
         from tools.document_std import ROOT, render, render_systems
         for name, rendered in [("API.md", render()), ("SYSTEMS.md", render_systems())]:
