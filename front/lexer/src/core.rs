@@ -46,6 +46,7 @@ pub struct Lexer<'a> {
     pub current: usize,
     pub line: usize,
     pub line_start: usize,
+    pub(crate) column: usize,
 }
 
 impl<'a> Lexer<'a> {
@@ -54,7 +55,7 @@ impl<'a> Lexer<'a> {
     }
 
     pub fn new_with_file(source: &'a str, file: impl Into<String>) -> Lexer<'a> {
-        Lexer { source, file: file.into(), current: 0, line: 1, line_start: 0 }
+        Lexer { source, file: file.into(), current: 0, line: 1, line_start: 0, column: 1 }
     }
 
     pub fn tokenize(&mut self) -> Result<Vec<Token>, WaveError> {
@@ -71,7 +72,7 @@ impl<'a> Lexer<'a> {
     }
 
     pub(crate) fn current_column(&self) -> usize {
-        self.column_at(self.current)
+        self.column
     }
 
     pub(crate) fn column_at(&self, byte_index: usize) -> usize {
