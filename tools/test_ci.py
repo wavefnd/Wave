@@ -761,6 +761,33 @@ class PackageTests(unittest.TestCase):
             )
             self.assertFalse(list(root.glob(".previous-*")))
 
+    def test_archive_triplet_cleanup_failure_after_publish_is_nonfatal(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            candidates = []
+            for index in range(3):
+                source = root / f"candidate{index}"
+                destination = root / f"published{index}"
+                source.write_text(f"new{index}")
+                destination.write_text(f"old{index}")
+                candidates.append((source, destination))
+
+            stderr = io.StringIO()
+            with (
+                patch.object(package.shutil, "rmtree", side_effect=OSError("cleanup denied")) as cleanup,
+                contextlib.redirect_stderr(stderr),
+            ):
+                package.replace_set(candidates)
+
+            cleanup.assert_called_once()
+            backup_directory = cleanup.call_args.args[0]
+            self.assertEqual([p.read_text() for _, p in candidates], ["new0", "new1", "new2"])
+            self.assertEqual(
+                [(backup_directory / str(i)).read_text() for i in range(3)],
+                ["old0", "old1", "old2"],
+            )
+            self.assertIn("package replacement succeeded", stderr.getvalue())
+            self.assertIn("cleanup denied", stderr.getvalue())
     def test_all_distribution_layouts_include_matching_std_and_identity(self):
         import shutil, zipfile
 
