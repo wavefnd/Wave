@@ -248,5 +248,169 @@ class TestCorpusTimeout(unittest.TestCase):
         self.assertIn("partial stderr", stderr.getvalue())
 
 
+
+class TestStdExampleContracts(unittest.TestCase):
+    def setUp(self):
+        temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(temporary.cleanup)
+        self.root = Path(temporary.name)
+        self.example_path = self.root / "examples/std/example.wave"
+        self.example_path.parent.mkdir(parents=True)
+        self.fixture_root = self.root / "tests/fixtures"
+        self.fixture_root.mkdir(parents=True)
+        (self.root / "std").mkdir()
+
+    def exercise(self, metadata="", *, exit_code=0, stdout="", stderr="",
+                 fixtures=None, error=None):
+        source = ("// wave-test: " + metadata + "\n" if metadata else "") + "fun main() {}\n"
+        self.example_path.write_text(source, encoding="utf-8")
+        for name, contents in (fixtures or {}).items():
+            path = self.fixture_root / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(contents, encoding="utf-8")
+        calls = []
+
+        def fake_process(command, **kwargs):
+            calls.append((command, kwargs))
+            if error is not None:
+                raise error
+            return subprocess.CompletedProcess(command, exit_code, stdout, stderr)
+
+        records = []
+        with (
+            patch.object(check_wave_corpus, "ROOT", self.root),
+            patch.object(check_wave_corpus, "run_process", side_effect=fake_process),
+            patch("sys.stdout", io.StringIO()),
+        ):
+            failures = check_wave_corpus.run_std_examples(
+                Path("wavec"), {"CUSTOM_ENV": "kept"}, 2.0,
+                records=records, capability_probe=lambda: None,
+            )
+        return records[0], failures, calls
+
+    def test_expected_exit_contract_accepts_nonzero_and_rejects_mismatch(self):
+        row, failures, calls = self.exercise("expected-exit=7", exit_code=7)
+        self.assertEqual((row["status"], row["expected_exit"], row["actual_exit"]),
+                         ("pass", 7, 7))
+        self.assertFalse(failures)
+        self.assertEqual(len(calls), 1)
+
+        row, failures, _ = self.exercise("expected-exit=7", exit_code=0)
+        self.assertEqual(row["status"], "fail")
+        self.assertIn("exit status 0, expected 7", row["reason"])
+        self.assertEqual(len(failures), 1)
+
+        row, failures, _ = self.exercise(exit_code=0)
+        self.assertEqual(row["status"], "pass")
+        self.assertFalse(failures)
+
+    def test_output_contract_checks_both_streams_even_on_exit_zero(self):
+        files = {"expected.out": "correct\n", "expected.err": "warning\n"}
+        declaration = "stdout-file=expected.out, stderr-file=expected.err"
+        row, failures, calls = self.exercise(
+            declaration, stdout="wrong\n", stderr="warning\n", fixtures=files,
+        )
+        self.assertEqual(row["status"], "fail")
+        self.assertIn("stdout fixture mismatch", row["reason"])
+        self.assertIn("-correct", row["reason"])
+        self.assertEqual(calls[0][1]["errors"], "strict")
+        self.assertEqual(len(failures), 1)
+
+        row, failures, _ = self.exercise(
+            declaration, stdout="correct\n", stderr="wrong\n", fixtures=files,
+        )
+        self.assertIn("stderr fixture mismatch", row["reason"])
+        self.assertEqual(row["status"], "fail")
+        self.assertEqual(len(failures), 1)
+
+        row, failures, _ = self.exercise(
+            declaration, stdout="correct\n", stderr="warning\n", fixtures=files,
+        )
+        self.assertEqual(row["status"], "pass")
+        self.assertFalse(failures)
+
+    def test_fixture_stdin_and_environment_reach_the_process(self):
+        row, failures, calls = self.exercise(
+            "stdin-file=input.txt, env-file=env.json",
+            fixtures={
+                "input.txt": "first\nsecond\n",
+                "env.json": '{"WAVE_CORPUS_FIXTURE": "enabled"}',
+            },
+        )
+        self.assertFalse(failures)
+        self.assertEqual(row["status"], "pass")
+        command, arguments = calls[0]
+        self.assertEqual(command[-2], "run")
+        self.assertEqual(Path(command[-1]), Path("examples/std/example.wave"))
+        self.assertEqual(arguments["input"], "first\nsecond\n")
+        self.assertEqual(arguments["env"]["WAVE_CORPUS_FIXTURE"], "enabled")
+        self.assertEqual(arguments["encoding"], "utf-8")
+
+        row, failures, calls = self.exercise("stdin=hello")
+        self.assertFalse(failures)
+        self.assertEqual(calls[0][1]["input"], "hello\n")
+        self.assertEqual(calls[0][1]["env"], {"CUSTOM_ENV": "kept"})
+
+    def test_unsupported_modes_are_failures_not_false_passes(self):
+        for metadata in (
+            "mode=check", "runner=server", "udp-input=true", "runtime=compile",
+        ):
+            with self.subTest(metadata=metadata):
+                row, failures, calls = self.exercise(metadata)
+                self.assertEqual(row["status"], "fail")
+                self.assertEqual(len(failures), 1)
+                self.assertEqual(calls, [])
+                self.assertIn("standard-library examples", row["reason"])
+
+    def test_invalid_metadata_and_borrowed_fixtures_are_recorded(self):
+        for metadata, fixtures, expected in (
+            ("expected-exit=oops", {}, "expects an integer"),
+            ("stdin-file=../escape", {}, "fixture path"),
+            ("stdin-file=missing.txt", {}, "cannot read UTF-8 fixture"),
+            ("env-file=env.json", {"env.json": "{bad"}, "invalid environment fixture"),
+        ):
+            with self.subTest(metadata=metadata):
+                row, failures, calls = self.exercise(metadata, fixtures=fixtures)
+                self.assertEqual(row["status"], "fail")
+                self.assertEqual(len(failures), 1)
+                self.assertIn(expected, row["reason"])
+                self.assertFalse(calls)
+
+        row, failures, calls = self.exercise("stdout-file=missing.txt")
+        self.assertEqual(row["status"], "fail")
+        self.assertIn("cannot read UTF-8 fixture", row["reason"])
+        self.assertEqual(len(failures), 1)
+        self.assertEqual(len(calls), 1)
+
+    def test_undecodable_contract_output_is_a_per_example_failure(self):
+        error = UnicodeDecodeError("utf-8", b"\xff", 0, 1, "invalid start byte")
+        row, failures, calls = self.exercise(
+            "stdout-file=expected.out",
+            fixtures={"expected.out": ""},
+            error=error,
+        )
+        self.assertEqual(row["status"], "fail")
+        self.assertIn("example execution failed", row["reason"])
+        self.assertEqual(len(failures), 1)
+        self.assertEqual(len(calls), 1)
+
+    def test_report_cannot_overwrite_borrowed_fixture(self):
+        self.example_path.write_text("fun main() {}\n", encoding="utf-8")
+        output_file = self.fixture_root / "expected.txt"
+        output_file.write_text("do not overwrite\n", encoding="utf-8")
+        errors = io.StringIO()
+        with (
+            patch.object(check_wave_corpus, "ROOT", self.root),
+            patch.object(check_wave_corpus, "resolve_wavec", return_value=Path("wavec")),
+            patch.object(check_wave_corpus, "corpus_files", return_value=[self.example_path]),
+            patch.object(check_wave_corpus, "run_process", side_effect=AssertionError("ran compiler")),
+            patch("sys.stderr", errors),
+        ):
+            result = main(["--run-std-examples", "--report-json", str(output_file)])
+        self.assertEqual(result, 2)
+        self.assertEqual(output_file.read_text(encoding="utf-8"), "do not overwrite\n")
+        self.assertIn("report path aliases an input", errors.getvalue())
+
+
 if __name__ == "__main__":
     unittest.main()

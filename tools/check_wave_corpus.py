@@ -25,12 +25,16 @@ import sys
 try:
     from tools.process_tree import run_process, timeout_output
     from tools.host_capabilities import local_network_unavailable
-    from tools.test_contracts import parse_test_metadata
+    from tools.test_contracts import (
+        parse_test_metadata, standard_input, test_environment, validate_output,
+    )
     from tools.validation_reports import validate_report_path, write_report
 except ModuleNotFoundError:
     from process_tree import run_process, timeout_output
     from host_capabilities import local_network_unavailable
-    from test_contracts import parse_test_metadata
+    from test_contracts import (
+        parse_test_metadata, standard_input, test_environment, validate_output,
+    )
     from validation_reports import validate_report_path, write_report
 
 
@@ -156,6 +160,16 @@ def run_std_examples(
         records.append(row)
         try:
             metadata = parse_test_metadata(path)
+            if metadata.mode != "run" or metadata.runner != "native" or metadata.udp_input:
+                raise ValueError("standard-library examples require native run mode without udp-input")
+            if metadata.runtime == "compile":
+                raise ValueError("standard-library examples cannot use compile-only runtime")
+            fixture_root = ROOT / "tests/fixtures"
+            stdin = standard_input(metadata, fixture_root)
+            environment = test_environment(metadata, fixture_root)
+            if environment is None:
+                environment = compiler_env
+            row["expected_exit"] = metadata.expected_exit
             if "sockets" in metadata.requires:
                 if not network_checked:
                     network_reason = capability_probe()
@@ -174,10 +188,13 @@ def run_std_examples(
             result = run_process(
                 [str(wavec), "--std-root", str(ROOT / "std"), "run", str(relative)],
                 cwd=ROOT,
-                env=compiler_env,
+                env=environment,
+                input=stdin,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
+                encoding="utf-8",
+                errors="strict" if metadata.stdout_file or metadata.stderr_file else "replace",
                 timeout=timeout,
                 check=False,
             )
@@ -187,24 +204,34 @@ def run_std_examples(
             row.update(status="timeout", reason=failures[-1][1])
             print(f"[RUN TIMEOUT] {relative}")
             continue
-        except OSError as error:
-            failures.append((relative, f"compiler launch failed: {error}"))
+        except (OSError, UnicodeError) as error:
+            failures.append((relative, f"example execution failed: {error}"))
             row["reason"] = failures[-1][1]
             print(f"[RUN FAIL] {relative}")
             continue
 
         row.update(actual_exit=result.returncode, stdout=result.stdout, stderr=result.stderr)
-        if result.returncode == 0:
+        reason = None
+        if result.returncode != metadata.expected_exit:
+            reason = f"exit status {result.returncode}, expected {metadata.expected_exit}"
+            detail = "\n".join(
+                part.rstrip() for part in (result.stdout, result.stderr) if part.strip()
+            )
+            if detail:
+                reason += f"\n{detail}"
+        else:
+            try:
+                reason = validate_output(metadata, result.stdout, result.stderr, fixture_root)
+            except (OSError, UnicodeError, ValueError) as error:
+                reason = str(error)
+
+        if reason is None:
             row["status"] = "pass"
             print(f"[RUN PASS] {relative}")
-            continue
-
-        detail = "\n".join(
-            part.rstrip() for part in (result.stdout, result.stderr) if part.strip()
-        )
-        failures.append((relative, detail or f"exit status {result.returncode}"))
-        row["reason"] = failures[-1][1]
-        print(f"[RUN FAIL] {relative}")
+        else:
+            failures.append((relative, reason))
+            row["reason"] = reason
+            print(f"[RUN FAIL] {relative}")
 
     print(
         f"Example result: {len(examples) - len(failures) - skipped} passed, "
@@ -231,7 +258,12 @@ def main(argv: list[str] | None = None) -> int:
     records = []
     if args.report_json is not None:
         try:
-            validate_report_path(args.report_json, [wavec, *files, *ROOT.glob("std/**/*")])
+            inputs = [wavec, *files, *ROOT.glob("std/**/*")]
+            if args.run_std_examples:
+                inputs.extend(
+                    path for path in (ROOT / "tests/fixtures").rglob("*") if path.is_file()
+                )
+            validate_report_path(args.report_json, inputs)
         except (ValueError, OSError) as error:
             print(error, file=sys.stderr)
             return 2
