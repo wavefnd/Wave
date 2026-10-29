@@ -130,7 +130,14 @@ def replace_set(candidates):
             ) from error
         raise
     else:
-        shutil.rmtree(directory)
+        try:
+            shutil.rmtree(directory)
+        except OSError as exc:
+            # Publication already succeeded; old-backup cleanup must not report a failed deployment.
+            print(
+                f"warning: package replacement succeeded but could not clean up {directory}: {exc}",
+                file=sys.stderr,
+            )
 
 def sidecars(directory, archive, metadata):
     checksum = directory / (archive.name + ".sha256")
