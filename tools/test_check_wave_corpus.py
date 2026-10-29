@@ -340,7 +340,8 @@ class TestStdExampleContracts(unittest.TestCase):
         self.assertFalse(failures)
         self.assertEqual(row["status"], "pass")
         command, arguments = calls[0]
-        self.assertEqual(command[-2:], ["run", "examples/std/example.wave"])
+        self.assertEqual(command[-2], "run")
+        self.assertEqual(Path(command[-1]), Path("examples/std/example.wave"))
         self.assertEqual(arguments["input"], "first\nsecond\n")
         self.assertEqual(arguments["env"]["WAVE_CORPUS_FIXTURE"], "enabled")
         self.assertEqual(arguments["encoding"], "utf-8")
