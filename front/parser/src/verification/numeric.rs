@@ -44,6 +44,15 @@ pub(super) fn infer_binary_type(
     }
     let left_canonical = canonical_expression_type(program, &left);
     let right_canonical = canonical_expression_type(program, &right);
+
+    // Boolean equality needs no numeric promotion. Other bool operators and
+    // mixed bool/numeric comparisons still use the existing validation.
+    if matches!(operator, Operator::Equal | Operator::NotEqual)
+        && left_canonical == Some(WaveType::Bool)
+        && right_canonical == Some(WaveType::Bool)
+    {
+        return Ok(ExpressionType::Known(WaveType::Bool));
+    }
     let comparison = matches!(
         operator,
         Operator::GreaterEqual
