@@ -193,3 +193,45 @@ fun check(value: u8) {
         hir::conversions::ConversionKind::ZeroExtend
     );
 }
+
+#[test]
+fn bool_equality_and_inequality_preserve_bool_computation() {
+    let program = lower(
+        r#"
+type Flag = bool;
+fun identity(value: Flag) -> bool { return value; }
+fun check(left: Flag, right: bool) -> bool {
+    var equal: bool = left == identity(right);
+    var unequal: bool = (left) != (right);
+    return equal != unequal;
+}
+"#,
+    );
+    program.verify_conversions().unwrap();
+    let ASTNode::Function(function) = &program.syntax()[2] else {
+        panic!("expected check function");
+    };
+    for node in function.body.iter().take(2) {
+        let ASTNode::Variable(variable) = node else { panic!("expected variable") };
+        let expression = variable.initial_value.as_ref().unwrap();
+        assert_eq!(
+            program.type_of(expression),
+            Some(&HirExpressionType::Resolved(WaveType::Bool))
+        );
+        let fact = program.numeric_expression_of(expression).unwrap();
+        assert_eq!(fact.computation_type, Some(WaveType::Bool));
+        assert_eq!(fact.result_type, WaveType::Bool);
+    }
+}
+
+#[test]
+fn bool_ordering_arithmetic_and_mixed_equality_stay_rejected() {
+    for expression in ["a < b", "a > b", "a + b", "a == 1", "a != 1.0"] {
+        let source =
+            format!("fun check(a: bool, b: bool) {{ var result: bool = {expression}; }}");
+        let mut lexer = Lexer::new(&source);
+        let tokens = lexer.tokenize().unwrap();
+        let syntax = parse_syntax_only(&tokens).unwrap();
+        assert!(TypedProgram::lower(syntax).is_err(), "{expression} should be rejected");
+    }
+}
