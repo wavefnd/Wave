@@ -13,9 +13,8 @@
 //! Typed formatting and checked scalar input using the existing C I/O runtime.
 use super::{integer_io, variable::build_entry_alloca};
 use crate::codegen::abi_c::ExternCInfo;
-use crate::codegen::{escape_percent, wave_format_to_c, VariableInfo};
-use crate::expression::lvalue::generate_lvalue_ir;
-use crate::expression::rvalue::generate_expression_ir;
+use crate::codegen::{escape_percent, generate_address_ir, wave_format_to_c, VariableInfo};
+use crate::expression::rvalue::{generate_expression_ir, ExprGenEnv};
 use hir::{HirExpressionType, TypedProgram};
 use inkwell::context::Context;
 use inkwell::module::{Linkage, Module};
@@ -232,26 +231,27 @@ pub(super) fn gen_input_ir<'ctx>(
     extern_c_info: &HashMap<String, ExternCInfo<'ctx>>,
     program: &TypedProgram,
 ) {
-    // Resolve every destination once, before any input, matching prior evaluation order.
+    // Resolve every destination once through the same typed address path as assignment,
+    // preserving base-before-index evaluation before any input is consumed.
     let destinations: Vec<_> = args
         .iter()
         .map(|argument| {
-            (
-                generate_lvalue_ir(
+            let destination = generate_address_ir(
+                &mut ExprGenEnv {
                     program,
                     context,
                     builder,
-                    argument,
-                    variables,
+                    variables: &mut *variables,
                     module,
                     global_consts,
                     struct_types,
                     struct_field_indices,
                     target_data,
                     extern_c_info,
-                ),
-                semantic_type(program, argument),
-            )
+                },
+                argument,
+            );
+            (destination, semantic_type(program, argument))
         })
         .collect();
     let mut destinations = destinations.into_iter();
