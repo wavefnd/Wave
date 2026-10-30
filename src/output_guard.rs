@@ -314,26 +314,6 @@ pub(crate) fn validate(
 
 #[cfg(windows)]
 fn windows_identity(path: &Path) -> std::io::Result<(u32, [u32; 2])> {
-    use std::os::windows::io::AsRawHandle;
-    #[repr(C)]
-    struct Information {
-        attributes: u32,
-        times: [u32; 6],
-        volume: u32,
-        size: [u32; 2],
-        links: u32,
-        index: [u32; 2],
-    }
-    #[link(name = "kernel32")]
-    extern "system" {
-        fn GetFileInformationByHandle(handle: *mut std::ffi::c_void, info: *mut Information)
-            -> i32;
-    }
-    let file = fs::File::open(path)?;
-    let mut info = std::mem::MaybeUninit::<Information>::uninit();
-    if unsafe { GetFileInformationByHandle(file.as_raw_handle(), info.as_mut_ptr()) } == 0 {
-        return Err(std::io::Error::last_os_error());
-    }
-    let info = unsafe { info.assume_init() };
+    let info = crate::windows_fs::information(&fs::File::open(path)?)?;
     Ok((info.volume, info.index))
 }

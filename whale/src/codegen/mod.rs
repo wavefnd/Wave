@@ -92,6 +92,27 @@ fn lower_with_limits(program: &TypedProgram, limits: IrLimits) -> Result<Module>
                     );
                     return Ok(());
                 },
+                ASTNode::Enum(enumeration) => {
+                    let info = program
+                        .enum_types()
+                        .iter()
+                        .find(|ty| ty.name == enumeration.name)
+                        .ok_or_else(|| ice("missing frontend enum facts"))?;
+                    let ty = scalar(&info.underlying_type)?;
+                    for variant in &info.variants {
+                        constants.insert(
+                            variant.name.clone(),
+                            (
+                                ty.clone(),
+                                expression::constant_value(
+                                    &hir::ConstantValue::Int(variant.value.clone()),
+                                    &info.underlying_type,
+                                )?,
+                            ),
+                        );
+                    }
+                    return Ok(());
+                },
                 ASTNode::Variable(_) => return Err(unsupported("mutable global storage")),
                 _ => return Err(unsupported("non-function top-level declarations")),
             };

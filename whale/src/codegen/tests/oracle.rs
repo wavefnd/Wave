@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 //! Execute the supported integer subset with the upstream bounded interpreter.
-//! Direct integer/void calls share execution budgets. Floating arithmetic and
-//! external calls remain explicit unsupported outcomes, not successes.
+//! Direct integer/void calls share execution budgets. Direct floating coverage
+//! lives in floating_oracle; external calls remain explicit unsupported outcomes.
 use super::{mask, module};
 use whale_ir::*;
 
@@ -11,6 +11,7 @@ fn options() -> InterpreterOptions {
         max_call_depth: 32,
         max_frames: 256,
         max_live_values: 8192,
+        max_trace_frames: 32,
         ir_limits: IrLimits { max_nodes: 20_000, ..IrLimits::default() },
         memory_limits: MemoryLimits {
             max_bytes: 4096,
@@ -22,7 +23,7 @@ fn options() -> InterpreterOptions {
 }
 
 fn run(module: &Module, arguments: &[ConstValue]) -> Result<InterpreterResult, InterpreterError> {
-    interpret_with_options(module, module.functions[0].id, arguments, options())
+    super::interpret_checked(module, module.functions[0].id, arguments, options())
 }
 
 fn integer(raw: u128, bits: u32, signed: bool) -> ConstValue {
@@ -241,7 +242,7 @@ fn budgets_unsupported_operations_and_traps_have_distinct_outcomes() {
     );
     let limited = InterpreterOptions { max_steps: 40, ..options() };
     assert!(matches!(
-        interpret_with_options(&ir, ir.functions[0].id, &[ConstValue::I(0)], limited),
+        super::interpret_checked(&ir, ir.functions[0].id, &[ConstValue::I(0)], limited),
         Err(InterpreterError::StepLimit { limit: 40, .. })
     ));
     let ir = module("fun probe(n: i64) -> i64 { var x: i64 = n; return x; }");
@@ -250,14 +251,11 @@ fn budgets_unsupported_operations_and_traps_have_distinct_outcomes() {
         ..options()
     };
     assert!(matches!(
-        interpret_with_options(&ir, ir.functions[0].id, &[ConstValue::I(0)], limited),
+        super::interpret_checked(&ir, ir.functions[0].id, &[ConstValue::I(0)], limited),
         Err(InterpreterError::MemoryLimit { .. })
     ));
     let ir = module("fun probe(n: i32) -> i32 { var f: f64 = n as f64; return f as i32; }");
-    assert!(matches!(
-        run(&ir, &[ConstValue::I(0)]),
-        Err(InterpreterError::UnsupportedInstruction { .. })
-    ));
+    assert_eq!(run(&ir, &[ConstValue::I(0)]).unwrap().value, Some(ConstValue::I(0)));
 }
 
 #[test]
@@ -319,12 +317,14 @@ fun leaf(n: u64) { var shifted: u8 = (1 as u8) << n; }
     // duplicated evaluation exceeds this budget even when its result is void.
     let exact = InterpreterOptions { max_call_depth: 3, max_frames: 5, ..options() };
     assert_eq!(
-        interpret_with_options(&ir, ir.functions[0].id, &[ConstValue::U(0)], exact).unwrap().value,
+        super::interpret_checked(&ir, ir.functions[0].id, &[ConstValue::U(0)], exact)
+            .unwrap()
+            .value,
         None
     );
     let returned = ir.functions.iter().find(|f| f.name == "returned").unwrap().id;
     assert!(matches!(
-        interpret_with_options(
+        super::interpret_checked(
             &ir,
             ir.functions[0].id,
             &[ConstValue::U(0)],
@@ -350,7 +350,7 @@ fn short_circuiting_skips_calls_but_reached_unused_results_still_trap() {
         ));
         let only_entry = InterpreterOptions { max_call_depth: 1, max_frames: 1, ..options() };
         assert_eq!(
-            interpret_with_options(
+            super::interpret_checked(
                 &ir,
                 ir.functions[0].id,
                 &[ConstValue::Bool(skipped), ConstValue::U(8)],
@@ -387,21 +387,21 @@ fn calls_share_fuel_memory_and_distinct_frame_and_live_value_limits() {
     let entry = ir.functions[0].id;
     let arguments = [ConstValue::U(3)];
     let exact = InterpreterOptions { max_call_depth: 2, max_frames: 3, ..options() };
-    let complete = interpret_with_options(&ir, entry, &arguments, exact).unwrap();
+    let complete = super::interpret_checked(&ir, entry, &arguments, exact).unwrap();
     assert_eq!(complete.value, Some(ConstValue::U(5)));
     for (limited, resource, limit) in [
         (InterpreterOptions { max_call_depth: 1, ..exact }, CallResource::Depth, 1),
         (InterpreterOptions { max_frames: 2, ..exact }, CallResource::Frames, 2),
     ] {
         assert!(matches!(
-            interpret_with_options(&ir, entry, &arguments, limited),
+            super::interpret_checked(&ir, entry, &arguments, limited),
             Err(InterpreterError::CallLimit { site, resource: actual, limit: actual_limit })
                 if site.function == entry && actual == resource && actual_limit == limit
         ));
     }
     let required_values: usize = ir.functions.iter().map(|f| f.value_types.len()).sum();
     assert_eq!(
-        interpret_with_options(
+        super::interpret_checked(
             &ir,
             entry,
             &arguments,
@@ -412,7 +412,7 @@ fn calls_share_fuel_memory_and_distinct_frame_and_live_value_limits() {
         complete.value
     );
     assert!(matches!(
-        interpret_with_options(
+        super::interpret_checked(
             &ir,
             entry,
             &arguments,
@@ -423,7 +423,7 @@ fn calls_share_fuel_memory_and_distinct_frame_and_live_value_limits() {
     ));
     let fuel = complete.steps - 1;
     assert!(matches!(
-        interpret_with_options(
+        super::interpret_checked(
             &ir,
             entry,
             &arguments,
@@ -439,11 +439,11 @@ fn calls_share_fuel_memory_and_distinct_frame_and_live_value_limits() {
     };
     let leaf = ir.functions.iter().find(|f| f.name == "leaf").unwrap().id;
     assert_eq!(
-        interpret_with_options(&ir, leaf, &arguments, memory).unwrap().value,
+        super::interpret_checked(&ir, leaf, &arguments, memory).unwrap().value,
         Some(ConstValue::U(4))
     );
     assert!(matches!(
-        interpret_with_options(&ir, entry, &arguments, memory),
+        super::interpret_checked(&ir, entry, &arguments, memory),
         Err(InterpreterError::MemoryLimit {
             site,
             resource: MemoryResource::Bytes,
@@ -466,14 +466,14 @@ fn recursive_calls_exhaust_shared_depth_and_total_frame_budgets() {
         (InterpreterOptions { max_frames: 4, ..options() }, CallResource::Frames),
     ] {
         assert!(matches!(
-            interpret_with_options(&ir, entry, &[ConstValue::U(5)], limited),
+            super::interpret_checked(&ir, entry, &[ConstValue::U(5)], limited),
             Err(InterpreterError::CallLimit { site, resource: actual, limit: 4 })
                 if site.function == entry && actual == resource
         ));
     }
     let exact = InterpreterOptions { max_call_depth: 6, max_frames: 6, ..options() };
     assert_eq!(
-        interpret_with_options(&ir, entry, &[ConstValue::U(5)], exact).unwrap().value,
+        super::interpret_checked(&ir, entry, &[ConstValue::U(5)], exact).unwrap().value,
         Some(ConstValue::U(15))
     );
 }
@@ -487,11 +487,8 @@ fn unsupported_callees_are_rejected_before_runtime_effects() {
          }
          fun helper() -> i32 { var f: f64 = 1.0; return f as i32; }",
     );
-    let helper = ir.functions.iter().find(|f| f.name == "helper").unwrap().id;
-    assert!(matches!(
-        run(&ir, &[ConstValue::U(8)]),
-        Err(InterpreterError::UnsupportedInstruction { site, .. }) if site.function == helper
-    ));
+    assert!(matches!(run(&ir, &[ConstValue::U(8)]), Err(InterpreterError::Trap(_))));
+    assert_eq!(run(&ir, &[ConstValue::U(0)]).unwrap().value, Some(ConstValue::I(1)));
 
     let mut ir = module(
         "fun probe(n: i32) -> i32 { return helper(n); }

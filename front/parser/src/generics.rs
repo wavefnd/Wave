@@ -240,8 +240,7 @@ fn rewrite_function(
 
     f.return_type = f.return_type.as_ref().map(|t| rewrite_wave_type(t, subst, env)).transpose()?;
 
-    f.body =
-        f.body.into_iter().map(|n| rewrite_node(n, subst, env)).collect::<Result<Vec<_>, _>>()?;
+    f.body = rewrite_node_list(f.body, subst, env)?;
 
     Ok(f)
 }
@@ -470,11 +469,72 @@ fn rewrite_expr_list(
 }
 
 fn rewrite_node_list(
-    nodes: Vec<ASTNode>,
+    mut nodes: Vec<ASTNode>,
     subst: &HashMap<String, WaveType>,
     env: &mut GenericEnv,
 ) -> Result<Vec<ASTNode>, String> {
-    nodes.into_iter().map(|n| rewrite_node(n, subst, env)).collect()
+    enum Work<'a> {
+        Node(&'a mut ASTNode),
+        Expr(&'a mut Expression),
+    }
+    fn enqueue<'a>(nodes: &'a mut [ASTNode], work: &mut Vec<Work<'a>>) {
+        for node in nodes.iter_mut().rev() {
+            work.push(Work::Node(node));
+        }
+    }
+    let mut work = Vec::new();
+    enqueue(&mut nodes, &mut work);
+    while let Some(next) = work.pop() {
+        match next {
+            Work::Expr(expr) => {
+                let value = std::mem::replace(expr, Expression::Null);
+                *expr = rewrite_expression(value, subst, env)?;
+            },
+            Work::Node(node) => match node {
+                ASTNode::Located { value, .. } => work.push(Work::Node(value)),
+                ASTNode::Statement(statement) => match statement {
+                    StatementNode::If { condition, body, else_if_blocks, else_block } => {
+                        if let Some(body) = else_block {
+                            enqueue(body, &mut work);
+                        }
+                        if let Some(blocks) = else_if_blocks {
+                            for (condition, body) in blocks.iter_mut().rev() {
+                                enqueue(body, &mut work);
+                                work.push(Work::Expr(condition));
+                            }
+                        }
+                        enqueue(body, &mut work);
+                        work.push(Work::Expr(condition));
+                    },
+                    StatementNode::For { initialization, condition, increment, body } => {
+                        enqueue(body, &mut work);
+                        work.push(Work::Expr(increment));
+                        work.push(Work::Expr(condition));
+                        work.push(Work::Node(initialization));
+                    },
+                    StatementNode::While { condition, body } => {
+                        enqueue(body, &mut work);
+                        work.push(Work::Expr(condition));
+                    },
+                    StatementNode::Match { value, arms } => {
+                        for arm in arms.iter_mut().rev() {
+                            enqueue(&mut arm.body, &mut work);
+                        }
+                        work.push(Work::Expr(value));
+                    },
+                    _ => {
+                        let value = std::mem::replace(statement, StatementNode::Break);
+                        *statement = rewrite_statement(value, subst, env)?;
+                    },
+                },
+                _ => {
+                    let value = std::mem::replace(node, ASTNode::Expression(Expression::Null));
+                    *node = rewrite_node(value, subst, env)?;
+                },
+            },
+        }
+    }
+    Ok(nodes)
 }
 
 fn append_default_arguments(

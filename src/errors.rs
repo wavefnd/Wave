@@ -28,6 +28,9 @@ pub enum CliError {
 
     // std
     StdAlreadyInstalled { path: PathBuf },
+    InstallationBusy { path: PathBuf },
+    InstallationTimeout(String),
+    InstallationOutputLimit(String),
     ExternalToolMissing(String),
     CommandFailed(String),
     HomeNotSet,
@@ -52,6 +55,9 @@ impl CliError {
                 }
             },
             CliError::StdAlreadyInstalled { .. } => "std-already-installed",
+            CliError::InstallationBusy { .. } => "installation-busy",
+            CliError::InstallationTimeout(_) => "installation-timeout",
+            CliError::InstallationOutputLimit(_) => "installation-output-limit",
             CliError::ExternalToolMissing(_) => "external-tool-missing",
             CliError::CommandFailed(_) => "command-failed",
             CliError::HomeNotSet => "home-not-set",
@@ -65,6 +71,15 @@ impl CliError {
             CliError::Backend(error) => error.to_string(),
             CliError::StdAlreadyInstalled { path } => {
                 format!("std already installed at '{}'", path.display())
+            },
+            CliError::InstallationBusy { path } => {
+                format!("std installation already in progress at '{}'", path.display())
+            },
+            CliError::InstallationTimeout(message) => {
+                format!("std installation timed out: {message}")
+            },
+            CliError::InstallationOutputLimit(message) => {
+                format!("std installation output limit exceeded: {message}")
             },
             CliError::ExternalToolMissing(t) => format!("required tool not found: {}", t),
             CliError::CommandFailed(msg) => format!("command failed: {}", msg),
@@ -98,7 +113,11 @@ impl CliError {
                 }
             },
             CliError::ExternalToolMissing(_) | CliError::HomeNotSet | CliError::Io(_) => 3,
-            CliError::StdAlreadyInstalled { .. } | CliError::CommandFailed(_) => 1,
+            CliError::StdAlreadyInstalled { .. }
+            | CliError::CommandFailed(_)
+            | CliError::InstallationBusy { .. }
+            | CliError::InstallationTimeout(_)
+            | CliError::InstallationOutputLimit(_) => 1,
         }
     }
 }

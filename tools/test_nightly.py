@@ -6,14 +6,14 @@ import hashlib
 import io
 import json
 import os
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import patch
 from urllib.error import HTTPError, URLError
 
-from tools.ci import nightly, package, release, targets
 from tools.check_release_assets import ARCHIVE_TARGETS
+from tools.ci import nightly, package, release, targets
 
 A, B, C, OTHER = (c * 40 for c in "abcd")
 
@@ -40,7 +40,14 @@ class FakeGitHub:
             head_sha=A,
             run_attempt=1,
         )
-        self.jobs = [dict(status="completed", conclusion="success")]
+        required = nightly.required_names(
+            (nightly.ROOT / ".github/workflows/ci.yml").read_text(),
+            (nightly.ROOT / "tests/cases/cases.toml").read_text(),
+        )
+        self.jobs = [
+            {"name": name, "status": "completed", "conclusion": "success"}
+            for name in sorted(required)
+        ]
 
     def by_tag(self, tag):
         return next((r for r in self.releases.values() if r["tag_name"] == tag), None)
@@ -77,6 +84,13 @@ class FakeGitHub:
             value = {"jobs": self.jobs}
         elif endpoint.startswith("actions/runs/"):
             value = self.run
+        elif endpoint.startswith(
+            ("contents/.github/workflows/ci.yml", "contents/tests/cases/cases.toml")
+        ):
+            path = endpoint.removeprefix("contents/").split("?")[0]
+            value = {
+                "content": base64.b64encode((nightly.ROOT / path).read_bytes()).decode()
+            }
         elif endpoint.startswith("contents/Cargo.toml"):
             value = {
                 "content": base64.b64encode(
@@ -96,7 +110,7 @@ class FakeGitHub:
                 value = None  # Exercise the draft-list fallback.
         elif endpoint.startswith("releases?"):
             page = int(endpoint.split("page=")[-1])
-            value = list(self.releases.values())[(page - 1) * 100:page * 100]
+            value = list(self.releases.values())[(page - 1) * 100 : page * 100]
         elif endpoint == "releases" and method == "POST":
             assert self.by_tag(data["tag_name"]) is None
             value = dict(data, id=self.next_id, published_at=None)
@@ -157,6 +171,9 @@ class FakeGitHub:
 
 class NightlyTests(unittest.TestCase):
     def setUp(self):
+        sleeper = patch.object(nightly.time, "sleep")
+        sleeper.start()
+        self.addCleanup(sleeper.stop)
         self.temp = tempfile.TemporaryDirectory()
         self.addCleanup(self.temp.cleanup)
         self.root = Path(self.temp.name)
@@ -687,6 +704,130 @@ class NightlyTests(unittest.TestCase):
         ) as github:
             self.assertEqual(nightly.main(["--stage", "publish"]), 1)
             github.assert_not_called()
+
+
+class EligibilityPropagationTests(unittest.TestCase):
+    def exercise(
+        self, *, settle_at=None, terminal=None, change_identity=False, missing=False
+    ):
+        github = FakeGitHub()
+        original = github.api
+        clock = [0]
+        snapshots = [0]
+
+        def api(endpoint, **kwargs):
+            value = original(endpoint, **kwargs)
+            if "/jobs?" in endpoint:
+                snapshots[0] += 1
+                if change_identity:
+                    github.run["run_attempt"] += 1
+                jobs = copy.deepcopy(value["jobs"])
+                if missing:
+                    jobs.pop()
+                elif terminal:
+                    jobs[0]["conclusion"] = terminal
+                elif settle_at is None or clock[0] < settle_at:
+                    jobs[0].update(status="in_progress", conclusion=None)
+                return {"jobs": jobs, "total_count": len(github.jobs)}
+            return value
+
+        def sleep(seconds):
+            clock[0] += seconds
+
+        with (
+            patch.object(nightly.time, "monotonic", side_effect=lambda: clock[0]),
+            patch.object(nightly.time, "sleep", side_effect=sleep),
+        ):
+            github.api = api
+            if settle_at is not None and not (terminal or change_identity or missing):
+                self.assertEqual(nightly.eligible(github, 10)["source_sha"], A)
+            else:
+                with self.assertRaises(ValueError):
+                    nightly.eligible(github, 10)
+        return clock[0], snapshots[0]
+
+    def test_run_state_propagates_without_accepting_pending_validation(self):
+        github = FakeGitHub()
+        github.run.update(status="in_progress", conclusion=None)
+        original = github.api
+        clock = [0]
+
+        def api(endpoint, **kwargs):
+            if endpoint == "actions/runs/10" and clock[0] >= 20:
+                github.run.update(status="completed", conclusion="success")
+            return original(endpoint, **kwargs)
+
+        def sleep(seconds):
+            clock[0] += seconds
+
+        with (
+            patch.object(nightly.time, "monotonic", side_effect=lambda: clock[0]),
+            patch.object(nightly.time, "sleep", side_effect=sleep),
+        ):
+            github.api = api
+            self.assertEqual(nightly.eligible(github, 10)["source_sha"], A)
+        self.assertEqual(clock[0], 20)
+
+    def test_exact_schedule_and_last_allowed_snapshot(self):
+        self.assertEqual(self.exercise(settle_at=60), (60, 7))
+        self.assertEqual(self.exercise(), (60, 7))
+        self.assertEqual(self.exercise(missing=True), (60, 7))
+
+    def test_terminal_failures_never_wait_or_pass(self):
+        for state in ("failure", "cancelled", "skipped", "timed_out"):
+            self.assertEqual(self.exercise(terminal=state), (0, 1))
+
+    def test_changed_attempt_is_rejected(self):
+        self.assertEqual(self.exercise(change_identity=True), (10, 1))
+
+
+class WorkflowLineEndingTests(unittest.TestCase):
+    def setUp(self):
+        self.workflow = (nightly.ROOT / ".github/workflows/ci.yml").read_text(
+            encoding="utf-8"
+        )
+        self.manifest = (nightly.ROOT / "tests/cases/cases.toml").read_text(
+            encoding="utf-8"
+        )
+
+    def test_required_names_preserve_all_jobs_across_line_endings(self):
+        expected = nightly.required_names(self.workflow, self.manifest)
+        self.assertEqual(len(expected), 50)
+        crlf = self.workflow.replace("\n", "\r\n")
+        mixed = "".join(
+            line + ("\r\n" if index % 2 else "\n")
+            for index, line in enumerate(self.workflow.splitlines())
+        )
+        for workflow in (crlf, mixed, crlf.rstrip("\r\n")):
+            with self.subTest(ending=repr(workflow[-2:])):
+                self.assertEqual(
+                    nightly.required_names(workflow, self.manifest), expected
+                )
+
+    def test_crlf_api_content_keeps_strict_eligibility(self):
+        github = FakeGitHub()
+        original = github.api
+
+        def api(endpoint, **kwargs):
+            value = original(endpoint, **kwargs)
+            if endpoint.startswith("contents/.github/workflows/ci.yml?"):
+                value = {
+                    "content": base64.b64encode(
+                        self.workflow.replace("\n", "\r\n").encode("utf-8")
+                    ).decode("ascii")
+                }
+            return value
+
+        github.api = api
+        self.assertEqual(nightly.eligible(github, 10)["source_sha"], A)
+        github.jobs[0]["conclusion"] = "skipped"
+        with self.assertRaisesRegex(ValueError, "skipped jobs are not validation"):
+            nightly.eligible(github, 10)
+
+    def test_missing_jobs_contract_has_a_controlled_error(self):
+        for workflow in ("name: CI\n", "name: CI\r\n"):
+            with self.assertRaisesRegex(ValueError, "jobs contract"):
+                nightly.required_names(workflow, self.manifest)
 
 
 if __name__ == "__main__":

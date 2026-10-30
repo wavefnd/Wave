@@ -76,6 +76,7 @@ pub fn resolve_import_graph(
     ast: Vec<ASTNode>,
     config: &ImportConfig,
 ) -> Result<ResolvedModuleGraph, WaveError> {
+    ::error::SourceManager::record(entry_path.display().to_string(), entry_source.to_string());
     let entry_key = canonical_key(entry_path);
     let mut resolver = Resolver {
         config,
@@ -105,25 +106,34 @@ pub(crate) fn existing_import_paths(
     entry_path: &Path,
     ast: Vec<ASTNode>,
     config: &ImportConfig,
-) -> Vec<PathBuf> {
+) -> Result<Vec<PathBuf>, WaveError> {
     let entry = canonical_key(entry_path);
     let mut loaded = HashSet::from([entry.to_string_lossy().into_owned()]);
-    let mut pending = vec![(entry, ast)];
-    while let Some((path, nodes)) = pending.pop() {
+    let mut pending = vec![(entry, ast, 1usize)];
+    while let Some((path, nodes, depth)) = pending.pop() {
         let base = path.parent().unwrap_or(Path::new("."));
         for node in nodes {
             if let ASTNode::Statement(StatementNode::Import(import)) = node.unspanned() {
                 if let Ok(unit) =
                     local_import_unit_with_config(&import.path, &mut loaded, base, config)
                 {
-                    pending.push((unit.abs_path, unit.ast));
+                    if depth >= 512 {
+                        return Err(module_error(
+                            &path,
+                            "Import depth exceeded",
+                            "import nesting exceeds the maximum of 512 levels",
+                            "reduce the depth of the import chain",
+                        )
+                        .with_span(node.span()));
+                    }
+                    pending.push((unit.abs_path, unit.ast, depth + 1));
                 }
             }
         }
     }
     let mut paths: Vec<_> = loaded.into_iter().map(PathBuf::from).collect();
     paths.sort();
-    paths
+    Ok(paths)
 }
 
 /// Removes the internal module hash prefix from names shown to Wave users.
@@ -156,105 +166,199 @@ impl Resolver<'_> {
         origin: usize,
         is_entry: bool,
     ) -> Result<ModuleInterface, WaveError> {
-        if let Some(interface) = self.interfaces.get(&key) {
-            return Ok(interface.clone());
+        struct Frame {
+            key: PathBuf,
+            ast: Vec<ASTNode>,
+            origin: usize,
+            is_entry: bool,
+            interface: ModuleInterface,
+            names: NameContext,
+            next: usize,
+            pending: Option<(usize, PathBuf)>,
         }
-        if let Some(cycle_start) = self.visiting.iter().position(|path| path == &key) {
-            let mut chain = self.visiting[cycle_start..]
-                .iter()
-                .map(|path| path.display().to_string())
-                .collect::<Vec<_>>();
-            chain.push(key.display().to_string());
-            return Err(module_error(
-                &key,
-                "Import cycle",
-                format!("import cycle detected: {}", chain.join(" -> ")),
-                "remove one dependency edge or move shared declarations into a third module",
-            ));
-        }
-
-        self.visiting.push(key.clone());
-        let mut interface = collect_symbols(&key, &ast, is_entry)?;
-        interface.unavailable_socket = unavailable_socket(&key, self.config);
-        let mut names = NameContext { own: interface.symbols.clone(), ..NameContext::default() };
-
-        for node in &ast {
-            let ASTNode::Statement(StatementNode::Import(import)) = node.unspanned() else {
-                continue;
+        let config = self.config;
+        let frame =
+            |key: PathBuf, ast: Vec<ASTNode>, origin, is_entry| -> Result<Frame, WaveError> {
+                let mut interface = collect_symbols(&key, &ast, is_entry)?;
+                interface.unavailable_socket = unavailable_socket(&key, config);
+                let names =
+                    NameContext { own: interface.symbols.clone(), ..NameContext::default() };
+                Ok(Frame { key, ast, origin, is_entry, interface, names, next: 0, pending: None })
             };
-
-            let base_dir = key.parent().unwrap_or(Path::new("."));
-            let mut loaded = HashSet::new();
-            let source = &self.sources[origin].source;
-            let site = node.span();
-            let unit =
-                local_import_unit_with_config(&import.path, &mut loaded, base_dir, self.config)
-                    .map_err(|error| import_failure(error, site, source, &import.path))?;
-            let child_key = canonical_key(&unit.abs_path);
-            let child_origin = if let Some(index) = self.source_indices.get(&child_key) {
-                *index
-            } else {
-                let index = self.sources.len();
-                self.sources
-                    .push(ModuleSource { path: unit.abs_path.clone(), source: unit.source });
-                self.source_indices.insert(child_key.clone(), index);
-                index
-            };
-            let child =
-                self.resolve_module(child_key, unit.ast, child_origin, false).map_err(|error| {
-                    import_failure(error, site, &self.sources[origin].source, &import.path)
-                })?;
-            bind_import(
-                &key,
-                import,
-                child.clone(),
-                &mut names,
-                site,
-                &self.sources[origin].source,
-            )
-            .map_err(|error| {
-                import_failure(error, site, &self.sources[origin].source, &import.path)
-            })?;
-            if import.visibility == Visibility::Public {
-                for selected in &import.selections {
-                    let symbol = child
-                        .symbols
-                        .get(selected)
-                        .expect("bind_import validated public selections")
-                        .clone();
-                    if interface.symbols.insert(selected.clone(), symbol).is_some() {
-                        return Err(module_error(
-                            &key,
-                            "Duplicate public symbol",
-                            format!("re-exported symbol '{}' conflicts in this module", selected),
-                            "remove one re-export or rename the local declaration",
-                        ));
-                    }
-                    let prefix = format!("{}::", selected);
-                    for (qualified, constructor) in &child.symbols {
-                        if qualified.starts_with(&prefix)
-                            && constructor.kind == SymbolKind::VariantConstructor
-                        {
-                            interface.symbols.insert(qualified.clone(), constructor.clone());
+        let root = key.clone();
+        let mut stack = vec![frame(key.clone(), ast, origin, is_entry)?];
+        self.visiting.push(key);
+        let operation = (|| {
+            while let Some(mut current) = stack.pop() {
+                if let Some((index, child_key)) = current.pending.take() {
+                    let node = &current.ast[index];
+                    let ASTNode::Statement(StatementNode::Import(import)) = node.unspanned() else {
+                        unreachable!()
+                    };
+                    let child = self.interfaces[&child_key].clone();
+                    bind_import(
+                        &current.key,
+                        import,
+                        child.clone(),
+                        &mut current.names,
+                        node.span(),
+                        &self.sources[current.origin].source,
+                    )
+                    .map_err(|e| {
+                        import_failure(
+                            e,
+                            node.span(),
+                            &self.sources[current.origin].source,
+                            &import.path,
+                        )
+                    })?;
+                    if import.visibility == Visibility::Public {
+                        for selected in &import.selections {
+                            let symbol = child.symbols[selected].clone();
+                            if current.interface.symbols.insert(selected.clone(), symbol).is_some()
+                            {
+                                return Err(module_error(
+                                    &current.key,
+                                    "Duplicate public symbol",
+                                    format!(
+                                        "re-exported symbol '{}' conflicts in this module",
+                                        selected
+                                    ),
+                                    "remove one re-export or rename the local declaration",
+                                ));
+                            }
+                            let prefix = format!("{selected}::");
+                            for (qualified, constructor) in &child.symbols {
+                                if qualified.starts_with(&prefix)
+                                    && constructor.kind == SymbolKind::VariantConstructor
+                                {
+                                    current
+                                        .interface
+                                        .symbols
+                                        .insert(qualified.clone(), constructor.clone());
+                                }
+                            }
                         }
                     }
                 }
+                let imported = (current.next..current.ast.len()).find(|&index| {
+                    matches!(
+                        current.ast[index].unspanned(),
+                        ASTNode::Statement(StatementNode::Import(_))
+                    )
+                });
+                let Some(index) = imported else {
+                    let mut lowered = Vec::new();
+                    for node in current.ast {
+                        if !matches!(node.unspanned(), ASTNode::Statement(StatementNode::Import(_)))
+                        {
+                            lowered.push(rewrite_top_level(
+                                node,
+                                &current.names,
+                                &current.key,
+                                current.is_entry,
+                            )?);
+                        }
+                    }
+                    self.visiting.pop();
+                    self.interfaces.insert(current.key, current.interface);
+                    self.origins.extend(std::iter::repeat_n(current.origin, lowered.len()));
+                    self.ast.extend(lowered);
+                    continue;
+                };
+                current.next = index + 1;
+                let node = &current.ast[index];
+                let ASTNode::Statement(StatementNode::Import(import)) = node.unspanned() else {
+                    unreachable!()
+                };
+                let base_dir = current.key.parent().unwrap_or(Path::new("."));
+                let unit = local_import_unit_with_config(
+                    &import.path,
+                    &mut HashSet::new(),
+                    base_dir,
+                    config,
+                )
+                .map_err(|e| {
+                    import_failure(
+                        e,
+                        node.span(),
+                        &self.sources[current.origin].source,
+                        &import.path,
+                    )
+                })?;
+                ::error::SourceManager::record(
+                    unit.abs_path.display().to_string(),
+                    unit.source.clone(),
+                );
+                let child_key = canonical_key(&unit.abs_path);
+                let child_origin = if let Some(index) = self.source_indices.get(&child_key) {
+                    *index
+                } else {
+                    let index = self.sources.len();
+                    self.sources.push(ModuleSource { path: unit.abs_path, source: unit.source });
+                    self.source_indices.insert(child_key.clone(), index);
+                    index
+                };
+                if !self.interfaces.contains_key(&child_key) {
+                    let error = if let Some(start) =
+                        self.visiting.iter().position(|key| key == &child_key)
+                    {
+                        let mut chain = self.visiting[start..]
+                            .iter()
+                            .map(|p| p.display().to_string())
+                            .collect::<Vec<_>>();
+                        chain.push(child_key.display().to_string());
+                        Some(module_error(&child_key, "Import cycle", format!("import cycle detected: {}", chain.join(" -> ")),
+                            "remove one dependency edge or move shared declarations into a third module"))
+                    } else if self.visiting.len() >= 512 {
+                        Some(module_error(
+                            &current.key,
+                            "Import depth exceeded",
+                            "import nesting exceeds the maximum of 512 levels",
+                            "reduce the depth of the import chain",
+                        ))
+                    } else {
+                        None
+                    };
+                    if let Some(error) = error {
+                        return Err(import_failure(
+                            error,
+                            node.span(),
+                            &self.sources[current.origin].source,
+                            &import.path,
+                        ));
+                    }
+                    current.pending = Some((index, child_key.clone()));
+                    stack.push(current);
+                    self.visiting.push(child_key.clone());
+                    stack.push(frame(child_key, unit.ast, child_origin, false)?);
+                } else {
+                    current.pending = Some((index, child_key));
+                    stack.push(current);
+                }
             }
-        }
-
-        let mut lowered = Vec::new();
-        for node in ast {
-            if matches!(node.unspanned(), ASTNode::Statement(StatementNode::Import(_))) {
-                continue;
+            Ok(self.interfaces[&root].clone())
+        })();
+        self.visiting.clear();
+        operation.map_err(|mut error| {
+            // Reconstruct the same related import provenance while unwinding
+            // heap frames, without recursive calls or growing the OS stack.
+            for parent in stack.iter().rev() {
+                if let Some((index, _)) = &parent.pending {
+                    let node = &parent.ast[*index];
+                    let ASTNode::Statement(StatementNode::Import(import)) = node.unspanned() else {
+                        continue;
+                    };
+                    error = import_failure(
+                        error,
+                        node.span(),
+                        &self.sources[parent.origin].source,
+                        &import.path,
+                    );
+                }
             }
-            lowered.push(rewrite_top_level(node, &names, &key, is_entry)?);
-        }
-
-        self.visiting.pop();
-        self.interfaces.insert(key, interface.clone());
-        self.origins.extend(std::iter::repeat_n(origin, lowered.len()));
-        self.ast.extend(lowered);
-        Ok(interface)
+            error
+        })
     }
 }
 
@@ -682,7 +786,27 @@ fn resolve_name(
                 "Unknown import namespace",
                 format!("qualified name '{}' uses an unknown module namespace", name),
                 "import the module first or check its alias",
-            ));
+            )
+            .with_suggestions(utils::suggestions::nearby(
+                name.split("::").next().unwrap_or(name),
+                {
+                    let mut candidates = names.namespaces.keys().cloned().collect::<Vec<_>>();
+                    candidates.sort_by_key(|candidate| {
+                        (
+                            names
+                                .namespace_sites
+                                .get(candidate)
+                                .map(|span| (span.file.clone(), span.start)),
+                            candidate.clone(),
+                        )
+                    });
+                    candidates
+                        .into_iter()
+                        .enumerate()
+                        .map(|(order, candidate)| (candidate, 0, order))
+                        .collect()
+                },
+            )));
         };
         let symbol_name = &name[namespace.len() + 2..];
         let Some(symbol) = interface.symbols.get(symbol_name) else {
@@ -702,21 +826,21 @@ fn resolve_name(
     Ok(names.own.get(name).or_else(|| names.selected.get(name)).cloned())
 }
 
-fn rewrite_type(ty: WaveType, names: &NameContext, path: &Path) -> Result<WaveType, WaveError> {
-    match ty {
-        WaveType::Future(inner) => {
-            Ok(WaveType::Future(Box::new(rewrite_type(*inner, names, path)?)))
-        },
-        WaveType::Pointer(inner) => {
-            Ok(WaveType::Pointer(Box::new(rewrite_type(*inner, names, path)?)))
-        },
-        WaveType::Array(inner, size) => {
-            Ok(WaveType::Array(Box::new(rewrite_type(*inner, names, path)?), size))
-        },
-        WaveType::Struct(name) => Ok(WaveType::Struct(rewrite_type_name(&name, names, path)?)),
-        WaveType::Variant(name) => Ok(WaveType::Variant(rewrite_type_name(&name, names, path)?)),
-        other => Ok(other),
+fn rewrite_type(mut ty: WaveType, names: &NameContext, path: &Path) -> Result<WaveType, WaveError> {
+    let mut current = &mut ty;
+    loop {
+        match current {
+            WaveType::Future(inner) | WaveType::Pointer(inner) | WaveType::Array(inner, _) => {
+                current = inner
+            },
+            WaveType::Struct(name) | WaveType::Variant(name) => {
+                *name = rewrite_type_name(name, names, path)?;
+                break;
+            },
+            _ => break,
+        }
     }
+    Ok(ty)
 }
 
 fn rewrite_type_name(name: &str, names: &NameContext, path: &Path) -> Result<String, WaveError> {
@@ -886,36 +1010,125 @@ fn rewrite_function(
 }
 
 fn rewrite_block(
-    nodes: Vec<ASTNode>,
+    mut nodes: Vec<ASTNode>,
     names: &NameContext,
     path: &Path,
     locals: &mut HashSet<String>,
 ) -> Result<Vec<ASTNode>, WaveError> {
-    let mut out = Vec::with_capacity(nodes.len());
-    for node in nodes {
-        match node {
-            ASTNode::Located { value, span } => {
-                let rewritten = rewrite_block(vec![*value], names, path, locals)?;
-                out.extend(rewritten.into_iter().map(|node| node.with_span(Some(span.clone()))));
-            },
-            ASTNode::Variable(mut variable) => {
-                variable.type_name = rewrite_type(variable.type_name, names, path)?;
-                if let Some(value) = variable.initial_value.take() {
-                    variable.initial_value = Some(rewrite_expression(value, names, path, locals)?);
-                }
-                locals.insert(variable.name.clone());
-                out.push(ASTNode::Variable(variable));
-            },
-            ASTNode::Statement(statement) => {
-                out.push(ASTNode::Statement(rewrite_statement(statement, names, path, locals)?))
-            },
-            ASTNode::Expression(expression) => {
-                out.push(ASTNode::Expression(rewrite_expression(expression, names, path, locals)?))
-            },
-            other => out.push(other),
+    use std::cell::RefCell;
+    use std::rc::Rc;
+    type Scope = Rc<RefCell<HashSet<String>>>;
+    enum Work<'a> {
+        Node(&'a mut ASTNode, Scope),
+        Expression(&'a mut Expression, Scope),
+        MatchArm(&'a mut MatchArm, Scope),
+        ForTail(&'a mut Expression, &'a mut Expression, &'a mut Vec<ASTNode>, Scope),
+    }
+    fn enqueue<'a>(nodes: &'a mut [ASTNode], scope: &Scope, work: &mut Vec<Work<'a>>) {
+        for node in nodes.iter_mut().rev() {
+            work.push(Work::Node(node, scope.clone()));
         }
     }
-    Ok(out)
+    let root = Rc::new(RefCell::new(locals.clone()));
+    let mut work = Vec::new();
+    enqueue(&mut nodes, &root, &mut work);
+    while let Some(next) = work.pop() {
+        match next {
+            Work::Expression(expression, scope) => {
+                rewrite_expression_in_place(expression, names, path, &scope.borrow())?;
+            },
+            Work::MatchArm(arm, scope) => {
+                rewrite_match_pattern(&mut arm.pattern, names, path, &scope.borrow())?;
+                let mut locals = scope.borrow().clone();
+                collect_pattern_bindings(&arm.pattern, &mut locals);
+                enqueue(&mut arm.body, &Rc::new(RefCell::new(locals)), &mut work);
+            },
+            Work::ForTail(condition, increment, body, scope) => {
+                rewrite_expression_in_place(condition, names, path, &scope.borrow())?;
+                rewrite_expression_in_place(increment, names, path, &scope.borrow())?;
+                enqueue(body, &scope, &mut work);
+            },
+            Work::Node(node, scope) => match node {
+                ASTNode::Located { value, .. } => work.push(Work::Node(value, scope)),
+                ASTNode::Variable(variable) => {
+                    variable.type_name = rewrite_type(variable.type_name.clone(), names, path)?;
+                    if let Some(value) = &mut variable.initial_value {
+                        rewrite_expression_in_place(value, names, path, &scope.borrow())?;
+                    }
+                    scope.borrow_mut().insert(variable.name.clone());
+                },
+                ASTNode::Expression(expression) => {
+                    rewrite_expression_in_place(expression, names, path, &scope.borrow())?
+                },
+                ASTNode::Statement(statement) => match statement {
+                    StatementNode::PrintFormat { args, .. }
+                    | StatementNode::PrintlnFormat { args, .. }
+                    | StatementNode::Input { args, .. } => {
+                        for expression in args {
+                            rewrite_expression_in_place(expression, names, path, &scope.borrow())?;
+                        }
+                    },
+                    StatementNode::If { condition, body, else_if_blocks, else_block } => {
+                        rewrite_expression_in_place(condition, names, path, &scope.borrow())?;
+                        if let Some(body) = else_block {
+                            enqueue(
+                                body,
+                                &Rc::new(RefCell::new(scope.borrow().clone())),
+                                &mut work,
+                            );
+                        }
+                        if let Some(blocks) = else_if_blocks {
+                            for (condition, body) in blocks.iter_mut().rev() {
+                                enqueue(
+                                    body,
+                                    &Rc::new(RefCell::new(scope.borrow().clone())),
+                                    &mut work,
+                                );
+                                work.push(Work::Expression(condition, scope.clone()));
+                            }
+                        }
+                        enqueue(body, &Rc::new(RefCell::new(scope.borrow().clone())), &mut work);
+                    },
+                    StatementNode::While { condition, body } => {
+                        rewrite_expression_in_place(condition, names, path, &scope.borrow())?;
+                        enqueue(body, &Rc::new(RefCell::new(scope.borrow().clone())), &mut work);
+                    },
+                    StatementNode::For { initialization, condition, increment, body } => {
+                        let scope = Rc::new(RefCell::new(scope.borrow().clone()));
+                        work.push(Work::ForTail(condition, increment, body, scope.clone()));
+                        work.push(Work::Node(initialization, scope));
+                    },
+                    StatementNode::Match { value, arms } => {
+                        rewrite_expression_in_place(value, names, path, &scope.borrow())?;
+                        for arm in arms.iter_mut().rev() {
+                            work.push(Work::MatchArm(arm, scope.clone()));
+                        }
+                    },
+                    StatementNode::Assign { variable, value } => {
+                        if !scope.borrow().contains(variable) {
+                            if let Some(symbol) = resolve_name(variable, names, path)? {
+                                *variable = symbol.lowered;
+                            }
+                        }
+                        rewrite_expression_in_place(value, names, path, &scope.borrow())?;
+                    },
+                    StatementNode::AsmBlock { inputs, outputs, .. } => {
+                        for (_, expression) in inputs.iter_mut().chain(outputs) {
+                            rewrite_expression_in_place(expression, names, path, &scope.borrow())?;
+                        }
+                    },
+                    StatementNode::Return(Some(expression))
+                    | StatementNode::Expression(expression) => {
+                        rewrite_expression_in_place(expression, names, path, &scope.borrow())?;
+                    },
+                    _ => {},
+                },
+                _ => {},
+            },
+        }
+    }
+    *locals = root.borrow().clone();
+    Ok(nodes)
 }
 
 fn rewrite_statement(
@@ -924,126 +1137,11 @@ fn rewrite_statement(
     path: &Path,
     locals: &mut HashSet<String>,
 ) -> Result<StatementNode, WaveError> {
-    Ok(match statement {
-        StatementNode::PrintFormat { format, args } => StatementNode::PrintFormat {
-            format,
-            args: rewrite_expressions(args, names, path, locals)?,
-        },
-        StatementNode::PrintlnFormat { format, args } => StatementNode::PrintlnFormat {
-            format,
-            args: rewrite_expressions(args, names, path, locals)?,
-        },
-        StatementNode::Input { format, args } => {
-            StatementNode::Input { format, args: rewrite_expressions(args, names, path, locals)? }
-        },
-        StatementNode::If { condition, body, else_if_blocks, else_block } => {
-            let condition = rewrite_expression(condition, names, path, locals)?;
-            let mut body_scope = locals.clone();
-            let body = rewrite_block(body, names, path, &mut body_scope)?;
-            let else_if_blocks = else_if_blocks
-                .map(|blocks| {
-                    blocks
-                        .into_iter()
-                        .map(|(condition, body)| {
-                            let condition = rewrite_expression(condition, names, path, locals)?;
-                            let mut scope = locals.clone();
-                            Ok((condition, rewrite_block(body, names, path, &mut scope)?))
-                        })
-                        .collect::<Result<Vec<_>, WaveError>>()
-                        .map(Box::new)
-                })
-                .transpose()?;
-            let else_block = else_block
-                .map(|body| {
-                    let mut scope = locals.clone();
-                    rewrite_block(*body, names, path, &mut scope).map(Box::new)
-                })
-                .transpose()?;
-            StatementNode::If { condition, body, else_if_blocks, else_block }
-        },
-        StatementNode::For { initialization, condition, increment, body } => {
-            let mut scope = locals.clone();
-            let initialization = rewrite_block(vec![*initialization], names, path, &mut scope)?
-                .into_iter()
-                .next()
-                .expect("for initializer is preserved");
-            let condition = rewrite_expression(condition, names, path, &scope)?;
-            let increment = rewrite_expression(increment, names, path, &scope)?;
-            let body = rewrite_block(body, names, path, &mut scope)?;
-            StatementNode::For {
-                initialization: Box::new(initialization),
-                condition,
-                increment,
-                body,
-            }
-        },
-        StatementNode::While { condition, body } => {
-            let condition = rewrite_expression(condition, names, path, locals)?;
-            let mut scope = locals.clone();
-            let body = rewrite_block(body, names, path, &mut scope)?;
-            StatementNode::While { condition, body }
-        },
-        StatementNode::Match { value, arms } => StatementNode::Match {
-            value: rewrite_expression(value, names, path, locals)?,
-            arms: arms
-                .into_iter()
-                .map(|mut arm| {
-                    rewrite_match_pattern(&mut arm.pattern, names, path, locals)?;
-                    let mut scope = locals.clone();
-                    collect_pattern_bindings(&arm.pattern, &mut scope);
-                    arm.body = rewrite_block(arm.body, names, path, &mut scope)?;
-                    Ok(arm)
-                })
-                .collect::<Result<_, WaveError>>()?,
-        },
-        StatementNode::Assign { variable, value } => StatementNode::Assign {
-            variable: if locals.contains(&variable) {
-                variable
-            } else {
-                resolve_name(&variable, names, path)?.map_or(variable, |symbol| symbol.lowered)
-            },
-            value: rewrite_expression(value, names, path, locals)?,
-        },
-        StatementNode::AsmBlock { instructions, inputs, outputs, clobbers } => {
-            StatementNode::AsmBlock {
-                instructions,
-                inputs: inputs
-                    .into_iter()
-                    .map(|(constraint, expression)| {
-                        Ok((constraint, rewrite_expression(expression, names, path, locals)?))
-                    })
-                    .collect::<Result<_, WaveError>>()?,
-                outputs: outputs
-                    .into_iter()
-                    .map(|(constraint, expression)| {
-                        Ok((constraint, rewrite_expression(expression, names, path, locals)?))
-                    })
-                    .collect::<Result<_, WaveError>>()?,
-                clobbers,
-            }
-        },
-        StatementNode::Return(value) => StatementNode::Return(
-            value
-                .map(|expression| rewrite_expression(expression, names, path, locals))
-                .transpose()?,
-        ),
-        StatementNode::Expression(expression) => {
-            StatementNode::Expression(rewrite_expression(expression, names, path, locals)?)
-        },
-        other => other,
-    })
-}
-
-fn rewrite_expressions(
-    expressions: Vec<Expression>,
-    names: &NameContext,
-    path: &Path,
-    locals: &HashSet<String>,
-) -> Result<Vec<Expression>, WaveError> {
-    expressions
-        .into_iter()
-        .map(|expression| rewrite_expression(expression, names, path, locals))
-        .collect()
+    let node = rewrite_block(vec![ASTNode::Statement(statement)], names, path, locals)?
+        .pop()
+        .expect("one statement");
+    let ASTNode::Statement(statement) = node else { unreachable!() };
+    Ok(statement)
 }
 
 fn rewrite_match_pattern(

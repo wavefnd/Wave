@@ -17,6 +17,7 @@
 //! node forms must be handled by both semantic passes and that rewrite where
 //! they may contain types or expressions.
 
+mod cloning;
 pub mod visit;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -42,7 +43,7 @@ pub enum WaveType {
     Variant(String),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum ASTNode {
     Located { value: Box<ASTNode>, span: error::SourceSpan },
     Function(FunctionNode),

@@ -459,6 +459,12 @@ impl Planner<'_> {
                 self.plan(value, Some(ty.clone()), None);
                 fact.computation_type = (!matches!(operator, AssignOperator::Assign)).then_some(ty);
             },
+            Expression::IncDec { target, .. } => {
+                let ty = self.plan(target, None, None)?;
+                fact.evaluation_type = ty.clone();
+                fact.result_type = ty.clone();
+                fact.computation_type = Some(ty);
+            },
             Expression::Unary { operator, expr: inner } => {
                 let input = if matches!(operator, Operator::Not | Operator::LogicalNot) {
                     self.plan(inner, None, boolean_literal_type(inner))?
@@ -620,6 +626,7 @@ mod tests {
         let ASTNode::Variable(v) = &f.body[index] else { panic!() };
         v.initial_value.as_ref().unwrap()
     }
+
     #[test]
     fn checked_ranges_match_exact_integer_boundaries() {
         use utils::const_int::ConstInt;
@@ -799,6 +806,7 @@ fun check(n: i64, f: f64) {
             ConversionKind::Identity
         );
     }
+
     #[test]
     fn computation_precedes_destination_conversion_and_is_backend_neutral() {
         let p = program("fun check(s: i8, u: u32) { var f: f64 = 5 / 2; var sum: i64 = s + u; var cmp: bool = s < u; }");
@@ -818,6 +826,7 @@ fun check(n: i64, f: f64) {
         );
         assert_eq!(p.numeric_expression_of(right).unwrap().result_type, WaveType::Uint(32));
     }
+
     #[test]
     fn verifier_rejects_missing_facts_disconnected_chains_wrong_kind_and_wrong_computation() {
         for mutation in 0..6 {

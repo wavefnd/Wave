@@ -113,6 +113,9 @@ pub struct WaveError {
     pub note: Option<String>,
     pub suggestions: Vec<String>,
     pub severity: ErrorSeverity,
+    pub source_manager: Option<std::sync::Arc<crate::SourceManager>>,
+    pub primary_file: Option<crate::FileId>,
+    pub related_files: Vec<Option<crate::FileId>>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -151,6 +154,9 @@ impl WaveError {
             note: None,
             suggestions: Vec::new(),
             severity: ErrorSeverity::Error,
+            source_manager: crate::SourceManager::current(),
+            primary_file: None,
+            related_files: Vec::new(),
         }
     }
 
@@ -161,6 +167,11 @@ impl WaveError {
 
     pub fn with_source_code(mut self, source: impl Into<String>) -> Self {
         self.source_code = Some(source.into());
+        if let (Some(manager), Some(source)) = (&self.source_manager, &self.source_code) {
+            // An existing snapshot is immutable; later source changes do not
+            // replace the version seen during this compilation.
+            self.primary_file = Some(manager.insert(self.file.clone(), source.clone()));
+        }
         self
     }
 
@@ -168,6 +179,7 @@ impl WaveError {
         if let Some(span) = span {
             let span = span.focus.as_deref().unwrap_or(span);
             self.file = span.file.clone();
+            self.primary_file = self.source_manager.as_ref().and_then(|m| m.id(&self.file));
             self.line = span.line;
             self.column = span.column;
             self.span_len = if span.line == span.end_line {
@@ -181,7 +193,11 @@ impl WaveError {
     }
 
     pub fn with_related(mut self, related: impl IntoIterator<Item = RelatedDiagnostic>) -> Self {
-        self.related.extend(related);
+        for related in related {
+            self.related_files
+                .push(self.source_manager.as_ref().and_then(|m| m.id(&related.span.file)));
+            self.related.push(related);
+        }
         self
     }
 
@@ -231,6 +247,11 @@ impl WaveError {
 
     pub fn with_note(mut self, note: impl Into<String>) -> Self {
         self.note = Some(note.into());
+        self
+    }
+
+    pub fn with_suggestions(mut self, suggestions: impl IntoIterator<Item = String>) -> Self {
+        self.suggestions.extend(suggestions);
         self
     }
 
@@ -370,7 +391,10 @@ impl WaveError {
         let line = self.line;
         let col = self.column;
 
-        if let Some(source_code) = &self.source_code {
+        let snapshot = self.source_manager.as_ref().and_then(|manager| {
+            self.primary_file.or_else(|| manager.id(&self.file)).and_then(|id| manager.get(id))
+        });
+        if let Some(source_code) = snapshot.as_deref().or(self.source_code.as_deref()) {
             // `lines()` drops the empty line containing EOF after a final newline.
             let lines: Vec<&str> =
                 crate::span::source_lines(source_code).into_iter().map(|(_, line)| line).collect();
@@ -500,7 +524,11 @@ impl WaveError {
                 related.span.line,
                 related.span.column
             );
-            if related.span.file == self.file {
+            let snapshot = self
+                .source_manager
+                .as_ref()
+                .and_then(|manager| manager.id(&related.span.file).and_then(|id| manager.get(id)));
+            if snapshot.is_some() || related.span.file == self.file {
                 let mut location = Self::new(
                     self.kind.clone(),
                     &related.message,
@@ -510,7 +538,8 @@ impl WaveError {
                 )
                 .with_span(Some(&related.span))
                 .with_severity(ErrorSeverity::Note);
-                location.source_code = self.source_code.clone();
+                location.source_code =
+                    snapshot.map(|source| source.to_string()).or_else(|| self.source_code.clone());
                 location.display_source_block();
             }
         }

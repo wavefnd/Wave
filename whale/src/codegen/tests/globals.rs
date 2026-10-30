@@ -4,7 +4,7 @@ use whale_ir::*;
 
 fn run(source: &str) -> Option<ConstValue> {
     let ir = module(source);
-    interpret_with_options(
+    super::interpret_checked(
         &ir,
         ir.functions[0].id,
         &[],

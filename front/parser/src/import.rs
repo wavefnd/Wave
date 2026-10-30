@@ -898,7 +898,7 @@ fn parse_wave_file(
     }
     already_imported.insert(abs_path_str);
 
-    let raw_content = std::fs::read_to_string(&abs_path).map_err(|e| {
+    let raw_content = ::error::SourceManager::read_input(&abs_path).map_err(|e| {
         WaveError::new(
             WaveErrorKind::SyntaxError("Read error".to_string()),
             format!("Failed to read '{}': {}", abs_path.display(), e),
@@ -908,6 +908,7 @@ fn parse_wave_file(
         )
     })?;
     let content = preprocess_target_attrs(&raw_content, &config.target);
+    ::error::SourceManager::record(abs_path.display().to_string(), content.clone());
 
     let mut lexer = Lexer::new_with_file(&content, abs_path.display().to_string());
     let tokens = lexer.tokenize()?;
@@ -1168,6 +1169,7 @@ mod tests {
         assert!(help.contains("shadowed by a bundled std or an explicit `--std-root`"), "{help}");
         let _ = std::fs::remove_dir_all(root);
     }
+
     #[test]
     fn target_attributes_allow_trailing_comments_and_private_async_items() {
         for newline in ["\n", "\r\n", "\r"] {

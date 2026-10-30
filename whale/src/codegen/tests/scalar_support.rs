@@ -9,6 +9,7 @@ fn options() -> InterpreterOptions {
         max_call_depth: 16,
         max_frames: 64,
         max_live_values: 4096,
+        max_trace_frames: 32,
         ir_limits: IrLimits { max_nodes: 10_000, ..IrLimits::default() },
         memory_limits: MemoryLimits {
             max_bytes: 4096,
@@ -20,7 +21,7 @@ fn options() -> InterpreterOptions {
 }
 
 fn run(module: &Module, args: &[ConstValue]) -> Option<ConstValue> {
-    interpret_with_options(module, module.functions[0].id, args, options()).unwrap().value
+    super::interpret_checked(module, module.functions[0].id, args, options()).unwrap().value
 }
 
 #[test]
@@ -78,7 +79,7 @@ fn eager_bitwise_evaluates_a_trapping_rhs_that_logical_operators_skip() {
             "fun probe(n: i32) -> bool {{ return {left} {operator} (((1 as i32) << n) > 0); }}"
         ));
         let result =
-            interpret_with_options(&ir, ir.functions[0].id, &[ConstValue::I(32)], options());
+            super::interpret_checked(&ir, ir.functions[0].id, &[ConstValue::I(32)], options());
         if matches!(operator, "&&" | "||") {
             assert_eq!(result.unwrap().value, Some(ConstValue::Bool(left)));
         } else {

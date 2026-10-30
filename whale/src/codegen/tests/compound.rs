@@ -3,7 +3,7 @@ use super::{mask, module};
 use whale_ir::*;
 
 fn run(module: &Module, arguments: &[ConstValue]) -> Option<ConstValue> {
-    interpret_with_options(
+    super::interpret_checked(
         module,
         module.functions[0].id,
         arguments,

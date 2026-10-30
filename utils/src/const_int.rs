@@ -17,6 +17,22 @@ pub struct ConstInt {
 }
 
 impl ConstInt {
+    /// Exact hexadecimal token for frontend constant records, including wide values.
+    pub fn to_literal(&self) -> String {
+        let magnitude = if self.negative { self.clone().negated() } else { self.clone() };
+        let words = magnitude.to_le_words(magnitude.bits().max(1) as u16);
+        let mut text = String::new();
+        for word in words.iter().rev() {
+            text.push_str(&format!("{word:016x}"));
+        }
+        let digits = text.trim_start_matches('0');
+        format!(
+            "{}0x{}",
+            if self.negative { "-" } else { "" },
+            if digits.is_empty() { "0" } else { digits }
+        )
+    }
+
     pub fn zero() -> Self {
         Self { negative: false, words: Box::new([0; WORDS]) }
     }
@@ -165,6 +181,7 @@ impl ConstInt {
         result.negative = self.negative != other.negative;
         Some(result.canonical())
     }
+
     /// Truncating division; the remainder has the dividend's sign.
     pub fn div_rem(&self, other: &Self) -> Option<(Self, Self)> {
         if other.is_zero() {
@@ -219,6 +236,7 @@ impl ConstInt {
         }
         result
     }
+
     /// Arithmetic shift: negative values round toward negative infinity.
     pub fn shifted_right(&self, shift: usize) -> Self {
         let mut result = self.magnitude_shr(shift);
@@ -275,6 +293,7 @@ impl ConstInt {
     pub fn checked_not(&self) -> Option<Self> {
         Self::from_twos_complement(self.twos_complement().map(|w| !w))
     }
+
     /// Apply modulo 2^bits, then interpret the result with the requested sign.
     /// Wave widths 1..=1024 are supported, including bool and byte storage.
     pub fn normalize(&self, bits: u16, signed: bool) -> Self {
@@ -302,6 +321,7 @@ impl ConstInt {
         }
         Some(self.words[0] as usize)
     }
+
     /// Decode IEEE binary64 exactly, discarding fractional bits toward zero.
     pub fn from_f64(value: f64) -> Option<Self> {
         if !value.is_finite() {
@@ -391,6 +411,7 @@ mod tests {
             v
         }
     }
+
     #[test]
     fn storage_words_preserve_sign_and_truncate_only_at_the_requested_width() {
         assert_eq!(int(-1).to_le_words(1), vec![1]);
@@ -432,6 +453,7 @@ mod tests {
             }
         }
     }
+
     #[test]
     fn wide_arithmetic_matches_independent_reference_vectors() {
         fn hex(raw: &str) -> ConstInt {
@@ -492,6 +514,7 @@ mod tests {
             assert!(ConstInt::from_digits(digits, radix).is_none());
         }
     }
+
     #[test]
     fn floating_conversions_round_once_and_decode_exactly() {
         for value in [i128::MIN, i128::MAX, -16777219, -1, 0, 1, 16777217, 16777219] {

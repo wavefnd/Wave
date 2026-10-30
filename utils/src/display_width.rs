@@ -2,7 +2,7 @@
 //! Terminal diagnostic layout; source locations stay in Unicode scalar columns.
 //! Wide/fullwidth scalars occupy two cells, combining marks and format
 //! characters zero, and ambiguous characters one. This is scalar cell width,
-//! not terminal-dependent grapheme/emoji ligature shaping.
+//! grapheme clusters are kept intact when clipping previews.
 #[path = "display_width_tables.rs"]
 mod tables;
 pub use tables::UNICODE_VERSION;
@@ -62,35 +62,68 @@ pub struct DiagnosticLine {
 /// project a scalar-column range into terminal cells. EOF/zero-width ranges
 /// still get one caret. A multiline/oversized range stops at the displayed line.
 pub fn diagnostic_line(source: &str, column: usize, length: usize) -> DiagnosticLine {
+    use unicode_segmentation::UnicodeSegmentation;
+    use unicode_width::UnicodeWidthStr;
+    const LIMIT: usize = 160;
     let start = column.saturating_sub(1);
-    let end = start.saturating_add(length);
-    let mut text = String::new();
-    let mut cells = 0;
-    let mut caret_offset = 0;
-    let mut caret_width = 0;
-    for (index, c) in source.chars().enumerate() {
-        let escaped = escaped_control(c);
-        let width = if c == '\t' {
-            let width = TAB_STOP - cells % TAB_STOP;
-            text.push_str(&" ".repeat(width));
-            width
-        } else if let Some(escaped) = escaped {
-            let width = escaped.len();
-            text.push_str(&escaped);
-            width
+    let end = start.saturating_add(length.max(1));
+    let mut glyphs = Vec::new();
+    let (mut scalar, mut cells) = (0usize, 0usize);
+    let (mut caret_start, mut caret_end) = (None, None);
+    for cluster in source.graphemes(true) {
+        let count = cluster.chars().count();
+        let text = if cluster == "\t" {
+            " ".repeat(TAB_STOP - cells % TAB_STOP)
         } else {
-            text.push(c);
-            cell_width(c)
+            cluster
+                .chars()
+                .map(|c| escaped_control(c).unwrap_or_else(|| c.to_string()))
+                .collect::<String>()
         };
-        if index < start {
-            caret_offset += width;
+        let width = UnicodeWidthStr::width(text.as_str());
+        if scalar <= start && start < scalar + count {
+            caret_start = Some(cells);
         }
-        if index >= start && index < end {
-            caret_width += width;
+        if scalar < end && scalar + count > start {
+            caret_end = Some(cells + width);
         }
+        glyphs.push((cells, cells + width, text));
         cells += width;
+        scalar += count;
     }
-    DiagnosticLine { text, caret_offset, caret_width: caret_width.max(1) }
+    let focus = caret_start.unwrap_or(cells);
+    let focus_end = caret_end.unwrap_or(focus).max(focus + 1);
+    let desired = if cells <= LIMIT {
+        0
+    } else {
+        focus
+            .saturating_sub((LIMIT - 2).saturating_sub(focus_end - focus) / 2)
+            .min(cells.saturating_sub(LIMIT - 1))
+    };
+    let first = glyphs
+        .iter()
+        .position(|&(left, right, _)| left >= desired || right > desired)
+        .unwrap_or(glyphs.len());
+    let left = glyphs.get(first).map_or(cells, |g| g.0);
+    let leading = usize::from(first > 0);
+    let mut used = leading;
+    let mut text = if leading > 0 { "…".to_string() } else { String::new() };
+    let mut visible_end = left;
+    for (index, &(_, right, ref glyph)) in glyphs.iter().enumerate().skip(first) {
+        let width = right - visible_end;
+        let trailing = usize::from(index + 1 < glyphs.len());
+        if used + width + trailing > LIMIT {
+            text.push('…');
+            break;
+        }
+        text.push_str(glyph);
+        used += width;
+        visible_end = right;
+    }
+    let caret_offset = (leading + focus.saturating_sub(left)).min(LIMIT - 1);
+    let caret_width =
+        focus_end.min(visible_end).saturating_sub(focus.max(left)).max(1).min(LIMIT - caret_offset);
+    DiagnosticLine { text, caret_offset, caret_width }
 }
 
 #[cfg(test)]
@@ -109,7 +142,7 @@ mod tests {
     #[test]
     fn eof_and_zero_cell_ranges_remain_visible() {
         let line = diagnostic_line("文e\u{301}", 3, 1);
-        assert_eq!((line.caret_offset, line.caret_width), (3, 1));
+        assert_eq!((line.caret_offset, line.caret_width), (2, 1));
         let line = diagnostic_line("\t文", 3, 100);
         assert_eq!((line.caret_offset, line.caret_width), (6, 1));
         assert_eq!(diagnostic_line("", 1, 0).caret_width, 1);
@@ -138,5 +171,22 @@ mod tests {
         assert_eq!(cell_width('\u{e0100}'), 0);
         assert_eq!(cell_width('é'), 1);
         assert_eq!(cell_width('\u{903}'), 0);
+    }
+}
+
+#[cfg(test)]
+mod clipping_tests {
+    use super::*;
+    use unicode_width::UnicodeWidthStr;
+    #[test]
+    fn clipping_keeps_graphemes_tabs_and_highlight_inside_the_window() {
+        for marker in ["e\u{301}", "👩‍💻", "🇰🇷", "한"] {
+            let source = format!("{}\t{marker}{}", "x".repeat(500), "y".repeat(500));
+            let preview = diagnostic_line(&source, 502, marker.chars().count());
+            assert!(UnicodeWidthStr::width(preview.text.as_str()) <= 160);
+            assert!(preview.text.starts_with('…') && preview.text.ends_with('…'));
+            assert!(preview.text.contains(marker));
+            assert!(preview.caret_offset + preview.caret_width <= 160);
+        }
     }
 }

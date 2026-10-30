@@ -9,3 +9,6 @@ pub use error::*;
 
 pub mod span;
 pub use span::SourceSpan;
+
+pub mod source;
+pub use source::{CompilationSources, FileId, SourceManager};

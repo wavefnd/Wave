@@ -37,3 +37,6 @@ pub mod version;
 pub use flags::{DebugFlags, DepFlags, LinkFlags, LlvmFlags, WhaleFlags};
 
 mod output_guard;
+
+#[cfg(windows)]
+mod windows_fs;

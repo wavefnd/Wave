@@ -1,5 +1,6 @@
 // One message-oriented scatter/gather operation over caller-owned slices.
 
+import("std::net::socket_base")::{net_fd_valid};
 import("std::sys::vector_io")::{NativeIoSlice, native_io_slice, vector_send, vector_recv};
 import("std::sys::socket")::{MSG_NOSIGNAL};
 import("std::net::error")::{NetIoResult, net_io_ok, net_io_eof, net_io_error};
@@ -36,6 +37,9 @@ fun _native_slices(
 pub fun net_send_vectored(
     fd: i64, slices: ptr<NetIoSlice>, count: i32, flags: i32
 ) -> NetIoResult {
+    if (!net_fd_valid(fd)) {
+        return net_io_error(0, -22);
+    }
     var native: array<NativeIoSlice, 32>;
     var prepared: i64 = _native_slices(slices, count, &native[0]);
     if (prepared < 0) { return net_io_error(0, prepared); }
@@ -48,6 +52,9 @@ pub fun net_send_vectored(
 pub fun net_recv_vectored(
     fd: i64, slices: ptr<NetIoSlice>, count: i32, flags: i32, eof_on_zero: bool
 ) -> NetIoResult {
+    if (!net_fd_valid(fd)) {
+        return net_io_error(0, -22);
+    }
     var native: array<NativeIoSlice, 32>;
     var prepared: i64 = _native_slices(slices, count, &native[0]);
     if (prepared < 0) { return net_io_error(0, prepared); }

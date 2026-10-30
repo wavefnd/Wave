@@ -38,6 +38,7 @@ pub(crate) fn expect_semicolon(
 }
 
 pub fn parse_block(tokens: &mut Peekable<Iter<Token>>) -> Result<Vec<ASTNode>, ParseError> {
+    let _depth = crate::nesting::Block::enter(tokens.peek().copied())?;
     let anchor = tokens.peek().copied();
     let mut body = vec![];
     loop {

@@ -2,7 +2,7 @@
 //! Iterative, source-ordered expression lowering. Even the maximum permitted
 //! nesting depth must work on a 1 MiB stack in debug builds.
 use super::*;
-use parser::ast::{AssignOperator, Operator};
+use parser::ast::{AssignOperator, IncDecKind, Literal, Operator};
 
 enum Action {
     Enter,
@@ -80,6 +80,40 @@ impl Lowerer<'_> {
                             return Err(unsupported(format!("binding `{name}`")));
                         };
                         values.push(value);
+                    },
+                    Expression::IncDec { kind, target } => {
+                        let Expression::Variable(name) = target.unspanned() else {
+                            return Err(unsupported("non-local increment/decrement"));
+                        };
+                        let slot = self
+                            .local_slot(name)
+                            .ok_or_else(|| unsupported("non-local increment/decrement"))?;
+                        let old = self.value(slot.ty.clone());
+                        self.emit(Instruction::Load {
+                            dst: old.id,
+                            ty: slot.ty.clone(),
+                            ptr: slot.ptr,
+                            align: 1,
+                        });
+                        let one = self.literal(&Literal::Int("1".into()), &fact.evaluation_type)?;
+                        let operator = if matches!(kind, IncDecKind::PreInc | IncDecKind::PostInc) {
+                            Operator::Add
+                        } else {
+                            Operator::Subtract
+                        };
+                        let new = self.binary_values(
+                            old.clone(),
+                            &operator,
+                            one,
+                            &fact.evaluation_type,
+                            &slot.ty,
+                        )?;
+                        self.store(&slot, new.clone())?;
+                        values.push(if matches!(kind, IncDecKind::PreInc | IncDecKind::PreDec) {
+                            new
+                        } else {
+                            old
+                        });
                     },
                     Expression::Cast { expr, .. } | Expression::Grouped(expr) => {
                         pending.push((expr, Action::Enter))

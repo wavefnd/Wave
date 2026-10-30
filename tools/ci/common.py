@@ -5,18 +5,20 @@ import argparse
 import ast
 import json
 import os
-from pathlib import Path
 import re
 import signal
 import subprocess
 import sys
 import tempfile
 import time
+from pathlib import Path
+
 import tomllib
 
+from tools.ci import environment
+from tools.ci.targets import PINS, check_lane, lanes, resolve
 from tools.process_tree import run_process, timeout_output
 from tools.validation_reports import validate_report_path, write_report
-from tools.ci.targets import PINS, resolve, lanes, check_lane
 
 ROOT = Path(__file__).resolve().parents[2]
 HERE = Path(__file__).resolve().parent
@@ -229,9 +231,9 @@ class Runner:
             print(f"Could not write Actions summary: {error}", file=sys.stderr)
 
     def setenv(self, key, value):
+        record = environment.encode(key, value)
+        environment.append(self.env["GITHUB_ENV"], record)
         self.env[key] = str(value)
-        with Path(self.env["GITHUB_ENV"]).open("a", encoding="utf-8") as f:
-            f.write(f"{key}={value}\n")
 
     def addpath(self, path):
         self.env["PATH"] = str(path) + os.pathsep + self.env.get("PATH", "")
@@ -241,10 +243,7 @@ class Runner:
     def refresh_environment(self):
         path = Path(self.env["GITHUB_ENV"])
         if path.exists():
-            for line in path.read_text(encoding="utf-8-sig").splitlines():
-                if "=" in line:
-                    key, value = line.split("=", 1)
-                    self.env[key] = value
+            self.env.update(environment.decode(path.read_bytes()))
         path = Path(self.env["GITHUB_PATH"])
         if path.exists():
             for line in path.read_text(encoding="utf-8-sig").splitlines():

@@ -531,3 +531,70 @@ fn source_read_errors_remain_structured_for_ast_and_other_outputs() {
         }
     }
 }
+
+#[test]
+fn duplicate_declarations_show_both_name_locations_and_shadowing_stays_legal() {
+    let case = Case::new();
+    for (source, name, message) in [
+        ("struct S { 항목: i32;\n 항목: i64; }\nfun main() {}", "항목", "duplicate field"),
+        ("fun duplicate() {}\nfun duplicate() {}\nfun main() {}", "duplicate", "duplicate value"),
+        (
+            "fun main() {\n var value: i32 = 1;\n var value: i32 = 2;\n}",
+            "value",
+            "duplicate variable",
+        ),
+    ] {
+        let second = source.rfind(name).unwrap();
+        let record = case.error_at(source, second, message);
+        let related = record.get("error").unwrap().get_arr("related").unwrap();
+        assert_eq!(related.len(), 1);
+        assert_eq!(
+            related[0].get("span").unwrap().get_u64("start"),
+            Some(source.find(name).unwrap() as u64)
+        );
+    }
+    case.valid("fun main() { var value: i32 = 1; if (true) { var value: i32 = 2; } }");
+}
+
+#[test]
+fn spelling_candidates_are_visible_kind_specific_and_deterministic() {
+    let case = Case::new();
+    for (source, wrong, candidate) in [
+        ("fun main() { var count: i32 = 1; println(\"{}\", coutn); }", "coutn", "count"),
+        ("fun count() {} fun main() { coutn(); }", "coutn", "count"),
+        ("struct Counter { value: i32; } fun main() { var n: Countr; }", "Countr", "Counter"),
+    ] {
+        fs::write(case.root.join("main.wave"), source).unwrap();
+        for _ in 0..3 {
+            let output =
+                case.run(&["check", "main.wave", "--target", &case.target, "--error-format=json"]);
+            assert_eq!(output.status.code(), Some(1));
+            let json = wson::parse_json(String::from_utf8_lossy(&output.stderr).trim()).unwrap();
+            let suggestions = json.get("error").unwrap().get_arr("suggestions").unwrap();
+            assert!(
+                suggestions.iter().any(|s| matches!(s, Value::String(name) if name == candidate)),
+                "{wrong}: {json:?}"
+            );
+        }
+    }
+    fs::write(
+        case.root.join("main.wave"),
+        "fun main() { if (true) { var secret: i32 = 1; } println(\"{}\", secrt); }",
+    )
+    .unwrap();
+    let output = case.run(&["check", "main.wave", "--target", &case.target, "--error-format=json"]);
+    let record = wson::parse_json(String::from_utf8_lossy(&output.stderr).trim()).unwrap();
+    assert!(record.get("error").unwrap().get_arr("suggestions").unwrap().is_empty());
+}
+
+#[test]
+fn imported_errors_render_loaded_related_source_without_changing_json_locations() {
+    let case = Case::new();
+    fs::write(case.root.join("main.wave"), "import(\"./bad.wave\");\nfun main() {}\n").unwrap();
+    fs::write(case.root.join("bad.wave"), "fun broken( {\n").unwrap();
+    let human = case.run(&["check", "main.wave", "--target", &case.target]);
+    assert!(!human.status.success());
+    let text = String::from_utf8(human.stderr).unwrap();
+    assert!(text.contains("import(\"./bad.wave\");"), "{text}");
+    assert!(text.contains("bad.wave") && text.contains("main.wave"));
+}

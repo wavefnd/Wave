@@ -142,6 +142,7 @@ pub fn is_expression_start(token_type: &TokenType) -> bool {
 }
 
 pub fn parse_type(type_str: &str) -> Option<TokenType> {
+    let _depth = crate::nesting::Type::enter()?;
     let type_str = type_str.trim();
 
     if type_str == "!" {
@@ -335,6 +336,10 @@ where
             *tokens = probe;
             Ok(ty)
         },
+        None if crate::nesting::type_exceeded() => Err(crate::parser::ParseError::syntax_at(
+            anchor,
+            "type nesting exceeds the maximum of 128 levels",
+        )),
         None => Err(crate::parser::ParseError::expected_at(anchor, anchor, "type", context)),
     }
 }

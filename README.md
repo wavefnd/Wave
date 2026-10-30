@@ -323,8 +323,9 @@ signed MIN / -1 traps and MIN % -1 produces zero. Floating division/remainder
 emit verified IR with existing f32/f64 semantics.
 Unsupported requests never fall back to LLVM. `--whale check` also verifies
 backend support, whereas the default `check` performs frontend validation.
-The supported integer/control-flow subset is tested with Whale's bounded
-interpreter; this does not add native Whale execution or floating execution.
+The supported scalar/control-flow subset is tested with Whale's bounded
+interpreter, including direct floating execution. This does not establish native
+Whale execution or complete backend parity.
 
 The root `whale/` workspace crate owns the Whale backend alongside `llvm/`.
 The compiler driver in `src/` selects and invokes these backends. The `whale/`
