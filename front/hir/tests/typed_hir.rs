@@ -212,7 +212,9 @@ fun check(left: Flag, right: bool) -> bool {
         panic!("expected check function");
     };
     for node in function.body.iter().take(2) {
-        let ASTNode::Variable(variable) = node else { panic!("expected variable") };
+        let ASTNode::Variable(variable) = node else {
+            panic!("expected variable")
+        };
         let expression = variable.initial_value.as_ref().unwrap();
         assert_eq!(
             program.type_of(expression),
@@ -232,6 +234,9 @@ fn bool_ordering_arithmetic_and_mixed_equality_stay_rejected() {
         let mut lexer = Lexer::new(&source);
         let tokens = lexer.tokenize().unwrap();
         let syntax = parse_syntax_only(&tokens).unwrap();
-        assert!(TypedProgram::lower(syntax).is_err(), "{expression} should be rejected");
+        assert!(
+            TypedProgram::lower(syntax).is_err(),
+            "{expression} should be rejected"
+        );
     }
 }
