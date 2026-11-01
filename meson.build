@@ -115,7 +115,7 @@ all_targets = [
 ]
 run_target('distclean', command: [python, '-m', 'tools.build.clean', all_targets], env: build_env)
 
-test('tooling', python, args: ['-m', 'unittest', 'discover', '-s', 'tools', '-p', 'test_*.py'],
+test('tooling', python, args: ['-m', 'unittest', 'discover', '-s', 'tools/tests', '-t', '.', '-p', 'test_*.py'],
     workdir: source_root, env: build_env, timeout: 1800, suite: 'tooling', is_parallel: false)
 if get_option('compiler')
     rust_test_args = ['+' + rust_toolchain, 'test', '--locked', '--workspace',
