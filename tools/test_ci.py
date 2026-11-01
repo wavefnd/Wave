@@ -408,6 +408,19 @@ class TargetTests(unittest.TestCase):
             [["node", "tools/test_wasm_host.mjs"]],
         )
 
+
+    def test_rust_formatting_gate_checks_function_spacing_without_writing(self):
+        plans, procedures = common.inventory()
+        self.assertEqual(
+            procedures["check_rust_formatting"]["commands"],
+            [["@python", "tools/format-rust.py", "--check"]],
+        )
+        self.assertTrue(any(
+            stage["procedure"] == "check_rust_formatting"
+            for plan in plans.values()
+            for stage in plan["stages"]
+        ))
+
     def test_environment_configuration_requires_objects_before_creating_a_runner(self):
         for name in ("WAVE_CI_MATRIX", "WAVE_RELEASE_INPUTS"):
             for raw in ("[]", "[1]", "null", "false", "true", "0", "1", '\"text\"', '\"\"', "{"):
