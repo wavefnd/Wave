@@ -4,11 +4,11 @@
 import hashlib
 import json
 import os
-from pathlib import Path
 import tarfile
 import tempfile
-from types import SimpleNamespace
 import unittest
+from pathlib import Path
+from types import SimpleNamespace
 from unittest.mock import Mock, patch
 
 from tools.ci import llvm_bundle as bundle
@@ -190,6 +190,44 @@ class PublicationTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "URL"):
                 prepare_publication(inputs, website)
             self.assertFalse(website.exists())
+
+
+
+
+
+@unittest.skipUnless(os.name == "posix", "symlink fixture")
+class LinkPolicyTests(unittest.TestCase):
+    def test_full_tree_rejects_absolute_outside_dangling_cycles_and_directory_links(
+        self,
+    ):
+        for target in ("/etc/passwd", "../../outside", "missing", "link", "."):
+            with self.subTest(target=target), tempfile.TemporaryDirectory() as folder:
+                root = Path(folder) / "sdk"
+                root.mkdir()
+                (root / "link").symlink_to(target)
+                with self.assertRaises(ValueError):
+                    bundle.check_tree(root)
+
+    def test_relative_multilevel_links_and_outside_intermediate_hops(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder) / "sdk"
+            (root / "lib").mkdir(parents=True)
+            (root / "lib/real").write_bytes(b"library")
+            (root / "lib/first").symlink_to("real")
+            (root / "second").symlink_to("lib/first")
+            bundle.check_tree(root)
+            (root / "second").unlink()
+            (root / "second").symlink_to("../sdk/lib/real")
+            with self.assertRaises(ValueError):
+                bundle.check_tree(root)
+
+    def test_file_parent_components_are_not_treated_as_directories(self):
+        with tempfile.TemporaryDirectory() as folder:
+            root = Path(folder)
+            (root / "file").write_bytes(b"library")
+            (root / "link").symlink_to("file/../file")
+            with self.assertRaises(ValueError):
+                bundle.check_tree(root)
 
 
 if __name__ == "__main__":

@@ -25,6 +25,8 @@
 pub mod async_lower;
 pub mod conversions;
 mod defaults;
+pub mod enums;
+pub use enums::{EnumConversion, EnumType, EnumVariant, TypeId};
 mod numeric_checks;
 use conversions::{ConversionError, NumericExpressionInfo};
 pub use numeric_checks::{integer_literal_float, ConstantValue};
@@ -77,6 +79,10 @@ pub use parser::verification::{
 /// consumers observe stable `ExpressionId` values.
 #[derive(Debug)]
 pub struct TypedProgram {
+    enum_types: Vec<EnumType>,
+    enum_sources: HashMap<ExpressionId, TypeId>,
+    enum_targets: HashMap<ExpressionId, TypeId>,
+    enum_conversions: HashMap<ExpressionId, EnumConversion>,
     syntax: Box<[ASTNode]>,
     node_ids: HashMap<usize, NodeId>,
     node_spans: Vec<Option<error::SourceSpan>>,
@@ -140,6 +146,8 @@ impl TypedProgram {
         // stable identities only after every occurrence owns its defaults.
         let source_map = parser::source::SourceMap::detach(&mut syntax);
         let SemanticFacts {
+            enum_sources: analyzed_enum_sources,
+            enum_targets: analyzed_enum_targets,
             expression_types: analyzed_types,
             variant_constructions: analyzed_variants,
             variant_patterns: analyzed_patterns,
@@ -195,7 +203,26 @@ impl TypedProgram {
             .iter()
             .map(|address| source_map.nodes.get(address).cloned())
             .collect();
+        let enum_types = enums::collect(&syntax);
+        let identities =
+            enum_types.iter().map(|ty| (ty.name.clone(), ty.id)).collect::<HashMap<_, _>>();
+        let enum_sources = analyzed_enum_sources
+            .into_iter()
+            .filter_map(|(address, name)| {
+                Some((*expression_ids.get(&address)?, *identities.get(&name)?))
+            })
+            .collect();
+        let enum_targets = analyzed_enum_targets
+            .into_iter()
+            .filter_map(|(address, name)| {
+                Some((*expression_ids.get(&address)?, *identities.get(&name)?))
+            })
+            .collect();
         let mut program = Self {
+            enum_types,
+            enum_sources,
+            enum_targets,
+            enum_conversions: HashMap::new(),
             syntax,
             node_ids,
             node_spans,
@@ -212,11 +239,24 @@ impl TypedProgram {
             pattern_spans,
         };
         program.numeric_expressions = conversions::build(&program);
+        program.enum_conversions = enums::conversions(&program);
         program.constant_values = match numeric_checks::validate(&program) {
             Ok(values) => values,
             Err(diagnostic) => return Err(HirLoweringError { syntax: program.syntax, diagnostic }),
         };
         Ok(program)
+    }
+
+    pub fn enum_types(&self) -> &[EnumType] {
+        &self.enum_types
+    }
+
+    pub fn enum_type_of(&self, expression: &Expression) -> Option<TypeId> {
+        self.expression_id(expression).and_then(|id| self.enum_sources.get(&id).copied())
+    }
+
+    pub fn enum_conversion_of(&self, expression: &Expression) -> Option<&EnumConversion> {
+        self.expression_id(expression).and_then(|id| self.enum_conversions.get(&id))
     }
 
     pub fn constant_value_of(&self, expression: &Expression) -> Option<&ConstantValue> {
@@ -230,6 +270,7 @@ impl TypedProgram {
     pub fn numeric_expression_of(&self, expression: &Expression) -> Option<&NumericExpressionInfo> {
         self.expression_id(expression).and_then(|id| self.numeric_expression(id))
     }
+
     /// Reject missing or inconsistent facts before entering a backend.
     pub fn verify_conversions(&self) -> Result<(), ConversionError> {
         let mut failure = None;

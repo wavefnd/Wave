@@ -19,6 +19,7 @@
 
 mod const_dependencies;
 mod diagnostics;
+mod duplicates;
 mod expression;
 mod facts;
 pub use facts::{AnalyzedExpressionType, SemanticFacts, VariantConstruction, VariantPattern};
@@ -118,6 +119,10 @@ fn infer_variant_type_pair(
 struct Validator<'a> {
     program: &'a ProgramTypes,
     scopes: Vec<HashMap<String, Binding>>,
+    binding_sites: Vec<HashMap<String, (usize, Option<error::SourceSpan>)>>,
+    declaration_order: usize,
+    related: Vec<error::RelatedDiagnostic>,
+    suggestions: Vec<String>,
     current_function: Option<String>,
     current_return_type: Option<WaveType>,
     current_async: bool,
@@ -131,6 +136,8 @@ struct Validator<'a> {
     diagnostic_help: Option<String>,
     expression_types: HashMap<usize, WaveType>,
     analyzed_expression_types: HashMap<usize, AnalyzedExpressionType>,
+    enum_sources: HashMap<usize, String>,
+    enum_targets: HashMap<usize, String>,
     expected_types: HashMap<usize, WaveType>,
     variant_constructions: HashMap<usize, VariantConstruction>,
     variant_patterns: HashMap<usize, VariantPattern>,
@@ -143,6 +150,10 @@ impl<'a> Validator<'a> {
         Self {
             program,
             scopes: vec![HashMap::new()],
+            binding_sites: vec![HashMap::new()],
+            declaration_order: 0,
+            related: Vec::new(),
+            suggestions: Vec::new(),
             current_function: None,
             current_return_type: None,
             current_async: false,
@@ -156,6 +167,8 @@ impl<'a> Validator<'a> {
             diagnostic_help: None,
             expression_types: HashMap::new(),
             analyzed_expression_types: HashMap::new(),
+            enum_sources: HashMap::new(),
+            enum_targets: HashMap::new(),
             expected_types: HashMap::new(),
             variant_constructions: HashMap::new(),
             variant_patterns: HashMap::new(),
@@ -169,6 +182,8 @@ impl<'a> Validator<'a> {
         self.span_counts.clear();
         self.primary_span = Some(hint);
         self.diagnostic_help = None;
+        self.related.clear();
+        self.suggestions.clear();
     }
 
     fn mark_span(&mut self, kind: SemanticSpanKind, text: impl Into<String>) {
@@ -182,7 +197,25 @@ impl<'a> Validator<'a> {
     }
 
     fn diagnostic(&self, message: String) -> SemanticDiagnostic {
+        let mut suggestions = self.suggestions.clone();
+        if let Some(tail) = message.strip_prefix("unknown type `") {
+            if let Some((name, _)) = tail.split_once('`') {
+                let candidates = self
+                    .program
+                    .declaration_order
+                    .iter()
+                    .filter(|(candidate, _)| {
+                        self.program.type_names.contains(*candidate)
+                            && !candidate.starts_with("__wave_")
+                    })
+                    .map(|(candidate, order)| (candidate.clone(), self.scopes.len(), *order))
+                    .collect();
+                suggestions = utils::suggestions::nearby(name, candidates);
+            }
+        }
         SemanticDiagnostic {
+            related: self.related.clone(),
+            suggestions,
             code: "E3001".to_string(),
             label: message.clone(),
             message,
@@ -194,6 +227,27 @@ impl<'a> Validator<'a> {
                 "fix type, mutability, scope, and control-flow errors".to_string()
             }),
         }
+    }
+
+    fn suggest_variables(&mut self, name: &str) {
+        let mut visible = HashSet::new();
+        let mut candidates = Vec::new();
+        for (proximity, scope) in self.binding_sites.iter().rev().enumerate() {
+            for (candidate, (order, _)) in scope {
+                if visible.insert(candidate.clone()) {
+                    candidates.push((candidate.clone(), proximity, *order));
+                }
+            }
+        }
+        for (candidate, order) in &self.program.declaration_order {
+            if self.program.globals.contains_key(candidate)
+                && !candidate.starts_with("__wave_")
+                && visible.insert(candidate.clone())
+            {
+                candidates.push((candidate.clone(), self.scopes.len(), *order));
+            }
+        }
+        self.suggestions = utils::suggestions::nearby(name, candidates);
     }
 
     fn lookup_binding(&self, name: &str) -> Option<Binding> {
@@ -209,8 +263,10 @@ impl<'a> Validator<'a> {
         validate: impl FnOnce(&mut Self) -> Result<T, String>,
     ) -> Result<T, String> {
         self.scopes.push(HashMap::new());
+        self.binding_sites.push(HashMap::new());
         let result = validate(self);
         self.scopes.pop();
+        self.binding_sites.pop();
         result
     }
 
@@ -279,6 +335,7 @@ impl<'a> Validator<'a> {
 
         let result = self.with_scope(|validator| {
             for parameter in &function.parameters {
+                validator.source_span = parameter.span.clone();
                 validator.insert_current_binding(
                     parameter.name.clone(),
                     Binding { mutability: Mutability::Var, ty: parameter.param_type.clone() },
@@ -316,8 +373,19 @@ impl<'a> Validator<'a> {
     ) -> Result<(), String> {
         let scope = self.scopes.last_mut().unwrap();
         if scope.contains_key(&name) {
+            if let Some((_, Some(span))) = self.binding_sites.last().unwrap().get(&name) {
+                self.related.push(error::RelatedDiagnostic {
+                    message: "previous declaration is here".into(),
+                    span: span.focus.as_deref().unwrap_or(span).clone(),
+                });
+            }
             return Err(format!("duplicate {} declaration `{}` in the same scope", kind, name));
         }
+        self.declaration_order += 1;
+        self.binding_sites
+            .last_mut()
+            .unwrap()
+            .insert(name.clone(), (self.declaration_order, self.source_span.clone()));
         scope.insert(name, binding);
         Ok(())
     }
@@ -342,56 +410,67 @@ impl<'a> Validator<'a> {
             self.source_span = Some(span.clone());
         }
         match node {
-            ASTNode::Variable(variable) => {
-                self.mark_span(SemanticSpanKind::Declaration, variable.name.clone());
-                let declaration_span = self.source_span.clone();
-                self.source_span = variable.type_span.clone().or(self.source_span.clone());
-                self.program.validate_type(
-                    &variable.type_name,
-                    &self.current_type_params,
-                    false,
-                    &format!("variable `{}`", variable.name),
-                )?;
-                self.source_span = declaration_span;
-                if self.scopes.last().unwrap().contains_key(&variable.name) {
-                    return Err(format!(
-                        "duplicate variable declaration `{}` in the same scope",
-                        variable.name
-                    ));
-                }
-                let asm_initializer =
-                    matches!(variable.initial_value, Some(Expression::AsmBlock { .. }));
-                if asm_initializer {
-                    self.insert_current_binding(
-                        variable.name.clone(),
-                        Binding { mutability: variable.mutability, ty: variable.type_name.clone() },
-                        "variable",
-                    )?;
-                }
-
-                if let Some(initial_value) = &variable.initial_value {
-                    let actual =
-                        self.validate_expr_expected(initial_value, Some(&variable.type_name))?;
-                    self.require_assignable(
-                        &actual,
-                        &variable.type_name,
-                        &format!("initializer for `{}`", variable.name),
-                    )?;
-                }
-
-                if !asm_initializer {
-                    self.insert_current_binding(
-                        variable.name.clone(),
-                        Binding { mutability: variable.mutability, ty: variable.type_name.clone() },
-                        "variable",
-                    )?;
-                }
-                Ok(true)
-            },
+            ASTNode::Variable(_) => self.validate_node_variable(node),
             ASTNode::Statement(statement) => self.validate_statement(statement),
             ASTNode::Expression(expression) => self.validate_expression_statement(expression),
             _ => Ok(true),
         }
+    }
+
+    fn validate_node_variable(&mut self, node: &ASTNode) -> Result<bool, String> {
+        let ASTNode::Variable(variable) = node else { unreachable!() };
+
+        self.mark_span(SemanticSpanKind::Declaration, variable.name.clone());
+        let declaration_span = self.source_span.clone();
+        self.source_span = variable.type_span.clone().or(self.source_span.clone());
+        self.program.validate_type(
+            &variable.type_name,
+            &self.current_type_params,
+            false,
+            &format!("variable `{}`", variable.name),
+        )?;
+        self.source_span = declaration_span;
+        if self.scopes.last().unwrap().contains_key(&variable.name) {
+            if let Some((_, Some(span))) = self.binding_sites.last().unwrap().get(&variable.name) {
+                self.related.push(error::RelatedDiagnostic {
+                    message: "previous declaration is here".into(),
+                    span: span.focus.as_deref().unwrap_or(span).clone(),
+                });
+            }
+            self.source_span =
+                self.source_span.as_ref().map(|s| s.focus.as_deref().unwrap_or(s).clone());
+            return Err(format!(
+                "duplicate variable declaration `{}` in the same scope",
+                variable.name
+            ));
+        }
+        let asm_initializer = matches!(variable.initial_value, Some(Expression::AsmBlock { .. }));
+        if asm_initializer {
+            self.insert_current_binding(
+                variable.name.clone(),
+                Binding { mutability: variable.mutability, ty: variable.type_name.clone() },
+                "variable",
+            )?;
+        }
+
+        if let Some(initial_value) = &variable.initial_value {
+            let actual = self.validate_expr_expected(initial_value, Some(&variable.type_name))?;
+            self.require_assignable(
+                &actual,
+                &variable.type_name,
+                &format!("initializer for `{}`", variable.name),
+            )?;
+        }
+
+        if !asm_initializer {
+            self.source_span = self.source_map.nodes.get(&(node as *const _ as usize)).cloned();
+            self.insert_current_binding(
+                variable.name.clone(),
+                Binding { mutability: variable.mutability, ty: variable.type_name.clone() },
+                "variable",
+            )?;
+        }
+        Ok(true)
     }
 
     fn validate_expression_statement(&mut self, expression: &Expression) -> Result<bool, String> {
@@ -412,202 +491,251 @@ impl<'a> Validator<'a> {
     fn validate_statement(&mut self, statement: &StatementNode) -> Result<bool, String> {
         match statement {
             StatementNode::Expression(expression) => self.validate_expression_statement(expression),
-            StatementNode::Assign { variable, value } => {
-                self.mark_span(SemanticSpanKind::Identifier, variable.clone());
-                let binding = self
-                    .lookup_binding(variable)
-                    .ok_or_else(|| format!("use of undeclared identifier `{}`", variable))?;
-                self.ensure_mutable_binding(variable, &binding, "assign")?;
-                let actual = self.validate_expr_expected(value, Some(&binding.ty))?;
-                self.require_assignable(
-                    &actual,
-                    &binding.ty,
-                    &format!("assignment to `{}`", variable),
-                )?;
-                Ok(true)
+            StatementNode::Assign { .. } => self.validate_stmt_assign(statement),
+            StatementNode::PrintFormat { .. } | StatementNode::PrintlnFormat { .. } => {
+                self.validate_stmt_print(statement)
             },
-            StatementNode::PrintFormat { args, format }
-            | StatementNode::PrintlnFormat { args, format } => {
-                self.mark_span(SemanticSpanKind::Keyword, "println|print");
-                let specs = crate::format::format_fragments(format).map_err(str::to_string)?;
-                let specs = specs.into_iter().filter_map(|p| match p {
-                    crate::format::FormatFragment::Placeholder(s) => Some(s),
-                    _ => None,
-                });
-                for (argument, spec) in args.iter().zip(specs) {
-                    let ty = self.validate_expr(argument)?;
-                    self.validate_format_argument(&ty)?;
-                    if matches!(ty, ExpressionType::IntLiteral(_)) {
-                        self.require_assignable(
-                            &ty,
-                            &WaveType::Int(32),
-                            "default integer format argument",
-                        )?;
-                    }
-                    let concrete = canonical_expression_type(self.program, &ty);
-                    let generic =
-                        concrete.as_ref().is_some_and(|t| self.program.is_generic_placeholder(t));
-                    let precision = crate::format::float_precision(spec).map_err(str::to_string)?;
-                    let valid = generic
-                        || match spec {
-                            "" => true,
-                            "d" | "x" | "c" => {
-                                self.is_integer_expression(&ty)
-                                    || matches!(concrete, Some(WaveType::Bool))
-                            },
-                            "p" => {
-                                matches!(concrete, Some(WaveType::Pointer(_) | WaveType::String))
-                                    || matches!(ty, ExpressionType::Null)
-                            },
-                            "s" => {
-                                matches!(concrete, Some(WaveType::String))
-                                    || matches!(concrete, Some(WaveType::Pointer(ref t)) if matches!(t.as_ref(), WaveType::Byte | WaveType::Char))
-                            },
-                            _ if precision.is_some() => {
-                                matches!(ty, ExpressionType::FloatLiteral)
-                                    || matches!(concrete, Some(WaveType::Float(32 | 64)))
-                            },
-                            _ => false,
-                        };
-                    if !valid {
-                        return Err(format!(
-                            "format placeholder `{{{spec}}}` is incompatible with `{}`",
-                            display_expression_type(&ty)
-                        ));
-                    }
-                }
-                Ok(true)
-            },
-            StatementNode::Input { args, .. } => {
-                self.mark_span(SemanticSpanKind::Keyword, "input");
-                for argument in args {
-                    self.source_span = self
-                        .source_map
-                        .expressions
-                        .get(&(argument as *const _ as usize))
-                        .cloned()
-                        .or(self.source_span.clone());
-                    if !is_lvalue_expression(argument) {
-                        return Err("input argument must be a mutable lvalue".to_string());
-                    }
-                    self.ensure_mutable_write_target(argument, "write input into")?;
-                    let ty = self.validate_expr(argument)?;
-                    let supported = match &ty {
-                        ExpressionType::Known(ty) => matches!(
-                            self.program.canonical_type(ty),
-                            WaveType::Bool
-                                | WaveType::Int(_)
-                                | WaveType::Uint(_)
-                                | WaveType::Float(_)
-                                | WaveType::Char
-                                | WaveType::Byte
-                        ),
-                        _ => false,
-                    };
-                    if !supported {
-                        return Err(format!(
-                            "input argument must be a mutable scalar lvalue, found `{}`",
-                            display_expression_type(&ty)
-                        ));
-                    }
-                }
-                Ok(true)
-            },
-            StatementNode::If { condition, body, else_if_blocks, else_block } => {
-                self.mark_span(SemanticSpanKind::Keyword, "if");
-                self.validate_condition(condition, "if condition")?;
-                let mut any_branch_falls_through = self.validate_scoped_block(body)?;
-
-                if let Some(blocks) = else_if_blocks {
-                    for (condition, block) in blocks.iter() {
-                        self.mark_span(SemanticSpanKind::Keyword, "if");
-                        self.validate_condition(condition, "else-if condition")?;
-                        any_branch_falls_through |= self.validate_scoped_block(block)?;
-                    }
-                }
-
-                if let Some(block) = else_block {
-                    any_branch_falls_through |= self.validate_scoped_block(block)?;
-                } else {
-                    any_branch_falls_through = true;
-                }
-
-                Ok(any_branch_falls_through)
-            },
-            StatementNode::While { condition, body } => {
-                self.mark_span(SemanticSpanKind::Keyword, "while");
-                self.validate_condition(condition, "while condition")?;
-                self.loop_depth += 1;
-                let body_result = self.validate_scoped_block(body);
-                self.loop_depth -= 1;
-                body_result?;
-
-                Ok(!expression_is_true(condition) || block_breaks_current_loop(body))
-            },
-            StatementNode::For { initialization, condition, increment, body } => {
-                self.with_scope(|validator| {
-                    validator.mark_span(SemanticSpanKind::Keyword, "for");
-                    validator.validate_node(initialization)?;
-                    validator.validate_condition(condition, "for condition")?;
-                    validator.validate_expr(increment)?;
-                    validator.loop_depth += 1;
-                    let body_result = validator.validate_block(body);
-                    validator.loop_depth -= 1;
-                    body_result?;
-
-                    Ok(!expression_is_true(condition) || block_breaks_current_loop(body))
-                })
-            },
-            StatementNode::Match { value, arms } => {
-                self.mark_span(SemanticSpanKind::Keyword, "match");
-                let value_type = self.validate_expr(value)?;
-                match &value_type {
-                    ExpressionType::Known(ty) => match self.program.canonical_type(ty) {
-                        WaveType::Variant(name) => self.validate_variant_match(&name, arms),
-                        _ if self.is_integer_expression(&value_type) => {
-                            self.validate_integer_match(&value_type, arms)
-                        },
-                        _ => Err(format!(
-                            "match value must be an integer, enum, or variant, found `{}`",
-                            display_expression_type(&value_type)
-                        )),
-                    },
-                    _ if self.is_integer_expression(&value_type) => {
-                        self.validate_integer_match(&value_type, arms)
-                    },
-                    _ => Err(format!(
-                        "match value must be an integer, enum, or variant, found `{}`",
-                        display_expression_type(&value_type)
-                    )),
-                }
-            },
-            StatementNode::Break => {
-                self.mark_span(SemanticSpanKind::Keyword, "break");
-                if self.loop_depth == 0 {
-                    return Err("`break` can only be used inside a loop".to_string());
-                }
-                Ok(false)
-            },
-            StatementNode::Continue => {
-                self.mark_span(SemanticSpanKind::Keyword, "continue");
-                if self.loop_depth == 0 {
-                    return Err("`continue` can only be used inside a loop".to_string());
-                }
-                Ok(false)
-            },
-            StatementNode::Return(value) => {
-                self.mark_span(SemanticSpanKind::Keyword, "return");
-                self.validate_return(value.as_ref())?;
-                Ok(false)
-            },
-            StatementNode::AsmBlock { inputs, outputs, clobbers, .. } => {
-                for (_, expression) in inputs.iter().chain(outputs.iter()) {
-                    self.validate_expr(expression)?;
-                }
-                Ok(!clobbers.iter().any(|clobber| clobber == "noreturn"))
-            },
+            StatementNode::Input { .. } => self.validate_stmt_input(statement),
+            StatementNode::If { .. } => self.validate_stmt_if(statement),
+            StatementNode::While { .. } => self.validate_stmt_while(statement),
+            StatementNode::For { .. } => self.validate_stmt_for(statement),
+            StatementNode::Match { .. } => self.validate_stmt_match(statement),
+            StatementNode::Break => self.validate_stmt_break(statement),
+            StatementNode::Continue => self.validate_stmt_continue(statement),
+            StatementNode::Return(_) => self.validate_stmt_return(statement),
+            StatementNode::AsmBlock { .. } => self.validate_stmt_asm(statement),
             _ => Ok(true),
         }
+    }
+
+    fn validate_stmt_assign(&mut self, statement: &StatementNode) -> Result<bool, String> {
+        let StatementNode::Assign { variable, value } = statement else { unreachable!() };
+
+        self.mark_span(SemanticSpanKind::Identifier, variable.clone());
+        let binding = self
+            .lookup_binding(variable)
+            .ok_or_else(|| format!("use of undeclared identifier `{}`", variable))?;
+        self.ensure_mutable_binding(variable, &binding, "assign")?;
+        let actual = self.validate_expr_expected(value, Some(&binding.ty))?;
+        self.require_assignable(&actual, &binding.ty, &format!("assignment to `{}`", variable))?;
+        Ok(true)
+    }
+
+    fn validate_stmt_print(&mut self, statement: &StatementNode) -> Result<bool, String> {
+        let (StatementNode::PrintFormat { args, format }
+        | StatementNode::PrintlnFormat { args, format }) = statement
+        else {
+            unreachable!()
+        };
+
+        self.mark_span(SemanticSpanKind::Keyword, "println|print");
+        let specs = crate::format::format_fragments(format).map_err(str::to_string)?;
+        let specs = specs.into_iter().filter_map(|p| match p {
+            crate::format::FormatFragment::Placeholder(s) => Some(s),
+            _ => None,
+        });
+        for (argument, spec) in args.iter().zip(specs) {
+            let ty = self.validate_expr(argument)?;
+            self.validate_format_argument(&ty)?;
+            if matches!(ty, ExpressionType::IntLiteral(_)) {
+                self.require_assignable(
+                    &ty,
+                    &WaveType::Int(32),
+                    "default integer format argument",
+                )?;
+            }
+            let concrete = canonical_expression_type(self.program, &ty);
+            let generic = concrete.as_ref().is_some_and(|t| self.program.is_generic_placeholder(t));
+            let precision = crate::format::float_precision(spec).map_err(str::to_string)?;
+            let valid = generic
+                || match spec {
+                    "" => true,
+                    "d" | "x" | "c" => {
+                        self.is_integer_expression(&ty) || matches!(concrete, Some(WaveType::Bool))
+                    },
+                    "p" => {
+                        matches!(concrete, Some(WaveType::Pointer(_) | WaveType::String))
+                            || matches!(ty, ExpressionType::Null)
+                    },
+                    "s" => {
+                        matches!(concrete, Some(WaveType::String))
+                            || matches!(concrete, Some(WaveType::Pointer(ref t)) if matches!(t.as_ref(), WaveType::Byte | WaveType::Char))
+                    },
+                    _ if precision.is_some() => {
+                        matches!(ty, ExpressionType::FloatLiteral)
+                            || matches!(concrete, Some(WaveType::Float(32 | 64)))
+                    },
+                    _ => false,
+                };
+            if !valid {
+                return Err(format!(
+                    "format placeholder `{{{spec}}}` is incompatible with `{}`",
+                    display_expression_type(&ty)
+                ));
+            }
+        }
+        Ok(true)
+    }
+
+    fn validate_stmt_input(&mut self, statement: &StatementNode) -> Result<bool, String> {
+        let StatementNode::Input { args, .. } = statement else { unreachable!() };
+
+        self.mark_span(SemanticSpanKind::Keyword, "input");
+        for argument in args {
+            self.source_span = self
+                .source_map
+                .expressions
+                .get(&(argument as *const _ as usize))
+                .cloned()
+                .or(self.source_span.clone());
+            if !is_lvalue_expression(argument) {
+                return Err("input argument must be a mutable lvalue".to_string());
+            }
+            self.ensure_mutable_write_target(argument, "write input into")?;
+            let ty = self.validate_expr(argument)?;
+            let supported = match &ty {
+                ExpressionType::Known(ty) => matches!(
+                    self.program.canonical_type(ty),
+                    WaveType::Bool
+                        | WaveType::Int(_)
+                        | WaveType::Uint(_)
+                        | WaveType::Float(_)
+                        | WaveType::Char
+                        | WaveType::Byte
+                ),
+                _ => false,
+            };
+            if !supported {
+                return Err(format!(
+                    "input argument must be a mutable scalar lvalue, found `{}`",
+                    display_expression_type(&ty)
+                ));
+            }
+        }
+        Ok(true)
+    }
+
+    fn validate_stmt_if(&mut self, statement: &StatementNode) -> Result<bool, String> {
+        let StatementNode::If { condition, body, else_if_blocks, else_block } = statement else {
+            unreachable!()
+        };
+
+        self.mark_span(SemanticSpanKind::Keyword, "if");
+        self.validate_condition(condition, "if condition")?;
+        let mut any_branch_falls_through = self.validate_scoped_block(body)?;
+
+        if let Some(blocks) = else_if_blocks {
+            for (condition, block) in blocks.iter() {
+                self.mark_span(SemanticSpanKind::Keyword, "if");
+                self.validate_condition(condition, "else-if condition")?;
+                any_branch_falls_through |= self.validate_scoped_block(block)?;
+            }
+        }
+
+        if let Some(block) = else_block {
+            any_branch_falls_through |= self.validate_scoped_block(block)?;
+        } else {
+            any_branch_falls_through = true;
+        }
+
+        Ok(any_branch_falls_through)
+    }
+
+    fn validate_stmt_while(&mut self, statement: &StatementNode) -> Result<bool, String> {
+        let StatementNode::While { condition, body } = statement else { unreachable!() };
+
+        self.mark_span(SemanticSpanKind::Keyword, "while");
+        self.validate_condition(condition, "while condition")?;
+        self.loop_depth += 1;
+        let body_result = self.validate_scoped_block(body);
+        self.loop_depth -= 1;
+        body_result?;
+
+        Ok(!expression_is_true(condition) || block_breaks_current_loop(body))
+    }
+
+    fn validate_stmt_for(&mut self, statement: &StatementNode) -> Result<bool, String> {
+        let StatementNode::For { initialization, condition, increment, body } = statement else {
+            unreachable!()
+        };
+
+        self.with_scope(|validator| {
+            validator.mark_span(SemanticSpanKind::Keyword, "for");
+            validator.validate_node(initialization)?;
+            validator.validate_condition(condition, "for condition")?;
+            validator.validate_expr(increment)?;
+            validator.loop_depth += 1;
+            let body_result = validator.validate_block(body);
+            validator.loop_depth -= 1;
+            body_result?;
+
+            Ok(!expression_is_true(condition) || block_breaks_current_loop(body))
+        })
+    }
+
+    fn validate_stmt_match(&mut self, statement: &StatementNode) -> Result<bool, String> {
+        let StatementNode::Match { value, arms } = statement else { unreachable!() };
+
+        self.mark_span(SemanticSpanKind::Keyword, "match");
+        let value_type = self.validate_expr(value)?;
+        match &value_type {
+            ExpressionType::Known(ty) => match self.program.canonical_type(ty) {
+                WaveType::Variant(name) => self.validate_variant_match(&name, arms),
+                _ if self.is_integer_expression(&value_type) => {
+                    self.validate_integer_match(&value_type, arms)
+                },
+                _ => Err(format!(
+                    "match value must be an integer, enum, or variant, found `{}`",
+                    display_expression_type(&value_type)
+                )),
+            },
+            _ if self.is_integer_expression(&value_type) => {
+                self.validate_integer_match(&value_type, arms)
+            },
+            _ => Err(format!(
+                "match value must be an integer, enum, or variant, found `{}`",
+                display_expression_type(&value_type)
+            )),
+        }
+    }
+
+    fn validate_stmt_break(&mut self, statement: &StatementNode) -> Result<bool, String> {
+        let StatementNode::Break = statement else { unreachable!() };
+
+        self.mark_span(SemanticSpanKind::Keyword, "break");
+        if self.loop_depth == 0 {
+            return Err("`break` can only be used inside a loop".to_string());
+        }
+        Ok(false)
+    }
+
+    fn validate_stmt_continue(&mut self, statement: &StatementNode) -> Result<bool, String> {
+        let StatementNode::Continue = statement else { unreachable!() };
+
+        self.mark_span(SemanticSpanKind::Keyword, "continue");
+        if self.loop_depth == 0 {
+            return Err("`continue` can only be used inside a loop".to_string());
+        }
+        Ok(false)
+    }
+
+    fn validate_stmt_return(&mut self, statement: &StatementNode) -> Result<bool, String> {
+        let StatementNode::Return(value) = statement else { unreachable!() };
+
+        self.mark_span(SemanticSpanKind::Keyword, "return");
+        self.validate_return(value.as_ref())?;
+        Ok(false)
+    }
+
+    fn validate_stmt_asm(&mut self, statement: &StatementNode) -> Result<bool, String> {
+        let StatementNode::AsmBlock { inputs, outputs, clobbers, .. } = statement else {
+            unreachable!()
+        };
+
+        for (_, expression) in inputs.iter().chain(outputs.iter()) {
+            self.validate_expr(expression)?;
+        }
+        Ok(!clobbers.iter().any(|clobber| clobber == "noreturn"))
     }
 
     fn validate_integer_match(
@@ -1109,6 +1237,15 @@ impl<'a> Validator<'a> {
 
         let result = self.validate_expr_inner(expression, expected);
         if let Ok(expression_type) = &result {
+            let address = expression as *const Expression as usize;
+            if let ExpressionType::Known(ty) = expression_type {
+                if let Some(name) = self.program.enum_identity(ty) {
+                    self.enum_sources.insert(address, name);
+                }
+            }
+            if let Some(name) = expected.and_then(|ty| self.program.enum_identity(ty)) {
+                self.enum_targets.insert(address, name);
+            }
             if let Some(expected) = expected {
                 self.expected_types.insert(
                     expression as *const Expression as usize,
@@ -1300,6 +1437,18 @@ impl<'a> Validator<'a> {
             for argument in args {
                 self.validate_expr(argument)?;
             }
+            self.suggestions = utils::suggestions::nearby(
+                name,
+                self.program
+                    .declaration_order
+                    .iter()
+                    .filter(|(candidate, _)| {
+                        self.program.functions.contains_key(*candidate)
+                            && !candidate.starts_with("__wave_")
+                    })
+                    .map(|(candidate, order)| (candidate.clone(), 0, *order))
+                    .collect(),
+            );
             return Err(format!("call to unknown function `{}`", name));
         };
 
@@ -1936,6 +2085,8 @@ pub fn analyze_semantic_facts(
     sources: &crate::source::SourceMap,
 ) -> Result<SemanticFacts, SemanticDiagnostic> {
     analyze_program_types(nodes, sources).map(|analysis| SemanticFacts {
+        enum_sources: analysis.enum_sources,
+        enum_targets: analysis.enum_targets,
         expression_types: analysis.analyzed_expression_types,
         variant_constructions: analysis.variant_constructions,
         variant_patterns: analysis.variant_patterns,
@@ -1954,6 +2105,8 @@ pub(crate) fn analyze_generic_method_calls(
 struct ProgramAnalysis {
     expression_types: HashMap<usize, WaveType>,
     analyzed_expression_types: HashMap<usize, AnalyzedExpressionType>,
+    enum_sources: HashMap<usize, String>,
+    enum_targets: HashMap<usize, String>,
     expected_types: HashMap<usize, WaveType>,
     variant_constructions: HashMap<usize, VariantConstruction>,
     variant_patterns: HashMap<usize, VariantPattern>,
@@ -1970,6 +2123,7 @@ fn analyze_program_types(
     sources: &crate::source::SourceMap,
 ) -> Result<ProgramAnalysis, SemanticDiagnostic> {
     crate::expression_depth::validate(nodes)?;
+    duplicates::validate(nodes, sources)?;
     let program = ProgramTypes::collect(nodes).map_err(|(index, message, primary)| {
         let mut diagnostic = semantic_diagnostic_for_top_level(nodes, index, message, primary);
         diagnostic.span = nodes
@@ -2060,6 +2214,8 @@ fn analyze_program_types(
     }
 
     Ok(ProgramAnalysis {
+        enum_sources: validator.enum_sources,
+        enum_targets: validator.enum_targets,
         expression_types: validator.expression_types,
         analyzed_expression_types: validator.analyzed_expression_types,
         expected_types: validator.expected_types,
@@ -2078,6 +2234,8 @@ fn semantic_diagnostic_for_top_level(
 ) -> SemanticDiagnostic {
     let primary = primary.or_else(|| nodes.get(index).map(top_level_span_hint));
     SemanticDiagnostic {
+        related: Vec::new(),
+        suggestions: Vec::new(),
         code: "E3001".to_string(),
         label: message.clone(),
         message,
@@ -2223,6 +2381,34 @@ fn validate_declaration_types(
                         enumeration.name,
                         display_wave_type(&enumeration.repr_type)
                     ))
+                } else if result.is_ok() {
+                    let ty = program.canonical_type(&enumeration.repr_type);
+                    let (bits, signed) = match ty {
+                        WaveType::Int(bits) => (bits, true),
+                        WaveType::Uint(bits) => (bits, false),
+                        _ => unreachable!(),
+                    };
+                    let mut status = Ok(());
+                    for variant in &enumeration.variants {
+                        let raw = &program.constant_values[&variant.name];
+                        let parsed = lexer::number::IntegerLiteral::parse(raw).unwrap();
+                        let mut value =
+                            utils::const_int::ConstInt::from_digits(&parsed.digits, parsed.radix)
+                                .unwrap();
+                        if parsed.negative {
+                            value = value.negated();
+                        }
+                        if !value.fits(bits, signed) {
+                            status = Err(format!(
+                                "enum `{}.{}` value is out of range for {}",
+                                enumeration.name,
+                                variant.name,
+                                display_wave_type(&ty)
+                            ));
+                            break;
+                        }
+                    }
+                    status
                 } else {
                     result
                 }

@@ -76,6 +76,8 @@ fn prepare_with_limit(nodes: &mut [ASTNode], limit: usize) -> Result<(), Semanti
                     let next_depth = depth + usize::from(constructor);
                     if next_depth > parser::expression_depth::MAX_EXPRESSION_DEPTH {
                         return Err(SemanticDiagnostic {
+                            related: Vec::new(),
+                            suggestions: Vec::new(),
                             code: "E3001".into(),
                             message: "expression nesting exceeds the maximum of 128 levels".into(),
                             top_level_index,
@@ -99,6 +101,8 @@ fn prepare_with_limit(nodes: &mut [ASTNode], limit: usize) -> Result<(), Semanti
                                     let default = parameter.initial_value.as_ref().unwrap();
                                     if !charge(default, &mut remaining) {
                                         return Err(SemanticDiagnostic {
+                                            related: Vec::new(),
+                                            suggestions: Vec::new(),
                                             code: "E3001".into(),
                                             message: format!("default argument preparation exceeds the limit of {limit} generated expression nodes"),
                                             top_level_index,

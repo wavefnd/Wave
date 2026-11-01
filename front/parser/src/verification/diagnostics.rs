@@ -30,6 +30,8 @@ pub struct SemanticSpanHint {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SemanticDiagnostic {
+    pub related: Vec<error::RelatedDiagnostic>,
+    pub suggestions: Vec<String>,
     pub code: String,
     pub message: String,
     pub top_level_index: usize,

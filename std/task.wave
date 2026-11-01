@@ -1,3 +1,4 @@
+import("std::net::error")::{NET_NATIVE_TIMEOUT, net_connect_pending};
 // Cooperative async tasks. Futures are lazy and single-consumer handles.
 // Complete or cancel outstanding work, then call shutdown to release the executor.
 // Windows sockets remain usable across shutdown; their IOCP is released after
@@ -220,7 +221,7 @@ fun _park_portable(blocking: bool) -> bool {
         var next_event: ptr<TaskSlot> = slot.event_next;
         if (slot.state == 4 && slot.kind == 1 && slot.deadline >= 0 && slot.deadline <= now) {
             if (slot.fd < 0) { _event_result(slot, 0); }
-            else { _event_result(slot, -110); }
+            else { _event_result(slot, NET_NATIVE_TIMEOUT as i32); }
         }
         slot = next_event;
     }
@@ -843,10 +844,12 @@ fun _park(blocking: bool) -> bool {
         if (slot.state == 4 && (slot.kind == 1 || slot.kind == 2) && slot.deadline >= 0 && slot.deadline <= now) {
             slot.deadline = -1;
             if (slot.kind == 1) {
-                if (slot.fd < 0) { _event_result(slot, 0); } else { _event_result(slot, -110); }
+                if (slot.fd < 0) { _event_result(slot, 0); } else { _event_result(slot, NET_NATIVE_TIMEOUT as i32); }
             } else {
-                slot.terminal = -110; _cancel_registration(slot);
-                if (!slot.registered) { _io_result(slot, -110); }
+                slot.terminal = NET_NATIVE_TIMEOUT; _cancel_registration(slot);
+                if (!slot.registered) {
+                    _io_result(slot, NET_NATIVE_TIMEOUT);
+                }
             }
         }
         slot = next_event;

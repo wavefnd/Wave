@@ -62,7 +62,7 @@ fun main() -> i32 {
 "#,
     );
     let ir = case.ir();
-    assert!(ir.contains("format_version 5"), "{ir}");
+    assert!(ir.contains("format_version 8"), "{ir}");
     assert!(ir.contains("x86_64-whale-linux"), "{ir}");
     assert!(ir.contains("phi"), "{ir}");
     assert!(ir.contains("call"), "{ir}");
@@ -622,7 +622,7 @@ fn failed_multi_input_whale_lowering_preserves_every_existing_output() {
     let success = case.run(&["--whale", "build", "main.wave", "second.wave", "--emit=ir"]);
     assert!(success.status.success(), "{}", String::from_utf8_lossy(&success.stderr));
     for name in ["main_1.wir", "second_2.wir"] {
-        assert!(fs::read_to_string(case.root.join(name)).unwrap().contains("format_version 5"));
+        assert!(fs::read_to_string(case.root.join(name)).unwrap().contains("format_version 8"));
     }
     let previous = fs::read(case.root.join("main_1.wir")).unwrap();
     let collision = case.run(&[
@@ -640,30 +640,31 @@ fn failed_multi_input_whale_lowering_preserves_every_existing_output() {
 
 #[test]
 fn named_unsupported_constructs_keep_exact_json_spans_and_previous_ir() {
-    for (name, source, token, description) in [
-        ("println", "fun main() { println(\"hello\"); }", "println", "println statement"),
-        (
-            "increment",
-            "fun main() -> i32 { var n: i32 = 1; return ++n; }",
-            "++n",
-            "increment/decrement expression",
-        ),
-    ] {
-        let case = Case::new(name, source);
-        fs::write(case.root.join("main.wir"), "previous IR").unwrap();
-        let result =
-            case.run(&["--whale", "build", "main.wave", "--emit=ir", "--error-format=json"]);
-        assert_eq!(result.status.code(), Some(1));
-        let text = String::from_utf8(result.stderr).unwrap();
-        let json = wson::parse_json(text.trim()).unwrap();
-        let error = json.get("error").unwrap();
-        assert_eq!(error.get_str("code"), Some("E4001"), "{text}");
-        assert!(error.get_str("message").unwrap().contains(description), "{text}");
-        assert_eq!(
-            error.get("span").unwrap().get_u64("start"),
-            Some(source.find(token).unwrap() as u64),
-            "{text}"
-        );
-        assert_eq!(fs::read_to_string(case.root.join("main.wir")).unwrap(), "previous IR");
-    }
+    let (name, source, token, description) =
+        ("println", "fun main() { println(\"hello\"); }", "println", "println statement");
+    let case = Case::new(name, source);
+    fs::write(case.root.join("main.wir"), "previous IR").unwrap();
+    let result = case.run(&["--whale", "build", "main.wave", "--emit=ir", "--error-format=json"]);
+    assert_eq!(result.status.code(), Some(1));
+    let text = String::from_utf8(result.stderr).unwrap();
+    let json = wson::parse_json(text.trim()).unwrap();
+    let error = json.get("error").unwrap();
+    assert_eq!(error.get_str("code"), Some("E4001"), "{text}");
+    assert!(error.get_str("message").unwrap().contains(description), "{text}");
+    assert_eq!(
+        error.get("span").unwrap().get_u64("start"),
+        Some(source.find(token).unwrap() as u64),
+        "{text}"
+    );
+    assert_eq!(fs::read_to_string(case.root.join("main.wir")).unwrap(), "previous IR");
+}
+
+#[test]
+fn scalar_enums_and_local_increments_reach_cli_ir() {
+    let case = Case::new(
+        "enum-increment",
+        "enum E -> i8 { First = -2, Next } fun main() -> i32 { var n: i8 = Next; var old: i8 = n++; return (old as i32) + ((++n) as i32); }",
+    );
+    let ir = case.ir();
+    assert!(ir.contains("format_version 8"), "{ir}");
 }

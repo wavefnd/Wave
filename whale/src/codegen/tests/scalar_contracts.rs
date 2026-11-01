@@ -5,7 +5,7 @@ use hir::TypedProgram;
 use whale_ir::*;
 
 fn run(module: &Module, args: &[ConstValue]) -> Result<Option<ConstValue>, InterpreterError> {
-    interpret_with_options(
+    super::interpret_checked(
         module,
         module.functions[0].id,
         args,
@@ -14,6 +14,7 @@ fn run(module: &Module, args: &[ConstValue]) -> Result<Option<ConstValue>, Inter
             max_call_depth: 16,
             max_frames: 64,
             max_live_values: 4096,
+            max_trace_frames: 32,
             ir_limits: IrLimits { max_nodes: 20_000, ..IrLimits::default() },
             memory_limits: MemoryLimits {
                 max_bytes: 4096,
@@ -170,7 +171,7 @@ fn direct_defaults_are_prepared_typed_and_evaluated_once_in_argument_order() {
 }
 
 #[test]
-fn float_division_and_remainder_verify_without_integer_traps_or_float_oracle_claims() {
+fn float_division_and_remainder_execute_without_integer_traps() {
     for ty in ["f32", "f64"] {
         for operator in ["/", "%"] {
             let ir = module(&format!(
@@ -179,11 +180,14 @@ fn float_division_and_remainder_verify_without_integer_traps_or_float_oracle_cla
             let text = print_module(&ir);
             assert!(text.contains(if operator == "/" { "fdiv" } else { "frem" }), "{text}");
             assert!(!text.contains("trap_if"), "{text}");
-            assert!(matches!(
-                run(&ir, &[]),
-                Err(InterpreterError::UnsupportedSignature(_)
-                    | InterpreterError::UnsupportedInstruction { .. })
-            ));
+            let bits = if ty == "f32" { 32 } else { 64 };
+            let arguments =
+                [6.0, 2.0].map(|n| ConstValue::F(FloatBits::from_f64(bits, n).unwrap()));
+            let expected = if operator == "/" { 3.0 } else { 0.0 };
+            assert_eq!(
+                run(&ir, &arguments).unwrap(),
+                Some(ConstValue::F(FloatBits::from_f64(bits, expected).unwrap()))
+            );
         }
         module(&format!(
             "fun probe(n: {ty}) -> {ty} {{ var x: {ty} = n; x /= 0.0; x %= -0.0; return x; }}"
@@ -249,7 +253,7 @@ fn generated_default_call_is_evaluated_once_with_ordered_effects() {
     }
     let program = TypedProgram::lower(nodes).unwrap();
     let ir = crate::codegen::lower(&program).unwrap();
-    let result = interpret_with_options(
+    let result = super::interpret_checked(
         &ir,
         ir.functions[0].id,
         &[],
@@ -259,7 +263,7 @@ fn generated_default_call_is_evaluated_once_with_ordered_effects() {
     assert_eq!(result.value, Some(ConstValue::I(9)));
     // Exactly probe + helper + pick frames; there is no duplicate default call.
     assert!(matches!(
-        interpret_with_options(
+        super::interpret_checked(
             &ir,
             ir.functions[0].id,
             &[],
@@ -270,7 +274,7 @@ fn generated_default_call_is_evaluated_once_with_ordered_effects() {
 }
 
 #[test]
-fn floating_ieee_fixture_round_trips_but_remains_unsupported_by_the_locked_oracle() {
+fn floating_ieee_fixture_executes_with_the_bounded_scalar_oracle() {
     let ir = module(include_str!("../../../../tests/fixtures/whale_float_defined.wave"));
     let text = print_module(&ir);
     for operation in ["fdiv f32", "frem f32", "fdiv f64", "frem f64"] {
@@ -278,5 +282,5 @@ fn floating_ieee_fixture_round_trips_but_remains_unsupported_by_the_locked_oracl
     }
     assert!(!text.contains("integer division"));
     assert!(!text.contains("integer remainder"));
-    assert!(matches!(run(&ir, &[]), Err(InterpreterError::UnsupportedInstruction { .. })));
+    assert_eq!(run(&ir, &[]).unwrap(), Some(ConstValue::I(0)));
 }

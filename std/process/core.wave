@@ -32,6 +32,35 @@ import("std::sys::process")::{
     kill,
 };
 
+#[target(os="linux")]
+fun _proc_pid_valid(pid: i64) -> bool {
+    return pid >= -2147483648 && pid <= 2147483647;
+}
+#[target(os="macos")]
+fun _proc_pid_valid(pid: i64) -> bool {
+    return pid >= -2147483648 && pid <= 2147483647;
+}
+#[target(os="freebsd")]
+fun _proc_pid_valid(pid: i64) -> bool {
+    return pid >= -2147483648 && pid <= 2147483647;
+}
+#[target(os="windows")]
+fun _proc_pid_valid(pid: i64) -> bool {
+    return true;
+}
+#[target(os="wasi")]
+fun _proc_pid_valid(pid: i64) -> bool {
+    return true;
+}
+#[target(os="none")]
+fun _proc_pid_valid(pid: i64) -> bool {
+    return true;
+}
+#[target(os="unknown")]
+fun _proc_pid_valid(pid: i64) -> bool {
+    return true;
+}
+
 pub fun proc_exit(code: i32) -> ! {
     exit(code);
 }
@@ -53,6 +82,9 @@ pub fun proc_execve(path: str, argv: ptr<ptr<i8>>, envp: ptr<ptr<i8>>) -> i64 {
 }
 
 pub fun proc_waitpid_raw(pid: i64, status: ptr<i32>, options: i32) -> i64 {
+    if (!_proc_pid_valid(pid)) {
+        return -22;
+    }
     while (true) {
         var r: i64 = waitpid(pid, status, options);
         if (r == PROC_ERR_INTR) {
@@ -65,5 +97,8 @@ pub fun proc_waitpid_raw(pid: i64, status: ptr<i32>, options: i32) -> i64 {
 }
 
 pub fun proc_kill(pid: i64, sig: i32) -> i64 {
+    if (!_proc_pid_valid(pid)) {
+        return -22;
+    }
     return kill(pid, sig);
 }

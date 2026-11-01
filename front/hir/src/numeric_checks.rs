@@ -380,6 +380,7 @@ impl Checker<'_> {
     fn inspect(&mut self, expr: &Expression, scope: &Scope) -> Result<(), Failure> {
         self.eval(expr, scope).map(|_| ())
     }
+
     // Syntactic eligibility is checked even in a dead logical operand; only
     // evaluation errors are suppressed by short-circuiting.
     fn require_constant(&self, expr: &Expression) -> Result<(), Failure> {
@@ -527,6 +528,8 @@ pub(super) fn validate(
     program: &TypedProgram,
 ) -> Result<HashMap<ExpressionId, ConstantValue>, SemanticDiagnostic> {
     let diagnostic = |index, (id, message): Failure| SemanticDiagnostic {
+        related: Vec::new(),
+        suggestions: Vec::new(),
         code: "E3001".into(),
         message: message.clone(),
         top_level_index: index,

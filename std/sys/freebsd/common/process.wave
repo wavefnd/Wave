@@ -56,9 +56,15 @@ pub fun execve(
 }
 
 pub fun waitpid(pid: i64, status: ptr<i32>, options: i32) -> i64 {
+    if (pid < -2147483648 || pid > 2147483647) {
+        return -22;
+    }
     return syscall4(7, pid, status as i64, options as i64, 0);
 }
 
 pub fun kill(pid: i64, sig: i32) -> i64 {
+    if (pid < -2147483648 || pid > 2147483647) {
+        return -22;
+    }
     return syscall2(37, pid, sig as i64);
 }

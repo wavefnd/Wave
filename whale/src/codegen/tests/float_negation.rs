@@ -91,6 +91,7 @@ fn floating_negation_flips_only_the_sign_bit_and_double_negation_restores_payloa
                     max_call_depth: 1,
                     max_frames: 1,
                     max_live_values: 128,
+                    max_trace_frames: 32,
                     ir_limits: IrLimits { max_nodes: 1000, ..IrLimits::default() },
                     memory_limits: MemoryLimits {
                         max_bytes: 64,
@@ -99,7 +100,7 @@ fn floating_negation_flips_only_the_sign_bit_and_double_negation_restores_payloa
                         max_work: 1000,
                     },
                 };
-                let result = interpret_with_options(
+                let result = super::interpret_checked(
                     &ir,
                     ir.functions[0].id,
                     &[ConstValue::U(*pattern)],

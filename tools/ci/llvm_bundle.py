@@ -3,11 +3,13 @@
 
 import hashlib
 import json
-from pathlib import Path
+import os
 import re
 import shutil
+import stat
 import tarfile
 import tempfile
+from pathlib import Path
 from urllib.parse import urlsplit
 
 from tools.ci.build import download
@@ -37,9 +39,61 @@ def identity(target):
     }
 
 
+def check_tree(root):
+    """Resolve every link component without allowing an outside intermediate hop."""
+    root = Path(root).resolve(strict=True)
+
+    def regular_target(relative):
+        pending = list(relative.parts)
+        current = root
+        seen = set()
+        while pending:
+            part = pending.pop(0)
+            if part in ("", "."):
+                continue
+            if part == "..":
+                if current == root:
+                    raise ValueError("LLVM link escapes bundle")
+                current = current.parent
+                continue
+            current = current / part
+            info = current.lstat()
+            if stat.S_ISLNK(info.st_mode):
+                if current in seen:
+                    raise ValueError("cyclic LLVM bundle link")
+                seen.add(current)
+                target = Path(os.readlink(current))
+                if target.is_absolute():
+                    raise ValueError("absolute LLVM bundle link")
+                pending = list(target.parts) + pending
+                current = current.parent
+            elif pending and not stat.S_ISDIR(info.st_mode):
+                raise ValueError("LLVM link traverses a non-directory component")
+        if not current.is_file():
+            raise ValueError("LLVM link must target a regular file")
+
+    def unreadable(error):
+        raise ValueError(f"cannot inspect complete LLVM bundle: {error}") from error
+
+    for directory, folders, files in os.walk(
+        root, followlinks=False, onerror=unreadable
+    ):
+        for name in folders + files:
+            path = Path(directory) / name
+            mode = path.lstat().st_mode
+            if stat.S_ISLNK(mode):
+                try:
+                    regular_target(path.relative_to(root))
+                except (OSError, RuntimeError) as error:
+                    raise ValueError(f"invalid LLVM bundle link: {path}") from error
+            elif not (stat.S_ISDIR(mode) or stat.S_ISREG(mode)):
+                raise ValueError(f"unsupported LLVM bundle entry: {path}")
+
+
 def check_layout(prefix, target):
     """Reject wrong-architecture/incomplete SDKs before executing their tools."""
     prefix = Path(prefix).resolve()
+    check_tree(prefix)
     metadata = json.loads((prefix / "bundle.json").read_text())
     if any(metadata.get(k) != v for k, v in identity(target).items()):
         raise ValueError("LLVM bundle identity does not match the pinned toolchain")

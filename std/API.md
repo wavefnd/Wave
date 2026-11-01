@@ -4068,40 +4068,138 @@ pub fun net_error(kind: i32, native_code: i64) -> NetError
 pub fun net_error_from_native(native_code: i64) -> NetError
 ```
 
-[Declaration](net/error.wave#L141)
+[Declaration](net/error.wave#L150)
 
 ```wave
 pub fun net_result_ok<T>(value: T) -> NetResult<T>
 ```
 
-[Declaration](net/error.wave#L149)
+[Declaration](net/error.wave#L158)
 
 ```wave
 pub fun net_result_err<T>(fallback: T, error: NetError) -> NetResult<T>
 ```
 
-[Declaration](net/error.wave#L157)
+[Declaration](net/error.wave#L166)
 
 ```wave
 pub fun net_io_from_native(value: i64) -> NetIoResult
 ```
 
-[Declaration](net/error.wave#L181)
+[Declaration](net/error.wave#L190)
 
 ```wave
 pub fun net_io_ok(count: i64) -> NetIoResult
 ```
 
-[Declaration](net/error.wave#L185)
+[Declaration](net/error.wave#L194)
 
 ```wave
 pub fun net_io_eof(count: i64) -> NetIoResult
 ```
 
-[Declaration](net/error.wave#L193)
+[Declaration](net/error.wave#L202)
 
 ```wave
 pub fun net_io_error(count: i64, native_code: i64) -> NetIoResult
+```
+
+[Declaration](net/error.wave#L211)
+
+```wave
+#[target(os="linux")]
+pub const NET_NATIVE_TIMEOUT: i64 = -110;
+```
+
+[Declaration](net/error.wave#L213)
+
+```wave
+#[target(os="linux")]
+pub fun net_connect_pending(code: i64) -> bool
+```
+
+[Declaration](net/error.wave#L217)
+
+```wave
+#[target(os="macos")]
+pub const NET_NATIVE_TIMEOUT: i64 = -60;
+```
+
+[Declaration](net/error.wave#L219)
+
+```wave
+#[target(os="macos")]
+pub fun net_connect_pending(code: i64) -> bool
+```
+
+[Declaration](net/error.wave#L223)
+
+```wave
+#[target(os="freebsd")]
+pub const NET_NATIVE_TIMEOUT: i64 = -60;
+```
+
+[Declaration](net/error.wave#L225)
+
+```wave
+#[target(os="freebsd")]
+pub fun net_connect_pending(code: i64) -> bool
+```
+
+[Declaration](net/error.wave#L229)
+
+```wave
+#[target(os="windows")]
+pub const NET_NATIVE_TIMEOUT: i64 = -10060;
+```
+
+[Declaration](net/error.wave#L231)
+
+```wave
+#[target(os="windows")]
+pub fun net_connect_pending(code: i64) -> bool
+```
+
+[Declaration](net/error.wave#L235)
+
+```wave
+#[target(os="none")]
+pub const NET_NATIVE_TIMEOUT: i64 = -110;
+```
+
+[Declaration](net/error.wave#L237)
+
+```wave
+#[target(os="none")]
+pub fun net_connect_pending(code: i64) -> bool
+```
+
+[Declaration](net/error.wave#L241)
+
+```wave
+#[target(os="unknown")]
+pub const NET_NATIVE_TIMEOUT: i64 = -110;
+```
+
+[Declaration](net/error.wave#L243)
+
+```wave
+#[target(os="unknown")]
+pub fun net_connect_pending(code: i64) -> bool
+```
+
+[Declaration](net/error.wave#L247)
+
+```wave
+#[target(os="wasi")]
+pub const NET_NATIVE_TIMEOUT: i64 = -73;
+```
+
+[Declaration](net/error.wave#L249)
+
+```wave
+#[target(os="wasi")]
+pub fun net_connect_pending(code: i64) -> bool
 ```
 
 ## `std::net::event`
@@ -4491,169 +4589,191 @@ pub fun net_resolve_from_table(
 
 [Source](net/socket_base.wave)
 
-[Declaration](net/socket_base.wave#L33)
+[Declaration](net/socket_base.wave#L34)
 
 ```wave
+#[target(os="windows")]
 pub fun net_fd_valid(fd: i64) -> bool
 ```
 
-[Declaration](net/socket_base.wave#L35)
+[Declaration](net/socket_base.wave#L36)
+
+```wave
+#[target(os="linux")]
+pub fun net_fd_valid(fd: i64) -> bool
+```
+
+[Declaration](net/socket_base.wave#L40)
+
+```wave
+#[target(os="macos")]
+pub fun net_fd_valid(fd: i64) -> bool
+```
+
+[Declaration](net/socket_base.wave#L44)
+
+```wave
+#[target(os="freebsd")]
+pub fun net_fd_valid(fd: i64) -> bool
+```
+
+[Declaration](net/socket_base.wave#L51)
 
 ```wave
 pub fun net_set_reuseaddr(fd: i64) -> i64
 ```
 
-[Declaration](net/socket_base.wave#L65)
+[Declaration](net/socket_base.wave#L83)
 
 ```wave
 pub fun net_socket_tcp_v4() -> i64
 ```
 
-[Declaration](net/socket_base.wave#L66)
+[Declaration](net/socket_base.wave#L84)
 
 ```wave
 pub fun net_socket_tcp_v6() -> i64
 ```
 
-[Declaration](net/socket_base.wave#L67)
+[Declaration](net/socket_base.wave#L85)
 
 ```wave
 pub fun net_socket_udp_v4() -> i64
 ```
 
-[Declaration](net/socket_base.wave#L68)
+[Declaration](net/socket_base.wave#L86)
 
 ```wave
 pub fun net_socket_udp_v6() -> i64
 ```
 
-[Declaration](net/socket_base.wave#L81)
+[Declaration](net/socket_base.wave#L123)
 
 ```wave
 pub fun net_decode_native_v4(address: ptr<i8>) -> SocketAddrV4
 ```
 
-[Declaration](net/socket_base.wave#L86)
+[Declaration](net/socket_base.wave#L128)
 
 ```wave
 pub fun net_bind_v4(fd: i64, addr: NetAddrV4) -> i64
 ```
 
-[Declaration](net/socket_base.wave#L91)
+[Declaration](net/socket_base.wave#L136)
 
 ```wave
 pub fun net_bind_socket_v4(fd: i64, addr: SocketAddrV4) -> i64
 ```
 
-[Declaration](net/socket_base.wave#L95)
+[Declaration](net/socket_base.wave#L143)
 
 ```wave
 pub fun net_connect_v4(fd: i64, addr: NetAddrV4) -> i64
 ```
 
-[Declaration](net/socket_base.wave#L100)
+[Declaration](net/socket_base.wave#L151)
 
 ```wave
 pub fun net_connect_socket_v4(fd: i64, addr: SocketAddrV4) -> i64
 ```
 
-[Declaration](net/socket_base.wave#L104)
+[Declaration](net/socket_base.wave#L158)
 
 ```wave
 pub fun net_accept_v4(fd: i64, out_addr: ptr<NetAddrV4>) -> i64
 ```
 
-[Declaration](net/socket_base.wave#L114)
+[Declaration](net/socket_base.wave#L174)
 
 ```wave
 pub fun net_accept_socket_v4(fd: i64, out_addr: ptr<SocketAddrV4>) -> i64
 ```
 
-[Declaration](net/socket_base.wave#L139)
+[Declaration](net/socket_base.wave#L205)
 
 ```wave
 pub fun net_decode_native_v6(address: ptr<i8>) -> SocketAddrV6
 ```
 
-[Declaration](net/socket_base.wave#L144)
+[Declaration](net/socket_base.wave#L210)
 
 ```wave
 pub fun net_bind_v6(fd: i64, addr: SocketAddrV6) -> i64
 ```
 
-[Declaration](net/socket_base.wave#L149)
+[Declaration](net/socket_base.wave#L218)
 
 ```wave
 pub fun net_connect_v6(fd: i64, addr: SocketAddrV6) -> i64
 ```
 
-[Declaration](net/socket_base.wave#L154)
+[Declaration](net/socket_base.wave#L226)
 
 ```wave
 pub fun net_accept_v6(fd: i64, out_addr: ptr<SocketAddrV6>) -> i64
 ```
 
-[Declaration](net/socket_base.wave#L164)
+[Declaration](net/socket_base.wave#L242)
 
 ```wave
 pub fun net_local_addr_v4(fd: i64, out_addr: ptr<SocketAddrV4>) -> i64
 ```
 
-[Declaration](net/socket_base.wave#L173)
+[Declaration](net/socket_base.wave#L259)
 
 ```wave
 pub fun net_peer_addr_v4(fd: i64, out_addr: ptr<SocketAddrV4>) -> i64
 ```
 
-[Declaration](net/socket_base.wave#L182)
+[Declaration](net/socket_base.wave#L276)
 
 ```wave
 pub fun net_local_addr_v6(fd: i64, out_addr: ptr<SocketAddrV6>) -> i64
 ```
 
-[Declaration](net/socket_base.wave#L191)
+[Declaration](net/socket_base.wave#L293)
 
 ```wave
 pub fun net_peer_addr_v6(fd: i64, out_addr: ptr<SocketAddrV6>) -> i64
 ```
 
-[Declaration](net/socket_base.wave#L209)
+[Declaration](net/socket_base.wave#L319)
 
 ```wave
 pub fun net_send_all(fd: i64, buf: ptr<u8>, len: i64, flags: i32) -> i64
 ```
 
-[Declaration](net/socket_base.wave#L228)
+[Declaration](net/socket_base.wave#L341)
 
 ```wave
 pub fun net_send_all_io(fd: i64, buf: ptr<u8>, len: i64, flags: i32) -> NetIoResult
 ```
 
-[Declaration](net/socket_base.wave#L249)
+[Declaration](net/socket_base.wave#L365)
 
 ```wave
 pub fun net_send_once(fd: i64, buf: ptr<u8>, len: i64, flags: i32) -> i64
 ```
 
-[Declaration](net/socket_base.wave#L257)
+[Declaration](net/socket_base.wave#L376)
 
 ```wave
 pub fun net_recv_once(fd: i64, buf: ptr<u8>, len: i64, flags: i32) -> i64
 ```
 
-[Declaration](net/socket_base.wave#L265)
+[Declaration](net/socket_base.wave#L387)
 
 ```wave
 pub fun net_recv_exact(fd: i64, buf: ptr<u8>, len: i64, flags: i32) -> i64
 ```
 
-[Declaration](net/socket_base.wave#L284)
+[Declaration](net/socket_base.wave#L412)
 
 ```wave
 pub fun net_recv_exact_io(fd: i64, buf: ptr<u8>, len: i64, flags: i32) -> NetIoResult
 ```
 
-[Declaration](net/socket_base.wave#L299)
+[Declaration](net/socket_base.wave#L433)
 
 ```wave
 pub fun net_sendto_v4(
@@ -4661,7 +4781,7 @@ pub fun net_sendto_v4(
 ) -> i64
 ```
 
-[Declaration](net/socket_base.wave#L313)
+[Declaration](net/socket_base.wave#L450)
 
 ```wave
 pub fun net_recvfrom_v4(
@@ -4669,7 +4789,7 @@ pub fun net_recvfrom_v4(
 ) -> i64
 ```
 
-[Declaration](net/socket_base.wave#L329)
+[Declaration](net/socket_base.wave#L472)
 
 ```wave
 pub fun net_sendto_v6(
@@ -4677,7 +4797,7 @@ pub fun net_sendto_v6(
 ) -> i64
 ```
 
-[Declaration](net/socket_base.wave#L343)
+[Declaration](net/socket_base.wave#L489)
 
 ```wave
 pub fun net_recvfrom_v6(
@@ -4685,19 +4805,19 @@ pub fun net_recvfrom_v6(
 ) -> i64
 ```
 
-[Declaration](net/socket_base.wave#L359)
+[Declaration](net/socket_base.wave#L511)
 
 ```wave
 pub fun net_close(fd: i64) -> i64
 ```
 
-[Declaration](net/socket_base.wave#L364)
+[Declaration](net/socket_base.wave#L518)
 
 ```wave
 pub fun net_shutdown(fd: i64, how: i32) -> i64
 ```
 
-[Declaration](net/socket_base.wave#L370)
+[Declaration](net/socket_base.wave#L526)
 
 ```wave
 pub fun net_shutdown_close(fd: i64)
@@ -4707,147 +4827,147 @@ pub fun net_shutdown_close(fd: i64)
 
 [Source](net/socketopt.wave)
 
-[Declaration](net/socketopt.wave#L31)
+[Declaration](net/socketopt.wave#L33)
 
 ```wave
 #[target(os="linux")]
 pub fun net_set_nonblock(fd: i64, enabled: i32) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L35)
+[Declaration](net/socketopt.wave#L40)
 
 ```wave
 #[target(os="macos")]
 pub fun net_set_nonblock(fd: i64, enabled: i32) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L39)
+[Declaration](net/socketopt.wave#L47)
 
 ```wave
 #[target(os="freebsd")]
 pub fun net_set_nonblock(fd: i64, enabled: i32) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L43)
+[Declaration](net/socketopt.wave#L54)
 
 ```wave
 #[target(os="windows")]
 pub fun net_set_nonblock(fd: i64, enabled: i32) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L76)
+[Declaration](net/socketopt.wave#L90)
 
 ```wave
 #[target(os="linux")]
 pub fun net_get_nonblock(fd: i64) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L78)
+[Declaration](net/socketopt.wave#L97)
 
 ```wave
 #[target(os="macos")]
 pub fun net_get_nonblock(fd: i64) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L80)
+[Declaration](net/socketopt.wave#L104)
 
 ```wave
 #[target(os="freebsd")]
 pub fun net_get_nonblock(fd: i64) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L82)
+[Declaration](net/socketopt.wave#L111)
 
 ```wave
 #[target(os="windows")]
 pub fun net_get_nonblock(fd: i64) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L106)
+[Declaration](net/socketopt.wave#L140)
 
 ```wave
 pub fun net_set_reuseaddr_flag(fd: i64, enabled: i32) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L112)
+[Declaration](net/socketopt.wave#L149)
 
 ```wave
 pub fun net_get_reuseaddr_flag(fd: i64) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L134)
+[Declaration](net/socketopt.wave#L174)
 
 ```wave
 pub fun net_set_tcp_nodelay(fd: i64, enabled: bool) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L138)
+[Declaration](net/socketopt.wave#L181)
 
 ```wave
 pub fun net_get_tcp_nodelay(fd: i64) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L142)
+[Declaration](net/socketopt.wave#L188)
 
 ```wave
 pub fun net_set_keepalive(fd: i64, enabled: bool) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L146)
+[Declaration](net/socketopt.wave#L195)
 
 ```wave
 pub fun net_get_keepalive(fd: i64) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L150)
+[Declaration](net/socketopt.wave#L202)
 
 ```wave
 pub fun net_set_recv_buffer(fd: i64, size: i32) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L155)
+[Declaration](net/socketopt.wave#L210)
 
 ```wave
 pub fun net_get_recv_buffer(fd: i64) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L159)
+[Declaration](net/socketopt.wave#L217)
 
 ```wave
 pub fun net_set_send_buffer(fd: i64, size: i32) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L164)
+[Declaration](net/socketopt.wave#L225)
 
 ```wave
 pub fun net_get_send_buffer(fd: i64) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L168)
+[Declaration](net/socketopt.wave#L232)
 
 ```wave
 pub fun net_set_broadcast(fd: i64, enabled: bool) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L172)
+[Declaration](net/socketopt.wave#L239)
 
 ```wave
 pub fun net_get_broadcast(fd: i64) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L176)
+[Declaration](net/socketopt.wave#L246)
 
 ```wave
 pub fun net_set_ipv4_ttl(fd: i64, ttl: i32) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L181)
+[Declaration](net/socketopt.wave#L254)
 
 ```wave
 pub fun net_get_ipv4_ttl(fd: i64) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L185)
+[Declaration](net/socketopt.wave#L261)
 
 ```wave
 pub struct NetIpv4Membership {
@@ -4856,7 +4976,7 @@ pub struct NetIpv4Membership {
 }
 ```
 
-[Declaration](net/socketopt.wave#L190)
+[Declaration](net/socketopt.wave#L266)
 
 ```wave
 pub struct NetIpv6Membership {
@@ -4865,124 +4985,124 @@ pub struct NetIpv6Membership {
 }
 ```
 
-[Declaration](net/socketopt.wave#L215)
+[Declaration](net/socketopt.wave#L291)
 
 ```wave
 pub fun net_join_multicast_v4(fd: i64, group: Ipv4Addr, interface: Ipv4Addr) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L226)
+[Declaration](net/socketopt.wave#L305)
 
 ```wave
 pub fun net_leave_multicast_v4(fd: i64, group: Ipv4Addr, interface: Ipv4Addr) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L237)
+[Declaration](net/socketopt.wave#L319)
 
 ```wave
 pub fun net_join_multicast_v6(fd: i64, group: Ipv6Addr, interface_index: u32) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L243)
+[Declaration](net/socketopt.wave#L328)
 
 ```wave
 pub fun net_leave_multicast_v6(fd: i64, group: Ipv6Addr, interface_index: u32) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L293)
+[Declaration](net/socketopt.wave#L381)
 
 ```wave
 pub fun net_set_multicast_interface_v4(fd: i64, interface: Ipv4Addr) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L298)
+[Declaration](net/socketopt.wave#L389)
 
 ```wave
 pub fun net_get_multicast_interface_v4(fd: i64) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L306)
+[Declaration](net/socketopt.wave#L400)
 
 ```wave
 pub fun net_set_multicast_ttl_v4(fd: i64, ttl: i32) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L311)
+[Declaration](net/socketopt.wave#L408)
 
 ```wave
 pub fun net_get_multicast_ttl_v4(fd: i64) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L315)
+[Declaration](net/socketopt.wave#L415)
 
 ```wave
 pub fun net_set_multicast_loop_v4(fd: i64, enabled: bool) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L319)
+[Declaration](net/socketopt.wave#L422)
 
 ```wave
 pub fun net_get_multicast_loop_v4(fd: i64) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L323)
+[Declaration](net/socketopt.wave#L429)
 
 ```wave
 pub fun net_set_multicast_interface_v6(fd: i64, interface_index: u32) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L327)
+[Declaration](net/socketopt.wave#L436)
 
 ```wave
 pub fun net_get_multicast_interface_v6(fd: i64) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L331)
+[Declaration](net/socketopt.wave#L443)
 
 ```wave
 pub fun net_set_multicast_hops_v6(fd: i64, hops: i32) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L336)
+[Declaration](net/socketopt.wave#L451)
 
 ```wave
 pub fun net_get_multicast_hops_v6(fd: i64) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L340)
+[Declaration](net/socketopt.wave#L458)
 
 ```wave
 pub fun net_set_multicast_loop_v6(fd: i64, enabled: bool) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L344)
+[Declaration](net/socketopt.wave#L465)
 
 ```wave
 pub fun net_get_multicast_loop_v6(fd: i64) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L349)
+[Declaration](net/socketopt.wave#L473)
 
 ```wave
 #[target(os="linux")]
 pub fun net_set_reuseport_flag(fd: i64, enabled: i32) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L353)
+[Declaration](net/socketopt.wave#L480)
 
 ```wave
 #[target(os="macos")]
 pub fun net_set_reuseport_flag(fd: i64, enabled: i32) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L357)
+[Declaration](net/socketopt.wave#L487)
 
 ```wave
 #[target(os="freebsd")]
 pub fun net_set_reuseport_flag(fd: i64, enabled: i32) -> i64
 ```
 
-[Declaration](net/socketopt.wave#L361)
+[Declaration](net/socketopt.wave#L494)
 
 ```wave
 #[target(os="windows")]
@@ -5085,7 +5205,7 @@ pub fun tcp_connect_v6(addr: SocketAddrV6) -> NetResult<TcpStream>
 pub fun tcp_connect_addr(addr: SocketAddr) -> NetResult<TcpStream>
 ```
 
-[Declaration](net/tcp.wave#L228)
+[Declaration](net/tcp.wave#L227)
 
 ```wave
 pub fun tcp_connect_timeout(
@@ -5093,7 +5213,7 @@ pub fun tcp_connect_timeout(
 ) -> NetResult<TcpStream>
 ```
 
-[Declaration](net/tcp.wave#L242)
+[Declaration](net/tcp.wave#L241)
 
 ```wave
 pub fun tcp_connect_v6_timeout(
@@ -5101,7 +5221,7 @@ pub fun tcp_connect_v6_timeout(
 ) -> NetResult<TcpStream>
 ```
 
-[Declaration](net/tcp.wave#L256)
+[Declaration](net/tcp.wave#L255)
 
 ```wave
 pub fun tcp_connect_addr_timeout(
@@ -5109,85 +5229,85 @@ pub fun tcp_connect_addr_timeout(
 ) -> NetResult<TcpStream>
 ```
 
-[Declaration](net/tcp.wave#L272)
+[Declaration](net/tcp.wave#L271)
 
 ```wave
 pub fun tcp_listener_local_addr_v4(listener: TcpListener) -> NetResult<SocketAddrV4>
 ```
 
-[Declaration](net/tcp.wave#L281)
+[Declaration](net/tcp.wave#L280)
 
 ```wave
 pub fun tcp_stream_local_addr_v4(stream: TcpStream) -> NetResult<SocketAddrV4>
 ```
 
-[Declaration](net/tcp.wave#L290)
+[Declaration](net/tcp.wave#L289)
 
 ```wave
 pub fun tcp_stream_peer_addr_v4(stream: TcpStream) -> NetResult<SocketAddrV4>
 ```
 
-[Declaration](net/tcp.wave#L299)
+[Declaration](net/tcp.wave#L298)
 
 ```wave
 pub fun tcp_listener_local_addr_v6(listener: TcpListener) -> NetResult<SocketAddrV6>
 ```
 
-[Declaration](net/tcp.wave#L308)
+[Declaration](net/tcp.wave#L307)
 
 ```wave
 pub fun tcp_stream_local_addr_v6(stream: TcpStream) -> NetResult<SocketAddrV6>
 ```
 
-[Declaration](net/tcp.wave#L317)
+[Declaration](net/tcp.wave#L316)
 
 ```wave
 pub fun tcp_stream_peer_addr_v6(stream: TcpStream) -> NetResult<SocketAddrV6>
 ```
 
-[Declaration](net/tcp.wave#L326)
+[Declaration](net/tcp.wave#L325)
 
 ```wave
 pub fun tcp_read(stream: TcpStream, buf: ptr<u8>, size: i64) -> i64
 ```
 
-[Declaration](net/tcp.wave#L330)
+[Declaration](net/tcp.wave#L329)
 
 ```wave
 pub fun tcp_write(stream: TcpStream, buf: ptr<u8>, size: i64) -> i64
 ```
 
-[Declaration](net/tcp.wave#L334)
+[Declaration](net/tcp.wave#L333)
 
 ```wave
 pub fun tcp_write_all(stream: TcpStream, buf: ptr<u8>, size: i64) -> i64
 ```
 
-[Declaration](net/tcp.wave#L338)
+[Declaration](net/tcp.wave#L337)
 
 ```wave
 pub fun tcp_read_exact(stream: TcpStream, buf: ptr<u8>, size: i64) -> i64
 ```
 
-[Declaration](net/tcp.wave#L342)
+[Declaration](net/tcp.wave#L341)
 
 ```wave
 pub fun tcp_read_result(stream: TcpStream, buf: ptr<u8>, size: i64) -> NetIoResult
 ```
 
-[Declaration](net/tcp.wave#L350)
+[Declaration](net/tcp.wave#L349)
 
 ```wave
 pub fun tcp_wait_read(stream: TcpStream, timeout_ms: i32) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L358)
+[Declaration](net/tcp.wave#L357)
 
 ```wave
 pub fun tcp_wait_write(stream: TcpStream, timeout_ms: i32) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L371)
+[Declaration](net/tcp.wave#L370)
 
 ```wave
 pub fun tcp_read_timeout(
@@ -5195,7 +5315,7 @@ pub fun tcp_read_timeout(
 ) -> NetIoResult
 ```
 
-[Declaration](net/tcp.wave#L381)
+[Declaration](net/tcp.wave#L380)
 
 ```wave
 pub fun tcp_write_timeout(
@@ -5203,25 +5323,25 @@ pub fun tcp_write_timeout(
 ) -> NetIoResult
 ```
 
-[Declaration](net/tcp.wave#L391)
+[Declaration](net/tcp.wave#L390)
 
 ```wave
 pub fun tcp_write_result(stream: TcpStream, buf: ptr<u8>, size: i64) -> NetIoResult
 ```
 
-[Declaration](net/tcp.wave#L397)
+[Declaration](net/tcp.wave#L396)
 
 ```wave
 pub fun tcp_write_all_result(stream: TcpStream, buf: ptr<u8>, size: i64) -> NetIoResult
 ```
 
-[Declaration](net/tcp.wave#L401)
+[Declaration](net/tcp.wave#L400)
 
 ```wave
 pub fun tcp_read_exact_result(stream: TcpStream, buf: ptr<u8>, size: i64) -> NetIoResult
 ```
 
-[Declaration](net/tcp.wave#L405)
+[Declaration](net/tcp.wave#L404)
 
 ```wave
 pub fun tcp_write_vectored(
@@ -5229,7 +5349,7 @@ pub fun tcp_write_vectored(
 ) -> NetIoResult
 ```
 
-[Declaration](net/tcp.wave#L411)
+[Declaration](net/tcp.wave#L410)
 
 ```wave
 pub fun tcp_read_vectored(
@@ -5237,133 +5357,133 @@ pub fun tcp_read_vectored(
 ) -> NetIoResult
 ```
 
-[Declaration](net/tcp.wave#L417)
+[Declaration](net/tcp.wave#L416)
 
 ```wave
 pub fun tcp_write_str(stream: TcpStream, text: str) -> NetIoResult
 ```
 
-[Declaration](net/tcp.wave#L422)
+[Declaration](net/tcp.wave#L421)
 
 ```wave
 pub fun tcp_shutdown_read(stream: TcpStream) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L428)
+[Declaration](net/tcp.wave#L427)
 
 ```wave
 pub fun tcp_shutdown_write(stream: TcpStream) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L434)
+[Declaration](net/tcp.wave#L433)
 
 ```wave
 pub fun tcp_shutdown_both(stream: TcpStream) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L440)
+[Declaration](net/tcp.wave#L439)
 
 ```wave
 pub fun tcp_stream_set_nonblock(stream: TcpStream, enabled: bool) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L446)
+[Declaration](net/tcp.wave#L445)
 
 ```wave
 pub fun tcp_listener_set_nonblock(listener: TcpListener, enabled: bool) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L452)
+[Declaration](net/tcp.wave#L451)
 
 ```wave
 pub fun tcp_stream_is_nonblock(stream: TcpStream) -> NetResult<bool>
 ```
 
-[Declaration](net/tcp.wave#L460)
+[Declaration](net/tcp.wave#L459)
 
 ```wave
 pub fun tcp_listener_is_nonblock(listener: TcpListener) -> NetResult<bool>
 ```
 
-[Declaration](net/tcp.wave#L487)
+[Declaration](net/tcp.wave#L486)
 
 ```wave
 pub fun tcp_set_nodelay(stream: TcpStream, enabled: bool) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L491)
+[Declaration](net/tcp.wave#L490)
 
 ```wave
 pub fun tcp_nodelay(stream: TcpStream) -> NetResult<bool>
 ```
 
-[Declaration](net/tcp.wave#L495)
+[Declaration](net/tcp.wave#L494)
 
 ```wave
 pub fun tcp_set_keepalive(stream: TcpStream, enabled: bool) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L499)
+[Declaration](net/tcp.wave#L498)
 
 ```wave
 pub fun tcp_keepalive(stream: TcpStream) -> NetResult<bool>
 ```
 
-[Declaration](net/tcp.wave#L503)
+[Declaration](net/tcp.wave#L502)
 
 ```wave
 pub fun tcp_set_recv_buffer(stream: TcpStream, size: i32) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L507)
+[Declaration](net/tcp.wave#L506)
 
 ```wave
 pub fun tcp_recv_buffer(stream: TcpStream) -> NetResult<i64>
 ```
 
-[Declaration](net/tcp.wave#L511)
+[Declaration](net/tcp.wave#L510)
 
 ```wave
 pub fun tcp_set_send_buffer(stream: TcpStream, size: i32) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L515)
+[Declaration](net/tcp.wave#L514)
 
 ```wave
 pub fun tcp_send_buffer(stream: TcpStream) -> NetResult<i64>
 ```
 
-[Declaration](net/tcp.wave#L520)
+[Declaration](net/tcp.wave#L519)
 
 ```wave
 pub fun tcp_from_fd(fd: i64) -> NetResult<TcpStream>
 ```
 
-[Declaration](net/tcp.wave#L525)
+[Declaration](net/tcp.wave#L524)
 
 ```wave
 pub fun tcp_listener_from_fd(fd: i64) -> NetResult<TcpListener>
 ```
 
-[Declaration](net/tcp.wave#L530)
+[Declaration](net/tcp.wave#L529)
 
 ```wave
 pub fun tcp_stream_valid(stream: TcpStream) -> bool
 ```
 
-[Declaration](net/tcp.wave#L531)
+[Declaration](net/tcp.wave#L530)
 
 ```wave
 pub fun tcp_listener_valid(listener: TcpListener) -> bool
 ```
 
-[Declaration](net/tcp.wave#L533)
+[Declaration](net/tcp.wave#L532)
 
 ```wave
 pub fun tcp_close(stream: TcpStream) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L539)
+[Declaration](net/tcp.wave#L538)
 
 ```wave
 pub fun tcp_close_listener(listener: TcpListener) -> NetError
@@ -5802,19 +5922,19 @@ pub fun unix_accept(listener: UnixListener) -> NetResult<UnixStream>
 pub fun unix_read(stream: UnixStream, buf: ptr<u8>, size: i64) -> NetIoResult
 ```
 
-[Declaration](net/unix.wave#L139)
+[Declaration](net/unix.wave#L145)
 
 ```wave
 pub fun unix_write(stream: UnixStream, buf: ptr<u8>, size: i64) -> NetIoResult
 ```
 
-[Declaration](net/unix.wave#L145)
+[Declaration](net/unix.wave#L151)
 
 ```wave
 pub fun unix_write_all(stream: UnixStream, buf: ptr<u8>, size: i64) -> NetIoResult
 ```
 
-[Declaration](net/unix.wave#L149)
+[Declaration](net/unix.wave#L155)
 
 ```wave
 pub fun unix_write_vectored(
@@ -5822,7 +5942,7 @@ pub fun unix_write_vectored(
 ) -> NetIoResult
 ```
 
-[Declaration](net/unix.wave#L155)
+[Declaration](net/unix.wave#L161)
 
 ```wave
 pub fun unix_read_vectored(
@@ -5830,71 +5950,71 @@ pub fun unix_read_vectored(
 ) -> NetIoResult
 ```
 
-[Declaration](net/unix.wave#L161)
+[Declaration](net/unix.wave#L167)
 
 ```wave
 pub fun unix_shutdown_read(stream: UnixStream) -> NetError
 ```
 
-[Declaration](net/unix.wave#L166)
+[Declaration](net/unix.wave#L172)
 
 ```wave
 pub fun unix_shutdown_write(stream: UnixStream) -> NetError
 ```
 
-[Declaration](net/unix.wave#L171)
+[Declaration](net/unix.wave#L177)
 
 ```wave
 pub fun unix_shutdown_both(stream: UnixStream) -> NetError
 ```
 
-[Declaration](net/unix.wave#L177)
+[Declaration](net/unix.wave#L183)
 
 ```wave
 pub fun unix_close(stream: UnixStream) -> NetError
 ```
 
-[Declaration](net/unix.wave#L182)
+[Declaration](net/unix.wave#L188)
 
 ```wave
 pub fun unix_close_listener(listener: UnixListener) -> NetError
 ```
 
-[Declaration](net/unix.wave#L189)
+[Declaration](net/unix.wave#L195)
 
 ```wave
 #[target(os="linux")]
 pub fun unix_remove(path: str) -> NetError
 ```
 
-[Declaration](net/unix.wave#L195)
+[Declaration](net/unix.wave#L201)
 
 ```wave
 #[target(os="macos")]
 pub fun unix_remove(path: str) -> NetError
 ```
 
-[Declaration](net/unix.wave#L201)
+[Declaration](net/unix.wave#L207)
 
 ```wave
 #[target(os="freebsd")]
 pub fun unix_remove(path: str) -> NetError
 ```
 
-[Declaration](net/unix.wave#L207)
+[Declaration](net/unix.wave#L213)
 
 ```wave
 #[target(os="windows")]
 pub fun unix_remove(path: str) -> NetError
 ```
 
-[Declaration](net/unix.wave#L215)
+[Declaration](net/unix.wave#L221)
 
 ```wave
 pub fun unix_stream_valid(stream: UnixStream) -> bool
 ```
 
-[Declaration](net/unix.wave#L216)
+[Declaration](net/unix.wave#L222)
 
 ```wave
 pub fun unix_listener_valid(listener: UnixListener) -> bool
@@ -5904,13 +6024,13 @@ pub fun unix_listener_valid(listener: UnixListener) -> bool
 
 [Source](net/vectored.wave)
 
-[Declaration](net/vectored.wave#L7)
+[Declaration](net/vectored.wave#L8)
 
 ```wave
 pub const NET_IOV_MAX: i32 = 32;
 ```
 
-[Declaration](net/vectored.wave#L9)
+[Declaration](net/vectored.wave#L10)
 
 ```wave
 pub struct NetIoSlice {
@@ -5919,7 +6039,7 @@ pub struct NetIoSlice {
 }
 ```
 
-[Declaration](net/vectored.wave#L36)
+[Declaration](net/vectored.wave#L37)
 
 ```wave
 pub fun net_send_vectored(
@@ -5927,7 +6047,7 @@ pub fun net_send_vectored(
 ) -> NetIoResult
 ```
 
-[Declaration](net/vectored.wave#L48)
+[Declaration](net/vectored.wave#L52)
 
 ```wave
 pub fun net_recv_vectored(
@@ -6065,43 +6185,43 @@ pub const PROC_EXIT_DUP_FAIL: i32 = 126;
 
 [Source](process/core.wave)
 
-[Declaration](process/core.wave#L35)
+[Declaration](process/core.wave#L64)
 
 ```wave
 pub fun proc_exit(code: i32) -> !
 ```
 
-[Declaration](process/core.wave#L39)
+[Declaration](process/core.wave#L68)
 
 ```wave
 pub fun proc_getpid() -> i64
 ```
 
-[Declaration](process/core.wave#L43)
+[Declaration](process/core.wave#L72)
 
 ```wave
 pub fun proc_getppid() -> i64
 ```
 
-[Declaration](process/core.wave#L47)
+[Declaration](process/core.wave#L76)
 
 ```wave
 pub fun proc_fork() -> i64
 ```
 
-[Declaration](process/core.wave#L51)
+[Declaration](process/core.wave#L80)
 
 ```wave
 pub fun proc_execve(path: str, argv: ptr<ptr<i8>>, envp: ptr<ptr<i8>>) -> i64
 ```
 
-[Declaration](process/core.wave#L55)
+[Declaration](process/core.wave#L84)
 
 ```wave
 pub fun proc_waitpid_raw(pid: i64, status: ptr<i32>, options: i32) -> i64
 ```
 
-[Declaration](process/core.wave#L67)
+[Declaration](process/core.wave#L99)
 
 ```wave
 pub fun proc_kill(pid: i64, sig: i32) -> i64
@@ -6600,7 +6720,7 @@ pub const SYS_ERR_INVAL: i64 = -22;
 
 ```wave
 #[target(os="macos")]
-pub const SYS_ERR_OVERFLOW: i64 = -75;
+pub const SYS_ERR_OVERFLOW: i64 = -84;
 ```
 
 [Declaration](sys/errors.wave#L20)
@@ -6642,7 +6762,7 @@ pub const SYS_ERR_INVAL: i64 = -22;
 
 ```wave
 #[target(os="freebsd")]
-pub const SYS_ERR_OVERFLOW: i64 = -75;
+pub const SYS_ERR_OVERFLOW: i64 = -84;
 ```
 
 [Declaration](sys/errors.wave#L32)
@@ -7462,7 +7582,7 @@ pub fun execve(
 pub fun waitpid(pid: i64, status: ptr<i32>, options: i32) -> i64
 ```
 
-[Declaration](sys/freebsd/common/process.wave#L62)
+[Declaration](sys/freebsd/common/process.wave#L65)
 
 ```wave
 pub fun kill(pid: i64, sig: i32) -> i64
@@ -9388,7 +9508,7 @@ pub fun execve(
 pub fun waitpid(pid: i64, status: ptr<i32>, options: i32) -> i64
 ```
 
-[Declaration](sys/linux/amd64/process.wave#L94)
+[Declaration](sys/linux/amd64/process.wave#L97)
 
 ```wave
 pub fun kill(pid: i64, sig: i32) -> i64
@@ -10380,7 +10500,7 @@ pub fun execve(
 pub fun waitpid(pid: i64, status: ptr<i32>, options: i32) -> i64
 ```
 
-[Declaration](sys/linux/arm64/process.wave#L81)
+[Declaration](sys/linux/arm64/process.wave#L84)
 
 ```wave
 pub fun kill(pid: i64, sig: i32) -> i64
@@ -11947,7 +12067,7 @@ pub fun execve(
 pub fun waitpid(pid: i64, status: ptr<i32>, options: i32) -> i64
 ```
 
-[Declaration](sys/linux/riscv64/process.wave#L81)
+[Declaration](sys/linux/riscv64/process.wave#L84)
 
 ```wave
 pub fun kill(pid: i64, sig: i32) -> i64
@@ -13332,7 +13452,7 @@ pub fun execve(
 pub fun waitpid(pid: i64, status: ptr<i32>, options: i32) -> i64
 ```
 
-[Declaration](sys/macos/amd64/process.wave#L78)
+[Declaration](sys/macos/amd64/process.wave#L81)
 
 ```wave
 pub fun kill(pid: i64, sig: i32) -> i64
@@ -14327,7 +14447,7 @@ pub fun execve(
 pub fun waitpid(pid: i64, status: ptr<i32>, options: i32) -> i64
 ```
 
-[Declaration](sys/macos/arm64/process.wave#L77)
+[Declaration](sys/macos/arm64/process.wave#L80)
 
 ```wave
 pub fun kill(pid: i64, sig: i32) -> i64
@@ -18190,92 +18310,92 @@ pub fun vector_recv(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32
 
 [Source](task/net.wave)
 
-[Declaration](task/net.wave#L78)
+[Declaration](task/net.wave#L94)
 
 ```wave
 pub async fun accept(fd: i64, timeout_ms: i64) -> i64
 ```
 
-[Declaration](task/net.wave#L98)
+[Declaration](task/net.wave#L118)
 
 ```wave
 pub async fun connect(fd: i64, address: SocketAddrV4, timeout_ms: i64) -> i64
 ```
 
-[Declaration](task/net.wave#L114)
+[Declaration](task/net.wave#L138)
 
 ```wave
 pub async fun accept_v6(fd: i64, timeout_ms: i64) -> i64
 ```
 
-[Declaration](task/net.wave#L134)
+[Declaration](task/net.wave#L162)
 
 ```wave
 pub async fun connect_v6(fd: i64, address: SocketAddrV6, timeout_ms: i64) -> i64
 ```
 
-[Declaration](task/net.wave#L144)
+[Declaration](task/net.wave#L174)
 
 ```wave
 pub async fun read_exact(fd: i64, buffer: ptr<u8>, size: i64, timeout_ms: i64) -> NetIoResult
 ```
 
-[Declaration](task/net.wave#L159)
+[Declaration](task/net.wave#L191)
 
 ```wave
 pub fun close(fd: i64) -> i64
 ```
 
-[Declaration](task/net.wave#L162)
+[Declaration](task/net.wave#L194)
 
 ```wave
 #[target(os="linux")]
 pub async fun read(fd:i64,buffer:ptr<u8>,size:i64,timeout_ms:i64)->NetIoResult
 ```
 
-[Declaration](task/net.wave#L164)
+[Declaration](task/net.wave#L196)
 
 ```wave
 #[target(os="linux")]
 pub async fun write_all(fd:i64,buffer:ptr<u8>,size:i64,timeout_ms:i64)->NetIoResult
 ```
 
-[Declaration](task/net.wave#L167)
+[Declaration](task/net.wave#L199)
 
 ```wave
 #[target(os="macos")]
 pub async fun read(fd:i64,buffer:ptr<u8>,size:i64,timeout_ms:i64)->NetIoResult
 ```
 
-[Declaration](task/net.wave#L169)
+[Declaration](task/net.wave#L201)
 
 ```wave
 #[target(os="macos")]
 pub async fun write_all(fd:i64,buffer:ptr<u8>,size:i64,timeout_ms:i64)->NetIoResult
 ```
 
-[Declaration](task/net.wave#L172)
+[Declaration](task/net.wave#L204)
 
 ```wave
 #[target(os="freebsd")]
 pub async fun read(fd:i64,buffer:ptr<u8>,size:i64,timeout_ms:i64)->NetIoResult
 ```
 
-[Declaration](task/net.wave#L174)
+[Declaration](task/net.wave#L206)
 
 ```wave
 #[target(os="freebsd")]
 pub async fun write_all(fd:i64,buffer:ptr<u8>,size:i64,timeout_ms:i64)->NetIoResult
 ```
 
-[Declaration](task/net.wave#L179)
+[Declaration](task/net.wave#L211)
 
 ```wave
 #[target(os="windows")]
 pub async fun read(fd:i64,buffer:ptr<u8>,size:i64,timeout_ms:i64)->NetIoResult
 ```
 
-[Declaration](task/net.wave#L189)
+[Declaration](task/net.wave#L221)
 
 ```wave
 #[target(os="windows")]
@@ -18286,74 +18406,74 @@ pub async fun write_all(fd:i64,buffer:ptr<u8>,size:i64,timeout_ms:i64)->NetIoRes
 
 [Source](task.wave)
 
-[Declaration](task.wave#L667)
+[Declaration](task.wave#L668)
 
 ```wave
 pub fun block_on<T>(future: Future<T>) -> T
 ```
 
-[Declaration](task.wave#L668)
+[Declaration](task.wave#L669)
 
 ```wave
 pub fun spawn<T>(future: Future<T>) -> Future<T>
 ```
 
-[Declaration](task.wave#L669)
+[Declaration](task.wave#L670)
 
 ```wave
 pub async fun join<T>(future: Future<T>) -> T
 ```
 
-[Declaration](task.wave#L670)
+[Declaration](task.wave#L671)
 
 ```wave
 pub fun cancel<T>(future: Future<T>) -> bool
 ```
 
-[Declaration](task.wave#L671)
+[Declaration](task.wave#L672)
 
 ```wave
 pub fun yield_now() -> Future<void>
 ```
 
-[Declaration](task.wave#L672)
+[Declaration](task.wave#L673)
 
 ```wave
 pub fun shutdown()
 ```
 
-[Declaration](task.wave#L700)
+[Declaration](task.wave#L701)
 
 ```wave
 pub fun wait_fd(fd: i64, flags: i32, timeout_ms: i64) -> Future<i32>
 ```
 
-[Declaration](task.wave#L702)
+[Declaration](task.wave#L703)
 
 ```wave
 pub fun sleep_ms(milliseconds: i64) -> Future<i32>
 ```
 
-[Declaration](task.wave#L703)
+[Declaration](task.wave#L704)
 
 ```wave
 pub fun closing_fd(fd: i64)
 ```
 
-[Declaration](task.wave#L869)
+[Declaration](task.wave#L872)
 
 ```wave
 pub fun cancel_and_join<T>(future: Future<T>) -> Future<void>
 ```
 
-[Declaration](task.wave#L871)
+[Declaration](task.wave#L874)
 
 ```wave
 #[target(os="windows")]
 pub fun overlapped_read(fd: i64, buffer: ptr<u8>, length: i64, timeout_ms: i64) -> Future<i64>
 ```
 
-[Declaration](task.wave#L873)
+[Declaration](task.wave#L876)
 
 ```wave
 #[target(os="windows")]

@@ -5,6 +5,8 @@
 // Portable baseline socket options. Platform-specific semantics are selected
 // here rather than assigning Unix meanings to unrelated Winsock constants.
 
+import("std::net::socket_base")::{net_fd_valid};
+
 #[target(os="linux")]
 import("std::sys::fs")::{FS_O_NONBLOCK, FS_F_GETFL, FS_F_SETFL, fcntl};
 #[target(os="macos")]
@@ -29,18 +31,30 @@ import("std::sys::windows::socket")::{socket_set_nonblock};
 
 #[target(os="linux")]
 pub fun net_set_nonblock(fd: i64, enabled: i32) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     return _net_set_nonblock_fcntl(fd, enabled);
 }
 #[target(os="macos")]
 pub fun net_set_nonblock(fd: i64, enabled: i32) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     return _net_set_nonblock_fcntl(fd, enabled);
 }
 #[target(os="freebsd")]
 pub fun net_set_nonblock(fd: i64, enabled: i32) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     return _net_set_nonblock_fcntl(fd, enabled);
 }
 #[target(os="windows")]
 pub fun net_set_nonblock(fd: i64, enabled: i32) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     return socket_set_nonblock(fd, enabled);
 }
 
@@ -73,13 +87,33 @@ fun _net_set_nonblock_fcntl(fd: i64, enabled: i32) -> i64 {
 }
 
 #[target(os="linux")]
-pub fun net_get_nonblock(fd: i64) -> i64 { return _net_get_nonblock_fcntl(fd); }
+pub fun net_get_nonblock(fd: i64) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
+    return _net_get_nonblock_fcntl(fd);
+}
 #[target(os="macos")]
-pub fun net_get_nonblock(fd: i64) -> i64 { return _net_get_nonblock_fcntl(fd); }
+pub fun net_get_nonblock(fd: i64) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
+    return _net_get_nonblock_fcntl(fd);
+}
 #[target(os="freebsd")]
-pub fun net_get_nonblock(fd: i64) -> i64 { return _net_get_nonblock_fcntl(fd); }
+pub fun net_get_nonblock(fd: i64) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
+    return _net_get_nonblock_fcntl(fd);
+}
 #[target(os="windows")]
-pub fun net_get_nonblock(fd: i64) -> i64 { return -95; }
+pub fun net_get_nonblock(fd: i64) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
+    return -95;
+}
 
 #[target(os="linux")]
 fun _net_get_nonblock_fcntl(fd: i64) -> i64 {
@@ -104,12 +138,18 @@ fun _net_get_nonblock_fcntl(fd: i64) -> i64 {
 }
 
 pub fun net_set_reuseaddr_flag(fd: i64, enabled: i32) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     var value: i32 = 0;
     if (enabled != 0) { value = 1; }
     return setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &value as ptr<i8>, 4);
 }
 
 pub fun net_get_reuseaddr_flag(fd: i64) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     var value: i32 = 0;
     var size: i32 = 4;
     var result: i64 = getsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &value as ptr<i8>, &size);
@@ -132,53 +172,89 @@ fun _net_get_i32(fd: i64, level: i32, name: i32) -> i64 {
 }
 
 pub fun net_set_tcp_nodelay(fd: i64, enabled: bool) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     return _net_set_i32(fd, IPPROTO_TCP, TCP_NODELAY, enabled as i32);
 }
 
 pub fun net_get_tcp_nodelay(fd: i64) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     return _net_get_i32(fd, IPPROTO_TCP, TCP_NODELAY);
 }
 
 pub fun net_set_keepalive(fd: i64, enabled: bool) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     return _net_set_i32(fd, SOL_SOCKET, SO_KEEPALIVE, enabled as i32);
 }
 
 pub fun net_get_keepalive(fd: i64) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     return _net_get_i32(fd, SOL_SOCKET, SO_KEEPALIVE);
 }
 
 pub fun net_set_recv_buffer(fd: i64, size: i32) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     if (size <= 0) { return -22; }
     return _net_set_i32(fd, SOL_SOCKET, SO_RCVBUF, size);
 }
 
 pub fun net_get_recv_buffer(fd: i64) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     return _net_get_i32(fd, SOL_SOCKET, SO_RCVBUF);
 }
 
 pub fun net_set_send_buffer(fd: i64, size: i32) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     if (size <= 0) { return -22; }
     return _net_set_i32(fd, SOL_SOCKET, SO_SNDBUF, size);
 }
 
 pub fun net_get_send_buffer(fd: i64) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     return _net_get_i32(fd, SOL_SOCKET, SO_SNDBUF);
 }
 
 pub fun net_set_broadcast(fd: i64, enabled: bool) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     return _net_set_i32(fd, SOL_SOCKET, SO_BROADCAST, enabled as i32);
 }
 
 pub fun net_get_broadcast(fd: i64) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     return _net_get_i32(fd, SOL_SOCKET, SO_BROADCAST);
 }
 
 pub fun net_set_ipv4_ttl(fd: i64, ttl: i32) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     if (ttl < 0 || ttl > 255) { return -22; }
     return _net_set_i32(fd, IPPROTO_IP, IP_TTL, ttl);
 }
 
 pub fun net_get_ipv4_ttl(fd: i64) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     return _net_get_i32(fd, IPPROTO_IP, IP_TTL);
 }
 
@@ -213,6 +289,9 @@ fun _net_ipv6_membership(group: Ipv6Addr, interface_index: u32) -> NetIpv6Member
 }
 
 pub fun net_join_multicast_v4(fd: i64, group: Ipv4Addr, interface: Ipv4Addr) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     if (!_net_ipv4_multicast(group)) { return -22; }
     var request: NetIpv4Membership = NetIpv4Membership {
         group: net_hton_u32(group.value),
@@ -224,6 +303,9 @@ pub fun net_join_multicast_v4(fd: i64, group: Ipv4Addr, interface: Ipv4Addr) -> 
 }
 
 pub fun net_leave_multicast_v4(fd: i64, group: Ipv4Addr, interface: Ipv4Addr) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     if (!_net_ipv4_multicast(group)) { return -22; }
     var request: NetIpv4Membership = NetIpv4Membership {
         group: net_hton_u32(group.value),
@@ -235,12 +317,18 @@ pub fun net_leave_multicast_v4(fd: i64, group: Ipv4Addr, interface: Ipv4Addr) ->
 }
 
 pub fun net_join_multicast_v6(fd: i64, group: Ipv6Addr, interface_index: u32) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     if (!_net_ipv6_multicast(group)) { return -22; }
     var request: NetIpv6Membership = _net_ipv6_membership(group, interface_index);
     return setsockopt(fd, IPPROTO_IPV6, IPV6_JOIN_GROUP, &request as ptr<i8>, 20);
 }
 
 pub fun net_leave_multicast_v6(fd: i64, group: Ipv6Addr, interface_index: u32) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     if (!_net_ipv6_multicast(group)) { return -22; }
     var request: NetIpv6Membership = _net_ipv6_membership(group, interface_index);
     return setsockopt(fd, IPPROTO_IPV6, IPV6_LEAVE_GROUP, &request as ptr<i8>, 20);
@@ -291,11 +379,17 @@ fun _net_get_ipv4_multicast_scalar(fd: i64, name: i32) -> i64 {
 }
 
 pub fun net_set_multicast_interface_v4(fd: i64, interface: Ipv4Addr) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     var value: u32 = net_hton_u32(interface.value);
     return setsockopt(fd, IPPROTO_IP, IP_MULTICAST_IF, &value as ptr<i8>, 4);
 }
 
 pub fun net_get_multicast_interface_v4(fd: i64) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     var value: u32 = 0;
     var size: i32 = 4;
     var result: i64 = getsockopt(fd, IPPROTO_IP, IP_MULTICAST_IF, &value as ptr<i8>, &size);
@@ -304,61 +398,105 @@ pub fun net_get_multicast_interface_v4(fd: i64) -> i64 {
 }
 
 pub fun net_set_multicast_ttl_v4(fd: i64, ttl: i32) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     if (ttl < 0 || ttl > 255) { return -22; }
     return _net_set_ipv4_multicast_scalar(fd, IP_MULTICAST_TTL, ttl);
 }
 
 pub fun net_get_multicast_ttl_v4(fd: i64) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     return _net_get_ipv4_multicast_scalar(fd, IP_MULTICAST_TTL);
 }
 
 pub fun net_set_multicast_loop_v4(fd: i64, enabled: bool) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     return _net_set_ipv4_multicast_scalar(fd, IP_MULTICAST_LOOP, enabled as i32);
 }
 
 pub fun net_get_multicast_loop_v4(fd: i64) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     return _net_get_ipv4_multicast_scalar(fd, IP_MULTICAST_LOOP);
 }
 
 pub fun net_set_multicast_interface_v6(fd: i64, interface_index: u32) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     return _net_set_i32(fd, IPPROTO_IPV6, IPV6_MULTICAST_IF, interface_index as i32);
 }
 
 pub fun net_get_multicast_interface_v6(fd: i64) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     return _net_get_i32(fd, IPPROTO_IPV6, IPV6_MULTICAST_IF);
 }
 
 pub fun net_set_multicast_hops_v6(fd: i64, hops: i32) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     if (hops < 0 || hops > 255) { return -22; }
     return _net_set_i32(fd, IPPROTO_IPV6, IPV6_MULTICAST_HOPS, hops);
 }
 
 pub fun net_get_multicast_hops_v6(fd: i64) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     return _net_get_i32(fd, IPPROTO_IPV6, IPV6_MULTICAST_HOPS);
 }
 
 pub fun net_set_multicast_loop_v6(fd: i64, enabled: bool) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     return _net_set_i32(fd, IPPROTO_IPV6, IPV6_MULTICAST_LOOP, enabled as i32);
 }
 
 pub fun net_get_multicast_loop_v6(fd: i64) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     return _net_get_i32(fd, IPPROTO_IPV6, IPV6_MULTICAST_LOOP);
 }
 
 #[target(os="linux")]
 pub fun net_set_reuseport_flag(fd: i64, enabled: i32) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     return _net_set_reuseport(fd, enabled);
 }
 #[target(os="macos")]
 pub fun net_set_reuseport_flag(fd: i64, enabled: i32) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     return _net_set_reuseport(fd, enabled);
 }
 #[target(os="freebsd")]
 pub fun net_set_reuseport_flag(fd: i64, enabled: i32) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     return _net_set_reuseport(fd, enabled);
 }
 #[target(os="windows")]
-pub fun net_set_reuseport_flag(fd: i64, enabled: i32) -> i64 { return -95; }
+pub fun net_set_reuseport_flag(fd: i64, enabled: i32) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
+    return -95;
+}
 
 #[target(os="linux")]
 fun _net_set_reuseport(fd: i64, enabled: i32) -> i64 {

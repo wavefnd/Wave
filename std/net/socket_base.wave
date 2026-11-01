@@ -30,10 +30,28 @@ import("std::net::error")::{
     net_error, net_io_ok, net_io_eof, net_io_error,
 };
 
+#[target(os="windows")]
 pub fun net_fd_valid(fd: i64) -> bool { return fd >= 0; }
+#[target(os="linux")]
+pub fun net_fd_valid(fd: i64) -> bool {
+    return fd >= 0 && fd <= 2147483647;
+}
+#[target(os="macos")]
+pub fun net_fd_valid(fd: i64) -> bool {
+    return fd >= 0 && fd <= 2147483647;
+}
+#[target(os="freebsd")]
+pub fun net_fd_valid(fd: i64) -> bool {
+    return fd >= 0 && fd <= 2147483647;
+}
+
+// MSG_PEEK is 0x2 on all supported socket providers.
+const EXACT_RECV_PEEK: i32 = 2;
 
 pub fun net_set_reuseaddr(fd: i64) -> i64 {
-    if (!net_fd_valid(fd)) { return -22; }
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     var one: i32 = 1;
     return setsockopt(fd, SOL_SOCKET, SO_REUSEADDR, &one as ptr<i8>, 4);
 }
@@ -67,6 +85,30 @@ pub fun net_socket_tcp_v6() -> i64 { return _net_socket(AF_INET6, SOCK_STREAM, I
 pub fun net_socket_udp_v4() -> i64 { return _net_socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP); }
 pub fun net_socket_udp_v6() -> i64 { return _net_socket(AF_INET6, SOCK_DGRAM, IPPROTO_UDP); }
 
+#[target(os="linux")]
+fun _net_family(address: ptr<i8>) -> i32 {
+    return (deref (address as ptr<u16>)) as i32;
+}
+#[target(os="windows")]
+fun _net_family(address: ptr<i8>) -> i32 {
+    return (deref (address as ptr<u16>)) as i32;
+}
+#[target(os="macos")]
+fun _net_family(address: ptr<i8>) -> i32 {
+    return (deref ((address + 1) as ptr<u8>)) as i32;
+}
+#[target(os="freebsd")]
+fun _net_family(address: ptr<i8>) -> i32 {
+    return (deref ((address + 1) as ptr<u8>)) as i32;
+}
+
+fun _net_address_valid(address: ptr<i8>, length: i32, expected: i32, family: i32) -> bool {
+    if (length != expected) {
+        return false;
+    }
+    return _net_family(address) == family;
+}
+
 fun _net_native_v4(addr: NetAddrV4) -> NativeSockAddrV4 {
     return native_sockaddr_v4(addr.ip, addr.port);
 }
@@ -84,34 +126,58 @@ pub fun net_decode_native_v4(address: ptr<i8>) -> SocketAddrV4 {
 }
 
 pub fun net_bind_v4(fd: i64, addr: NetAddrV4) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     var native: NativeSockAddrV4 = _net_native_v4(addr);
     return bind(fd, &native as ptr<i8>, NATIVE_SOCKADDR_V4_LEN);
 }
 
 pub fun net_bind_socket_v4(fd: i64, addr: SocketAddrV4) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     return net_bind_v4(fd, socket_addr_to_net_v4(addr));
 }
 
 pub fun net_connect_v4(fd: i64, addr: NetAddrV4) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     var native: NativeSockAddrV4 = _net_native_v4(addr);
     return connect(fd, &native as ptr<i8>, NATIVE_SOCKADDR_V4_LEN);
 }
 
 pub fun net_connect_socket_v4(fd: i64, addr: SocketAddrV4) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     return net_connect_v4(fd, socket_addr_to_net_v4(addr));
 }
 
 pub fun net_accept_v4(fd: i64, out_addr: ptr<NetAddrV4>) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     var native: NativeSockAddrV4;
     var length: i32 = NATIVE_SOCKADDR_V4_LEN;
     var accepted: i64 = accept(fd, &native as ptr<i8>, &length);
     if (accepted >= 0 && out_addr != null) {
+        if (!_net_address_valid(&native as ptr<i8>, length, NATIVE_SOCKADDR_V4_LEN, AF_INET)) {
+            close_socket(accepted); return -22;
+        }
         deref out_addr = _net_from_native_v4(native);
     }
     return accepted;
 }
 
 pub fun net_accept_socket_v4(fd: i64, out_addr: ptr<SocketAddrV4>) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
+    if (out_addr == null) {
+        return net_accept_v4(fd, null);
+    }
     var compat: NetAddrV4;
     var accepted: i64 = net_accept_v4(fd, &compat);
     if (accepted >= 0 && out_addr != null) {
@@ -142,58 +208,102 @@ pub fun net_decode_native_v6(address: ptr<i8>) -> SocketAddrV6 {
 }
 
 pub fun net_bind_v6(fd: i64, addr: SocketAddrV6) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     var native: NativeSockAddrV6 = _net_native_v6(addr);
     return bind(fd, &native as ptr<i8>, NATIVE_SOCKADDR_V6_LEN);
 }
 
 pub fun net_connect_v6(fd: i64, addr: SocketAddrV6) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     var native: NativeSockAddrV6 = _net_native_v6(addr);
     return connect(fd, &native as ptr<i8>, NATIVE_SOCKADDR_V6_LEN);
 }
 
 pub fun net_accept_v6(fd: i64, out_addr: ptr<SocketAddrV6>) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     var native: NativeSockAddrV6;
     var length: i32 = NATIVE_SOCKADDR_V6_LEN;
     var accepted: i64 = accept(fd, &native as ptr<i8>, &length);
     if (accepted >= 0 && out_addr != null) {
+        if (!_net_address_valid(&native as ptr<i8>, length, NATIVE_SOCKADDR_V6_LEN, AF_INET6)) {
+            close_socket(accepted); return -22;
+        }
         deref out_addr = _net_from_native_v6(native);
     }
     return accepted;
 }
 
 pub fun net_local_addr_v4(fd: i64, out_addr: ptr<SocketAddrV4>) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     if (out_addr == null) { return -22; }
     var native: NativeSockAddrV4;
     var length: i32 = NATIVE_SOCKADDR_V4_LEN;
     var result: i64 = getsockname(fd, &native as ptr<i8>, &length);
-    if (result >= 0) { deref out_addr = net_addr_to_socket_v4(_net_from_native_v4(native)); }
+    if (result >= 0) {
+        if (!_net_address_valid(&native as ptr<i8>, length, NATIVE_SOCKADDR_V4_LEN, AF_INET)) {
+            return -22;
+        }
+        deref out_addr = net_addr_to_socket_v4(_net_from_native_v4(native));
+    }
     return result;
 }
 
 pub fun net_peer_addr_v4(fd: i64, out_addr: ptr<SocketAddrV4>) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     if (out_addr == null) { return -22; }
     var native: NativeSockAddrV4;
     var length: i32 = NATIVE_SOCKADDR_V4_LEN;
     var result: i64 = getpeername(fd, &native as ptr<i8>, &length);
-    if (result >= 0) { deref out_addr = net_addr_to_socket_v4(_net_from_native_v4(native)); }
+    if (result >= 0) {
+        if (!_net_address_valid(&native as ptr<i8>, length, NATIVE_SOCKADDR_V4_LEN, AF_INET)) {
+            return -22;
+        }
+        deref out_addr = net_addr_to_socket_v4(_net_from_native_v4(native));
+    }
     return result;
 }
 
 pub fun net_local_addr_v6(fd: i64, out_addr: ptr<SocketAddrV6>) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     if (out_addr == null) { return -22; }
     var native: NativeSockAddrV6;
     var length: i32 = NATIVE_SOCKADDR_V6_LEN;
     var result: i64 = getsockname(fd, &native as ptr<i8>, &length);
-    if (result >= 0) { deref out_addr = _net_from_native_v6(native); }
+    if (result >= 0) {
+        if (!_net_address_valid(&native as ptr<i8>, length, NATIVE_SOCKADDR_V6_LEN, AF_INET6)) {
+            return -22;
+        }
+        deref out_addr = _net_from_native_v6(native);
+    }
     return result;
 }
 
 pub fun net_peer_addr_v6(fd: i64, out_addr: ptr<SocketAddrV6>) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     if (out_addr == null) { return -22; }
     var native: NativeSockAddrV6;
     var length: i32 = NATIVE_SOCKADDR_V6_LEN;
     var result: i64 = getpeername(fd, &native as ptr<i8>, &length);
-    if (result >= 0) { deref out_addr = _net_from_native_v6(native); }
+    if (result >= 0) {
+        if (!_net_address_valid(&native as ptr<i8>, length, NATIVE_SOCKADDR_V6_LEN, AF_INET6)) {
+            return -22;
+        }
+        deref out_addr = _net_from_native_v6(native);
+    }
     return result;
 }
 
@@ -207,6 +317,9 @@ fun _net_send_flags(flags: i32) -> i32 { return flags; }
 fun _net_send_flags(flags: i32) -> i32 { return flags; }
 
 pub fun net_send_all(fd: i64, buf: ptr<u8>, len: i64, flags: i32) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     if (len < 0 || (buf == null && len > 0)) { return -22; }
     if (len == 0) { return 0; }
 
@@ -226,6 +339,9 @@ pub fun net_send_all(fd: i64, buf: ptr<u8>, len: i64, flags: i32) -> i64 {
 // Unlike the legacy integer helper, this form preserves both partial progress
 // and the terminal socket error.
 pub fun net_send_all_io(fd: i64, buf: ptr<u8>, len: i64, flags: i32) -> NetIoResult {
+    if (!net_fd_valid(fd)) {
+        return net_io_error(0, -22);
+    }
     if (len < 0 || (buf == null && len > 0)) { return net_io_error(0, -22); }
     if (len == 0) { return net_io_ok(0); }
 
@@ -247,6 +363,9 @@ pub fun net_send_all_io(fd: i64, buf: ptr<u8>, len: i64, flags: i32) -> NetIoRes
 }
 
 pub fun net_send_once(fd: i64, buf: ptr<u8>, len: i64, flags: i32) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     if (len < 0 || (buf == null && len > 0)) { return -22; }
     var empty: u8 = 0;
     var native_buf: ptr<u8> = buf;
@@ -255,6 +374,9 @@ pub fun net_send_once(fd: i64, buf: ptr<u8>, len: i64, flags: i32) -> i64 {
 }
 
 pub fun net_recv_once(fd: i64, buf: ptr<u8>, len: i64, flags: i32) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     if (len < 0 || (buf == null && len > 0)) { return -22; }
     var empty: u8 = 0;
     var native_buf: ptr<u8> = buf;
@@ -263,6 +385,12 @@ pub fun net_recv_once(fd: i64, buf: ptr<u8>, len: i64, flags: i32) -> i64 {
 }
 
 pub fun net_recv_exact(fd: i64, buf: ptr<u8>, len: i64, flags: i32) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
+    if ((flags & EXACT_RECV_PEEK) != 0) {
+        return -22;
+    }
     if (len < 0 || (buf == null && len > 0)) { return -22; }
     if (len == 0) { return 0; }
 
@@ -282,6 +410,12 @@ pub fun net_recv_exact(fd: i64, buf: ptr<u8>, len: i64, flags: i32) -> i64 {
 // EOF is distinct from an error and retains the number of bytes received
 // before the peer closed its write side.
 pub fun net_recv_exact_io(fd: i64, buf: ptr<u8>, len: i64, flags: i32) -> NetIoResult {
+    if (!net_fd_valid(fd)) {
+        return net_io_error(0, -22);
+    }
+    if ((flags & EXACT_RECV_PEEK) != 0) {
+        return net_io_error(0, -22);
+    }
     if (len < 0 || (buf == null && len > 0)) { return net_io_error(0, -22); }
     if (len == 0) { return net_io_ok(0); }
 
@@ -299,6 +433,9 @@ pub fun net_recv_exact_io(fd: i64, buf: ptr<u8>, len: i64, flags: i32) -> NetIoR
 pub fun net_sendto_v4(
     fd: i64, addr: NetAddrV4, buf: ptr<u8>, len: i64, flags: i32
 ) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     if (len < 0 || (buf == null && len > 0)) { return -22; }
     var native: NativeSockAddrV4 = _net_native_v4(addr);
     var empty: u8 = 0;
@@ -313,6 +450,9 @@ pub fun net_sendto_v4(
 pub fun net_recvfrom_v4(
     fd: i64, buf: ptr<u8>, len: i64, flags: i32, out_addr: ptr<NetAddrV4>
 ) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     if (len < 0 || (buf == null && len > 0)) { return -22; }
     var native: NativeSockAddrV4;
     var length: i32 = NATIVE_SOCKADDR_V4_LEN;
@@ -321,6 +461,9 @@ pub fun net_recvfrom_v4(
     if (native_buf == null) { native_buf = &empty; }
     var count: i64 = recvfrom(fd, native_buf, len, flags, &native as ptr<i8>, &length);
     if (count >= 0 && out_addr != null) {
+        if (!_net_address_valid(&native as ptr<i8>, length, NATIVE_SOCKADDR_V4_LEN, AF_INET)) {
+            return -22;
+        }
         deref out_addr = _net_from_native_v4(native);
     }
     return count;
@@ -329,6 +472,9 @@ pub fun net_recvfrom_v4(
 pub fun net_sendto_v6(
     fd: i64, addr: SocketAddrV6, buf: ptr<u8>, len: i64, flags: i32
 ) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     if (len < 0 || (buf == null && len > 0)) { return -22; }
     var native: NativeSockAddrV6 = _net_native_v6(addr);
     var empty: u8 = 0;
@@ -343,6 +489,9 @@ pub fun net_sendto_v6(
 pub fun net_recvfrom_v6(
     fd: i64, buf: ptr<u8>, len: i64, flags: i32, out_addr: ptr<SocketAddrV6>
 ) -> i64 {
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     if (len < 0 || (buf == null && len > 0)) { return -22; }
     var native: NativeSockAddrV6;
     var length: i32 = NATIVE_SOCKADDR_V6_LEN;
@@ -351,24 +500,33 @@ pub fun net_recvfrom_v6(
     if (native_buf == null) { native_buf = &empty; }
     var count: i64 = recvfrom(fd, native_buf, len, flags, &native as ptr<i8>, &length);
     if (count >= 0 && out_addr != null) {
+        if (!_net_address_valid(&native as ptr<i8>, length, NATIVE_SOCKADDR_V6_LEN, AF_INET6)) {
+            return -22;
+        }
         deref out_addr = _net_from_native_v6(native);
     }
     return count;
 }
 
 pub fun net_close(fd: i64) -> i64 {
-    if (!net_fd_valid(fd)) { return -22; }
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     return close_socket(fd);
 }
 
 pub fun net_shutdown(fd: i64, how: i32) -> i64 {
-    if (!net_fd_valid(fd)) { return -22; }
+    if (!net_fd_valid(fd)) {
+        return -22;
+    }
     if (how != SHUT_RD && how != SHUT_WR && how != SHUT_RDWR) { return -22; }
     return shutdown(fd, how);
 }
 
 pub fun net_shutdown_close(fd: i64) {
-    if (!net_fd_valid(fd)) { return; }
+    if (!net_fd_valid(fd)) {
+        return;
+    }
     shutdown(fd, SHUT_RDWR);
     close_socket(fd);
 }

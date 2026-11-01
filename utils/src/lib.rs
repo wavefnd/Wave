@@ -23,3 +23,5 @@ pub mod paths;
 pub mod wson;
 
 pub use colorex::Colorize;
+
+pub mod suggestions;

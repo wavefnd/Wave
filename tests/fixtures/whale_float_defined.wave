@@ -1,6 +1,5 @@
 // SPDX-License-Identifier: MPL-2.0
-// LLVM executes these IEEE cases. Whale validates their FDiv/FRem IR; the
-// currently locked integer interpreter must report them as unsupported.
+// LLVM and the bounded Whale scalar interpreter execute these IEEE cases.
 fun probe() -> i32 {
     var one: f64 = 1.0;
     var zero: f64 = 0.0;

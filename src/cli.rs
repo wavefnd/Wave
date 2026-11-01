@@ -218,6 +218,7 @@ struct BuildPlan {
 }
 
 pub fn run() -> Result<(), CliError> {
+    let _sources = ::error::CompilationSources::begin();
     // The CLI grammar currently uses UTF-8 strings. Reject unrepresentable
     // arguments before planning any outputs; args() panics and lossy decoding
     // can alias distinct filesystem names.

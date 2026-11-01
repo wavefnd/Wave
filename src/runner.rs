@@ -132,7 +132,7 @@ fn lower_wave_hir_or_exit(file_path: &Path, source: &str, ast: Vec<ASTNode>) -> 
             let span = diagnostic.span.clone();
             let diagnostic_source = span
                 .as_ref()
-                .and_then(|s| fs::read_to_string(&s.file).ok())
+                .and_then(|s| ::error::SourceManager::snapshot(&s.file))
                 .unwrap_or_else(|| source.to_string());
             let mut error = WaveError::new(
                 WaveErrorKind::InvalidStatement(diagnostic.message.clone()),
@@ -141,6 +141,8 @@ fn lower_wave_hir_or_exit(file_path: &Path, source: &str, ast: Vec<ASTNode>) -> 
                 0,
                 0,
             )
+            .with_related(diagnostic.related.clone())
+            .with_suggestions(diagnostic.suggestions.clone())
             .with_code(diagnostic.code)
             .with_source_code(diagnostic_source)
             .with_span(span.as_ref())
@@ -186,6 +188,8 @@ fn validate_expanded_ast_or_exit(expanded: &ExpandedWaveAst) {
         0,
         0,
     )
+    .with_related(diagnostic.related.clone())
+    .with_suggestions(diagnostic.suggestions.clone())
     .with_code(diagnostic.code)
     .with_source_code(diagnostic_source)
     .with_span(span.as_ref())
@@ -336,7 +340,7 @@ pub(crate) fn validate_wave_source_readable(path: &Path) {
 }
 
 fn read_wave_source_or_exit(path: &Path) -> String {
-    fs::read_to_string(path).unwrap_or_else(|error| {
+    ::error::SourceManager::read_input(path).unwrap_or_else(|error| {
         let help = if path.is_dir() {
             "select a Wave source file instead of a directory"
         } else {
@@ -398,7 +402,10 @@ pub(crate) fn wave_ast_input_paths(path: &Path, dep: &DepFlags, llvm: &LlvmFlags
     });
     let ast = parse_wave_tokens_or_exit(path, &raw, &tokens);
     let config = build_import_config(dep, target_condition_context_for_llvm(Some(llvm)));
-    crate::module_resolver::existing_import_paths(path, ast, &config)
+    crate::module_resolver::existing_import_paths(path, ast, &config).unwrap_or_else(|error| {
+        error.display_auto();
+        process::exit(1);
+    })
 }
 
 struct SemanticSourceUnit {
@@ -559,6 +566,7 @@ fn frontend_prepare_wave_hir(
     let raw_code = read_wave_source_or_exit(file_path);
     let target = target_condition_context_for_llvm(llvm);
     let code = preprocess_target_attrs(&raw_code, &target);
+    ::error::SourceManager::record(file_path.display().to_string(), code.clone());
 
     let mut lexer = Lexer::new_with_file(&code, file_path.display().to_string());
     let tokens = lexer.tokenize().unwrap_or_else(|e| {
@@ -631,7 +639,7 @@ pub(crate) fn emit_whale_ir_text(
             let diagnostic_source = diagnostic
                 .span
                 .as_ref()
-                .and_then(|s| fs::read_to_string(&s.file).ok())
+                .and_then(|s| ::error::SourceManager::snapshot(&s.file))
                 .unwrap_or(source);
             WaveError::new(
                 WaveErrorKind::InvalidStatement(diagnostic.message.clone()),
@@ -830,6 +838,7 @@ pub(crate) unsafe fn run_wave_file(
     let raw_code = read_wave_source_or_exit(file_path);
     let target = target_condition_context_for_llvm(Some(llvm));
     let code = preprocess_target_attrs(&raw_code, &target);
+    ::error::SourceManager::record(file_path.display().to_string(), code.clone());
 
     let mut lexer = Lexer::new_with_file(&code, file_path.display().to_string());
     let tokens = lexer.tokenize().unwrap_or_else(|e| {
@@ -957,6 +966,7 @@ pub(crate) unsafe fn object_build_wave_file(
     let raw_code = read_wave_source_or_exit(file_path);
     let target = target_condition_context_for_llvm(Some(llvm));
     let code = preprocess_target_attrs(&raw_code, &target);
+    ::error::SourceManager::record(file_path.display().to_string(), code.clone());
 
     let mut lexer = Lexer::new_with_file(&code, file_path.display().to_string());
     let tokens = lexer.tokenize().unwrap_or_else(|e| {

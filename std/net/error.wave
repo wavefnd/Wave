@@ -116,6 +116,9 @@ fun classify_native_error(code: i64) -> i32 {
 
 #[target(os="none")]
 fun classify_native_error(code: i64) -> i32 {
+    if (code == -110) {
+        return NET_ERROR_TIMED_OUT;
+    }
     // No socket provider on these targets; only Wave-generated errors apply.
     if (code == -22) { return NET_ERROR_INVALID; }
     if (code == -95) { return NET_ERROR_UNSUPPORTED; }
@@ -124,6 +127,9 @@ fun classify_native_error(code: i64) -> i32 {
 
 #[target(os="unknown")]
 fun classify_native_error(code: i64) -> i32 {
+    if (code == -110) {
+        return NET_ERROR_TIMED_OUT;
+    }
     // Bare WebAssembly has no native socket errno namespace.
     if (code == -22) { return NET_ERROR_INVALID; }
     if (code == -95) { return NET_ERROR_UNSUPPORTED; }
@@ -132,6 +138,9 @@ fun classify_native_error(code: i64) -> i32 {
 
 #[target(os="wasi")]
 fun classify_native_error(code: i64) -> i32 {
+    if (code == -73) {
+        return NET_ERROR_TIMED_OUT;
+    }
     // No socket provider on these targets; only Wave-generated errors apply.
     if (code == -22) { return NET_ERROR_INVALID; }
     if (code == -95) { return NET_ERROR_UNSUPPORTED; }
@@ -196,4 +205,47 @@ pub fun net_io_error(count: i64, native_code: i64) -> NetIoResult {
         eof: false,
         error: net_error_from_native(native_code)
     };
+}
+
+#[target(os="linux")]
+pub const NET_NATIVE_TIMEOUT: i64 = -110;
+#[target(os="linux")]
+pub fun net_connect_pending(code: i64) -> bool {
+    return code == -115 || code == -114;
+}
+#[target(os="macos")]
+pub const NET_NATIVE_TIMEOUT: i64 = -60;
+#[target(os="macos")]
+pub fun net_connect_pending(code: i64) -> bool {
+    return code == -36 || code == -37 || code == -35;
+}
+#[target(os="freebsd")]
+pub const NET_NATIVE_TIMEOUT: i64 = -60;
+#[target(os="freebsd")]
+pub fun net_connect_pending(code: i64) -> bool {
+    return code == -36 || code == -37 || code == -35;
+}
+#[target(os="windows")]
+pub const NET_NATIVE_TIMEOUT: i64 = -10060;
+#[target(os="windows")]
+pub fun net_connect_pending(code: i64) -> bool {
+    return code == -10035 || code == -10036 || code == -10037;
+}
+#[target(os="none")]
+pub const NET_NATIVE_TIMEOUT: i64 = -110;
+#[target(os="none")]
+pub fun net_connect_pending(code: i64) -> bool {
+    return false;
+}
+#[target(os="unknown")]
+pub const NET_NATIVE_TIMEOUT: i64 = -110;
+#[target(os="unknown")]
+pub fun net_connect_pending(code: i64) -> bool {
+    return false;
+}
+#[target(os="wasi")]
+pub const NET_NATIVE_TIMEOUT: i64 = -73;
+#[target(os="wasi")]
+pub fun net_connect_pending(code: i64) -> bool {
+    return false;
 }

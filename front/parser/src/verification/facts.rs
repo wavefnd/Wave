@@ -52,6 +52,8 @@ pub struct VariantPattern {
 /// syntax allocations stable until these facts have been attached to their IR.
 #[derive(Debug)]
 pub struct SemanticFacts {
+    pub enum_sources: HashMap<usize, String>,
+    pub enum_targets: HashMap<usize, String>,
     pub expression_types: HashMap<usize, AnalyzedExpressionType>,
     pub variant_constructions: HashMap<usize, VariantConstruction>,
     pub variant_patterns: HashMap<usize, VariantPattern>,

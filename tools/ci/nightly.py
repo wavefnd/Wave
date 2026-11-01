@@ -8,20 +8,23 @@ finishes publishing it under the single public nightly tag.
 
 import argparse
 import base64
-from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
-import tomllib
+import time
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from urllib.request import Request, urlopen
 
+import tomllib
+
 from tools.ci.common import ROOT
+from tools.ci.job_contract import required_names
 from tools.ci.release import verify_metadata
 
 REPO = "wavefnd/Wave"
@@ -96,26 +99,85 @@ def eligible(github, run_id):
         or run.get("event") != "push"
         or run.get("head_branch") != "master"
         or run.get("path") != ".github/workflows/ci.yml"
-        or run.get("status") != "completed"
-        or run.get("conclusion") != "success"
     ):
         raise ValueError("Nightly requires successful canonical master push CI")
-    jobs = []
-    page = 1
-    while True:
-        batch = github.api(
-            f"actions/runs/{run_id}/attempts/{run['run_attempt']}/jobs?per_page=100&page={page}"
-        )["jobs"]
-        jobs.extend(batch)
-        if len(batch) < 100:
-            break
-        page += 1
-    if not jobs or any(
-        j.get("status") != "completed" or j.get("conclusion") != "success" for j in jobs
-    ):
-        raise ValueError(
-            "CI jobs must all complete successfully; skipped jobs are not validation"
+    source = sha(run["head_sha"])
+
+    def source_text(path):
+        record = github.api(f"contents/{path}?ref={source}")
+        return base64.b64decode(record["content"]).decode("utf-8")
+
+    required = required_names(
+        source_text(".github/workflows/ci.yml"), source_text("tests/cases/cases.toml")
+    )
+    identity = (int(run_id), run["run_attempt"], source)
+
+    def check_run(current):
+        if (
+            current.get("id", int(run_id)),
+            current.get("run_attempt"),
+            current.get("head_sha"),
+        ) != identity or any(
+            current.get(key) != run.get(key)
+            for key in ("repository", "head_repository", "event", "head_branch", "path")
+        ):
+            raise ValueError("CI run identity changed during eligibility validation")
+        if current.get("status") not in ("queued", "in_progress", "completed"):
+            raise ValueError("CI run has an invalid validation status")
+        if current.get("conclusion") not in (None, "success") or (
+            current.get("status") == "completed"
+            and current.get("conclusion") != "success"
+        ):
+            raise ValueError("CI run no longer completed successfully")
+        return (
+            current.get("status") == "completed"
+            and current.get("conclusion") == "success"
         )
+
+    check_run(run)
+    current = run
+    started = time.monotonic()
+    deadline = started + 60
+    for attempt in range(7):
+        if attempt:
+            remaining = deadline - time.monotonic()
+            if remaining < 0:
+                raise ValueError("CI job snapshots did not settle within 60 seconds")
+            time.sleep(max(0, started + attempt * 10 - time.monotonic()))
+            current = github.api(f"actions/runs/{run_id}")
+            check_run(current)
+        jobs = []
+        page = 1
+        total = None
+        while True:
+            snapshot = github.api(
+                f"actions/runs/{run_id}/attempts/{run['run_attempt']}/jobs?per_page=100&page={page}"
+            )
+            batch = snapshot["jobs"]
+            total = snapshot.get("total_count", total)
+            jobs.extend(batch)
+            if len(batch) < 100:
+                break
+            page += 1
+        if any(j.get("conclusion") not in (None, "success") for j in jobs):
+            raise ValueError(
+                "CI jobs must all complete successfully; skipped jobs are not validation"
+            )
+        if (
+            jobs
+            and (total is None or len(jobs) == total)
+            and {j.get("name") for j in jobs} == required
+            and len(jobs) == len(required)
+            and all(
+                j.get("status") == "completed" and j.get("conclusion") == "success"
+                for j in jobs
+            )
+        ):
+            settled = github.api(f"actions/runs/{run_id}")
+            if check_run(settled):
+                break
+        if attempt == 6:
+            raise ValueError("CI job snapshots did not settle within 60 seconds")
     source = sha(run["head_sha"])
     master = github.api("git/ref/heads/master")["object"]["sha"]
     if not ancestor(github, source, master):

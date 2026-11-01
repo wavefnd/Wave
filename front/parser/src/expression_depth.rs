@@ -94,6 +94,8 @@ pub fn validate(nodes: &[ASTNode]) -> Result<(), SemanticDiagnostic> {
                 Work::Expression(expr) => {
                     if let Err(failure) = check_expression(expr, 0) {
                         return Err(SemanticDiagnostic {
+                            related: Vec::new(),
+                            suggestions: Vec::new(),
                             code: "E3001".into(),
                             message: MESSAGE.into(),
                             top_level_index: index,

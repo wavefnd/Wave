@@ -14,7 +14,7 @@ import("std::net::address")::{
     socket_addr_as_v4, socket_addr_as_v6,
 };
 import("std::net::error")::{
-    NET_ERROR_TIMED_OUT,
+    NET_ERROR_TIMED_OUT, net_connect_pending,
     NetError, NetResult, NetIoResult,
     net_error, net_error_none, net_error_from_native,
     net_result_ok, net_result_err,
@@ -193,8 +193,7 @@ pub fun tcp_connect_addr(addr: SocketAddr) -> NetResult<TcpStream> {
 }
 
 fun _tcp_connect_pending(result: i64) -> bool {
-    return result == -35 || result == -36 || result == -114 || result == -115
-        || result == -10035 || result == -10036;
+    return net_connect_pending(result);
 }
 
 fun _tcp_finish_connect_timeout(fd: i64, result: i64, timeout_ms: i32) -> NetResult<TcpStream> {

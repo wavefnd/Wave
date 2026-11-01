@@ -101,6 +101,7 @@ impl Validator<'_> {
             Ok(ExpressionType::Known(binding.ty))
         } else {
             self.mark_span(SemanticSpanKind::Identifier, name.clone());
+            self.suggest_variables(name);
             Err(format!("use of undeclared identifier `{}`", name))
         }
     }

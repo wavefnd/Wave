@@ -130,6 +130,12 @@ pub fun unix_accept(listener: UnixListener) -> NetResult<UnixStream> {
 }
 
 pub fun unix_read(stream: UnixStream, buf: ptr<u8>, size: i64) -> NetIoResult {
+    if (size < 0 || (buf == null && size > 0)) {
+        return net_io_error(0, -22);
+    }
+    if (size == 0) {
+        return net_io_ok(0);
+    }
     var count: i64 = net_recv_once(stream.fd, buf, size, 0);
     if (count > 0) { return net_io_ok(count); }
     if (count == 0) { return net_io_eof(0); }

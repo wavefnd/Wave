@@ -59,6 +59,8 @@ pub(super) fn validate(
             if active.contains(&name) {
                 let message = format!("type `{name}` has infinite size through by-value recursive storage; use pointer indirection");
                 return Err(SemanticDiagnostic {
+                    related: Vec::new(),
+                    suggestions: Vec::new(),
                     code: "E3001".into(),
                     label: message.clone(),
                     message,
