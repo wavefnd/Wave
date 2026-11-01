@@ -6,7 +6,7 @@ from types import SimpleNamespace
 import unittest
 from unittest.mock import Mock, patch
 
-from tools.check_freebsd_sys import Console
+from tools.check_freebsd_sys import Console, SINGLE_USER_PROMPT
 
 
 class ConsoleTests(unittest.TestCase):
@@ -60,6 +60,35 @@ class ConsoleTests(unittest.TestCase):
                 console.expect("login:")
         self.assertEqual(console.log.getvalue(), b"booting")
         self.assertEqual(console.buffer, "booting")
+
+    def test_single_user_prompt_survives_interleaved_kernel_device_messages(self):
+        for prompt in (
+            b"Enter full pathname of shell or RETURN for /bin/sh: ",
+            b"Enter full pathncd0 at ata1 bus 0\r\ncd0: QEMU DVD-ROM\r\name of shell or RETURN for /bin/sh: ",
+            b"Enter full pathname of shell or RETURN for /bcd0: QEMU DVD-ROM\r\nin/sh: ",
+        ):
+            with self.subTest(prompt=prompt):
+                console = self.console()
+                chunks = [prompt[:8], prompt[8:], b"\r\nroot@freebsd:~ # "]
+                with (
+                    patch("tools.check_freebsd_sys.select.select", return_value=([console.process.stdout], [], [])),
+                    patch("tools.check_freebsd_sys.os.read", side_effect=chunks),
+                    patch("tools.check_freebsd_sys.time.monotonic", return_value=0),
+                ):
+                    console.expect(SINGLE_USER_PROMPT)
+                    self.assertEqual(console.expect(r"root@[^\r\n]*# ").group(), "root@freebsd:~ # ")
+                self.assertEqual(console.log.getvalue(), b"".join(chunks))
+
+    def test_single_user_prefix_does_not_replace_root_shell_confirmation(self):
+        console = self.console()
+        with (
+            patch("tools.check_freebsd_sys.select.select", return_value=([console.process.stdout], [], [])),
+            patch("tools.check_freebsd_sys.os.read", side_effect=[b"Enter full pathname of shell", b""]),
+            patch("tools.check_freebsd_sys.time.monotonic", return_value=0),
+        ):
+            console.expect(SINGLE_USER_PROMPT)
+            with self.assertRaises(RuntimeError):
+                console.expect(r"root@[^\r\n]*# ")
 
     def test_timeout_uses_deadline_without_waiting_or_reading_from_guest(self):
         console = self.console()

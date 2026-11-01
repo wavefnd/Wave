@@ -24,9 +24,9 @@ from tools.validation_reports import validate_report_path, write_report
 
 ROOT = Path(__file__).resolve().parents[1]
 ARCHES = {"amd64": "x86_64", "arm64": "aarch64", "riscv64": "riscv64"}
-# Kernel device messages can interleave with init's prompt (even inside
-# '/bin/sh:'). Accept its prefix, then require the actual root shell prompt.
-SINGLE_USER_PROMPT = r"Enter full pathname of shell"
+# Kernel device messages can interleave even inside 'pathname' or '/bin/sh:'.
+# Accept the short leading prefix, then require the actual root shell prompt.
+SINGLE_USER_PROMPT = r"Enter full "
 
 
 class Commands:
