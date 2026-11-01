@@ -43,11 +43,11 @@ jobs:
       compiler_version: ${{ steps.gate.outputs.compiler_version }}
       ci_run_id: ${{ steps.gate.outputs.ci_run_id }}
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         ref: master
         persist-credentials: false
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
     - name: Install pinned Meson and Ninja
@@ -81,13 +81,13 @@ jobs:
           target: aarch64-unknown-linux-gnu
           archive_target: aarch64-linux-gnu
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         ref: ${{ needs.nightly-gate.outputs.source_sha }}
         persist-credentials: false
     - name: Setup Rust
       uses: dtolnay/rust-toolchain@1.89.0
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
     - name: Install pinned Meson and Ninja
@@ -99,7 +99,7 @@ jobs:
         GH_TOKEN: ${{ github.token }}
       run: python -m tools.ci.release --channel nightly --stage package --target "${{ matrix.target }}" --provision
         --report-json ci-report.json
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v6
       with:
         name: nightly-package-linux-${{ matrix.display_arch }}
         path: |
@@ -111,7 +111,7 @@ jobs:
       name: Upload package
     - name: Upload logs and summary
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: reports-nightly-linux-${{ matrix.display_arch }}-package
         path: |
@@ -129,17 +129,17 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 240
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         ref: ${{ needs.nightly-gate.outputs.source_sha }}
         persist-credentials: false
     - name: Setup Rust
       uses: dtolnay/rust-toolchain@1.89.0
     - name: Enable LoongArch64 compiler execution
-      uses: docker/setup-qemu-action@v3
+      uses: docker/setup-qemu-action@v4
       with:
         platforms: loong64
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
     - name: Install pinned Meson and Ninja
@@ -151,7 +151,7 @@ jobs:
         GH_TOKEN: ${{ github.token }}
       run: python -m tools.ci.release --channel nightly --stage package --target "linux-loong64" --provision --report-json
         ci-report.json
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v6
       with:
         name: nightly-package-linux-loong64
         path: |
@@ -163,7 +163,7 @@ jobs:
       name: Upload package
     - name: Upload logs and summary
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: reports-nightly-linux-loong64-package
         path: |
@@ -181,14 +181,14 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         ref: ${{ needs.nightly-gate.outputs.source_sha }}
         persist-credentials: false
     - name: Setup Rust
       uses: dtolnay/rust-toolchain@1.89.0
     - name: Cache Cargo build inputs
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: |-
           ~/.cargo/registry
@@ -199,10 +199,10 @@ jobs:
         restore-keys: nightly-cargo-riscv64-${{ hashFiles('Cargo.lock', 'tools/ci/toolchains.json', 'tools/ci/cross_package.py')
           }}-
     - name: Enable RISC-V container execution
-      uses: docker/setup-qemu-action@v3
+      uses: docker/setup-qemu-action@v4
       with:
         platforms: riscv64
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
     - name: Install pinned Meson and Ninja
@@ -214,7 +214,7 @@ jobs:
         GH_TOKEN: ${{ github.token }}
       run: python -m tools.ci.release --channel nightly --stage package --target "linux-riscv64" --provision --report-json
         ci-report.json
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v6
       with:
         name: nightly-package-linux-riscv64
         path: |
@@ -226,7 +226,7 @@ jobs:
       name: Upload package
     - name: Upload logs and summary
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: reports-nightly-linux-riscv64-package
         path: |
@@ -258,13 +258,13 @@ jobs:
           runner: macos-15
           target: aarch64-apple-darwin
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         ref: ${{ needs.nightly-gate.outputs.source_sha }}
         persist-credentials: false
     - name: Setup Rust
       uses: dtolnay/rust-toolchain@1.89.0
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
     - name: Install pinned Meson and Ninja
@@ -276,7 +276,7 @@ jobs:
         GH_TOKEN: ${{ github.token }}
       run: python -m tools.ci.release --channel nightly --stage package --target "${{ matrix.target }}" --provision
         --report-json ci-report.json
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v6
       with:
         name: nightly-package-macos-${{ matrix.display_arch }}
         path: |
@@ -288,7 +288,7 @@ jobs:
       name: Upload package
     - name: Upload logs and summary
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: reports-nightly-macos-${{ matrix.display_arch }}-package
         path: |
@@ -308,14 +308,14 @@ jobs:
     runs-on: windows-2025
     timeout-minutes: 90
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         ref: ${{ needs.nightly-gate.outputs.source_sha }}
         persist-credentials: false
     - uses: dtolnay/rust-toolchain@1.89.0
       with:
         toolchain: 1.89.0-x86_64-pc-windows-msvc
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.11'
         architecture: x64
@@ -330,25 +330,25 @@ jobs:
         ci-report.json
     - name: Preserve native execution evidence
       if: ${{ always() && steps.procedure.outputs.native_acceptance != 'skipped' }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: evidence-nightly-windows-amd64-package-native-tests
         path: ${{ runner.temp }}/wave-msvc-native-x64/
         retention-days: 7
     - name: Preserve case evidence
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: evidence-nightly-windows-amd64-package-cases
         path: wave-cases-windows-amd64.json
     - name: Preserve package acceptance evidence
       if: ${{ always() && steps.procedure.outputs.package_smoke != 'skipped' }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: evidence-nightly-windows-amd64-package-package-tests
         path: ${{ runner.temp }}/wave-package-x64/
         retention-days: 7
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v6
       with:
         name: nightly-package-windows-amd64
         path: |
@@ -359,7 +359,7 @@ jobs:
       name: Upload package
     - name: Upload logs and summary
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: reports-nightly-windows-amd64-package
         path: |
@@ -377,14 +377,14 @@ jobs:
     runs-on: windows-11-vs2026-arm
     timeout-minutes: 90
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         ref: ${{ needs.nightly-gate.outputs.source_sha }}
         persist-credentials: false
     - uses: dtolnay/rust-toolchain@1.89.0
       with:
         toolchain: 1.89.0-aarch64-pc-windows-msvc
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.11'
         architecture: arm64
@@ -399,25 +399,25 @@ jobs:
         ci-report.json
     - name: Preserve native execution evidence
       if: ${{ always() && steps.procedure.outputs.native_acceptance != 'skipped' }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: evidence-nightly-windows-arm64-package-native-tests
         path: ${{ runner.temp }}/wave-msvc-native-arm64/
         retention-days: 7
     - name: Preserve case evidence
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: evidence-nightly-windows-arm64-package-cases
         path: wave-cases-windows-arm64.json
     - name: Preserve package acceptance evidence
       if: ${{ always() && steps.procedure.outputs.package_smoke != 'skipped' }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: evidence-nightly-windows-arm64-package-package-tests
         path: ${{ runner.temp }}/wave-package-arm64/
         retention-days: 7
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v6
       with:
         name: nightly-package-windows-arm64
         path: |
@@ -428,7 +428,7 @@ jobs:
       name: Upload package
     - name: Upload logs and summary
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: reports-nightly-windows-arm64-package
         path: |
@@ -448,12 +448,12 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         fetch-depth: 0
         persist-credentials: false
         ref: ${{ needs.nightly-gate.outputs.source_sha }}
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
     - name: Install pinned Meson and Ninja
@@ -462,7 +462,7 @@ jobs:
       id: freebsd-cache
       run: python3 -m tools.ci.freebsd_cache --github-output "$GITHUB_OUTPUT"
     - name: Restore FreeBSD tools and Cargo cache
-      uses: actions/cache@v4
+      uses: actions/cache@v5
       with:
         path: ${{ steps.freebsd-cache.outputs.path }}
         key: ${{ steps.freebsd-cache.outputs.key }}
@@ -472,7 +472,7 @@ jobs:
         GH_TOKEN: ${{ github.token }}
       run: python3 -m tools.ci.release --channel nightly --stage package --target freebsd-amd64 --provision --report-json
         ci-report.json
-    - uses: actions/upload-artifact@v4
+    - uses: actions/upload-artifact@v6
       with:
         name: nightly-package-freebsd-amd64
         path: wave-v${{ needs.nightly-gate.outputs.compiler_version }}-x86_64-unknown-freebsd.tar.gz*
@@ -481,7 +481,7 @@ jobs:
       name: Upload package
     - name: Upload logs and summary
       if: ${{ always() }}
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v6
       with:
         name: reports-nightly-freebsd-amd64-package
         path: |-
@@ -514,16 +514,16 @@ jobs:
       group: wave-nightly-publish
       cancel-in-progress: false
     steps:
-    - uses: actions/checkout@v4
+    - uses: actions/checkout@v5
       with:
         ref: ${{ needs.nightly-gate.outputs.source_sha }}
         persist-credentials: false
-    - uses: actions/setup-python@v5
+    - uses: actions/setup-python@v6
       with:
         python-version: '3.12'
     - name: Install pinned Meson and Ninja
       run: python -m pip install --disable-pip-version-check -r tools/ci/requirements-build.txt
-    - uses: actions/download-artifact@v4
+    - uses: actions/download-artifact@v7
       with:
         pattern: nightly-package-*
         path: release-assets
