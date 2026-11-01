@@ -6,7 +6,7 @@ import subprocess
 import tempfile
 import unittest
 
-SCRIPT = Path(__file__).resolve().parent / "verify_patch.sh"
+SCRIPT = Path(__file__).resolve().parents[1] / "verify_patch.sh"
 
 
 @unittest.skipUnless(

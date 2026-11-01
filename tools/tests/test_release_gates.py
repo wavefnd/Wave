@@ -18,7 +18,7 @@ from tools import check_case_sources as source_check, run_runtime_cases as runti
 from tools import check_wave_corpus as corpus, run_tests as native
 from tools import check_std_policy as policy, check_freebsd_sys as freebsd
 from tools.test_contracts import TestMetadata, read_elf_contract
-from tools.test_test_contracts import make_elf
+from tools.tests.test_test_contracts import make_elf
 
 
 class ReportProtectionTests(unittest.TestCase):

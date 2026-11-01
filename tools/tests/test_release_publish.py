@@ -205,7 +205,7 @@ class ReleaseAssetTests(unittest.TestCase):
                 "--version",
                 self.version,
             ],
-            cwd=Path(__file__).resolve().parents[1],
+            cwd=Path(__file__).resolve().parents[2],
             text=True,
             capture_output=True,
             timeout=10,

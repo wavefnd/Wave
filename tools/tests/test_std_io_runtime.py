@@ -13,7 +13,7 @@ from unittest.mock import patch
 
 from tools.process_tree import run_process, timeout_output
 
-ROOT = Path(__file__).resolve().parent.parent
+ROOT = Path(__file__).resolve().parents[2]
 COMPILER = os.environ.get("WAVE_TEST_COMPILER")
 
 

@@ -10,7 +10,7 @@ from pathlib import Path
 
 from tools.process_tree import run_process
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 COMPILER = os.environ.get("WAVE_TEST_COMPILER")
 
 
