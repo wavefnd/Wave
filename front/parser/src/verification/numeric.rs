@@ -602,6 +602,7 @@ mod tests {
             assert_eq!(integer_literal_fits(raw, &ty), fits, "{raw} {ty:?}");
         }
     }
+
     #[test]
     fn implicit_assignment_keeps_width_and_cast_policy_distinct() {
         let program = ProgramTypes::default();

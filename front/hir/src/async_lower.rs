@@ -783,6 +783,7 @@ fn emit_frame(
     )));
     (constructor, vec![structure, ASTNode::Function(resume)])
 }
+
 /// Emit ordinary typed operations from the resumable plan. No LLVM details occur here.
 pub fn lower_program(program: &TypedProgram) -> Result<Vec<ASTNode>, AsyncLoweringError> {
     let mut output = program.syntax().to_vec();

@@ -68,6 +68,7 @@ fn native() -> bool {
     llvm::codegen::target::target_spec_for_triple(String::from_utf8_lossy(&o.stdout).trim())
         .is_some()
 }
+
 #[test]
 fn frontend_constant_expressions_match_runtime() {
     if !native() {
@@ -75,6 +76,7 @@ fn frontend_constant_expressions_match_runtime() {
     }
     Case::new().run(include_str!("fixtures/release_constants/numeric.wave"));
 }
+
 #[test]
 fn constant_errors_agree_between_check_and_build() {
     let case = Case::new();
@@ -113,6 +115,7 @@ fn constant_errors_agree_between_check_and_build() {
         }
     }
 }
+
 #[cfg(unix)]
 #[test]
 fn cli_preserves_signal_and_regular_child_status() {

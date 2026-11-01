@@ -62,6 +62,7 @@ fn msvc_machine_crt_and_output_modes_are_independent() {
         }
     }
 }
+
 #[test]
 fn preserves_library_suffixes_paths_and_explicit_argument_order() {
     let args = msvc_link_args(

@@ -42,6 +42,7 @@ fn success(out: Output) {
         String::from_utf8_lossy(&out.stderr)
     );
 }
+
 #[test]
 fn windows_file_and_memory_boundaries() {
     let case = Case::new();
@@ -74,6 +75,7 @@ fn windows_file_and_memory_boundaries() {
         success(Command::new(case.0.join("case.exe")).current_dir(&case.0).output().unwrap());
     }
 }
+
 #[cfg(target_os = "linux")]
 #[test]
 fn windows_boundary_native_api_mocks() {
@@ -117,6 +119,7 @@ fun wide_path_to_utf8(path: ptr<u16>, n: i32, dst: ptr<u8>, cap: i64) -> i64 { r
         success(Command::new(case.0.join("case.exe")).output().unwrap());
     }
 }
+
 #[cfg(unix)]
 #[test]
 fn non_utf8_cli_paths_report_errors_without_colliding_outputs() {

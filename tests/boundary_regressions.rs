@@ -134,19 +134,23 @@ fn float_inequality_is_unordered_in_all_numeric_paths() {
     assert!(ir.matches("fcmp une double").count() >= 3, "{ir}");
     assert!(!ir.contains("fcmp one"), "{ir}");
 }
+
 #[test]
 fn floating_negation_preserves_sign_and_nan_payloads() {
     let ir = shared(130);
     assert!(ir.contains("fneg float") && ir.contains("fneg double"), "{ir}");
 }
+
 #[test]
 fn dirname_fallback_preserves_guard_bytes() {
     shared(131);
 }
+
 #[test]
 fn paths_follow_native_target_policy() {
     shared(132);
 }
+
 #[test]
 fn path_boundaries_compile_for_windows_architectures() {
     let case = Case::new("windows-paths");
@@ -168,22 +172,27 @@ fn path_boundaries_compile_for_windows_architectures() {
         }
     }
 }
+
 #[test]
 fn basename_ignores_trailing_separators() {
     shared(133);
 }
+
 #[test]
 fn durations_normalize_before_overflow_checks() {
     shared(134);
 }
+
 #[test]
 fn fnv1a_matches_known_64_bit_vectors() {
     shared(135);
 }
+
 #[test]
 fn trim_ranges_are_ordered_and_bounded() {
     shared(136);
 }
+
 #[test]
 fn buffer_append_handles_adjacent_allocations_and_moving_self_sources() {
     let case = Case::new("buffer");
@@ -230,6 +239,7 @@ fn read_to_end_rejects_capacity_overflow_and_preserves_normal_growth() {
     fs::write(case.root.join("empty.bin"), []).unwrap();
     case.run(&source("tests/fixtures/boundaries/read_to_end.wave"));
 }
+
 #[test]
 #[cfg(windows)]
 fn empty_windows_event_set_returns_zero() {
