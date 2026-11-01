@@ -261,7 +261,7 @@ class TestStdExampleContracts(unittest.TestCase):
         (self.root / "std").mkdir()
 
     def exercise(self, metadata="", *, exit_code=0, stdout="", stderr="",
-                 fixtures=None, error=None):
+                 fixtures=None, error=None, compiler_env=None):
         source = ("// wave-test: " + metadata + "\n" if metadata else "") + "fun main() {}\n"
         self.example_path.write_text(source, encoding="utf-8")
         for name, contents in (fixtures or {}).items():
@@ -283,7 +283,7 @@ class TestStdExampleContracts(unittest.TestCase):
             patch("sys.stdout", io.StringIO()),
         ):
             failures = check_wave_corpus.run_std_examples(
-                Path("wavec"), {"CUSTOM_ENV": "kept"}, 2.0,
+                Path("wavec"), {"CUSTOM_ENV": "kept"} if compiler_env is None else compiler_env, 2.0,
                 records=records, capability_probe=lambda: None,
             )
         return records[0], failures, calls
@@ -344,12 +344,40 @@ class TestStdExampleContracts(unittest.TestCase):
         self.assertEqual(Path(command[-1]), Path("examples/std/example.wave"))
         self.assertEqual(arguments["input"], "first\nsecond\n")
         self.assertEqual(arguments["env"]["WAVE_CORPUS_FIXTURE"], "enabled")
+        self.assertEqual(arguments["env"]["CUSTOM_ENV"], "kept")
         self.assertEqual(arguments["encoding"], "utf-8")
 
         row, failures, calls = self.exercise("stdin=hello")
         self.assertFalse(failures)
         self.assertEqual(calls[0][1]["input"], "hello\n")
         self.assertEqual(calls[0][1]["env"], {"CUSTOM_ENV": "kept"})
+
+    def test_environment_fixture_overrides_compiler_values_without_mutating_them(self):
+        compiler_env = {"CUSTOM_ENV": "kept", "LLVM_SYS_211_PREFIX": "compiler-sdk"}
+        row, failures, calls = self.exercise(
+            "env-file=env.json",
+            fixtures={"env.json": '{"CUSTOM_ENV": "fixture"}'},
+            compiler_env=compiler_env,
+        )
+        self.assertFalse(failures)
+        self.assertEqual(row["status"], "pass")
+        self.assertEqual(calls[0][1]["env"], {
+            "CUSTOM_ENV": "fixture", "LLVM_SYS_211_PREFIX": "compiler-sdk",
+        })
+        self.assertEqual(compiler_env, {
+            "CUSTOM_ENV": "kept", "LLVM_SYS_211_PREFIX": "compiler-sdk",
+        })
+
+    def test_unfinished_examples_report_no_actual_exit(self):
+        for error, status in (
+            (subprocess.TimeoutExpired("wavec", 2, output="partial output"), "timeout"),
+            (OSError("cannot launch compiler"), "fail"),
+        ):
+            with self.subTest(error=type(error).__name__):
+                row, failures, _ = self.exercise(error=error)
+                self.assertEqual(row["status"], status)
+                self.assertIsNone(row["actual_exit"])
+                self.assertEqual(len(failures), 1)
 
     def test_unsupported_modes_are_failures_not_false_passes(self):
         for metadata in (

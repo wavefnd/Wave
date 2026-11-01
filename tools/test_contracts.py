@@ -341,7 +341,7 @@ def standard_input(metadata: TestMetadata, fixture_root: Path) -> str | None:
     return f"{metadata.stdin}\n" if metadata.stdin is not None else None
 
 
-def test_environment(metadata: TestMetadata, fixture_root: Path):
+def test_environment(metadata: TestMetadata, fixture_root: Path, *, base_env=None):
     if metadata.env_file is None:
         return None
     try:
@@ -359,7 +359,7 @@ def test_environment(metadata: TestMetadata, fixture_root: Path):
         if normalized in names:
             raise ValueError("environment fixture repeats a platform environment name")
         names.add(normalized)
-    environment = dict(os.environ)
+    environment = dict(os.environ if base_env is None else base_env)
     if os.name == "nt":
         environment = {key.upper(): value for key, value in environment.items()}
         values = {key.upper(): value for key, value in values.items()}

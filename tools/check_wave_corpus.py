@@ -156,7 +156,7 @@ def run_std_examples(
     print(f"Running {len(examples)} standard-library examples")
     for path in examples:
         relative = path.relative_to(ROOT)
-        row = {"name": relative.as_posix(), "phase": "run", "status": "fail"}
+        row = {"name": relative.as_posix(), "phase": "run", "status": "fail", "actual_exit": None}
         records.append(row)
         try:
             metadata = parse_test_metadata(path)
@@ -166,7 +166,7 @@ def run_std_examples(
                 raise ValueError("standard-library examples cannot use compile-only runtime")
             fixture_root = ROOT / "tests/fixtures"
             stdin = standard_input(metadata, fixture_root)
-            environment = test_environment(metadata, fixture_root)
+            environment = test_environment(metadata, fixture_root, base_env=compiler_env)
             if environment is None:
                 environment = compiler_env
             row["expected_exit"] = metadata.expected_exit
@@ -274,7 +274,7 @@ def main(argv: list[str] | None = None) -> int:
     compiler_env = os.environ.copy()
     for path in files:
         relative = path.relative_to(ROOT)
-        row = {"name": relative.as_posix(), "phase": "check", "status": "fail"}
+        row = {"name": relative.as_posix(), "phase": "check", "status": "fail", "actual_exit": None}
         records.append(row)
         try:
             result = run_process(
