@@ -269,3 +269,57 @@ fun main() -> i32 {
         "",
     );
 }
+
+#[test]
+fn input_index_destination_evaluates_base_before_index() {
+    run_both(
+        r#"
+fun change(p: ptr<ptr<i32>>, next: ptr<i32>) -> i32 {
+    deref p = next;
+    return 0;
+}
+fun main() -> i32 {
+    var a: i32 = 11;
+    var b: i32 = 22;
+    var p: ptr<i32> = &a;
+    input("{}", p[change(&p, &b)]);
+    println("a={} b={}", a, b);
+    return 0;
+}
+"#,
+        "7\n",
+        "a=7 b=22\n",
+    );
+}
+
+#[test]
+fn input_computed_pointer_and_field_destinations_evaluate_once() {
+    run_both(
+        r#"
+static calls: i32 = 0;
+struct Record { value: i32; }
+fun pointer(p: ptr<i32>) -> ptr<i32> {
+    calls += 1;
+    return p;
+}
+fun offset() -> i32 {
+    calls += 10;
+    return 0;
+}
+fun record(p: ptr<Record>) -> ptr<Record> {
+    calls += 100;
+    return p;
+}
+fun main() -> i32 {
+    var a: i32 = 3;
+    var entry: Record = Record { value: 4 };
+    input("{} {}", pointer(&a)[offset()], record(&entry).value);
+    if (calls != 111) { return 1; }
+    println("a={} entry={} calls={}", a, entry.value, calls);
+    return 0;
+}
+"#,
+        "41 42\n",
+        "a=41 entry=42 calls=111\n",
+    );
+}
