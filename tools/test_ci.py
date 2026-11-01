@@ -374,6 +374,44 @@ class TargetTests(unittest.TestCase):
                 if operation["operation"] != "commands":
                     self.assertIn(operation["operation"], handlers)
 
+
+    def test_workflows_use_node24_native_actions(self):
+        expected = {
+            "actions/checkout": "v5",
+            "actions/setup-python": "v6",
+            "actions/upload-artifact": "v6",
+            "actions/cache": "v5",
+            "actions/setup-node": "v5",
+            "actions/download-artifact": "v7",
+            "docker/setup-qemu-action": "v4",
+        }
+        for name in ("ci.yml", "release.yml", "nightly.yml"):
+            with self.subTest(workflow=name):
+                workflow = (common.ROOT / ".github" / "workflows" / name).read_text(
+                    encoding="utf-8"
+                )
+                seen = set()
+                for line in workflow.splitlines():
+                    line = line.strip().removeprefix("- ").strip()
+                    if not line.startswith("uses: "):
+                        continue
+                    action, separator, version = line[6:].partition("@")
+                    if action in expected:
+                        self.assertTrue(separator, line)
+                        self.assertEqual(version, expected[action], f"{name}: {action}")
+                        seen.add(action)
+                self.assertTrue(
+                    {"actions/checkout", "actions/setup-python",
+                     "actions/upload-artifact", "actions/cache",
+                     "docker/setup-qemu-action"} <= seen
+                )
+
+        ci = (common.ROOT / ".github" / "workflows" / "ci.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertEqual(ci.count("uses: actions/setup-node@v5"), 2)
+        self.assertEqual(ci.count("package-manager-cache: false"), 2)
+
     def test_formatter_and_webassembly_host_unit_suites_are_ci_gated(self):
         plans, procedures = common.inventory()
         python_validation_procedures = (
