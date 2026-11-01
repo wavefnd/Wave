@@ -23,7 +23,7 @@ fn native_wait_status_and_descriptor_boundaries() {
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .env("WAVE_TEST_COMPILER", compiler)
         .env("WAVE_TEST_TARGET", host)
-        .args(["-m", "unittest", "-v", "tools.test_std_process_runtime"])
+        .args(["-m", "unittest", "-v", "tools.tests.test_std_process_runtime"])
         .output()
         .unwrap();
     assert!(

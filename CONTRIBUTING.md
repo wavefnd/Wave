@@ -167,11 +167,11 @@ cargo clippy --locked --workspace --all-targets -- -D warnings
 python3 -m py_compile tools/build/cargo_env.py tools/build/runtime.py \
   tools/build/package.py tools/build/install.py tools/check_wave_corpus.py tools/case_manifest.py \
   tools/populate_case_matrix.py tools/run_tests.py tools/test_contracts.py \
-  tools/test_case_manifest.py tools/test_test_contracts.py tools/process_tree.py \
-  tools/test_process_tree.py tools/test_run_tests.py tools/test_get_maintainer.py
-python3 -m unittest tools.test_case_manifest tools.test_test_contracts tools.test_process_tree \
-  tools.test_run_tests tools.test_get_maintainer tools.test_check_wave_corpus \
-  tools.test_corpus_execution tools.test_freebsd_console
+  tools/tests/test_case_manifest.py tools/tests/test_test_contracts.py tools/process_tree.py \
+  tools/tests/test_process_tree.py tools/tests/test_run_tests.py tools/tests/test_get_maintainer.py
+python3 -m unittest tools.tests.test_case_manifest tools.tests.test_test_contracts tools.tests.test_process_tree \
+  tools.tests.test_run_tests tools.tests.test_get_maintainer tools.tests.test_check_wave_corpus \
+  tools.tests.test_corpus_execution tools.tests.test_freebsd_console
 cargo build --locked --release --jobs 2
 cargo test --locked --workspace --all-targets --verbose
 python3 tools/check_wave_corpus.py --wavec target/release/wavec --run-std-examples
@@ -196,7 +196,7 @@ continues to artifact checks only after that command succeeds. For example,
 the Windows ARM64 object-output procedure calls `windows_object`, which runs
 the compiler before reading `test1.o`. If a check’s failure or artifact seems
 misleading, inspect both the handler and `Runner.run`, then look for regression
-tests in [`tools/test_ci.py`](tools/test_ci.py).
+tests in [`tools/tests/test_ci.py`](tools/tests/test_ci.py).
 
 Case runner JSON reports (`tools/run_tests.py --report-json PATH`) use
 `schema_version: 1`. `selection.mode` distinguishes automatic native selection
@@ -321,7 +321,7 @@ Wave uses:
 - Locked Rust tests: `cargo test --locked --workspace --all-targets`
 - Automated `.wave` language cases and std examples via
   `python3 tools/check_wave_corpus.py`
-- Python tooling unit tests: `python3 -m unittest discover -s tools -p "test_*.py"`
+- Python tooling unit tests: `python3 -m unittest discover -s tools/tests -t . -p "test_*.py"`
 
 Contributors should:
 

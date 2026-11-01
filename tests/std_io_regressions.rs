@@ -21,9 +21,9 @@ fn native_standard_io_preserves_data_descriptors_and_deadlines() {
             "-m",
             "unittest",
             "-v",
-            "tools.test_std_io_runtime",
-            "tools.test_std_boundary_runtime",
-            "tools.test_std_socket_boundaries",
+            "tools.tests.test_std_io_runtime",
+            "tools.tests.test_std_boundary_runtime",
+            "tools.tests.test_std_socket_boundaries",
         ])
         .output()
         .unwrap();
