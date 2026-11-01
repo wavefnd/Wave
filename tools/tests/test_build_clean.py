@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 
 
 TARGETS = ["x86_64-unknown-linux-gnu", "aarch64-pc-windows-msvc"]

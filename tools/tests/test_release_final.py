@@ -99,7 +99,7 @@ class FinalReleaseTests(unittest.TestCase):
     @unittest.skipUnless(shutil.which("node"), "Node required")
     def test_smoke_runner_contracts(self):
         subprocess.run(
-            ["node", "--test", str(Path(__file__).with_name("test_wasm_smoke.mjs"))],
+            ["node", "--test", str(Path(__file__).resolve().parents[1] / "test_wasm_smoke.mjs")],
             check=True,
             timeout=60,
         )
@@ -220,7 +220,7 @@ class FinalReleaseTests(unittest.TestCase):
             self.assertEqual(log.read_text(), "ready\n")
 
     def test_darwin_bundles_versioned_and_transitive_dependencies(self):
-        from tools.test_msvc_package_tools import DRIVER
+        from tools.tests.test_msvc_package_tools import DRIVER
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
@@ -273,7 +273,7 @@ class FinalReleaseTests(unittest.TestCase):
                 DRIVER.copy_darwin_dependency_closure(stage, [(compiler, compiler)])
 
     def test_darwin_resolves_loader_relative_and_rpath_libraries(self):
-        from tools.test_msvc_package_tools import DRIVER
+        from tools.tests.test_msvc_package_tools import DRIVER
 
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

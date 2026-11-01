@@ -94,7 +94,7 @@ class CaseManifestTests(unittest.TestCase):
                     self.assertFalse(target.ci)
 
     def test_unannounced_riscv_os_ports_are_not_reserved_or_discovered(self):
-        cases_root = Path(__file__).resolve().parents[1] / "tests" / "cases"
+        cases_root = Path(__file__).resolve().parents[2] / "tests" / "cases"
         for os_name in ("macos", "windows", "ios"):
             with self.subTest(os=os_name):
                 with self.assertRaises(CaseManifestError):

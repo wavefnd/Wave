@@ -17,7 +17,7 @@ from unittest.mock import patch
 from tools.build import cargo_env, install
 from tools.ci.targets import PINS
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 MESON = [sys.executable, "-m", "mesonbuild.mesonmain"]
 HAS_MESON = importlib.util.find_spec("mesonbuild") is not None
 

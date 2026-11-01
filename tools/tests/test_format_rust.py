@@ -2,10 +2,10 @@ import unittest
 from pathlib import Path
 import sys
 
-sys.path.append(str(Path(__file__).resolve().parent))
+sys.path.append(str(Path(__file__).resolve().parents[1]))
 import importlib.util
 
-spec = importlib.util.spec_from_file_location("format_rust", Path(__file__).resolve().parent / "format-rust.py")
+spec = importlib.util.spec_from_file_location("format_rust", Path(__file__).resolve().parents[1] / "format-rust.py")
 format_rust = importlib.util.module_from_spec(spec)
 sys.modules["format_rust"] = format_rust
 spec.loader.exec_module(format_rust)

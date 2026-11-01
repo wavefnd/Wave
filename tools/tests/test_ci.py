@@ -412,6 +412,29 @@ class TargetTests(unittest.TestCase):
         self.assertEqual(ci.count("uses: actions/setup-node@v5"), 2)
         self.assertEqual(ci.count("package-manager-cache: false"), 2)
 
+
+    def test_python_tooling_tests_use_a_separate_package(self):
+        root = common.ROOT
+        moved = sorted((root / "tools" / "tests").glob("test_*.py"))
+        self.assertEqual(len(moved), 39)
+        self.assertEqual(
+            sorted(path.name for path in (root / "tools").glob("test_*.py")),
+            ["test_contracts.py"],
+        )
+        _, procedures = common.inventory()
+        for procedure in procedures.values():
+            for command in procedure.get("commands", []):
+                for arg in command:
+                    if not isinstance(arg, str):
+                        continue
+                    self.assertFalse(
+                        arg.startswith("tools.test_")
+                        and arg != "tools.test_contracts",
+                        arg,
+                    )
+                    if arg.startswith("tools/test_") and arg.endswith(".py"):
+                        self.assertEqual(arg, "tools/test_contracts.py")
+
     def test_formatter_and_webassembly_host_unit_suites_are_ci_gated(self):
         plans, procedures = common.inventory()
         python_validation_procedures = (
@@ -428,7 +451,7 @@ class TargetTests(unittest.TestCase):
                     if command[:3] == ["@python", "-m", "unittest"]
                 ]
                 self.assertEqual(len(unit_commands), 1)
-                self.assertIn("tools.test_format_rust", unit_commands[0])
+                self.assertIn("tools.tests.test_format_rust", unit_commands[0])
 
         stages = plans["rust/build-wasm"]["stages"]
         names = [stage["procedure"] for stage in stages]

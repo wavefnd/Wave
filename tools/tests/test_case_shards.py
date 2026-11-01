@@ -14,7 +14,7 @@ import unittest
 from unittest.mock import Mock, patch
 
 from tools import case_manifest, run_tests
-from tools.test_run_tests import fake_compiler
+from tools.tests.test_run_tests import fake_compiler
 from tools.ci import test as ci_test
 from tools.test_contracts import (
     TestMetadata,
