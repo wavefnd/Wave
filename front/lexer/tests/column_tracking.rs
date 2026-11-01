@@ -6,8 +6,7 @@ use lexer::{token::TokenType, Lexer};
 fn many_tokens_on_one_line_keep_utf8_columns_and_newline_positions() {
     let count = 8_192;
     for newline in ["\n", "\r\n", "\r"] {
-        let source =
-            format!("{}café += \"λ🦀\";{newline}  이름 += 1;", "x ".repeat(count));
+        let source = format!("{}café += \"λ🦀\";{newline}  이름 += 1;", "x ".repeat(count));
         let tokens = Lexer::new_with_file(&source, "columns.wave").tokenize().unwrap();
         assert_eq!(tokens.len(), count + 9);
 
