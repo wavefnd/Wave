@@ -212,14 +212,9 @@ fun check(left: Flag, right: bool) -> bool {
         panic!("expected check function");
     };
     for node in function.body.iter().take(2) {
-        let ASTNode::Variable(variable) = node else {
-            panic!("expected variable")
-        };
+        let ASTNode::Variable(variable) = node else { panic!("expected variable") };
         let expression = variable.initial_value.as_ref().unwrap();
-        assert_eq!(
-            program.type_of(expression),
-            Some(&HirExpressionType::Resolved(WaveType::Bool))
-        );
+        assert_eq!(program.type_of(expression), Some(&HirExpressionType::Resolved(WaveType::Bool)));
         let fact = program.numeric_expression_of(expression).unwrap();
         assert_eq!(fact.computation_type, Some(WaveType::Bool));
         assert_eq!(fact.result_type, WaveType::Bool);
@@ -229,14 +224,10 @@ fun check(left: Flag, right: bool) -> bool {
 #[test]
 fn bool_ordering_arithmetic_and_mixed_equality_stay_rejected() {
     for expression in ["a < b", "a > b", "a + b", "a == 1", "a != 1.0"] {
-        let source =
-            format!("fun check(a: bool, b: bool) {{ var result: bool = {expression}; }}");
+        let source = format!("fun check(a: bool, b: bool) {{ var result: bool = {expression}; }}");
         let mut lexer = Lexer::new(&source);
         let tokens = lexer.tokenize().unwrap();
         let syntax = parse_syntax_only(&tokens).unwrap();
-        assert!(
-            TypedProgram::lower(syntax).is_err(),
-            "{expression} should be rejected"
-        );
+        assert!(TypedProgram::lower(syntax).is_err(), "{expression} should be rejected");
     }
 }
