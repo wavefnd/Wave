@@ -235,5 +235,38 @@ class TestFormatRustRegressions(unittest.TestCase):
         expected = source.replace("\n// Second", "\n\n// Second")
         self.assertEqual(format_rust.add_function_spacing(source), expected)
 
+    def test_combined_function_modifiers_and_restricted_visibility(self):
+        for prefix in (
+            "pub(crate) const",
+            "pub(in crate::widgets) const unsafe",
+            "pub(self) async",
+            'pub(super) unsafe extern "C"',
+            'extern "C-unwind"',
+            "pub const",
+            "const unsafe",
+        ):
+            with self.subTest(prefix=prefix):
+                source = f"{prefix} fn first() {{}}\n{prefix} fn second() {{}}\n"
+                expected = source.replace(
+                    f"{prefix} fn second()", f"\n{prefix} fn second()", 1
+                )
+                self.assertEqual(
+                    format_rust.function_ranges(source.splitlines(keepends=True)),
+                    [(0, 0, 0), (1, 1, 0)],
+                )
+                self.assertEqual(format_rust.add_function_spacing(source), expected)
+                self.assertEqual(format_rust.add_function_spacing(expected), expected)
+
+    def test_extern_blocks_and_bodyless_declarations_are_not_functions(self):
+        for item in (
+            'extern "C" {\n    fn imported();\n}\n',
+            'pub extern "C" {\n    fn imported();\n}\n',
+            "extern crate alloc;\n",
+            "trait Contract {\n    fn declared();\n}\n",
+        ):
+            with self.subTest(item=item):
+                source = "fn first() {}\n" + item + "fn second() {}\n"
+                self.assertEqual(format_rust.add_function_spacing(source), source)
+
 if __name__ == "__main__":
     unittest.main()

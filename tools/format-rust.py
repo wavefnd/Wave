@@ -3,6 +3,7 @@
 import argparse
 import subprocess
 import sys
+import re
 import unicodedata
 from pathlib import Path
 
@@ -215,31 +216,40 @@ def strip_lexical_content(line, state):
     return "".join(result)
 
 
+_FUNCTION_VISIBILITY = re.compile(
+    r"pub(?:\((?:crate|self|super|in\s+"
+    r"(?:crate|self|super)(?:::[A-Za-z_][A-Za-z_0-9]*)*)\))?\s+"
+)
+_FUNCTION_MODIFIER = re.compile(r"(const|async|unsafe)\s+")
+
+
 def is_function_start(text):
     stripped = text.lstrip()
-
-    while stripped.startswith("#["):
+    if stripped.startswith("#["):
         return False
 
-    prefixes = (
-        "fn ",
-        "pub fn ",
-        "pub(crate) fn ",
-        "pub(super) fn ",
-        "pub(self) fn ",
-        "async fn ",
-        "pub async fn ",
-        "pub(crate) async fn ",
-        "pub(super) async fn ",
-        "unsafe fn ",
-        "pub unsafe fn ",
-        "const fn ",
-        "pub const fn ",
-        "extern ",
-        "pub extern ",
-    )
+    visibility = _FUNCTION_VISIBILITY.match(stripped)
+    if visibility:
+        stripped = stripped[visibility.end():]
 
-    return stripped.startswith(prefixes)
+    # Qualifiers have a defined order; extern must precede fn.
+    order = {"const": 0, "async": 1, "unsafe": 2}
+    previous = -1
+    while modifier := _FUNCTION_MODIFIER.match(stripped):
+        position = order[modifier.group(1)]
+        if position <= previous:
+            return False
+        previous = position
+        stripped = stripped[modifier.end():]
+
+    # The lexical pass blanks ABI strings, so both extern fn and
+    # extern "C" fn end with the same fn token here.
+    external = re.match(r"extern\s+", stripped)
+    if external:
+        stripped = stripped[external.end():]
+
+    return bool(re.match(r"fn\s+", stripped))
+
 
 
 def function_ranges(lines):
