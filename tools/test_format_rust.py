@@ -278,8 +278,8 @@ class TestFormatRustRegressions(unittest.TestCase):
         with TemporaryDirectory() as directory:
             root = Path(directory)
             path = root / "example.rs"
-            missing = "fn first() {}\\nfn second() {}\\n"
-            fixed = "fn first() {}\\n\\nfn second() {}\\n"
+            missing = "fn first() {}\nfn second() {}\n"
+            fixed = "fn first() {}\n\nfn second() {}\n"
             path.write_text(missing, encoding="utf-8")
 
             with (
