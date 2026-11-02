@@ -45,6 +45,7 @@ impl Number {
     pub fn as_u64(&self) -> Option<u64> {
         self.raw.parse().ok()
     }
+
     /// Explicit approximate conversion for consumers that require floating point.
     pub fn as_f64(&self) -> Option<f64> {
         self.raw.parse::<f64>().ok().filter(|v| v.is_finite())
@@ -194,6 +195,7 @@ pub fn validate(input: &str, format: Format) -> Result<(), Error> {
 pub fn dumps(value: &Value, format: Format, pretty: bool) -> Result<String, Error> {
     writer::serialize(value, format, pretty, MAX_DEPTH)
 }
+
 /// Write an already constructed value with an explicit, bounded container depth.
 /// Useful when a validated domain tree expands into several wire containers per node.
 /// Parsing and the default writer retain their independent 256-container limit.
@@ -244,6 +246,7 @@ fn valid_date(raw: &str) -> bool {
     let days = [0, 31, 28 + u32::from(leap), 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
     (1..=12).contains(&month) && day > 0 && day <= days[month]
 }
+
 fn valid_datetime(raw: &str) -> bool {
     let b = raw.as_bytes();
     if b.len() != 19

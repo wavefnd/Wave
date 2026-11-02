@@ -46,6 +46,7 @@ fn member(name: &str, bytes: &[u8]) -> Vec<u8> {
     }
     b
 }
+
 #[test]
 fn rejects_wrong_machine_images_bitcode_and_truncation() {
     assert!(coff::inspect(&obj(0x8664), X64).is_ok());
@@ -63,6 +64,7 @@ fn rejects_wrong_machine_images_bitcode_and_truncation() {
     b[40] = 255;
     assert!(coff::inspect(&b, X64).is_err());
 }
+
 #[test]
 fn handles_bigobj_and_short_import_objects() {
     let mut b = vec![0; 56];
@@ -87,6 +89,7 @@ fn handles_bigobj_and_short_import_objects() {
     b.pop();
     assert!(coff::inspect(&b, X64).is_err());
 }
+
 #[test]
 fn archives_check_every_member_and_report_long_names() {
     let mut a = b"!<arch>\n".to_vec();
@@ -104,6 +107,7 @@ fn archives_check_every_member_and_report_long_names() {
     assert!(coff::inspect(&a, X64).is_err());
     assert!(coff::inspect(b"!<thin>\n", X64).is_err());
 }
+
 #[test]
 fn sdk_selects_complete_numeric_versions_and_target_architecture() {
     let t = Temp::new();
@@ -126,6 +130,7 @@ fn sdk_selects_complete_numeric_versions_and_target_architecture() {
     env.insert("WindowsSDKVersion".into(), "10.0.9.0\\".into());
     assert!(sdk::discover(ARM, &[], &env)[0].to_string_lossy().contains("10.0.9.0"));
 }
+
 #[test]
 fn explicit_paths_precede_environment_and_wrong_architecture_fails_closed() {
     let t = Temp::new();
@@ -141,6 +146,7 @@ fn explicit_paths_precede_environment_and_wrong_architecture_fails_closed() {
     args.push("missing.lib".into());
     assert!(sdk::validate_arguments(X64, &args).unwrap_err().contains("missing.lib"));
 }
+
 #[test]
 fn missing_default_libraries_are_actionable_and_nodefaultlib_is_respected() {
     let args = vec!["/DEFAULTLIB:wave_nonexistent_sdk.lib".into()];

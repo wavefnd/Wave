@@ -22,6 +22,7 @@ fn copy_std(source: &Path, destination: &Path) {
         }
     }
 }
+
 #[test]
 fn checked_typed_memory_and_sleb128_preserve_data_and_failure_state() {
     let root = Path::new(env!("CARGO_MANIFEST_DIR"));

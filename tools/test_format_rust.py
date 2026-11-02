@@ -268,5 +268,36 @@ class TestFormatRustRegressions(unittest.TestCase):
                 source = "fn first() {}\n" + item + "fn second() {}\n"
                 self.assertEqual(format_rust.add_function_spacing(source), source)
 
+
+    def test_check_mode_rejects_missing_spacing_without_changing_files(self):
+        from contextlib import redirect_stderr, redirect_stdout
+        from io import StringIO
+        from tempfile import TemporaryDirectory
+        from unittest.mock import call, patch
+
+        with TemporaryDirectory() as directory:
+            root = Path(directory)
+            path = root / "example.rs"
+            missing = "fn first() {}\nfn second() {}\n"
+            fixed = "fn first() {}\n\nfn second() {}\n"
+            path.write_text(missing, encoding="utf-8")
+
+            with (
+                patch.object(format_rust, "ROOT", root),
+                patch.object(format_rust, "rust_files", return_value=[path]),
+                patch.object(format_rust, "run_rustfmt") as rustfmt,
+                patch.object(sys, "argv", ["format-rust.py", "--check"]),
+                redirect_stdout(StringIO()),
+                redirect_stderr(StringIO()) as errors,
+            ):
+                self.assertEqual(format_rust.main(), 1)
+                self.assertEqual(path.read_text(encoding="utf-8"), missing)
+                self.assertIn("Rust function spacing", errors.getvalue())
+
+                path.write_text(fixed, encoding="utf-8")
+                self.assertEqual(format_rust.main(), 0)
+                self.assertEqual(path.read_text(encoding="utf-8"), fixed)
+                self.assertEqual(rustfmt.call_args_list, [call(True), call(True)])
+
 if __name__ == "__main__":
     unittest.main()
