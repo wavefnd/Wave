@@ -37,7 +37,7 @@ with open(os.environ["CORPUS_RECORD"], "a", encoding="utf-8") as stream:
     stream.write(json.dumps({"args":args, "home":os.environ["HOME"], "profile":os.environ["USERPROFILE"]}) + "\\n")
 if "timeout" in args[-1]:
     print("partial timeout output", flush=True)
-    time.sleep(5)
+    time.sleep(30)
 print("compiler stdout", flush=True)
 print("compiler stderr", file=sys.stderr, flush=True)
 sys.exit(7 if "failure" in args[-1] else 0)
@@ -138,15 +138,19 @@ sys.exit(7 if "failure" in args[-1] else 0)
                 (root / f"examples/{name}.wave").write_text("failure fixture")
             report = root / "report.json"
             status, records, stdout, stderr = self.run_corpus(
-                root, compiler, script, "--timeout=0.2", "--report-json", str(report)
+                root, compiler, script, "--timeout=5", "--report-json", str(report)
             )
             self.assertEqual(status, 1)
             self.assertIn("compiler stdout", stderr)
             self.assertIn("compiler stderr", stderr)
-            self.assertIn("timed out after 0.2s", stderr)
+            self.assertIn("timed out after 5s", stderr)
             rows = {row["name"]: row for row in json.loads(report.read_text())["tests"]}
+            self.assertEqual(rows["examples/failure.wave"]["status"], "fail")
             self.assertEqual(rows["examples/failure.wave"]["actual_exit"], 7)
+            self.assertEqual(rows["examples/failure.wave"]["stdout"], "compiler stdout\n")
+            self.assertEqual(rows["examples/failure.wave"]["stderr"], "compiler stderr\n")
             self.assertEqual(rows["examples/timeout.wave"]["status"], "timeout")
+            self.assertIsNone(rows["examples/timeout.wave"]["actual_exit"])
             self.assertEqual(len(records), 5)
 
     def test_recursive_discovery_excludes_non_wave_files(self):
