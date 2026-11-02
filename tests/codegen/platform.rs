@@ -39,6 +39,34 @@ pub fun sys_random_read(buffer: ptr<u8>, size: i64) -> i64 {
     if (step == 3) { buffer[0] = 33; return 1; }
     return -5;
 }
+"#,
+    )
+    .unwrap();
+    let source = write_wave(
+        &dir,
+        "partial.wave",
+        r#"
+import("std::random::fill")::{RandomFillResult, random_fill};
+fun main() -> i32 {
+    var data: array<u8, 5> = [85, 85, 85, 85, 85];
+    var result: RandomFillResult = random_fill(&data[0], 5);
+    if (result.ok || result.written != 3 || result.error != -5) { return 1; }
+    if (data[0] != 31 || data[1] != 32 || data[2] != 33 || data[3] != 85 || data[4] != 85) { return 2; }
+    return 0;
+}
+"#,
+    );
+    let output = wavec_command()
+        .env("HOME", &home)
+        .arg("build")
+        .arg(source)
+        .arg("--run")
+        .arg("--out-dir")
+        .arg(dir.join("partial"))
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{}", String::from_utf8_lossy(&output.stderr));
+}
 
 #[test]
 fn linux_numeric_and_explicit_table_resolvers_are_libc_independent() {
@@ -271,6 +299,101 @@ fun add(a: i32, b: i32) -> i32 {
     return a + b;
 }
 
+fun main() -> i32 {
+    return add(20, 22);
+}
+"#,
+    );
+    let out_dir = dir.join("out");
+    let (plan, stderr) = run_wavec_capture([
+        OsStr::new("build"),
+        source.as_os_str(),
+        OsStr::new("--target"),
+        OsStr::new("wasm32-unknown-unknown"),
+        OsStr::new("--dry-run"),
+        OsStr::new("--error-format=json"),
+        OsStr::new("--out-dir"),
+        out_dir.as_os_str(),
+    ]);
+    assert!(stderr.trim().is_empty(), "unexpected stderr:\n{stderr}");
+    assert!(plan.contains("\"target\":\"wasm32-unknown-unknown\""), "{plan}");
+    assert!(plan.contains("\"program\":") && plan.contains("wasm-ld"), "{plan}");
+    assert!(plan.contains("--no-entry"), "{plan}");
+    assert!(plan.contains("--allow-undefined"), "{plan}");
+    assert!(plan.contains("--export-if-defined=main"), "{plan}");
+    assert!(plan.contains("--export-memory"), "{plan}");
+    assert!(
+        plan.contains(&json_string_for_test(&out_dir.join("module.wasm").to_string_lossy())),
+        "{plan}"
+    );
+
+    let (run_plan, stderr) = run_wavec_capture([
+        OsStr::new("build"),
+        source.as_os_str(),
+        OsStr::new("--target"),
+        OsStr::new("wasm32-unknown-unknown"),
+        OsStr::new("--run"),
+        OsStr::new("--dry-run"),
+        OsStr::new("--error-format=json"),
+    ]);
+    assert!(stderr.trim().is_empty(), "{stderr}");
+    assert!(run_plan.contains("\"program\":\"node\""), "{run_plan}");
+    assert!(run_plan.contains("--input-type=module"), "{run_plan}");
+
+    let wasm64_out = dir.join("wasm64-out");
+    run_wavec([
+        OsStr::new("build"),
+        source.as_os_str(),
+        OsStr::new("--target"),
+        OsStr::new("wasm64-unknown-unknown"),
+        OsStr::new("--emit=ir"),
+        OsStr::new("--out-dir"),
+        wasm64_out.as_os_str(),
+    ]);
+    let wasm64_ir = fs::read_to_string(wasm64_out.join("module.ll")).unwrap();
+    assert!(
+        wasm64_ir.contains("target triple = \"wasm64-unknown-unknown\"")
+            && wasm64_ir.contains("p:64:64"),
+        "{wasm64_ir}"
+    );
+
+    let (wasm64_plan, stderr) = run_wavec_capture([
+        OsStr::new("build"),
+        source.as_os_str(),
+        OsStr::new("--target"),
+        OsStr::new("wasm64-unknown-unknown"),
+        OsStr::new("--run"),
+        OsStr::new("--dry-run"),
+        OsStr::new("--error-format=json"),
+    ]);
+    assert!(stderr.trim().is_empty(), "{stderr}");
+    assert!(wasm64_plan.contains("-mwasm64"), "{wasm64_plan}");
+    let parsed = utils::wson::parse_json(&wasm64_plan).unwrap();
+    let Some(utils::wson::Value::Array(args)) = parsed.get("execute").unwrap().get("args") else {
+        panic!("missing WebAssembly host arguments: {wasm64_plan}");
+    };
+    assert!(
+        !args.contains(&utils::wson::Value::string("--experimental-wasm-memory64")),
+        "memory64 host flags must be selected at execution time: {wasm64_plan}"
+    );
+
+    let asm_source =
+        write_wave(&dir, "inline_asm.wave", "fun main() {\n    asm {\n        \"nop\"\n    }\n}\n");
+    let asm_error = run_wavec_expect_failure([
+        OsStr::new("build"),
+        asm_source.as_os_str(),
+        OsStr::new("--target"),
+        OsStr::new("wasm32-unknown-unknown"),
+        OsStr::new("--emit=ir"),
+        OsStr::new("--out-dir"),
+        out_dir.as_os_str(),
+    ]);
+    assert!(
+        asm_error.contains("inline assembly is not supported for webassembly wasm32 unknown"),
+        "{asm_error}"
+    );
+}
+
 #[test]
 #[cfg(feature = "llvm-target-wasm")]
 fn wasm_host_output_preserves_bytes_numeric_formatting_and_exit_status() {
@@ -304,6 +427,31 @@ fun main() -> i32 {
     print("한글 {} {c} {} {} {} {} 100%", "text", 65, -42, large, zero, 0.0078125 as f64);
     puts(" host puts");
     return 7;
+}
+"#,
+    );
+    let expected = "한글 text A -42 340282366920938463463374607431768211455 -0.000000 0.007812 100% host puts\n";
+    for target in ["wasm32-unknown-unknown", "wasm32-wasip1", "wasm64-unknown-unknown"] {
+        for optimization in ["-O0", "-O2"] {
+            let output = wavec_command()
+                .arg("build")
+                .arg(&source)
+                .args(["--target", target, optimization, "--run", "--std-root"])
+                .arg(Path::new(env!("CARGO_MANIFEST_DIR")).join("std"))
+                .arg("--out-dir")
+                .arg(dir.join(target))
+                .output()
+                .unwrap();
+            assert_eq!(
+                output.status.code(),
+                Some(7),
+                "{target} {optimization}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            assert_eq!(output.stdout, expected.as_bytes(), "{target} {optimization}");
+        }
+    }
+    fs::remove_dir_all(dir).unwrap();
 }
 
 #[test]
@@ -590,6 +738,54 @@ fun leaf(a: i64, b: i64, c: i64, d: i64, e: i64) -> i64 {
     var y: i64 = c + d;
     return x + y + e;
 }
+"#,
+    );
+
+    let explicit_dir = dir.join("explicit");
+    run_wavec([
+        OsStr::new("build"),
+        src.as_os_str(),
+        OsStr::new("--freestanding"),
+        OsStr::new("--emit=ir"),
+        OsStr::new("--out-dir"),
+        explicit_dir.as_os_str(),
+    ]);
+    let explicit_out = explicit_dir.join("leaf.ll");
+    let explicit_ir = fs::read_to_string(&explicit_out).unwrap();
+    assert!(
+        explicit_ir.contains("noredzone"),
+        "--freestanding IR must carry the LLVM noredzone function attribute:\n{}",
+        explicit_ir
+    );
+    assert!(
+        explicit_ir.contains("nounwind"),
+        "--freestanding IR must mark Wave functions nounwind:\n{}",
+        explicit_ir
+    );
+
+    let bare_dir = dir.join("bare");
+    run_wavec([
+        OsStr::new("build"),
+        src.as_os_str(),
+        OsStr::new("--target"),
+        OsStr::new("x86_64-unknown-none-elf"),
+        OsStr::new("--emit=ir"),
+        OsStr::new("--out-dir"),
+        bare_dir.as_os_str(),
+    ]);
+    let bare_out = bare_dir.join("leaf.ll");
+    let bare_ir = fs::read_to_string(&bare_out).unwrap();
+    assert!(
+        bare_ir.contains("noredzone"),
+        "bare-metal target IR must carry the LLVM noredzone function attribute:\n{}",
+        bare_ir
+    );
+    assert!(
+        bare_ir.contains("nounwind"),
+        "bare-metal target IR must mark Wave functions nounwind:\n{}",
+        bare_ir
+    );
+}
 
 #[test]
 #[cfg(any(feature = "llvm-target-all", feature = "llvm-target-x86"))]
@@ -698,6 +894,79 @@ fun consume(value: f64) {
     }
 }
 
+fun main() {}
+"#,
+    );
+    let float_out = dir.join("float-register");
+    run_wavec([
+        OsStr::new("build"),
+        float_source.as_os_str(),
+        OsStr::new("--target"),
+        OsStr::new("riscv64-unknown-linux-gnu"),
+        OsStr::new("--abi=lp64d"),
+        OsStr::new("--emit=obj"),
+        OsStr::new("--out-dir"),
+        float_out.as_os_str(),
+    ]);
+    assert!(float_out.join("float_register.o").is_file());
+
+    let jump_source = write_wave(
+        &dir,
+        "jalr.wave",
+        r#"
+fun jump(addr: u64) {
+    asm {
+        "jalr x0, 0(a0)"
+        in("a0") addr
+        clobber("stack")
+    }
+}
+
+fun main() {}
+"#,
+    );
+    let jump_out = dir.join("jalr-missing-noreturn");
+    let error = run_wavec_expect_failure([
+        OsStr::new("build"),
+        jump_source.as_os_str(),
+        OsStr::new("--target"),
+        OsStr::new("riscv64-unknown-none-elf"),
+        OsStr::new("--emit=ir"),
+        OsStr::new("--out-dir"),
+        jump_out.as_os_str(),
+    ]);
+    assert!(error.contains("clobber(\"noreturn\")"), "{}", error);
+
+    let noreturn_source = write_wave(
+        &dir,
+        "jalr_noreturn.wave",
+        r#"
+fun jump(addr: u64) {
+    asm {
+        "jalr x0, 0(a0)"
+        in("a0") addr
+        clobber("stack")
+        clobber("noreturn")
+    }
+}
+
+fun main() {}
+"#,
+    );
+    let noreturn_out = dir.join("jalr-noreturn");
+    run_wavec([
+        OsStr::new("build"),
+        noreturn_source.as_os_str(),
+        OsStr::new("--target"),
+        OsStr::new("riscv64-unknown-none-elf"),
+        OsStr::new("--emit=ir"),
+        OsStr::new("--out-dir"),
+        noreturn_out.as_os_str(),
+    ]);
+    let ir = fs::read_to_string(noreturn_out.join("jalr_noreturn.ll")).unwrap();
+    assert!(ir.contains("unreachable"), "{}", ir);
+}
+
 #[test]
 #[cfg(any(feature = "llvm-target-all", feature = "llvm-target-riscv"))]
 fn riscv64_ir_and_bitcode_preserve_target_contract_when_recompiled() {
@@ -769,6 +1038,128 @@ fn riscv64_relocation_atomic_and_compressed_feature_contracts() {
 define ptr @local_address() {
 entry:
   ret ptr @local_value
+}
+
+define ptr @external_address() {
+entry:
+  ret ptr @external_value
+}
+"#,
+    );
+    let pic_out = dir.join("pic");
+    let static_out = dir.join("static");
+    run_wavec([
+        OsStr::new("build"),
+        relocation_source.as_os_str(),
+        OsStr::new("--target"),
+        OsStr::new("riscv64-unknown-linux-gnu"),
+        OsStr::new("-Crelocation-model=pic"),
+        OsStr::new("--emit=obj"),
+        OsStr::new("--out-dir"),
+        pic_out.as_os_str(),
+    ]);
+    run_wavec([
+        OsStr::new("build"),
+        relocation_source.as_os_str(),
+        OsStr::new("--target"),
+        OsStr::new("riscv64-unknown-linux-gnu"),
+        OsStr::new("-Crelocation-model=static"),
+        OsStr::new("--emit=obj"),
+        OsStr::new("--out-dir"),
+        static_out.as_os_str(),
+    ]);
+
+    let read_relocations = |path: &Path| {
+        let output = Command::new("llvm-readobj")
+            .arg("--relocations")
+            .arg(path)
+            .output()
+            .expect("failed to start llvm-readobj");
+        assert!(
+            output.status.success(),
+            "llvm-readobj failed:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stdout).into_owned()
+    };
+    let pic_relocations = read_relocations(&pic_out.join("relocation.o"));
+    assert!(pic_relocations.contains("R_RISCV_GOT_HI20 local_value"));
+    assert!(pic_relocations.contains("R_RISCV_GOT_HI20 external_value"));
+    assert!(pic_relocations.contains("R_RISCV_PCREL_LO12_I"));
+    assert!(!pic_relocations.contains("R_RISCV_HI20 local_value"));
+
+    let static_relocations = read_relocations(&static_out.join("relocation.o"));
+    assert!(static_relocations.contains("R_RISCV_HI20 local_value"));
+    assert!(static_relocations.contains("R_RISCV_LO12_I local_value"));
+    assert!(static_relocations.contains("R_RISCV_HI20 external_value"));
+    assert!(!static_relocations.contains("R_RISCV_GOT_HI20"));
+
+    let atomic_source = write_wave(
+        &dir,
+        "atomic.ll",
+        r#"
+define i64 @atomic_add(ptr %address) {
+entry:
+  %previous = atomicrmw add ptr %address, i64 1 seq_cst
+  ret i64 %previous
+}
+"#,
+    );
+    let atomic_a_out = dir.join("atomic-a");
+    let atomic_no_a_out = dir.join("atomic-no-a");
+    let compressed_off_out = dir.join("compressed-off");
+    for (features, out) in [
+        ("+m,+a,-f,-d,+c", &atomic_a_out),
+        ("+m,-a,-f,-d,+c", &atomic_no_a_out),
+        ("+m,+a,-f,-d,-c", &compressed_off_out),
+    ] {
+        run_wavec([
+            OsStr::new("build"),
+            atomic_source.as_os_str(),
+            OsStr::new("--target"),
+            OsStr::new("riscv64-unknown-linux-gnu"),
+            OsStr::new("--features"),
+            OsStr::new(features),
+            OsStr::new("--abi=lp64"),
+            OsStr::new("--emit=obj,asm"),
+            OsStr::new("--out-dir"),
+            out.as_os_str(),
+        ]);
+    }
+
+    let atomic_a_assembly = fs::read_to_string(atomic_a_out.join("atomic.s")).unwrap();
+    assert!(atomic_a_assembly.contains("amoadd.d.aqrl"));
+    assert!(!atomic_a_assembly.contains("__atomic_fetch_add_8"));
+    let atomic_no_a_assembly = fs::read_to_string(atomic_no_a_out.join("atomic.s")).unwrap();
+    assert!(!atomic_no_a_assembly.contains("amoadd"));
+    assert!(atomic_no_a_assembly.contains("__atomic_fetch_add_8"));
+
+    let compressed_object = atomic_a_out.join("atomic.o");
+    let uncompressed_object = compressed_off_out.join("atomic.o");
+    assert_eq!(riscv64_elf_flags(&compressed_object) & 1, 1);
+    assert_eq!(riscv64_elf_flags(&uncompressed_object) & 1, 0);
+    let compressed_bytes = fs::read(&compressed_object).unwrap();
+    let uncompressed_bytes = fs::read(&uncompressed_object).unwrap();
+    assert!(bytes_contains(&compressed_bytes, b"c2p0"));
+    assert!(!bytes_contains(&uncompressed_bytes, b"c2p0"));
+
+    let disassemble = |path: &Path| {
+        let output = Command::new("llvm-objdump")
+            .arg("--disassemble")
+            .arg(path)
+            .output()
+            .expect("failed to start llvm-objdump");
+        assert!(
+            output.status.success(),
+            "llvm-objdump failed:\n{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8_lossy(&output.stdout).into_owned()
+    };
+    let compressed_disassembly = disassemble(&compressed_object);
+    let uncompressed_disassembly = disassemble(&uncompressed_object);
+    assert!(compressed_disassembly.contains("8082"));
+    assert!(uncompressed_disassembly.contains("00008067"));
 }
 
 #[test]

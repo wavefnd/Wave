@@ -309,6 +309,110 @@ struct Pair {
     y: i32;
 }
 
+extern(c, "host_transform") fun transform(value: Pair) -> Pair;
+
+export(c, "wave_transform") fun apply(value: Pair) -> Pair {
+    return transform(value);
+}
+
+fun main() -> i32 { return 0; }
+"#,
+    );
+    let host_out = dir.join("host-out");
+    run_wavec([
+        OsStr::new("build"),
+        host_source.as_os_str(),
+        OsStr::new("--target"),
+        OsStr::new("wasm32-unknown-unknown"),
+        OsStr::new("--emit=ir"),
+        OsStr::new("--out-dir"),
+        host_out.as_os_str(),
+    ]);
+    let host_ir = fs::read_to_string(host_out.join("host.ll")).unwrap();
+    assert!(
+        host_ir.contains("ptr sret(%Pair) align 4") && host_ir.contains("ptr byval(%Pair) align 4"),
+        "{host_ir}"
+    );
+    assert!(
+        host_ir.contains("\"wasm-import-module\"=\"env\"")
+            && host_ir.contains("\"wasm-import-name\"=\"host_transform\""),
+        "{host_ir}"
+    );
+    assert!(host_ir.contains("\"wasm-export-name\"=\"wave_transform\""), "{host_ir}");
+
+    let host64_out = dir.join("host64-out");
+    run_wavec([
+        OsStr::new("build"),
+        host_source.as_os_str(),
+        OsStr::new("--target"),
+        OsStr::new("wasm64-unknown-unknown"),
+        OsStr::new("--emit=ir"),
+        OsStr::new("--out-dir"),
+        host64_out.as_os_str(),
+    ]);
+    let host64_ir = fs::read_to_string(host64_out.join("host.ll")).unwrap();
+    assert!(
+        host64_ir.contains("target triple = \"wasm64-unknown-unknown\"")
+            && host64_ir.contains("p:64:64")
+            && host64_ir.contains("ptr sret(%Pair) align 4")
+            && host64_ir.contains("ptr byval(%Pair) align 4")
+            && host64_ir.contains("\"wasm-import-module\"=\"env\""),
+        "{host64_ir}"
+    );
+
+    let wasi_source = write_wave(
+        &dir,
+        "wasi.wave",
+        r#"
+extern(c, "fd_write") fun fd_write(fd: u32, vectors: ptr<u8>, count: u32, written: ptr<u32>) -> u16;
+fun main() -> i32 { return 0; }
+"#,
+    );
+    let wasi_out = dir.join("wasi-out");
+    run_wavec([
+        OsStr::new("build"),
+        wasi_source.as_os_str(),
+        OsStr::new("--target"),
+        OsStr::new("wasm32-wasip1"),
+        OsStr::new("--emit=ir"),
+        OsStr::new("--out-dir"),
+        wasi_out.as_os_str(),
+    ]);
+    let wasi_ir = fs::read_to_string(wasi_out.join("wasi.ll")).unwrap();
+    assert!(wasi_ir.contains("target triple = \"wasm32-wasip1\""), "{wasi_ir}");
+    assert!(
+        wasi_ir.contains("\"wasm-import-module\"=\"wasi_snapshot_preview1\"")
+            && wasi_ir.contains("\"wasm-import-name\"=\"fd_write\""),
+        "{wasi_ir}"
+    );
+    assert!(wasi_ir.contains("define void @_start()"), "{wasi_ir}");
+
+    let (spec, stderr) = run_wavec_capture([
+        OsStr::new("print"),
+        OsStr::new("target-spec"),
+        OsStr::new("--target"),
+        OsStr::new("wasm32-wasip1"),
+        OsStr::new("--format=json"),
+    ]);
+    assert!(stderr.trim().is_empty(), "{stderr}");
+    assert!(spec.contains("\"os\":\"wasi\""), "{spec}");
+    assert!(spec.contains("\"env\":\"p1\""), "{spec}");
+    assert!(spec.contains("\"hosted\":true"), "{spec}");
+
+    let (run_plan, stderr) = run_wavec_capture([
+        OsStr::new("build"),
+        wasi_source.as_os_str(),
+        OsStr::new("--target"),
+        OsStr::new("wasm32-wasip1"),
+        OsStr::new("--run"),
+        OsStr::new("--dry-run"),
+        OsStr::new("--error-format=json"),
+    ]);
+    assert!(stderr.trim().is_empty(), "{stderr}");
+    assert!(run_plan.contains("\"program\":\"node\""), "{run_plan}");
+    assert!(run_plan.contains("node:wasi"), "{run_plan}");
+}
+
 #[test]
 #[cfg(any(feature = "llvm-target-all", feature = "llvm-target-riscv"))]
 fn riscv64_export_c_uses_indirect_aggregate_parameters_and_sret() {
@@ -321,6 +425,45 @@ struct Triple {
     a: u64;
     b: u64;
     c: u64;
+}
+
+export(c) fun wave_take(value: Triple) -> u64 {
+    return value.c;
+}
+
+export(c) fun wave_make(a: u64, b: u64, c: u64) -> Triple {
+    return Triple { a: a, b: b, c: c };
+}
+
+fun main() -> i32 {
+    var value: Triple = wave_make(1, 2, 3);
+    if (wave_take(value) != 3) {
+        return 1;
+    }
+    return 0;
+}
+"#,
+    );
+    let out = dir.join("out");
+    run_wavec([
+        OsStr::new("build"),
+        source.as_os_str(),
+        OsStr::new("--target"),
+        OsStr::new("riscv64-unknown-linux-gnu"),
+        OsStr::new("--emit=ir"),
+        OsStr::new("--out-dir"),
+        out.as_os_str(),
+    ]);
+    let ir = fs::read_to_string(out.join("aggregate.ll")).unwrap();
+    assert!(
+        ir.lines()
+            .any(|line| line.starts_with("define i64 @wave_take(ptr ") && !line.contains("byval")),
+        "{}",
+        ir
+    );
+    assert!(ir.contains("define void @wave_make(ptr sret(%Triple) align 8"), "{}", ir);
+    assert!(ir.contains("@__wave_export_impl_wave_take"), "{}", ir);
+    assert!(ir.contains("@__wave_export_impl_wave_make"), "{}", ir);
 }
 
 #[test]
@@ -348,6 +491,36 @@ fun main() -> i32 {
     var single: f32 = 1.5;
     if (c_variadic(2, narrow, single) != 0) { return 4; }
     return 0;
+}
+"#,
+    );
+    let out = dir.join("out");
+    run_wavec([
+        OsStr::new("build"),
+        source.as_os_str(),
+        OsStr::new("--target"),
+        OsStr::new("riscv64-unknown-linux-gnu"),
+        OsStr::new("--emit=ir"),
+        OsStr::new("--out-dir"),
+        out.as_os_str(),
+    ]);
+    let ir = fs::read_to_string(out.join("integer_extensions.ll")).unwrap();
+
+    for expected in [
+        "define signext i8 @wave_i8(i8 signext",
+        "define zeroext i8 @wave_u8(i8 zeroext",
+        "define signext i32 @wave_u32(i32 signext",
+        "call signext i8 @c_i8(i8 signext",
+        "call zeroext i8 @c_u8(i8 zeroext",
+        "call signext i32 @c_u32(i32 signext",
+        "declare signext i8 @c_i8(i8 signext)",
+        "declare zeroext i8 @c_u8(i8 zeroext)",
+        "declare signext i32 @c_u32(i32 signext)",
+        "call i64 (i32, ...) @c_variadic(i32 signext 2, i32 signext %vararg1_sext, double %vararg2_f64)",
+        "declare i64 @c_variadic(i32 signext, ...)",
+    ] {
+        assert!(ir.contains(expected), "missing `{expected}` in:\n{ir}");
+    }
 }
 
 #[test]
@@ -692,6 +865,43 @@ fun main() -> i32 {
     consume(2, null as ptr<byte>, null as ptr<i32>);
     return 0;
 }
+"#,
+    );
+    let out = dir.join("out");
+    run_wavec([
+        OsStr::new("build"),
+        source.as_os_str(),
+        OsStr::new("--target"),
+        OsStr::new("riscv64-unknown-linux-gnu"),
+        OsStr::new("--emit=ir"),
+        OsStr::new("--out-dir"),
+        out.as_os_str(),
+    ]);
+    let ir = fs::read_to_string(out.join("promotions.ll")).unwrap();
+    for expected in [
+        "%vararg1_sext = sext i8",
+        "%vararg2_zext = zext i8",
+        "%vararg3_sext = sext i8",
+        "%vararg4_sext = sext i8",
+        "%vararg5_sext = sext i8",
+        "%vararg6_zext = zext i1",
+        "%vararg7_zext = zext i1",
+        "%vararg8_sext = sext i8",
+        "%vararg9_sext = sext i8",
+    ] {
+        assert!(ir.contains(expected), "missing `{expected}`:\n{ir}");
+    }
+    assert!(ir.contains("i32 signext 255"), "{ir}");
+    assert!(ir.contains("ptr null, ptr null"), "{ir}");
+
+    let invalid = write_wave(
+        &dir,
+        "untyped_null.wave",
+        "extern(c) fun consume(count: i32, ...) -> i64; fun main() { consume(1, null); }\n",
+    );
+    let error = run_wavec_expect_failure([OsStr::new("check"), invalid.as_os_str()]);
+    assert!(error.contains("variadic argument 2") && error.contains("no scalar type"), "{error}");
+}
 
 #[test]
 #[cfg(any(feature = "llvm-target-all", feature = "llvm-target-riscv"))]
@@ -714,6 +924,18 @@ fun main() {
     c_integer();
     c_float();
     c_pointer();
+}
+"#,
+    );
+    run_wavec([
+        OsStr::new("build"),
+        source.as_os_str(),
+        OsStr::new("--target"),
+        OsStr::new("riscv64-unknown-linux-gnu"),
+        OsStr::new("--emit=ir"),
+        OsStr::new("--out-dir"),
+        dir.join("out").as_os_str(),
+    ]);
 }
 
 #[test]

@@ -140,6 +140,121 @@ fun value() -> i32 {
     return "not an integer";
 }
 
+"#,
+            "type mismatch in return value of function `value`",
+        ),
+        (
+            "value_from_void.wave",
+            r#"
+fun noop() {
+    return 1;
+}
+"#,
+            "void function `noop` cannot return a value",
+        ),
+        (
+            "empty_non_void_return.wave",
+            r#"
+fun value() -> i32 {
+    return;
+}
+"#,
+            "non-void function `value` must return `i32`",
+        ),
+        (
+            "missing_return_path.wave",
+            r#"
+fun value(flag: bool) -> i32 {
+    if (flag) {
+        return 1;
+    }
+}
+"#,
+            "non-void function `value` may exit without returning `i32`",
+        ),
+        (
+            "break_outside_loop.wave",
+            r#"
+fun main() {
+    break;
+}
+"#,
+            "`break` can only be used inside a loop",
+        ),
+        (
+            "continue_outside_loop.wave",
+            r#"
+fun main() {
+    continue;
+}
+"#,
+            "`continue` can only be used inside a loop",
+        ),
+        (
+            "wrong_call_type.wave",
+            r#"
+fun identity(value: i32) -> i32 {
+    return value;
+}
+
+fun main() {
+    identity("text");
+}
+"#,
+            "type mismatch in argument 1 of function `identity`",
+        ),
+        (
+            "wrong_main_return.wave",
+            r#"
+fun main() -> f64 {
+    return 0.0;
+}
+"#,
+            "entry function `main` must return `i32` or omit its return type",
+        ),
+        (
+            "generic_main.wave",
+            r#"
+fun main<T>() {}
+"#,
+            "entry function `main` cannot declare generic parameters",
+        ),
+    ];
+
+    for (file_name, source, expected) in cases {
+        let source = write_wave(&dir, file_name, source);
+        for mode in ["check", "build"] {
+            let output = if mode == "check" {
+                run_wavec_raw([OsStr::new("check"), source.as_os_str()])
+            } else {
+                run_wavec_raw([
+                    OsStr::new("build"),
+                    source.as_os_str(),
+                    OsStr::new("--emit=obj"),
+                    OsStr::new("--out-dir"),
+                    dir.as_os_str(),
+                ])
+            };
+            assert!(
+                !output.status.success(),
+                "{} unexpectedly passed semantic validation in {} mode",
+                file_name,
+                mode
+            );
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(stderr.contains("error[E3001]"), "{} ({}): {}", file_name, mode, stderr);
+            assert!(stderr.contains(expected), "{} ({}): {}", file_name, mode, stderr);
+            assert!(
+                !stderr.contains("E9001") && !stderr.contains("compiler internal error"),
+                "{} ({}) leaked a backend failure: {}",
+                file_name,
+                mode,
+                stderr
+            );
+        }
+    }
+}
+
 #[test]
 fn semantic_validation_rejects_backend_only_type_failures_early() {
     let dir = temp_case_dir("semantic-backend-parity");
@@ -372,6 +487,18 @@ fun main() {
 
     for (var index: i32 = 0; index < 2; index += 1) {}
 }
+"#,
+    );
+
+    run_wavec([OsStr::new("check"), source.as_os_str()]);
+    run_wavec([
+        OsStr::new("build"),
+        source.as_os_str(),
+        OsStr::new("--emit=obj"),
+        OsStr::new("--out-dir"),
+        dir.as_os_str(),
+    ]);
+}
 
 #[test]
 fn semantic_validation_preserves_pointer_depth_for_address_of() {
@@ -385,6 +512,78 @@ fun main() {
     var correct: ptr<str> = &message;
     var copied: ptr<str> = correct;
     var converted: ptr<i8> = &message as ptr<i8>;
+}
+"#,
+    );
+
+    run_wavec([OsStr::new("check"), valid.as_os_str()]);
+    run_wavec([
+        OsStr::new("build"),
+        valid.as_os_str(),
+        OsStr::new("--emit=obj"),
+        OsStr::new("--out-dir"),
+        dir.as_os_str(),
+    ]);
+
+    let invalid_cases = [
+        (
+            "string_depth.wave",
+            r#"
+fun main() {
+    var message: str = "Hello";
+    var wrong: ptr<i8> = &message;
+}
+"#,
+            "type mismatch in initializer for `wrong`: expected `ptr<i8>`, found `ptr<str>`",
+        ),
+        (
+            "pointer_pointee.wave",
+            r#"
+fun consume(value: ptr<u8>) {}
+
+fun main() {
+    var number: i32 = 1;
+    consume(&number);
+}
+"#,
+            "type mismatch in argument 1 of function `consume`: expected `ptr<u8>`, found `ptr<i32>`",
+        ),
+    ];
+
+    for (file_name, source, expected) in invalid_cases {
+        let source = write_wave(&dir, file_name, source);
+        for mode in ["check", "build"] {
+            let output = if mode == "check" {
+                run_wavec_raw([OsStr::new("check"), source.as_os_str()])
+            } else {
+                run_wavec_raw([
+                    OsStr::new("build"),
+                    source.as_os_str(),
+                    OsStr::new("--emit=obj"),
+                    OsStr::new("--out-dir"),
+                    dir.as_os_str(),
+                ])
+            };
+            assert!(
+                !output.status.success(),
+                "{} unexpectedly accepted an implicit pointer conversion in {} mode",
+                file_name,
+                mode
+            );
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            assert!(stderr.contains("error[E3001]"), "{}: {}", file_name, stderr);
+            assert!(stderr.contains(expected), "{}: {}", file_name, stderr);
+            assert!(
+                !stderr.contains("E9001")
+                    && !stderr.contains("compiler internal error")
+                    && !stderr.contains("panic location"),
+                "{} leaked a backend failure in {} mode: {}",
+                file_name,
+                mode,
+                stderr
+            );
+        }
+    }
 }
 
 #[test]
@@ -586,6 +785,39 @@ enum Mode -> i32 {
     Alias = 1
 }
 
+fun noop() {}
+
+fun add(left: f32, right: f64) -> f32 {
+    return left + (right as f32);
+}
+
+fun main() {
+    noop();
+    var minimum: i8 = -128;
+    var bit_pattern: i8 = 0xFF;
+    var unsigned_max: u128 = 340282366920938463463374607431768211455;
+    var explicit: i8 = 300 as i8;
+    var values: ptr<array<i32, 2>> = &[1, 2];
+    var input_value: i32 = 0;
+    if (true) {
+        var minimum: i32 = 1;
+        println("{}", minimum);
+    }
+    println("{} {} {} {} {}", minimum, bit_pattern, unsigned_max, explicit, values);
+}
+"#,
+    );
+
+    run_wavec([OsStr::new("check"), source.as_os_str()]);
+    run_wavec([
+        OsStr::new("build"),
+        source.as_os_str(),
+        OsStr::new("--emit=obj"),
+        OsStr::new("--out-dir"),
+        dir.as_os_str(),
+    ]);
+}
+
 #[test]
 fn semantic_diagnostics_point_at_the_relevant_source() {
     let dir = temp_case_dir("semantic-source-position");
@@ -595,6 +827,91 @@ fn semantic_diagnostics_point_at_the_relevant_source() {
         r#"
 fun value() -> i32 {
     return "text";
+}
+"#,
+    );
+    let output = run_wavec_raw([OsStr::new("check"), source.as_os_str()]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("wrong_return.wave:3:12"), "{}", stderr);
+    assert!(stderr.contains("return \"text\";"), "{}", stderr);
+
+    let repeated_return = write_wave(
+        &dir,
+        "repeated_return.wave",
+        r#"
+fun value(flag: bool) -> i32 {
+    if (flag) {
+        return 1;
+    }
+    return "text";
+}
+"#,
+    );
+    let output = run_wavec_raw([OsStr::new("check"), repeated_return.as_os_str()]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("repeated_return.wave:6:12"), "{}", stderr);
+    assert!(stderr.contains("return \"text\";"), "{}", stderr);
+
+    let duplicate = write_wave(
+        &dir,
+        "duplicate.wave",
+        r#"
+fun other() {
+    var value: i32 = 0;
+}
+
+fun main() {
+    var value: i32 = 1;
+    var value: i32 = 2;
+}
+"#,
+    );
+    let output = run_wavec_raw([OsStr::new("check"), duplicate.as_os_str()]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("duplicate.wave:8:9"), "{}", stderr);
+    assert!(stderr.contains("var value: i32 = 2;"), "{}", stderr);
+
+    let duplicate_type = write_wave(
+        &dir,
+        "duplicate_type.wave",
+        "struct Item { first: i32; }\nstruct Item { second: i32; }\nfun main() {}\n",
+    );
+    let output = run_wavec_raw([OsStr::new("check"), duplicate_type.as_os_str()]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("duplicate_type.wave:2:8"), "{}", stderr);
+    assert!(stderr.contains("struct Item { second: i32; }"), "{}", stderr);
+
+    let imported = dir.join("broken.wave");
+    fs::write(&imported, "fun broken() {\n    var value: Missing = 1;\n}\n").unwrap();
+    let entry = write_wave(&dir, "import_main.wave", "import(\"./broken\");\n\nfun main() {}\n");
+    let output = run_wavec_raw([OsStr::new("check"), entry.as_os_str()]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("broken.wave:2:16"), "{}", stderr);
+    assert!(stderr.contains("var value: Missing = 1;"), "{}", stderr);
+    assert!(!stderr.contains("import_main.wave:1:1"), "{}", stderr);
+
+    let generic_import = dir.join("generic_broken.wave");
+    fs::write(
+        &generic_import,
+        "struct Box<T> { value: T; }\nfun broken() {\n    var value: Box<i32, i64>;\n}\n",
+    )
+    .unwrap();
+    let generic_entry = write_wave(
+        &dir,
+        "generic_import_main.wave",
+        "import(\"./generic_broken\");\n\nfun main() {}\n",
+    );
+    let output = run_wavec_raw([OsStr::new("check"), generic_entry.as_os_str()]);
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("generic_broken.wave:3:16"), "{}", stderr);
+    assert!(stderr.contains("type `Box` expects 1 generic argument(s), found 2"), "{}", stderr);
+    assert!(!stderr.contains("generic monomorphization failed"), "{}", stderr);
 }
 
 #[test]
@@ -607,6 +924,67 @@ fn semantic_validation_accepts_complete_returns_and_explicit_casts() {
 struct Pair {
     x: i32;
     y: i32;
+}
+
+fun choose(flag: bool) -> i32 {
+    if (flag) {
+        return 1;
+    } else {
+        return 2;
+    }
+    println("unreachable");
+}
+
+fun dead_after_return() {
+    return;
+    println("unreachable");
+}
+
+fun widen(value: i32) -> i64 {
+    return value;
+}
+
+fun narrow_explicitly(value: i64) -> i32 {
+    return value as i32;
+}
+
+fun values() -> array<i32, 2> {
+    return [1, 2];
+}
+
+fun pointer_bits() -> i64 {
+    return "text" as i64;
+}
+
+fun infinite() -> i32 {
+    while (true) {
+        continue;
+    }
+}
+
+fun main() -> i32 {
+    var value: i32 = choose(true);
+    var bits: i64 = pointer_bits();
+    var pair: Pair = Pair { x: 1, y: 2 };
+    var items: array<i32, 2> = values();
+    var pointer: ptr<Pair> = &pair;
+    if (pointer) {
+        if (value == 1 && bits != 0 && items[0] == 1 && widen(pair.y) == 2) {
+            return narrow_explicitly(0);
+        }
+    }
+    return infinite();
+}
+"#,
+    );
+    let out_dir = dir.join("out");
+    run_wavec([
+        OsStr::new("build"),
+        source.as_os_str(),
+        OsStr::new("--emit=ir"),
+        OsStr::new("--out-dir"),
+        out_dir.as_os_str(),
+    ]);
 }
 
 #[test]
@@ -730,6 +1108,81 @@ fn vex_cli_json_errors_and_dry_run_are_stable() {
 fun main() -> i32 {
     return 0;
 }
+"#,
+    );
+    let out_dir = dir.join("out");
+    let (stdout, stderr) = run_wavec_capture([
+        OsStr::new("--error-format=json"),
+        OsStr::new("build"),
+        src.as_os_str(),
+        OsStr::new("--target"),
+        OsStr::new(frontend_target()),
+        OsStr::new("--freestanding"),
+        OsStr::new("--emit=obj"),
+        OsStr::new("--dry-run"),
+        OsStr::new("--out-dir"),
+        out_dir.as_os_str(),
+    ]);
+    assert!(stderr.trim().is_empty(), "unexpected stderr:\n{}", stderr);
+    let plan = stdout.trim();
+    assert!(plan.starts_with('{') && plan.ends_with('}'), "{}", plan);
+    assert!(plan.contains("\"schema_version\":1"), "{}", plan);
+    assert!(plan.contains(&format!("\"target\":\"{}\"", frontend_target())), "{}", plan);
+    let parsed = utils::wson::parse_json(plan).unwrap();
+    let spec = llvm::codegen::target::target_spec_for_triple(frontend_target()).unwrap();
+    let options = llvm::codegen::target::resolve_target_options(spec, None, None, None).unwrap();
+    assert_eq!(parsed.get_str("cpu"), Some(options.cpu.as_str()));
+    assert_eq!(parsed.get_str("features"), Some(options.features.as_str()));
+    assert_eq!(parsed.get_str("abi"), options.abi.as_deref());
+    assert_eq!(parsed.get_str("isa"), options.isa.as_deref());
+    assert!(plan.contains("\"mode\":\"compile-only\""), "{}", plan);
+    assert!(plan.contains("\"emit_kinds\":[\"obj\"]"), "{}", plan);
+    assert!(plan.contains("\"control_mode\":null"), "{}", plan);
+    assert!(plan.contains("\"freestanding\":true"), "{}", plan);
+    assert!(plan.contains("\"compile\""), "{}", plan);
+    assert!(plan.contains("\"link\":null"), "{}", plan);
+    assert!(plan.contains("\"execute\":null"), "{}", plan);
+
+    let syntax_src = write_wave(
+        &dir,
+        "syntax_error.wave",
+        r#"
+fun main( {
+}
+"#,
+    );
+    let syntax = run_wavec_raw([
+        OsStr::new("build"),
+        syntax_src.as_os_str(),
+        OsStr::new("--emit=check"),
+        OsStr::new("--error-format=json"),
+    ]);
+    assert!(
+        !syntax.status.success(),
+        "syntax error should fail\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&syntax.stdout),
+        String::from_utf8_lossy(&syntax.stderr)
+    );
+    let stderr = String::from_utf8_lossy(&syntax.stderr);
+    assert!(stderr.contains("\"error\""), "{}", stderr);
+    assert!(stderr.contains("\"kind\":\"syntax-error\""), "{}", stderr);
+    assert!(stderr.contains("\"line\":"), "{}", stderr);
+    assert!(stderr.contains("\"column\":"), "{}", stderr);
+
+    let ordered_format = run_wavec_raw([
+        OsStr::new("--error-format=human"),
+        OsStr::new("build"),
+        OsStr::new("--bad-option"),
+        OsStr::new("--error-format=json"),
+    ]);
+    assert_eq!(ordered_format.status.code(), Some(2));
+    let stderr = String::from_utf8_lossy(&ordered_format.stderr);
+    assert!(
+        stderr.contains("\"kind\":\"usage\""),
+        "later build-level json format must control parser errors:\n{}",
+        stderr
+    );
+}
 
 #[test]
 fn vex_cli_mixed_inputs_and_mode_conflicts_are_stable() {
@@ -740,6 +1193,156 @@ fn vex_cli_mixed_inputs_and_mode_conflicts_are_stable() {
         r#"
 fun main() -> i32 {
     return 0;
+}
+"#,
+    );
+    let obj = dir.join("native.o");
+    let archive = dir.join("libnative.a");
+    fs::write(&obj, b"not-a-real-object").unwrap();
+    fs::write(&archive, b"not-a-real-archive").unwrap();
+
+    let out_dir = dir.join("artifacts");
+    let target_dir = dir.join("intermediate");
+    let binary = dir.join("app");
+    let (stdout, stderr) = run_wavec_capture([
+        OsStr::new("--error-format=json"),
+        OsStr::new("build"),
+        src.as_os_str(),
+        obj.as_os_str(),
+        archive.as_os_str(),
+        OsStr::new("--emit=obj,bin"),
+        OsStr::new("--dry-run"),
+        OsStr::new("--out-dir"),
+        out_dir.as_os_str(),
+        OsStr::new("--target-dir"),
+        target_dir.as_os_str(),
+        OsStr::new("-o"),
+        binary.as_os_str(),
+    ]);
+    assert!(stderr.trim().is_empty(), "unexpected stderr:\n{}", stderr);
+    let plan = stdout.trim();
+    assert!(plan.contains("\"kind\":\"wave\""), "{}", plan);
+    assert!(plan.contains("\"kind\":\"obj\""), "{}", plan);
+    assert!(plan.contains("\"kind\":\"archive\""), "{}", plan);
+    assert!(plan.contains("\"emit_kinds\":[\"obj\",\"bin\"]"), "{}", plan);
+    assert!(
+        plan.contains(&format!("\"output\":{}", json_string_for_test(&binary.to_string_lossy()))),
+        "-o must apply to final linked binary only:\n{}",
+        plan
+    );
+    assert!(
+        plan.contains(&format!(
+            "\"output\":{}",
+            json_string_for_test(&out_dir.join("main.o").to_string_lossy())
+        )),
+        "obj artifact must follow --out-dir, not -o:\n{}",
+        plan
+    );
+    assert!(
+        plan.contains(&json_string_for_test(&archive.to_string_lossy())),
+        "archive input must be forwarded to the link plan:\n{}",
+        plan
+    );
+
+    let mut run_command = wavec_command();
+    if !native_target_enabled() && frontend_target() == "wasm64-unknown-unknown" {
+        run_command.args(["--target", "wasm32-wasip1"]);
+    }
+    let run_plan = run_command
+        .args([
+            OsStr::new("--error-format=json"),
+            OsStr::new("build"),
+            src.as_os_str(),
+            OsStr::new("--run"),
+            OsStr::new("--dry-run"),
+            OsStr::new("--"),
+            OsStr::new("arg one"),
+            OsStr::new("--flag"),
+        ])
+        .output()
+        .unwrap();
+    assert!(
+        run_plan.status.success(),
+        "run dry-run failed\nstdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&run_plan.stdout),
+        String::from_utf8_lossy(&run_plan.stderr)
+    );
+    let stdout = String::from_utf8_lossy(&run_plan.stdout);
+    assert!(stdout.contains("\"mode\":\"build+run\""), "{}", stdout);
+    assert!(stdout.contains("\"execute\":{"), "{}", stdout);
+    let plan = utils::wson::parse_json(&stdout).unwrap();
+    let expected = [utils::wson::Value::string("arg one"), utils::wson::Value::string("--flag")];
+    assert_eq!(plan.get_arr("run_args"), Some(expected.as_slice()));
+    let execute_args = plan.get("execute").unwrap().get_arr("args").unwrap();
+    assert!(execute_args.ends_with(&expected), "{stdout}");
+
+    let cases: &[(&str, &[&str], &[&str])] = &[
+        (
+            "check cannot be combined",
+            &["build", "main.wave", "--emit=check,ast"],
+            &["--emit=check", "alone"],
+        ),
+        (
+            "link-only obj emit conflict",
+            &["build", "native.o", "--link-only", "--emit=obj"],
+            &["--link-only", "--emit=bin"],
+        ),
+        (
+            "shared static conflict",
+            &["build", "main.wave", "--shared", "--static", "--dry-run"],
+            &["--shared", "--static"],
+        ),
+        (
+            "run shared conflict",
+            &["build", "main.wave", "--shared", "--run", "--dry-run"],
+            &["--run", "--shared"],
+        ),
+        (
+            "no-pie relocation conflict",
+            &["-C", "relocation-model=pie", "build", "main.wave", "--no-pie", "--dry-run"],
+            &["--no-pie", "relocation-model=pie"],
+        ),
+        (
+            "forced input conflict",
+            &["build", "native.o", "--input-type=wave", "--dry-run"],
+            &["--input-type=wave", "conflicts"],
+        ),
+        (
+            "unknown input inference",
+            &["build", "unknown.blob", "--dry-run"],
+            &["cannot infer input type", "--input-type"],
+        ),
+    ];
+
+    for (name, args, needles) in cases {
+        let full_args =
+            std::iter::once("--error-format=json").chain(args.iter().copied()).map(OsStr::new);
+        let out = run_wavec_raw(full_args);
+        assert!(
+            !out.status.success(),
+            "{} unexpectedly succeeded\nstdout:\n{}\nstderr:\n{}",
+            name,
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        assert_eq!(out.status.code(), Some(2), "{}", name);
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        assert!(stderr.contains("\"kind\":\"usage\""), "{}: {}", name, stderr);
+        // WebAssembly rejects native link modes before checking their mutual
+        // conflicts. Keep the native conflict assertions on native backends,
+        // and check the documented unsupported-mode diagnostic on wasm-only.
+        let needles = if !native_target_enabled()
+            && frontend_target() == "wasm64-unknown-unknown"
+            && (args.contains(&"--shared") || args.contains(&"--no-pie"))
+        {
+            &["--shared", "--static", "--pie/--no-pie", "not supported for WebAssembly"][..]
+        } else {
+            *needles
+        };
+        for needle in needles {
+            assert!(stderr.contains(needle), "{} missing '{}': {}", name, needle, stderr);
+        }
+    }
 }
 
 #[test]
@@ -1242,6 +1845,113 @@ fun main() {
         "jmp 1f"
         "1:"
     }
+}
+
+"#,
+    );
+    let local_jump_dir = dir.join("local-jump");
+    run_wavec([
+        OsStr::new("build"),
+        local_jump_src.as_os_str(),
+        OsStr::new("--target"),
+        OsStr::new("x86_64-unknown-linux-gnu"),
+        OsStr::new("--emit=ir"),
+        OsStr::new("--out-dir"),
+        local_jump_dir.as_os_str(),
+    ]);
+
+    let conflict_src = write_wave(
+        &dir,
+        "conflicting_stack.wave",
+        r#"
+fun main() {
+    asm {
+        "nop"
+        clobber("stack")
+        clobber("nostack")
+    }
+}
+"#,
+    );
+    let conflict_dir = dir.join("conflict");
+    let err = run_wavec_expect_failure([
+        OsStr::new("build"),
+        conflict_src.as_os_str(),
+        OsStr::new("--target"),
+        OsStr::new("x86_64-unknown-linux-gnu"),
+        OsStr::new("--emit=ir"),
+        OsStr::new("--out-dir"),
+        conflict_dir.as_os_str(),
+    ]);
+    assert!(
+        err.contains("cannot declare both"),
+        "stack/nostack conflict should be rejected:\n{}",
+        err
+    );
+
+    let expr_noreturn_src = write_wave(
+        &dir,
+        "expr_noreturn.wave",
+        r#"
+fun invalid_noreturn_expression() -> i64 {
+    var x: i64 = asm {
+        "jmp rax"
+        in("rax") 0
+        clobber("noreturn")
+    };
+    return x;
+}
+
+fun main() {
+    invalid_noreturn_expression();
+}
+"#,
+    );
+    let expr_noreturn_dir = dir.join("expr-noreturn");
+    let err = run_wavec_expect_failure([
+        OsStr::new("build"),
+        expr_noreturn_src.as_os_str(),
+        OsStr::new("--target"),
+        OsStr::new("x86_64-unknown-linux-gnu"),
+        OsStr::new("--emit=ir"),
+        OsStr::new("--out-dir"),
+        expr_noreturn_dir.as_os_str(),
+    ]);
+    assert!(
+        err.contains("asm expression cannot declare"),
+        "asm expressions must reject noreturn:\n{}",
+        err
+    );
+
+    let clobber_operand_conflict_src = write_wave(
+        &dir,
+        "clobber_operand_conflict.wave",
+        r#"
+fun main() {
+    var x: i64 = 1;
+    asm {
+        "mov rax, rax"
+        in("rax") x
+        clobber("rax")
+    }
+}
+"#,
+    );
+    let clobber_operand_conflict_dir = dir.join("clobber-operand-conflict");
+    let err = run_wavec_expect_failure([
+        OsStr::new("build"),
+        clobber_operand_conflict_src.as_os_str(),
+        OsStr::new("--target"),
+        OsStr::new("x86_64-unknown-linux-gnu"),
+        OsStr::new("--emit=ir"),
+        OsStr::new("--out-dir"),
+        clobber_operand_conflict_dir.as_os_str(),
+    ]);
+    assert!(
+        err.contains("conflicts with an input/output operand register"),
+        "clobber/operand register conflict should be rejected:\n{}",
+        err
+    );
 }
 
 #[cfg(any(feature = "llvm-target-all", feature = "llvm-target-loongarch"))]
