@@ -1,0 +1,78 @@
+// SPDX-License-Identifier: MPL-2.0
+// Make sure a descriptor wider than the native POSIX fd never aliases a live socket.
+import("std::net::tcp")::{
+    TcpListener, TcpStream, tcp_bind_loopback, tcp_listener_local_addr_v4,
+    tcp_connect, tcp_accept, tcp_close, tcp_close_listener,
+    tcp_read_timeout, tcp_write_timeout,
+};
+import("std::net::address")::{SocketAddrV4};
+import("std::net::error")::{
+    NetResult, NetIoResult, NET_ERROR_INVALID, NET_ERROR_TIMED_OUT,
+};
+import("std::net::posix_timeout")::{net_io_timeout};
+
+fun rejected(result: NetIoResult) -> bool {
+    return result.count == 0 && !result.eof
+        && result.error.kind == NET_ERROR_INVALID
+        && result.error.native_code == -22;
+}
+
+fun zero_ok(result: NetIoResult) -> bool {
+    return result.count == 0 && !result.eof && result.error.kind == 0;
+}
+
+fun main() -> i32 {
+    var listener: NetResult<TcpListener> = tcp_bind_loopback(0);
+    if (!listener.ok) { return 10; }
+    var addr: NetResult<SocketAddrV4> = tcp_listener_local_addr_v4(listener.value);
+    if (!addr.ok) { return 11; }
+    var client: NetResult<TcpStream> = tcp_connect(addr.value);
+    if (!client.ok) { return 12; }
+    var peer: NetResult<TcpStream> = tcp_accept(listener.value);
+    if (!peer.ok) { return 13; }
+    tcp_close_listener(listener.value);
+
+    // Both overflow forms narrow to the same native descriptor as client.fd.
+    var high: TcpStream = TcpStream { fd: client.value.fd + 4294967296 };
+    var negative: TcpStream = TcpStream { fd: client.value.fd - 4294967296 };
+
+    var incoming: u8 = 90;
+    var sent: NetIoResult = tcp_write_timeout(peer.value, &incoming, 1, 1000);
+    if (sent.count != 1 || sent.error.kind != 0) { return 14; }
+
+    var data: u8 = 17;
+    if (!rejected(tcp_read_timeout(high, &data, 1, 0)) || data != 17) { return 15; }
+    if (!rejected(tcp_read_timeout(negative, &data, 1, 0)) || data != 17) { return 16; }
+    if (!rejected(net_io_timeout(high.fd, &data, 1, 0, false)) || data != 17) { return 17; }
+    if (!rejected(net_io_timeout(negative.fd, &data, 1, 0, false)) || data != 17) { return 18; }
+
+    // No invalid read may consume the byte queued on the real socket.
+    var received: NetIoResult = tcp_read_timeout(client.value, &data, 1, 1000);
+    if (received.count != 1 || received.error.kind != 0 || data != 90) { return 19; }
+
+    var outgoing: u8 = 65;
+    if (!rejected(tcp_write_timeout(high, &outgoing, 1, 0))) { return 20; }
+    if (!rejected(tcp_write_timeout(negative, &outgoing, 1, 0))) { return 21; }
+    if (!rejected(net_io_timeout(high.fd, &outgoing, 1, 0, true))) { return 22; }
+    if (!rejected(net_io_timeout(negative.fd, &outgoing, 1, 0, true))) { return 23; }
+
+    // An invalid write must not send anything to the live peer.
+    data = 17;
+    received = tcp_read_timeout(peer.value, &data, 1, 0);
+    if (received.count != 0 || received.error.kind != NET_ERROR_TIMED_OUT || data != 17) {
+        return 24;
+    }
+
+    sent = tcp_write_timeout(client.value, &outgoing, 1, 1000);
+    received = tcp_read_timeout(peer.value, &data, 1, 1000);
+    if (sent.count != 1 || sent.error.kind != 0 || received.count != 1
+        || received.error.kind != 0 || data != 65) { return 25; }
+
+    // Empty operations keep succeeding even when the descriptor is invalid.
+    if (!zero_ok(tcp_read_timeout(high, null, 0, 0))) { return 26; }
+    if (!zero_ok(tcp_write_timeout(negative, null, 0, 0))) { return 27; }
+
+    tcp_close(client.value);
+    tcp_close(peer.value);
+    return 0;
+}
