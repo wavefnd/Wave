@@ -19,9 +19,8 @@
     "operation": "commands",
     "commands": [
       [
-        "cargo",
-        "fmt",
-        "--all",
+        "@python",
+        "tools/format-rust.py",
         "--check"
       ]
     ]

@@ -13,6 +13,7 @@ fn syntax(s: &str) -> Vec<ASTNode> {
 fn typed(s: &str) -> TypedProgram {
     TypedProgram::lower(monomorphize_generics(syntax(s)).unwrap()).unwrap()
 }
+
 #[test]
 fn async_and_await_preserve_types_spans_and_specialization() {
     let source="pub async fun value<T>(x:T) -> T { return x; }\nasync fun use_value() -> i64 { return await value<i64>(42); }\nfun main() {}";
@@ -45,6 +46,7 @@ fn async_and_await_preserve_types_spans_and_specialization() {
     // The ordinary output is itself type checked before any backend consumes it.
     TypedProgram::lower(hir::async_lower::lower_program(&program).unwrap()).unwrap();
 }
+
 #[test]
 fn rejects_invalid_async_declarations_and_operands() {
     for source in [
@@ -69,6 +71,7 @@ fn rejects_invalid_async_declarations_and_operands() {
         assert!(error.contains(needle), "{source}: {error}");
     }
 }
+
 #[test]
 fn await_is_not_an_lvalue_and_short_circuit_has_distinct_states() {
     let program=typed("async fun flag()->bool{return true;} async fun f()->bool{return false && await flag();} fun main(){}");

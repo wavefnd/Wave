@@ -68,6 +68,7 @@ fn native() -> bool {
     llvm::codegen::target::target_spec_for_triple(String::from_utf8_lossy(&o.stdout).trim())
         .is_some()
 }
+
 #[test]
 fn declaration_diagnostics_preserve_the_offending_token() {
     let case = Case::new();
@@ -112,6 +113,7 @@ fn declaration_diagnostics_preserve_the_offending_token() {
         }
     }
 }
+
 #[test]
 fn cli_rejects_invalid_debug_modes_and_empty_dependency_roots() {
     let case = Case::new();
@@ -139,6 +141,7 @@ fn cli_rejects_invalid_debug_modes_and_empty_dependency_roots() {
         ok(case.command().args(args).args(["check", "case.wave"]).output().unwrap());
     }
 }
+
 #[test]
 fn numeric_constants_reject_invalid_shifts_and_casts() {
     let case = Case::new();
@@ -215,6 +218,7 @@ fn checked_numeric_runtime_and_byte_apis() {
         case.run(&source);
     }
 }
+
 #[test]
 fn runtime_invalid_numeric_operations_trap_before_conversion() {
     if !native() {

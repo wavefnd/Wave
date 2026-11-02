@@ -6,6 +6,26 @@ fun bump(value: ptr<i32>) -> bool {
     return true;
 }
 
+
+type Flag = bool;
+fun identity(value: Flag) -> bool { return value; }
+fun counted(value: ptr<i32>, result: bool) -> bool {
+    deref value += 1;
+    return result;
+}
+fun check_bool_comparisons() -> i32 {
+    if (!(true == true) || !(false == false) || true == false || false == true) { return 1; }
+    if (true != true || false != false || !(true != false) || !(false != true)) { return 2; }
+    var yes: Flag = true;
+    var no: Flag = false;
+    if (!((yes) == (identity(true))) || (no) != identity(false)) { return 3; }
+    if (yes == no || !(yes != no)) { return 4; }
+    var calls: i32 = 0;
+    if (!(counted(&calls, true) == counted(&calls, true)) || calls != 2) { return 5; }
+    if (!(counted(&calls, true) != counted(&calls, false)) || calls != 4) { return 6; }
+    return 0;
+}
+
 fun main() -> i32 {
     var count: i32 = 0;
     if (false && bump(&count)) { return 1; }
@@ -16,5 +36,7 @@ fun main() -> i32 {
     if (count != 1) { return 6; }
     if (false || bump(&count)) {} else { return 7; }
     if (count != 2) { return 8; }
+    var comparison_result: i32 = check_bool_comparisons();
+    if (comparison_result != 0) { return 10 + comparison_result; }
     return 0;
 }

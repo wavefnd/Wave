@@ -18,6 +18,7 @@ fn directory() -> PathBuf {
 fn wave(args: &[&OsStr]) -> Output {
     Command::new(env!("CARGO_BIN_EXE_wavec")).args(args).output().unwrap()
 }
+
 // Exercise the public host default, including MSVC on Windows.
 #[cfg(any(feature = "llvm-target-core64", feature = "llvm-target-all"))]
 fn native_wave(args: &[&OsStr]) -> Output {

@@ -25,6 +25,7 @@ pub fn is_intrinsic(name: &str) -> bool {
             | "__wave_async_windows_notify_address"
     )
 }
+
 /// The caller validates argument expressions before checking this signature.
 pub fn signature(
     name: &str,
