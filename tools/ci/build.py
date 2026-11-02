@@ -252,7 +252,7 @@ def freebsd_build(r, _):
         ]
     )
     r.run(["@python", "-m", "mesonbuild.mesonmain", "compile", "-C", directory, "wavec"])
-    r.run(["@python", "-m", "unittest", "tools.test_freebsd_runtime_reporting"])
+    r.run(["@python", "-m", "unittest", "tools.tests.test_freebsd_runtime_reporting"])
 
 
 def windows_prerequisites(r, operation):

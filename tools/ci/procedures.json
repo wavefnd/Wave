@@ -94,7 +94,7 @@
         "tools/tests/test_corpus_execution.py",
         "tools/tests/test_freebsd_console.py",
         "tools/tests/test_check_msvc_native.py",
-        "tools/test_diagnose_windows_arm64.py",
+        "tools/tests/test_diagnose_windows_arm64.py",
         "tools/tests/test_document_std.py",
         "tools/get_maintainer.py",
         "tools/host_capabilities.py"
@@ -116,7 +116,7 @@
         "tools.tests.test_test_contracts",
         "tools.tests.test_process_tree",
         "tools.tests.test_check_msvc_native",
-        "tools.test_diagnose_windows_arm64",
+        "tools.tests.test_diagnose_windows_arm64",
         "tools.tests.test_runtime_selection",
         "tools.tests.test_ci",
         "tools.tests.test_nightly",
@@ -264,7 +264,7 @@
         "tools/tests/test_corpus_execution.py",
         "tools/tests/test_freebsd_console.py",
         "tools/tests/test_check_msvc_native.py",
-        "tools/test_diagnose_windows_arm64.py",
+        "tools/tests/test_diagnose_windows_arm64.py",
         "tools/tests/test_document_std.py",
         "tools/get_maintainer.py",
         "tools/host_capabilities.py"
@@ -302,7 +302,7 @@
         "tools.tests.test_get_maintainer",
         "tools.tests.test_corpus_execution",
         "tools.tests.test_freebsd_console",
-        "tools.test_diagnose_windows_arm64"
+        "tools.tests.test_diagnose_windows_arm64"
       ]
     ]
   },
@@ -979,7 +979,7 @@
         "tools.tests.test_corpus_execution",
         "tools.tests.test_freebsd_console",
         "tools.tests.test_check_msvc_native",
-        "tools.test_diagnose_windows_arm64"
+        "tools.tests.test_diagnose_windows_arm64"
       ]
     ]
   },
@@ -1003,7 +1003,7 @@
         "tools.tests.test_corpus_execution",
         "tools.tests.test_freebsd_console",
         "tools.tests.test_check_msvc_native",
-        "tools.test_diagnose_windows_arm64"
+        "tools.tests.test_diagnose_windows_arm64"
       ]
     ]
   },
@@ -1209,7 +1209,7 @@
         "tools.tests.test_corpus_execution",
         "tools.tests.test_freebsd_console",
         "tools.tests.test_check_msvc_native",
-        "tools.test_diagnose_windows_arm64"
+        "tools.tests.test_diagnose_windows_arm64"
       ]
     ]
   },
@@ -1720,7 +1720,7 @@
         "tools/tests/test_corpus_execution.py",
         "tools/tests/test_freebsd_console.py",
         "tools/tests/test_check_msvc_native.py",
-        "tools/test_diagnose_windows_arm64.py",
+        "tools/tests/test_diagnose_windows_arm64.py",
         "tools/tests/test_document_std.py",
         "tools/get_maintainer.py",
         "tools/host_capabilities.py"
@@ -1753,7 +1753,7 @@
         "tools.tests.test_corpus_execution",
         "tools.tests.test_freebsd_console",
         "tools.tests.test_check_msvc_native",
-        "tools.test_diagnose_windows_arm64"
+        "tools.tests.test_diagnose_windows_arm64"
       ]
     ]
   },
