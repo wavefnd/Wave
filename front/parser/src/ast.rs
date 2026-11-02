@@ -135,8 +135,12 @@ pub struct StructNode {
 
 #[derive(Debug, Clone)]
 pub struct ProtoImplNode {
+    /// Named contract, or None for the existing inherent proto form.
+    pub name: Option<String>,
+    /// The target name includes generic arguments, e.g. Buffer<i32>.
     pub target: String,
     pub methods: Vec<FunctionNode>,
+    pub visibility: Visibility,
 }
 
 #[derive(Debug, Clone)]

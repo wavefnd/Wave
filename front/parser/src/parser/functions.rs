@@ -16,7 +16,9 @@
 //! within generic parameter lists are rejected here; program-wide symbol and
 //! body type checks remain the semantic verifier's responsibility.
 
-use crate::ast::{ASTNode, ExportAttribute, Expression, FunctionNode, ParameterNode, Visibility};
+use crate::ast::{
+    ASTNode, ExportAttribute, Expression, FunctionNode, ParameterNode, Visibility, WaveType,
+};
 use crate::parser::decl::parse_ffi_header;
 use crate::parser::ParseError;
 use lexer::token::TokenType;
@@ -73,6 +75,13 @@ pub fn parse_generic_param_names(
 pub fn parse_parameters(
     tokens: &mut Peekable<Iter<Token>>,
 ) -> Result<Vec<ParameterNode>, ParseError> {
+    parse_parameters_with_receiver(tokens, None)
+}
+
+fn parse_parameters_with_receiver(
+    tokens: &mut Peekable<Iter<Token>>,
+    receiver_type: Option<&WaveType>,
+) -> Result<Vec<ParameterNode>, ParseError> {
     let anchor = tokens.peek().copied();
     let context = "function parameters";
     let mut params = Vec::new();
@@ -90,9 +99,17 @@ pub fn parse_parameters(
             return Err(ParseError::syntax_at(at, format!("duplicate parameter '{name}'"))
                 .with_context(context));
         }
-        crate::expr::expect_token(tokens, anchor, TokenType::Colon, "':'", context)?;
         skip_ws(tokens);
-        let param_type = crate::types::parse_type_checked(tokens, "parameter type")?;
+        let param_type = if name == "self"
+            && matches!(tokens.peek().map(|t| &t.token_type), Some(TokenType::Comma | TokenType::Rparen))
+            && receiver_type.is_some()
+        {
+            receiver_type.unwrap().clone()
+        } else {
+            crate::expr::expect_token(tokens, anchor, TokenType::Colon, "':'", context)?;
+            skip_ws(tokens);
+            crate::types::parse_type_checked(tokens, "parameter type")?
+        };
         skip_ws(tokens);
         let initial_value = if tokens.peek().is_some_and(|t| t.token_type == TokenType::Equal) {
             tokens.next();
@@ -130,6 +147,22 @@ pub fn parse_function(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, Par
 pub fn parse_function_with_export(
     tokens: &mut Peekable<Iter<Token>>,
     export: Option<ExportAttribute>,
+) -> Result<ASTNode, ParseError> {
+    parse_function_with_export_and_receiver(tokens, export, None)
+}
+
+/// A named proto may use an untyped `self` receiver, whose type is its target.
+pub fn parse_function_with_receiver(
+    tokens: &mut Peekable<Iter<Token>>,
+    receiver_type: WaveType,
+) -> Result<ASTNode, ParseError> {
+    parse_function_with_export_and_receiver(tokens, None, Some(receiver_type))
+}
+
+fn parse_function_with_export_and_receiver(
+    tokens: &mut Peekable<Iter<Token>>,
+    export: Option<ExportAttribute>,
+    receiver_type: Option<WaveType>,
 ) -> Result<ASTNode, ParseError> {
     let anchor = tokens.peek().copied();
     let invalid = |token: Option<&Token>| {
@@ -175,7 +208,7 @@ pub fn parse_function_with_export(
     }
 
     tokens.next(); // consume '('
-    let parameters = parse_parameters(tokens)?;
+    let parameters = parse_parameters_with_receiver(tokens, receiver_type.as_ref())?;
 
     skip_ws(tokens);
     let mut return_type_span = None;
