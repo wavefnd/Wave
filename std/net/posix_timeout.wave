@@ -10,6 +10,7 @@ import("std::sys::socket")::{MSG_DONTWAIT};
 import("std::sys::socket")::{MSG_DONTWAIT};
 
 import("std::net::poll")::{net_wait_readable, net_wait_writable};
+import("std::net::socket_base")::{net_fd_valid};
 import("std::net::error")::{
     NetIoResult, NetError, net_io_ok, net_io_eof, net_io_error,
     net_error, net_error_from_native, NET_ERROR_INTERRUPTED, NET_ERROR_WOULD_BLOCK,
@@ -33,6 +34,10 @@ pub fun net_io_timeout(fd: i64, buffer: ptr<u8>, size: i64, timeout_ms: i32, wri
 }
 
 fun _net_io_timeout(fd: i64, buffer: ptr<u8>, size: i64, timeout_ms: i32, writing: bool, nonblock: i32) -> NetIoResult {
+    // send/recv narrow the descriptor to a native i32 before checking it.
+    if (size > 0 && !net_fd_valid(fd)) {
+        return net_io_error(0, -22);
+    }
     var start: i64 = 0;
     if (timeout_ms >= 0) {
         start = time_now_monotonic_ns();

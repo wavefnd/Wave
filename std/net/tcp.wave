@@ -374,6 +374,7 @@ pub fun tcp_read_timeout(
         return net_io_error(0, -22);
     }
     if (size == 0) { return net_io_ok(0); }
+    if (!net_fd_valid(stream.fd)) { return net_io_error(0, -22); }
     return net_io_timeout(stream.fd, buf, size, timeout_ms, false);
 }
 
@@ -384,6 +385,7 @@ pub fun tcp_write_timeout(
         return net_io_error(0, -22);
     }
     if (size == 0) { return net_io_ok(0); }
+    if (!net_fd_valid(stream.fd)) { return net_io_error(0, -22); }
     return net_io_timeout(stream.fd, buf, size, timeout_ms, true);
 }
 

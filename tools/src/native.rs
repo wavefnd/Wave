@@ -235,6 +235,8 @@ impl Harness {
         }
         #[cfg(unix)]
         self.both(&crate::root().join("tests/fixtures/std_boundaries/poll.wave"), &[])?;
+        #[cfg(any(target_os = "linux", target_os = "macos", target_os = "freebsd"))]
+        self.both(&crate::root().join("tests/fixtures/io/tcp_fd_bounds.wave"), &[])?;
         self.sockets()?;
         println!("PASS native I/O and socket boundary fixtures ({})", self.target);
         Ok(())
