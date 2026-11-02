@@ -28,6 +28,7 @@ impl<'a> Lexer<'a> {
         }
         self.line += 1;
         self.line_start = self.current;
+        self.column = 1;
     }
 
     pub(crate) fn skip_trivia(&mut self) -> Result<(), WaveError> {

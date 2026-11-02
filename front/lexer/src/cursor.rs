@@ -29,6 +29,7 @@ impl<'a> Lexer<'a> {
 
         let ch = self.peek();
         self.current += ch.len_utf8();
+        self.column += 1;
         ch
     }
 
