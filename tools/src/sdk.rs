@@ -67,7 +67,9 @@ fn check_tree_policy(root: &Path, directories: bool) -> Result<()> {
                 continue;
             }
             current.push(part);
-            let info = fs::symlink_metadata(&current)?;
+            let info = fs::symlink_metadata(&current).map_err(|e| {
+                error(format!("LLVM bundle link target {}: {e}", current.display()))
+            })?;
             if info.is_symlink() {
                 if !seen.insert(current.clone()) {
                     return Err(error("cyclic LLVM bundle link"));
@@ -86,7 +88,8 @@ fn check_tree_policy(root: &Path, directories: bool) -> Result<()> {
                 return Err(error("LLVM link traverses a non-directory"));
             }
         }
-        let target = fs::symlink_metadata(current)?;
+        let target = fs::symlink_metadata(&current)
+            .map_err(|e| error(format!("LLVM bundle link target {}: {e}", current.display())))?;
         if !(target.is_file() || directories && target.is_dir()) {
             return Err(error("LLVM link must target a regular file"));
         }
@@ -371,7 +374,9 @@ fn extract_policy(
         fs::create_dir_all(path.parent().unwrap())?;
         if *hard {
             let target = stage.join(relative(target)?);
-            if fs::symlink_metadata(&target)?.is_symlink()
+            if fs::symlink_metadata(&target)
+                .map_err(|e| error(format!("archive hard link target {}: {e}", target.display())))?
+                .is_symlink()
                 || !target.is_file()
                 || !fs::canonicalize(&target)?.starts_with(&stage)
             {
@@ -396,6 +401,9 @@ pub fn download(url: &str, destination: &Path, expected: &str) -> Result<()> {
         || !expected.bytes().all(|v| v.is_ascii_hexdigit() && !v.is_ascii_uppercase())
     {
         return Err(error("download requires HTTPS and a pinned SHA-256"));
+    }
+    if destination.is_file() && storage::digest(destination)? == expected {
+        return Ok(());
     }
     let parent = destination.parent().unwrap_or(Path::new("."));
     fs::create_dir_all(parent)?;

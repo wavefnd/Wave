@@ -972,14 +972,14 @@ jobs:
       run: |
         set -euo pipefail
         "$WAVE_TOOLS" ci artifact --target "$WAVE_CI_TARGET" --github-output "$GITHUB_OUTPUT"
-    - name: Select FreeBSD VM cache
+    - name: Select pinned FreeBSD input cache
       id: freebsd-cache
       shell: bash
       timeout-minutes: 30
       run: |
         set -euo pipefail
         "$WAVE_TOOLS" freebsd cache-key --github-output "$GITHUB_OUTPUT"
-    - name: Restore FreeBSD tools and Cargo cache
+    - name: Restore pinned FreeBSD build inputs
       uses: actions/cache@v5
       with:
         path: ${{ steps.freebsd-cache.outputs.path }}
@@ -994,15 +994,21 @@ jobs:
         "$WAVE_TOOLS" nightly --stage verify-source
       env:
         GH_TOKEN: ${{ github.token }}
-    - name: Build and validate native FreeBSD package
+    - name: Prepare Linux cross-build tools and FreeBSD VM
+      id: tools
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" prepare host --target "$WAVE_CI_TARGET" --provision
+    - name: Build FreeBSD package on Linux and validate in VM
       id: freebsd-package
       shell: bash
       timeout-minutes: 300
       run: |
         set -euo pipefail
-        sudo apt-get update
-        sudo apt-get install -y qemu-system-x86 qemu-utils genisoimage openssh-client xz-utils curl
-        "$WAVE_TOOLS" freebsd package --provision --output . --cache "$RUNNER_TEMP/wave-freebsd-cache"
+        cargo "+$RUST_VERSION" build --locked --jobs 2 --release -p wave-tools
+        target/release/wave-tools freebsd package --provision --output . --cache "$RUNNER_TEMP/wave-freebsd-cache"
     - name: Record native Actions outcomes
       id: ci_report
       shell: bash
@@ -1028,7 +1034,9 @@ jobs:
         name: reports-nightly-freebsd-amd64-package
         path: 'ci-report.json
 
-          ${{ runner.temp }}/wave-ci-*/*.log'
+          ${{ runner.temp }}/wave-ci-*/*.log
+
+          ${{ runner.temp }}/wave-ci-freebsd-package-*/*.json'
         if-no-files-found: warn
         retention-days: 7
     env:

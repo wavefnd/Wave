@@ -168,3 +168,15 @@ fn archive_root_directory_and_dot_prefixes_do_not_discard_real_entries() {
     sdk::extract(&input, &output, false).unwrap();
     assert_eq!(fs::read(output.join("tree/file")).unwrap(), b"DATA");
 }
+
+#[test]
+fn verified_cached_downloads_do_not_require_network_or_replace_the_file() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("reviewed-sdk.tar.xz");
+    fs::write(&path, b"reviewed input").unwrap();
+    let before = fs::metadata(&path).unwrap().modified().unwrap();
+    let digest = wave_tools::storage::digest(&path).unwrap();
+    wave_tools::sdk::download("https://invalid.invalid/not-requested", &path, &digest).unwrap();
+    assert_eq!(fs::read(&path).unwrap(), b"reviewed input");
+    assert_eq!(fs::metadata(&path).unwrap().modified().unwrap(), before);
+}

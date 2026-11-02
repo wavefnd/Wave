@@ -1,14 +1,19 @@
 // SPDX-License-Identifier: MPL-2.0
-//! Owned VM console, cold/warm build-cache identity and native guest acceptance.
+//! Pinned cross-build inputs, owned VM console and native guest acceptance.
+use crate::{cli::Args, config, error, storage, Result};
 #[cfg(unix)]
-use crate::process::{Output, Spec};
-use crate::{cli::Args, config, error, package, storage, Result};
+use crate::{
+    package,
+    process::{Output, Spec},
+};
 use std::ffi::OsString;
 #[cfg(unix)]
 use std::fs;
 use std::fs::File;
 use std::io::{Read, Write};
-use std::path::{Path, PathBuf};
+#[cfg(unix)]
+use std::path::Path;
+use std::path::PathBuf;
 #[cfg(unix)]
 use std::sync::{
     atomic::{AtomicBool, Ordering},
@@ -23,11 +28,18 @@ pub struct Console<S> {
     log: File,
     buffer: String,
     boot_deadline: Instant,
+    echo_output: bool,
 }
 
 impl<S: Read + Write> Console<S> {
     pub fn new(stream: S, log: File, timeout: Duration) -> Self {
-        Self { stream, log, buffer: String::new(), boot_deadline: Instant::now() + timeout }
+        Self {
+            stream,
+            log,
+            buffer: String::new(),
+            boot_deadline: Instant::now() + timeout,
+            echo_output: false,
+        }
     }
 
     pub fn expect(&mut self, pattern: &str, timeout: Option<Duration>) -> Result<Vec<String>> {
@@ -60,6 +72,10 @@ impl<S: Read + Write> Console<S> {
             Ok(count) => {
                 self.log.write_all(&bytes[..count])?;
                 self.log.flush()?;
+                if self.echo_output {
+                    std::io::stdout().write_all(&bytes[..count])?;
+                    std::io::stdout().flush()?;
+                }
                 self.buffer.push_str(&String::from_utf8_lossy(&bytes[..count]));
                 if self.buffer.len() > 1024 * 1024 {
                     return Err(error("guest console unmatched output exceeded 1 MiB"));
@@ -229,133 +245,32 @@ impl Drop for GuestOwner {
     }
 }
 
-pub fn cache_identity(root: &Path) -> Result<String> {
-    let mut files = vec![
-        "Cargo.lock".into(),
-        "Cargo.toml".into(),
-        ".cargo/config.toml".into(),
-        "meson.build".into(),
-        "meson.options".into(),
-        "tools/Cargo.toml".into(),
-    ];
-    for folder in
-        ["llvm", "whale", "utils", "front/lexer", "front/parser", "front/hir", "front/error"]
-    {
-        files.push(format!("{folder}/Cargo.toml"));
-    }
-    files.extend(
-        storage::files(&root.join("tools/src"))?
-            .into_iter()
-            .filter(|path| path.extension().is_some_and(|v| v == "rs"))
-            .map(|p| p.strip_prefix(root).unwrap().to_string_lossy().replace('\\', "/")),
-    );
-    files.sort();
-    files.dedup();
-    let inputs = files
-        .iter()
-        .map(|name| Ok((name.clone(), Value::string(storage::digest(&root.join(name))?))))
-        .collect::<Result<Vec<_>>>()?;
-    let pins = [
+pub fn cache_identity() -> Result<String> {
+    let names = [
         "FREEBSD_IMAGE",
         "FREEBSD_IMAGE_SHA256",
-        "RUST_VERSION",
-        "LLVM_SOURCE_VERSION",
-        "MESON_VERSION",
-    ]
-    .into_iter()
-    .map(|name| Ok((name, Value::string(config::pin(name)?))))
-    .collect::<Result<Vec<_>>>()?;
-    let value = Value::object([
-        ("schema", Value::integer(2)),
-        ("pins", Value::object(pins)),
-        ("inputs", Value::object(inputs)),
-    ]);
-    Ok(storage::bytes_digest(config::json(&value)?.as_bytes()))
-}
-
-pub fn cache_image(directory: &Path, expected: &str) -> Result<Option<PathBuf>> {
-    let image = directory.join("vm.qcow2");
-    let manifest = directory.join("manifest.json");
-    if !image.is_file() || !manifest.is_file() {
-        return Ok(None);
-    }
-    let validate = (|| -> Result<()> {
-        let metadata = config::read_json(&manifest)?;
-        if metadata.get_str("identity") != Some(expected)
-            || metadata.get_str("sha256") != Some(storage::digest(&image)?.as_str())
-        {
-            return Err(error("cache identity or checksum mismatch"));
-        }
-        let info = config::parse_json(&package::run([
-            OsString::from("qemu-img"),
-            "info".into(),
-            "--output=json".into(),
-            image.clone().into(),
-        ])?)?;
-        if info.get_str("format") != Some("qcow2")
-            || info.get("backing-filename").is_some()
-            || info.get("data-file").is_some()
-            || info.get("dirty-flag") == Some(&Value::Bool(true))
-        {
-            return Err(error("cache is not a clean standalone qcow2 image"));
-        }
-        if let Some(data) = info.get("format-specific").and_then(|v| v.get("data")) {
-            if data.get("data-file").is_some() || data.get("corrupt") == Some(&Value::Bool(true)) {
-                return Err(error("cache image is corrupt or externally backed"));
-            }
-        }
-        Ok(())
-    })();
-    match validate {
-        Ok(()) => Ok(Some(image)),
-        Err(e) => {
-            println!("Discarding unusable FreeBSD VM cache: {e}");
-            Ok(None)
-        },
-    }
-}
-
-#[cfg(unix)]
-fn save_image(overlay: &Path, directory: &Path, identity: &str, source: &str) -> Result<()> {
-    fs::create_dir_all(directory)?;
-    let stage = tempfile::Builder::new().prefix(".snapshot-").tempdir_in(directory)?;
-    let image = stage.path().join("vm.qcow2");
-    let mut convert = Spec::new([
-        OsString::from("qemu-img"),
-        "convert".into(),
-        "-O".into(),
-        "qcow2".into(),
-        overlay.into(),
-        image.clone().into(),
-    ]);
-    convert.timeout = Duration::from_secs(900);
-    convert.checked()?;
-    let mut check = Spec::new([OsString::from("qemu-img"), "check".into(), image.clone().into()]);
-    check.timeout = Duration::from_secs(120);
-    check.checked()?;
-    let manifest = stage.path().join("manifest.json");
-    fs::write(
-        &manifest,
-        config::json(&Value::object([
-            ("identity", Value::string(identity)),
-            ("source", Value::string(source)),
-            ("sha256", Value::string(storage::digest(&image)?)),
-        ]))?,
-    )?;
-    storage::replace_set(&[
-        (image, directory.join("vm.qcow2")),
-        (manifest, directory.join("manifest.json")),
-    ])?;
-    Ok(())
+        "FREEBSD_SYSROOT_URL",
+        "FREEBSD_SYSROOT_SHA256",
+        "FREEBSD_LLVM_RUNTIME_URL",
+        "FREEBSD_LLVM_RUNTIME_SHA256",
+    ];
+    let values = names
+        .iter()
+        .map(|name| Ok((*name, Value::string(config::pin(name)?))))
+        .collect::<Result<Vec<_>>>()?;
+    Ok(storage::bytes_digest(config::json(&Value::object(values))?.as_bytes()))
 }
 
 #[cfg(unix)]
 fn image(work: &Path, provision: bool) -> Result<PathBuf> {
+    image_to(work, work, provision)
+}
+
+#[cfg(unix)]
+fn image_to(cache: &Path, work: &Path, provision: bool) -> Result<PathBuf> {
     let name = config::pin("FREEBSD_IMAGE")?;
     let digest = config::pin("FREEBSD_IMAGE_SHA256")?;
-    let temporary =
-        std::env::var_os("RUNNER_TEMP").map(PathBuf::from).unwrap_or_else(|| work.to_path_buf());
-    let archive = temporary.join(&name);
+    let archive = cache.join(&name);
     if provision {
         crate::sdk::download(
             &format!(
@@ -718,15 +633,30 @@ pub fn main(arguments: &[OsString]) -> Result<i32> {
                     .unwrap_or_else(std::env::temp_dir)
                     .join("wave-freebsd-cache")
             });
-        let prefix = format!("wave-freebsd-v2-{}-", cache_identity(&crate::root())?);
-        let source = package::run(["git", "rev-parse", "HEAD"])?;
+        let prefix = format!("wave-freebsd-inputs-v1-{}", cache_identity()?);
         for (name, value) in [
             ("path", directory.to_string_lossy().into_owned()),
-            ("key", format!("{prefix}{}", source.trim())),
+            ("key", prefix.clone()),
             ("restore-prefix", prefix),
         ] {
             config::append_output(&output, name, &value)?;
         }
+        return Ok(0);
+    }
+    #[cfg(unix)]
+    if command == "validate-package" {
+        let work = args.path("--work-dir")?.ok_or_else(|| error("missing --work-dir"))?;
+        let cache = args.path("--cache")?.ok_or_else(|| error("missing --cache"))?;
+        args.finish()?;
+        validate_package_vm(&work, &cache)?;
+        return Ok(0);
+    }
+    #[cfg(unix)]
+    if command == "build-sysroot" {
+        let archive = args.path("--archive")?.ok_or_else(|| error("missing --archive"))?;
+        let output = args.path("--output")?.ok_or_else(|| error("missing --output"))?;
+        args.finish()?;
+        sysroot(&archive, &output)?;
         return Ok(0);
     }
     #[cfg(unix)]
@@ -770,135 +700,188 @@ pub fn main(arguments: &[OsString]) -> Result<i32> {
 }
 
 #[cfg(unix)]
-const BOOTSTRAP: &str = r###"#!/bin/sh
-set -eu
-if [ ! -f /root/.wave-ci-prepared ]; then
-    gpart recover vtbd0
-    root_part=$(gpart show -p vtbd0 | awk '$4 == "freebsd-ufs" {print $3}')
-    test -n "$root_part"
-    gpart resize -i "${root_part##*p}" vtbd0
-# Use the mount point: the mounted /dev/gpt/rootfs alias can differ from vtbd0pN.
-# growfs must recognize the live mount to suspend UFS writes while expanding it.
-    growfs -y /
-fi
-mkdir -p /root/.ssh
-cp /mnt/authorized_keys /root/.ssh/authorized_keys
-chmod 700 /root/.ssh
-chmod 600 /root/.ssh/authorized_keys
-grep -qxF 'PermitRootLogin prohibit-password' /etc/ssh/sshd_config ||
-    echo 'PermitRootLogin prohibit-password' >> /etc/ssh/sshd_config
-dhclient vtnet0
-service sshd onestart
-"###;
-
-#[cfg(unix)]
-const GUEST_BUILD: &str = r###"#!/bin/sh
-set -eu
-export ASSUME_ALWAYS_YES=yes
-export PYTHONUNBUFFERED=1
-phase() { printf '\n[FreeBSD %s] %s\n' "$(date -u +%H:%M:%S)" "$*"; }
-phase 'Guest CPU'
-sysctl hw.model hw.ncpu
-if [ -f /root/.wave-ci-prepared ]; then
-    [ "$(cat /root/.wave-ci-prepared)" = CACHE_PIN ]
-    phase 'Reuse installed LLVM and Rust'
-else
-    phase 'Install build dependencies'
-    pkg bootstrap -f
-    pkg install -y bash git python312 py312-pip ninja llvm21 patchelf curl ca_root_nss
-    ln -sf /usr/local/bin/python3.12 /usr/local/bin/python3
-    curl --proto '=https' --tlsv1.2 -fsSL https://sh.rustup.rs -o /tmp/rustup.sh
-    sh /tmp/rustup.sh -y --profile minimal --default-toolchain RUST_PIN
-fi
-export PATH=/root/.cargo/bin:/usr/local/llvm21/bin:/usr/local/bin:/usr/bin:/bin
-export LLVM_SYS_211_PREFIX=/usr/local/llvm21
-export LLVM_CONFIG_PATH=/usr/local/llvm21/bin/llvm-config
-export CARGO_BUILD_JOBS=2
-export CARGO_TARGET_X86_64_UNKNOWN_FREEBSD_LINKER=cc
-[ "$(llvm-config --version)" = LLVM_PIN ]
-case "$(rustc --version)" in 'rustc RUST_PIN '*) ;; *) exit 1;; esac
-printf '%s\n' CACHE_PIN > /root/.wave-ci-prepared
-if [ -d /root/Wave/.git ]; then
-    phase 'Refresh source while retaining Cargo outputs'
-    git -C /root/Wave fetch --no-tags /mnt/source.bundle HEAD
-    git -C /root/Wave checkout --detach --force SOURCE_PIN
-    git -C /root/Wave clean -ffdx -e target/
-else
-    git clone /mnt/source.bundle /root/Wave
-    git -C /root/Wave checkout --detach SOURCE_PIN
-fi
-cd /root/Wave
-phase 'Prepare pinned Meson'
-python3 -m venv /root/.wave-meson
-/root/.wave-meson/bin/python -m pip install --disable-pip-version-check meson==MESON_PIN
-export PATH=/root/.wave-meson/bin:$PATH
-phase 'Run workspace unit tests'
-cargo test --locked --workspace --lib --jobs 2
-phase 'Run frontend regression tests'
-cargo test --locked --test frontend_regressions --jobs 2
-phase 'Run native environment boundary cases with injected fixture variables'
-cargo test --locked --test env_boundaries --jobs 2
-phase 'Build release archive'
-meson setup .tmp/meson-freebsd -Dcompiler_target=x86_64-unknown-freebsd
-meson compile -C .tmp/meson-freebsd release
-phase 'Validate extracted package and C linking'
-./.tmp/meson-freebsd/wave-tools check extracted-package --target x86_64-unknown-freebsd --archive "$(ls wave-v*-x86_64-unknown-freebsd.tar.gz)"
-phase 'Package validation complete'
-"###;
-
-#[cfg(unix)]
 fn quoted(value: &str) -> String {
-    format!("'{}'", value.replace('\'', "'\\''"))
+    format!("'{}'", value.replace('\'', "'\"'\"'"))
 }
 
 #[cfg(unix)]
-fn build_package(output: &Path, cache: &Path, provision: bool) -> Result<()> {
-    if !provision {
-        return Err(error("FreeBSD VM package provisioning requires --provision"));
+fn executable_script(path: &Path, contents: &str) -> Result<()> {
+    use std::os::unix::fs::PermissionsExt;
+    fs::write(path, contents)?;
+    fs::set_permissions(path, fs::Permissions::from_mode(0o755))?;
+    Ok(())
+}
+
+/// Reuse the reviewed release's target LLVM binaries; only headers/config run on the host.
+#[cfg(unix)]
+pub fn cross_environment(
+    runtime: &Path,
+    sysroot: &Path,
+    host: &Path,
+    work: &Path,
+) -> Result<std::collections::BTreeMap<OsString, OsString>> {
+    let runtime = fs::canonicalize(runtime)?;
+    let sysroot = fs::canonicalize(sysroot)?;
+    let host = fs::canonicalize(host)?;
+    let version =
+        package::run([host.join("bin/llvm-config").into_os_string(), "--version".into()])?;
+    if version.trim() != config::pin("LLVM_SOURCE_VERSION")? {
+        return Err(error("host LLVM must match the reviewed FreeBSD LLVM version exactly"));
     }
-    let work = tempfile::Builder::new().prefix("wave-freebsd-package-").tempdir()?;
-    let inputs = work.path().join("inputs");
-    fs::create_dir(&inputs)?;
-    let identity = cache_identity(&crate::root())?;
-    let cached = cache_image(cache, &identity)?;
-    let warm = cached.is_some();
-    let image = match cached {
-        Some(path) => path,
-        None => image(work.path(), true)?,
-    };
-    let key = work.path().join("guest-key");
+    for tool in ["ld.lld", "llc", "llvm-as", "llvm-mc"] {
+        crate::binary::inspect(&runtime.join("bin").join(tool), Some("x86_64-unknown-freebsd"))?;
+    }
+    crate::binary::inspect(&runtime.join("lib/libLLVM.so"), Some("x86_64-unknown-freebsd"))?;
+    if !sysroot.join("usr/lib/crt1.o").is_file() {
+        return Err(error("FreeBSD base sysroot is incomplete"));
+    }
+    fs::create_dir_all(work.join("bin"))?;
+    let work = fs::canonicalize(work)?;
+    let config = work.join("bin/llvm-config");
+    executable_script(&config, &format!(
+        "#!/bin/sh\ncase \"$1\" in\n --libdir) printf '%s\\n' {};;\n --prefix) printf '%s\\n' {};;\n --libnames) printf '%s\\n' libLLVM.so;;\n --system-libs) printf '\\n';;\n --host-target) printf '%s\\n' x86_64-unknown-freebsd;;\n *) exec {} \"$@\";;\nesac\n",
+        quoted(&runtime.join("lib").to_string_lossy()),
+        quoted(&runtime.to_string_lossy()),
+        quoted(&host.join("bin/llvm-config").to_string_lossy()),
+    ))?;
+    let cc = work.join("cc");
+    executable_script(&cc, &format!(
+        "#!/bin/sh\nexec {} --target=x86_64-unknown-freebsd14.4 --sysroot={} -fuse-ld=lld -Wl,-rpath-link,{} \"$@\"\n",
+        quoted(&host.join("bin/clang").to_string_lossy()), quoted(&sysroot.to_string_lossy()),
+        quoted(&runtime.join("lib").to_string_lossy()),
+    ))?;
+    let mut env = std::collections::BTreeMap::new();
+    for (name, value) in [
+        ("WAVE_CROSS_LLVM_TARGET", OsString::from("x86_64-unknown-freebsd")),
+        ("WAVE_CROSS_SYSROOT", sysroot.into_os_string()),
+        ("WAVE_LLVM_HOME", runtime.clone().into_os_string()),
+        ("WAVE_LLVM_BIN", runtime.join("bin").into_os_string()),
+        ("WAVE_LLVM_LIB", runtime.join("lib").into_os_string()),
+        ("LLVM_SYS_211_PREFIX", work.into_os_string()),
+        ("LLVM_CONFIG_PATH", config.into_os_string()),
+        ("WAVE_LLVM_MC", host.join("bin/llvm-mc").into_os_string()),
+        ("WAVE_HOST_LLVM_MC", host.join("bin/llvm-mc").into_os_string()),
+        ("CARGO_TARGET_X86_64_UNKNOWN_FREEBSD_LINKER", cc.clone().into_os_string()),
+        ("CC_x86_64_unknown_freebsd", cc.into_os_string()),
+        ("AR_x86_64_unknown_freebsd", host.join("bin/llvm-ar").into_os_string()),
+    ] {
+        env.insert(name.into(), value);
+    }
+    Ok(env)
+}
+
+/// Select the base-system build inputs before applying the existing archive/link verifier.
+#[cfg(unix)]
+fn sysroot(archive: &Path, output: &Path) -> Result<()> {
+    let work =
+        tempfile::Builder::new().prefix(".freebsd-base-").tempdir_in(output.parent().unwrap())?;
+    let compressed = work.path().join("base.tar.xz");
+    fs::copy(archive, &compressed).map_err(|e| error(format!("copy base archive: {e}")))?;
     Spec::new([
-        OsString::from("ssh-keygen"),
-        "-q".into(),
-        "-t".into(),
-        "ed25519".into(),
-        "-N".into(),
-        "".into(),
-        "-f".into(),
-        key.clone().into(),
+        OsString::from("xz"),
+        "--decompress".into(),
+        "--memlimit-decompress=1GiB".into(),
+        compressed.into(),
     ])
     .checked()?;
-    fs::copy(key.with_extension("pub"), inputs.join("authorized_keys"))?;
-    fs::write(inputs.join("bootstrap.sh"), BOOTSTRAP)?;
-    let source = package::run(["git", "rev-parse", "HEAD"])?;
-    let source = source.trim();
-    crate::publication::sha(source)?;
-    Spec::new([
-        OsString::from("git"),
-        "bundle".into(),
-        "create".into(),
-        inputs.join("source.bundle").into(),
-        "HEAD".into(),
-    ])
-    .checked()?;
-    let guest = GUEST_BUILD
-        .replace("RUST_PIN", &quoted(&config::pin("RUST_VERSION")?))
-        .replace("LLVM_PIN", &quoted(&config::pin("LLVM_SOURCE_VERSION")?))
-        .replace("MESON_PIN", &quoted(&config::pin("MESON_VERSION")?))
-        .replace("CACHE_PIN", &quoted(&identity))
-        .replace("SOURCE_PIN", &quoted(source));
-    fs::write(inputs.join("build.sh"), guest)?;
-    let iso = work.path().join("inputs.iso");
+    let selected = work.path().join("sysroot.tar");
+    let mut builder = tar::Builder::new(File::create(&selected)?);
+    for entry in tar::Archive::new(
+        File::open(work.path().join("base.tar"))
+            .map_err(|e| error(format!("open expanded FreeBSD base: {e}")))?,
+    )
+    .entries()?
+    {
+        let mut entry = entry?;
+        let mut sparse = None;
+        if let Some(fields) = entry.pax_extensions()? {
+            for field in fields {
+                let field = field?;
+                if field.key()? == "GNU.sparse.name" {
+                    sparse = Some(PathBuf::from(field.value()?));
+                }
+            }
+        }
+        let path = sparse.clone().unwrap_or(entry.path()?.into_owned());
+        let name = path.to_string_lossy();
+        let name = name.trim_start_matches("./");
+        // The libxo test plug-in points outside the build sysroot and is not a compiler input.
+        if ["lib/", "libexec/", "usr/lib/", "usr/include/", "usr/libdata/"]
+            .iter()
+            .any(|prefix| name.starts_with(prefix))
+            && !name.starts_with("usr/lib/libxo/")
+            // Base compiler internals are unnecessary for the clang 21 host
+            // driver and contain very large sparse LLVM 19 libraries.
+            && !name.starts_with("usr/lib/libprivate")
+        {
+            let mut header = entry.header().clone();
+            if sparse.is_some() {
+                // GNU pax sparse members expose compact storage under a synthetic
+                // name through tar::Entry. Let the existing host tar expand only
+                // this member to stdout; filesystem extraction still uses sdk's
+                // path/link policy below.
+                let expanded = Spec::new([
+                    OsString::from("tar"),
+                    "-xOf".into(),
+                    work.path().join("base.tar").into(),
+                    "--".into(),
+                    path.clone().into(),
+                ])
+                .checked()?;
+                header.set_entry_type(tar::EntryType::Regular);
+                header.set_size(expanded.stdout.len() as u64);
+                builder.append_data(&mut header, &path, expanded.stdout.as_slice())?;
+            } else {
+                header.set_size(entry.size());
+                builder.append_data(&mut header, &path, &mut entry)?;
+            }
+        }
+    }
+    builder.finish()?;
+    crate::sdk::extract_toolchain(&selected, output)
+        .map_err(|e| error(format!("extract filtered sysroot: {e}")))
+}
+
+#[cfg(unix)]
+fn host_inputs(cache: &Path, work: &Path) -> Result<(PathBuf, PathBuf)> {
+    fs::create_dir_all(cache)?;
+    let runtime = cache.join("runtime.tar.gz");
+    crate::sdk::download(
+        &config::pin("FREEBSD_LLVM_RUNTIME_URL")?,
+        &runtime,
+        &config::pin("FREEBSD_LLVM_RUNTIME_SHA256")?,
+    )?;
+    let base = cache.join("base.txz");
+    crate::sdk::download(
+        &config::pin("FREEBSD_SYSROOT_URL")?,
+        &base,
+        &config::pin("FREEBSD_SYSROOT_SHA256")?,
+    )?;
+    crate::sdk::extract(&runtime, &work.join("runtime"), false)?;
+    let entries = fs::read_dir(work.join("runtime"))?.collect::<std::io::Result<Vec<_>>>()?;
+    if entries.len() != 1 || !entries[0].file_type()?.is_dir() {
+        return Err(error("reviewed FreeBSD runtime must have exactly one package root"));
+    }
+    let sdk = entries[0].path().join("llvm");
+    let base_root = work.join("sysroot");
+    sysroot(&base, &base_root).map_err(|e| error(format!("FreeBSD build sysroot: {e}")))?;
+    Ok((sdk, base_root))
+}
+
+#[cfg(unix)]
+fn validate_package_vm(work: &Path, cache: &Path) -> Result<()> {
+    let inputs = work.join("inputs");
+    let name = format!("wave-v{}-x86_64-unknown-freebsd.tar.gz", config::compiler_version()?);
+    let metadata =
+        config::read_json(&work.join("artifacts").join(format!("{name}.metadata.json")))?;
+    if metadata.get_str("source_sha") != Some(package::run(["git", "rev-parse", "HEAD"])?.trim())
+        || metadata.get_str("target") != Some("x86_64-unknown-freebsd")
+        || metadata.get_str("sha256") != Some(storage::digest(&inputs.join(&name))?.as_str())
+    {
+        return Err(error("FreeBSD validation input source/target/checksum mismatch"));
+    }
+    crate::binary::inspect(&inputs.join("wave-tools"), Some("x86_64-unknown-freebsd"))?;
+    let iso = work.join("inputs.iso");
     Spec::new([
         OsString::from("genisoimage"),
         "-quiet".into(),
@@ -908,7 +891,9 @@ fn build_package(output: &Path, cache: &Path, provision: bool) -> Result<()> {
         inputs.into(),
     ])
     .checked()?;
-    let overlay = work.path().join("guest.qcow2");
+    println!("Validating the completed package and host-built tests inside FreeBSD; no Rust/LLVM installation or Cargo build in the VM");
+    let image = image_to(cache, work, true)?;
+    let overlay = work.join("guest.qcow2");
     Spec::new([
         OsString::from("qemu-img"),
         "create".into(),
@@ -921,113 +906,285 @@ fn build_package(output: &Path, cache: &Path, provision: bool) -> Result<()> {
         overlay.clone().into(),
     ])
     .checked()?;
-    if !warm {
-        Spec::new([
-            OsString::from("qemu-img"),
-            "resize".into(),
-            overlay.clone().into(),
-            "+24G".into(),
-        ])
-        .checked()?;
-    }
-    let port = {
-        let listener = std::net::TcpListener::bind("127.0.0.1:0")?;
-        listener.local_addr()?.port()
-    };
     let kvm = fs::OpenOptions::new().read(true).write(true).open("/dev/kvm").is_ok();
-    let command = vec![
-        "qemu-system-x86_64".into(),
-        "-cpu".into(),
-        if kvm { "host" } else { "Nehalem" }.into(),
-        "-m".into(),
-        "6144".into(),
-        "-smp".into(),
-        "2".into(),
-        "-accel".into(),
-        if kvm { "kvm" } else { "tcg" }.into(),
-        "-drive".into(),
-        format!("file={},format=qcow2,if=virtio", overlay.display()).into(),
-        "-drive".into(),
-        format!("file={},format=raw,if=virtio,readonly=on", iso.display()).into(),
-        "-nic".into(),
-        format!("user,model=virtio-net-pci,hostfwd=tcp:127.0.0.1:{port}-:22").into(),
-    ];
-    let mut vm =
-        Vm::start(command, work.path(), Duration::from_secs(300), Duration::from_secs(18000))?;
-    vm.console.boot("amd64")?;
-    vm.console.send("mount -uw / && mount -t cd9660 /dev/vtbd1 /mnt && sh /mnt/bootstrap.sh; printf '\\nWAVE-SSH-STATUS %s\\n' \"$?\"\n")?;
-    let status = vm
-        .console
-        .expect(r"(?:^|\r?\n)WAVE-SSH-STATUS ([0-9]+)\r?\n", Some(Duration::from_secs(180)))?;
-    if status[1] != "0" {
-        return Err(error(format!("FreeBSD SSH bootstrap exited {}", status[1])));
-    }
-    vm.console.send("cat /etc/ssh/ssh_host_ed25519_key.pub\n")?;
-    let key_line = vm.console.expect(
-        r"(?:^|\r?\n)(ssh-ed25519 [A-Za-z0-9+/=]+)(?:[ \t]+[^\r\n]*)?\r?\n",
-        Some(Duration::from_secs(30)),
+    let mut vm = Vm::start(
+        vec![
+            "qemu-system-x86_64".into(),
+            "-cpu".into(),
+            if kvm { "host" } else { "Nehalem" }.into(),
+            "-m".into(),
+            "3072".into(),
+            "-smp".into(),
+            "2".into(),
+            "-accel".into(),
+            if kvm { "kvm" } else { "tcg" }.into(),
+            "-drive".into(),
+            format!("file={},format=qcow2,if=virtio", overlay.display()).into(),
+            "-drive".into(),
+            format!("file={},format=raw,if=virtio,readonly=on", iso.display()).into(),
+            "-nic".into(),
+            "user,model=virtio-net-pci".into(),
+        ],
+        work,
+        Duration::from_secs(240),
+        Duration::from_secs(1800),
     )?;
-    let known = work.path().join("known_hosts");
-    fs::write(&known, format!("[127.0.0.1]:{port} {}\n", key_line[1]))?;
-    let options = vec![
-        "-i".into(),
-        key.into(),
-        "-o".into(),
-        "BatchMode=yes".into(),
-        "-o".into(),
-        "StrictHostKeyChecking=yes".into(),
-        "-o".into(),
-        format!("UserKnownHostsFile={}", known.display()).into(),
-        "-o".into(),
-        "ConnectTimeout=30".into(),
-    ];
-    let ssh = |script: &str, timeout: u64| -> Result<()> {
-        let mut args = vec![OsString::from("ssh")];
-        args.extend(options.iter().cloned());
-        args.extend(["-p".into(), port.to_string().into(), "root@127.0.0.1".into(), script.into()]);
+    vm.console.boot("amd64")?;
+    vm.console.echo_output = true;
+    vm.console.send("mount -uw / && mkdir -p /wave-inputs && mount -t cd9660 /dev/vtbd1 /wave-inputs && sh /wave-inputs/validate.sh; printf '\\nWAVE-PACKAGE-STATUS %s\\n' \"$?\"\n")?;
+    let result = vm
+        .console
+        .expect(r"(?:^|\r?\n)WAVE-PACKAGE-STATUS ([0-9]+)\r?\n", Some(Duration::from_secs(1200)))?;
+    if result[1] != "0" {
+        return Err(error(format!(
+            "FreeBSD package validation failed (exit {}); see {}",
+            result[1],
+            work.join("guest.log").display()
+        )));
+    }
+    vm.console.send("poweroff\n")?;
+    vm.shutdown(Duration::from_secs(60))?;
+    Ok(())
+}
+
+#[cfg(unix)]
+fn build_package(output: &Path, cache: &Path, provision: bool) -> Result<()> {
+    if !provision {
+        return Err(error("FreeBSD cross package preparation requires --provision"));
+    }
+    if !cfg!(target_os = "linux") || std::env::consts::ARCH != "x86_64" {
+        return Err(error("FreeBSD package builds require a Linux amd64 host"));
+    }
+    let temporary =
+        std::env::var_os("RUNNER_TEMP").map(PathBuf::from).unwrap_or_else(std::env::temp_dir);
+    let work =
+        tempfile::Builder::new().prefix("wave-ci-freebsd-package-").tempdir_in(temporary)?.keep();
+    let root = fs::canonicalize(crate::root())?;
+    let target = "x86_64-unknown-freebsd";
+    let run = |args: Vec<OsString>,
+               env: &std::collections::BTreeMap<OsString, OsString>|
+     -> Result<Output> {
         let mut spec = Spec::new(args);
-        spec.timeout = Duration::from_secs(timeout);
+        spec.env = env.clone();
         spec.stream = true;
-        spec.checked()?;
-        Ok(())
+        spec.timeout = Duration::from_secs(1800);
+        spec.checked()
     };
-    ssh("sh /mnt/build.sh", 14400)?;
-    let version = config::compiler_version()?;
-    let name = format!("wave-v{version}-x86_64-unknown-freebsd.tar.gz");
-    fs::create_dir_all(output)?;
-    let pending = tempfile::Builder::new().prefix(".freebsd-artifacts-").tempdir_in(output)?;
-    for suffix in ["", ".sha256", ".metadata.json"] {
-        let mut args = vec![OsString::from("scp"), "-O".into()];
-        args.extend(options.iter().cloned());
-        args.extend([
-            "-P".into(),
-            port.to_string().into(),
-            format!("root@127.0.0.1:/root/Wave/{name}{suffix}").into(),
-            pending.path().join(format!("{name}{suffix}")).into(),
-        ]);
-        Spec::new(args).checked()?;
+    println!("Preparing pinned FreeBSD sysroot and existing LLVM runtime on Linux");
+    let (sdk, base) = host_inputs(cache, &work)?;
+    let host = package::prefix()?;
+    let env = cross_environment(&sdk, &base, &host, &work.join("host-tools"))?;
+    let rust = config::pin("RUST_VERSION")?;
+    run(
+        vec![
+            "rustup".into(),
+            "target".into(),
+            "add".into(),
+            "--toolchain".into(),
+            rust.clone().into(),
+            target.into(),
+        ],
+        &env,
+    )?;
+    let meson = work.join("meson");
+    println!("Cross-building the FreeBSD compiler on Linux through Cargo and Meson");
+    run(
+        vec![
+            "python3".into(),
+            "-m".into(),
+            "mesonbuild.mesonmain".into(),
+            "setup".into(),
+            meson.clone().into(),
+            root.clone().into(),
+            format!("-Dcompiler_target={target}").into(),
+            "-Dbuildtype=release".into(),
+        ],
+        &env,
+    )?;
+    run(
+        vec![
+            "python3".into(),
+            "-m".into(),
+            "mesonbuild.mesonmain".into(),
+            "compile".into(),
+            "-C".into(),
+            meson.clone().into(),
+            "--jobs".into(),
+            "2".into(),
+            "wavec".into(),
+        ],
+        &env,
+    )?;
+    let artifacts = work.join("artifacts");
+    let helper = std::env::current_exe()?;
+    run(
+        vec![
+            helper.clone().into(),
+            "package".into(),
+            "--binary".into(),
+            meson.join("wavec").into(),
+            "--target".into(),
+            target.into(),
+            "--dist-dir".into(),
+            work.join("dist").into(),
+            "--archive-dir".into(),
+            artifacts.clone().into(),
+        ],
+        &env,
+    )?;
+
+    println!("Cross-compiling existing FreeBSD validation tests on Linux");
+    let tests = run(
+        vec![
+            "cargo".into(),
+            format!("+{rust}").into(),
+            "test".into(),
+            "--locked".into(),
+            "--jobs".into(),
+            "2".into(),
+            "--release".into(),
+            "--target".into(),
+            target.into(),
+            "--workspace".into(),
+            "--exclude".into(),
+            "wave-tools".into(),
+            "--lib".into(),
+            "--test".into(),
+            "frontend_regressions".into(),
+            "--test".into(),
+            "env_boundaries".into(),
+            "--no-run".into(),
+            "--message-format=json-render-diagnostics".into(),
+        ],
+        &env,
+    )?
+    .strict_stdout()?;
+    run(
+        vec![
+            "cargo".into(),
+            format!("+{rust}").into(),
+            "build".into(),
+            "--locked".into(),
+            "--jobs".into(),
+            "2".into(),
+            "--release".into(),
+            "--target".into(),
+            target.into(),
+            "-p".into(),
+            "wave-tools".into(),
+        ],
+        &env,
+    )?;
+    let target_dir = std::env::var_os("CARGO_TARGET_DIR")
+        .map(PathBuf::from)
+        .unwrap_or_else(|| root.join("target"));
+    let target_dir = fs::canonicalize(target_dir)?;
+    let inputs = work.join("inputs");
+    fs::create_dir(&inputs)?;
+    fs::copy(target_dir.join(target).join("release/wave-tools"), inputs.join("wave-tools"))?;
+    let mut payload = tar::Builder::new(File::create(inputs.join("validation.tar"))?);
+    let mut executables = std::collections::BTreeSet::new();
+    let mut copied = std::collections::BTreeSet::new();
+    for line in tests.lines().filter(|line| !line.trim().is_empty()) {
+        let event = config::parse_json(line)?;
+        if event.get_str("reason") == Some("compiler-artifact") {
+            if let Some(path) = event.get_str("executable") {
+                let path = PathBuf::from(path);
+                if !path.starts_with(&target_dir) {
+                    return Err(error("test executable is outside Cargo output"));
+                }
+                if copied.insert(path.clone()) {
+                    payload.append_path_with_name(&path, path.strip_prefix("/")?)?;
+                }
+                if event.get("profile").and_then(|profile| profile.get("test"))
+                    == Some(&Value::Bool(true))
+                {
+                    executables.insert(path);
+                }
+            }
+        } else if event.get_str("reason") == Some("build-script-executed")
+            && event
+                .get_str("package_id")
+                .is_some_and(|id| id.starts_with("path+") && id.contains("/llvm#"))
+        {
+            let crt = Path::new(config::text(&event, "out_dir")?).join("crt");
+            payload.append_dir_all(crt.strip_prefix("/")?, &crt)?;
+        }
     }
-    let archive = pending.path().join(&name);
-    let digest = storage::digest(&archive)?;
-    let metadata = config::read_json(&pending.path().join(format!("{name}.metadata.json")))?;
-    if metadata.get_str("sha256") != Some(&digest)
-        || metadata.get_str("source_sha") != Some(source)
-        || metadata.get_str("target") != Some("x86_64-unknown-freebsd")
-        || fs::read_to_string(pending.path().join(format!("{name}.sha256")))?.trim()
-            != format!("{digest}  {name}")
+    if executables.len() < 8
+        || !executables
+            .iter()
+            .any(|p| p.file_name().unwrap().to_string_lossy().starts_with("env_boundaries-"))
+        || !executables
+            .iter()
+            .any(|p| p.file_name().unwrap().to_string_lossy().starts_with("frontend_regressions-"))
     {
-        return Err(error("FreeBSD artifact identity or checksum mismatch"));
+        return Err(error("FreeBSD validation executables are incomplete"));
     }
-    ssh("set -e; rm -f /root/.ssh/authorized_keys /etc/ssh/ssh_host_* /root/.cargo/credentials /root/.cargo/credentials.toml /root/Wave/wave-v*.tar.gz*; pkg clean -ay; sync",120)?;
-    vm.console.send("shutdown -p now\n")?;
-    vm.console.expect("Powering system off", Some(Duration::from_secs(120)))?;
-    vm.shutdown(Duration::from_secs(30))?;
+    payload.finish()?;
+    let source = Spec::new([
+        OsString::from("git"),
+        "archive".into(),
+        "--format=tar".into(),
+        "HEAD".into(),
+        "-o".into(),
+        inputs.join("source.tar").into(),
+    ]);
+    source.checked()?;
+    let version = config::compiler_version()?;
+    let name = format!("wave-v{version}-{target}.tar.gz");
+    let archive = artifacts.join(&name);
+    fs::copy(&archive, inputs.join(&name))?;
+    let package_name = name.strip_suffix(".tar.gz").unwrap();
+    let commands = executables
+        .iter()
+        .map(|path| format!("{}\n", quoted(&path.to_string_lossy())))
+        .collect::<String>();
+    let source_root = quoted(&root.to_string_lossy());
+    let script = format!(
+        r#"#!/bin/sh
+set -eu
+export PATH=/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+export ASSUME_ALWAYS_YES=yes
+# Git is a runtime prerequisite for the existing installer regression tests.
+dhclient vtnet0
+pkg bootstrap -f
+pkg install -y git
+mkdir -p {source_root} /tmp/wave-runtime
+tar -xf /wave-inputs/source.tar -C {source_root}
+tar -xf /wave-inputs/validation.tar -C /
+tar -xzf /wave-inputs/{name} -C /tmp/wave-runtime
+export LD_LIBRARY_PATH=/tmp/wave-runtime/{package_name}/llvm/lib
+export WAVE_REPOSITORY={source_root}
+export WAVE_TOOLS=/wave-inputs/wave-tools
+cd {source_root}
+{commands}
+/wave-inputs/wave-tools check extracted-package --target {target} --archive /wave-inputs/{name} --output /tmp/wave-package-evidence
+printf 'FreeBSD package and native validation passed\n'
+"#
+    );
+    fs::write(inputs.join("validate.sh"), script)?;
+    validate_package_vm(&work, cache)?;
+    let digest = storage::digest(&archive)?;
+    let report = Value::object([
+        ("status", Value::string("pass")),
+        ("source_sha", Value::string(package::run(["git", "rev-parse", "HEAD"])?.trim())),
+        ("archive_sha256", Value::string(digest)),
+        ("host_built_tests", Value::integer(executables.len() as u64)),
+        ("guest_cargo_builds", Value::integer(0)),
+        ("clean_poweroff", Value::Bool(true)),
+    ]);
+    storage::atomic_write(
+        &work.join("package-validation.json"),
+        config::json(&report)?.as_bytes(),
+    )?;
+    fs::create_dir_all(output)?;
     let entries = ["", ".sha256", ".metadata.json"].map(|suffix| {
         let name = format!("{name}{suffix}");
-        (pending.path().join(&name), output.join(name))
+        (artifacts.join(&name), output.join(name))
     });
     storage::replace_set(&entries)?;
-    save_image(&overlay, cache, &identity, source)?;
+    println!("FreeBSD package validated; evidence: {}", work.display());
     Ok(())
 }
 

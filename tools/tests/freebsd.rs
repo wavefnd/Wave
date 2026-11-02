@@ -93,7 +93,7 @@ fn loader_waits_for_each_echo_and_handles_read_errors_and_eof() {
 }
 
 #[test]
-fn cache_outputs_preserve_the_restore_prefix_key_and_full_identity() {
+fn cache_outputs_identify_only_the_immutable_freebsd_inputs() {
     let directory = tempfile::tempdir().unwrap();
     let output = directory.path().join("outputs");
     let cache = directory.path().join("cache with spaces");
@@ -110,7 +110,113 @@ fn cache_outputs_preserve_the_restore_prefix_key_and_full_identity() {
     assert_eq!(fields.len(), 3);
     assert_eq!(fields["path"], cache.to_str().unwrap());
     let prefix = fields["restore-prefix"];
-    assert!(prefix.starts_with("wave-freebsd-v2-"));
+    assert!(prefix.starts_with("wave-freebsd-inputs-v1-"));
     assert!(fields["key"].starts_with(prefix));
-    assert_eq!(fields["key"].len(), prefix.len() + 40);
+    assert_eq!(fields["key"], prefix);
+}
+
+#[test]
+#[cfg(target_os = "linux")]
+fn base_sysroot_expands_sparse_members_and_keeps_link_validation() {
+    use std::io::{Seek, SeekFrom};
+    use std::process::Command;
+    let directory = tempfile::tempdir().unwrap();
+    let fixture = directory.path().join("base");
+    std::fs::create_dir_all(fixture.join("usr/lib/libxo/encoder")).unwrap();
+    let mut file = File::create(fixture.join("usr/lib/sparse.so.1")).unwrap();
+    file.set_len(1024 * 1024).unwrap();
+    file.seek(SeekFrom::End(-4)).unwrap();
+    file.write_all(b"TAIL").unwrap();
+    drop(file);
+    std::os::unix::fs::symlink("sparse.so.1", fixture.join("usr/lib/sparse.so")).unwrap();
+    std::os::unix::fs::symlink(
+        "/usr/tests/lib/plugin.so",
+        fixture.join("usr/lib/libxo/encoder/test.enc"),
+    )
+    .unwrap();
+    for unsafe_link in [false, true] {
+        if unsafe_link {
+            std::os::unix::fs::symlink("../../../outside", fixture.join("usr/lib/escape.so"))
+                .unwrap();
+        }
+        let archive = directory.path().join(format!("base-{unsafe_link}.tar"));
+        let status = Command::new("tar")
+            .args(["--format=pax", "--sparse", "-cf"])
+            .arg(&archive)
+            .arg("-C")
+            .arg(&fixture)
+            .arg(".")
+            .status()
+            .unwrap();
+        assert!(status.success());
+        assert!(Command::new("xz").arg(&archive).status().unwrap().success());
+        let output = directory.path().join(format!("sysroot-{unsafe_link}"));
+        let result = Command::new(env!("CARGO_BIN_EXE_wave-tools"))
+            .args(["freebsd", "build-sysroot", "--archive"])
+            .arg(archive.with_extension("tar.xz"))
+            .arg("--output")
+            .arg(&output)
+            .output()
+            .unwrap();
+        if unsafe_link {
+            assert!(!result.status.success());
+            assert!(!output.exists());
+        } else {
+            assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stderr));
+            let bytes = std::fs::read(output.join("usr/lib/sparse.so")).unwrap();
+            assert_eq!(bytes.len(), 1024 * 1024);
+            assert_eq!(&bytes[bytes.len() - 4..], b"TAIL");
+            assert!(bytes[..bytes.len() - 4].iter().all(|byte| *byte == 0));
+            assert!(!output.join("usr/lib/libxo").exists());
+        }
+    }
+}
+
+#[test]
+#[cfg(unix)]
+fn vm_validation_rejects_stale_sources_and_changed_archives_before_starting_qemu() {
+    let directory = tempfile::tempdir().unwrap();
+    let work = directory.path();
+    std::fs::create_dir(work.join("artifacts")).unwrap();
+    std::fs::create_dir(work.join("inputs")).unwrap();
+    let name = format!(
+        "wave-v{}-x86_64-unknown-freebsd.tar.gz",
+        wave_tools::config::compiler_version().unwrap()
+    );
+    let archive = work.join("inputs").join(&name);
+    std::fs::write(&archive, b"archive bytes").unwrap();
+    let source = std::process::Command::new("git")
+        .args(["rev-parse", "HEAD"])
+        .current_dir(wave_tools::root())
+        .output()
+        .unwrap();
+    assert!(source.status.success());
+    let source = String::from_utf8(source.stdout).unwrap();
+    let digest = wave_tools::storage::digest(&archive).unwrap();
+    for stale_source in [false, true] {
+        let metadata = utils::wson::Value::object([
+            (
+                "source_sha",
+                utils::wson::Value::string(if stale_source { "wrong" } else { source.trim() }),
+            ),
+            ("sha256", utils::wson::Value::string(if stale_source { &digest } else { "wrong" })),
+            ("target", utils::wson::Value::string("x86_64-unknown-freebsd")),
+        ]);
+        std::fs::write(
+            work.join("artifacts").join(format!("{name}.metadata.json")),
+            wave_tools::config::json(&metadata).unwrap(),
+        )
+        .unwrap();
+        let result = std::process::Command::new(env!("CARGO_BIN_EXE_wave-tools"))
+            .args(["freebsd", "validate-package", "--work-dir"])
+            .arg(work)
+            .arg("--cache")
+            .arg(work.join("cache"))
+            .output()
+            .unwrap();
+        assert!(!result.status.success());
+        assert!(String::from_utf8_lossy(&result.stderr).contains("source/target/checksum mismatch"));
+        assert!(!work.join("inputs.iso").exists());
+        assert!(!work.join("guest.qcow2").exists());
+    }
 }

@@ -495,9 +495,12 @@ pub fn runtime_closure(
             let dependency = resolve_library(name, &source, &info, sdk, target)?;
             binary::inspect(&dependency, Some(target))?;
             if target.contains("freebsd")
-                && [Path::new("/lib"), Path::new("/usr/lib")]
-                    .iter()
-                    .any(|base| dependency.starts_with(base))
+                && freebsd_base_library(
+                    &dependency,
+                    &std::env::var_os("WAVE_CROSS_SYSROOT")
+                        .map(PathBuf::from)
+                        .unwrap_or_else(|| PathBuf::from("/")),
+                )
             {
                 continue;
             }
@@ -539,6 +542,10 @@ pub fn runtime_closure(
         }
     }
     Ok(copied)
+}
+
+fn freebsd_base_library(path: &Path, root: &Path) -> bool {
+    [root.join("lib"), root.join("usr/lib")].iter().any(|base| path.starts_with(base))
 }
 
 pub fn require_rpath(path: &Path, expected: &str) -> Result<()> {
@@ -1081,6 +1088,9 @@ pub fn extracted_smoke(archive: &Path, target: &str, output: &Path) -> Result<()
             }
         }
         if target.contains("freebsd") {
+            for name in &tools {
+                run(vec![package.join("llvm/bin").join(name).into(), "--version".into()], None)?;
+            }
             let dependency = regex_lite::Regex::new(r"=> (/[^\n]+?) \(0x")?;
             for path in &roots {
                 let mut spec = Spec::new([OsString::from("/usr/bin/ldd"), path.as_os_str().into()]);
@@ -1255,4 +1265,22 @@ pub fn extracted_smoke(archive: &Path, target: &str, output: &Path) -> Result<()
     }
     storage::atomic_write(&output.join("report.json"), config::json(&report)?.as_bytes())?;
     result
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn freebsd_base_libraries_are_resolved_under_the_selected_sysroot() {
+        let root = Path::new("/reviewed-freebsd-base");
+        assert!(freebsd_base_library(&root.join("lib/libc.so.7"), root));
+        assert!(freebsd_base_library(&root.join("usr/lib/libc++.so.1"), root));
+        assert!(!freebsd_base_library(Path::new("/lib/libc.so.7"), root));
+        assert!(!freebsd_base_library(&root.join("usr/local/lib/libzstd.so.1"), root));
+        assert!(!freebsd_base_library(
+            Path::new("/reviewed-freebsd-base-other/lib/libc.so.7"),
+            root
+        ));
+    }
 }
