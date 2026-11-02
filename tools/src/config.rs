@@ -72,8 +72,27 @@ pub fn env_name(name: &str) -> Result<()> {
     Ok(())
 }
 
+fn output_name(name: &str) -> Result<()> {
+    if name.is_empty()
+        || !name.bytes().enumerate().all(|(index, b)| {
+            b == b'_' || b.is_ascii_alphabetic() || index > 0 && (b.is_ascii_digit() || b == b'-')
+        })
+    {
+        return Err(error("invalid Actions output name"));
+    }
+    Ok(())
+}
+
 pub fn encode_env(name: &str, value: &str) -> Result<Vec<u8>> {
-    env_name(name)?;
+    encode_record(name, value, env_name)
+}
+
+fn encode_record(
+    name: &str,
+    value: &str,
+    validate_name: fn(&str) -> Result<()>,
+) -> Result<Vec<u8>> {
+    validate_name(name)?;
     if value.contains('\0') {
         return Err(error("environment values cannot contain NUL"));
     }
@@ -92,6 +111,17 @@ pub fn encode_env(name: &str, value: &str) -> Result<Vec<u8>> {
 }
 
 pub fn decode_env(bytes: &[u8]) -> Result<std::collections::BTreeMap<String, String>> {
+    decode_records(bytes, env_name)
+}
+
+pub fn decode_output(bytes: &[u8]) -> Result<std::collections::BTreeMap<String, String>> {
+    decode_records(bytes, output_name)
+}
+
+fn decode_records(
+    bytes: &[u8],
+    validate_name: fn(&str) -> Result<()>,
+) -> Result<std::collections::BTreeMap<String, String>> {
     let text = std::str::from_utf8(bytes)?.trim_start_matches('\u{feff}');
     if text.contains('\0') {
         return Err(error("environment values cannot contain NUL"));
@@ -136,16 +166,29 @@ pub fn decode_env(bytes: &[u8]) -> Result<std::collections::BTreeMap<String, Str
             } else {
                 return Err(error("invalid environment record"));
             };
-        env_name(name)?;
+        validate_name(name)?;
         values.insert(name.to_string(), value);
     }
     Ok(values)
 }
 
 pub fn append_env(path: &Path, name: &str, value: &str) -> Result<()> {
+    append_record(path, name, value, env_name)
+}
+
+pub fn append_output(path: &Path, name: &str, value: &str) -> Result<()> {
+    append_record(path, name, value, output_name)
+}
+
+fn append_record(
+    path: &Path,
+    name: &str,
+    value: &str,
+    validate_name: fn(&str) -> Result<()>,
+) -> Result<()> {
     use std::io::{Read, Seek, SeekFrom, Write};
-    let mut record = encode_env(name, value)?;
-    decode_env(&record)?;
+    let mut record = encode_record(name, value, validate_name)?;
+    decode_records(&record, validate_name)?;
     let mut file = std::fs::OpenOptions::new().create(true).read(true).append(true).open(path)?;
     // All writers through this codec serialize the rollback boundary as well.
     file.lock()?;

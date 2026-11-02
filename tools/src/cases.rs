@@ -595,7 +595,7 @@ pub fn main(arguments: &[std::ffi::OsString]) -> Result<i32> {
     if let Some(output) = output {
         let Value::Object(groups) = manifest.workflow_matrices()? else { unreachable!() };
         for (key, value) in groups {
-            config::append_env(
+            config::append_output(
                 &output,
                 &key,
                 &utils::wson::dumps(&value, utils::wson::Format::Json, false)?,

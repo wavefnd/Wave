@@ -291,3 +291,22 @@ fn cleanup_preflights_ownership_preserves_tmp_and_recognizes_native_archives() {
     assert!(root.join("wave-v0.0.1-alpha-dev-unknown.tar.gz").is_file());
     assert!(root.join("unrelated.zip").is_file());
 }
+
+#[test]
+fn actions_outputs_share_the_codec_without_relaxing_environment_names() {
+    let directory = tempfile::tempdir().unwrap();
+    let path = directory.path().join("records");
+    fs::write(&path, "EXISTING=keep\n").unwrap();
+    let original = fs::read(&path).unwrap();
+    assert!(config::append_env(&path, "restore-prefix", "value").is_err());
+    assert!(config::append_output(&path, "invalid=name", "value").is_err());
+    assert_eq!(fs::read(&path).unwrap(), original);
+    let value = "one\n\n한국어  \n";
+    config::append_output(&path, "restore-prefix", value).unwrap();
+    let records = fs::read(&path).unwrap();
+    let decoded = config::decode_output(&records).unwrap();
+    assert_eq!(decoded["EXISTING"], "keep");
+    assert_eq!(decoded["restore-prefix"], value);
+    assert!(config::decode_env(&records).is_err());
+    assert!(config::decode_output(b"restore-prefix<<end\nunterminated").is_err());
+}

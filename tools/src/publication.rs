@@ -1043,7 +1043,7 @@ pub fn main(arguments: &[OsString], nightly: bool) -> Result<i32> {
                 ("compiler_version", identity.version.clone()),
                 ("ci_run_id", identity.ci_run_id.to_string()),
             ] {
-                config::append_env(&output, name, &value)?;
+                config::append_output(&output, name, &value)?;
             }
             return Ok(0);
         }

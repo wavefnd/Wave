@@ -93,4 +93,47 @@ mod native {
         assert!(String::from_utf8_lossy(&result.stderr).contains("aliases an input"));
         assert_eq!(fs::read_to_string(source).unwrap(), "fun main() {}\n");
     }
+
+    #[test]
+    fn non_binary_outputs_use_the_compiler_out_dir_contract() {
+        let work = tempfile::tempdir().unwrap();
+        let compiler = work.path().join("wavec");
+        fs::write(&compiler, r#"#!/bin/sh
+output=''
+emit=''
+while [ $# -gt 0 ]; do
+    case "$1" in
+        -o) echo 'Error: -o is only allowed for final binary output, or single-input --emit=obj' >&2; exit 2 ;;
+        --out-dir) shift; output=$1 ;;
+        --emit=*) emit=${1#--emit=} ;;
+    esac
+    shift
+done
+case "$emit" in
+    asm) suffix=s ;;
+    ir) suffix=ll ;;
+    bc) suffix=bc ;;
+    *) exit 3 ;;
+esac
+printf 'ecall a7' > "$output/input.$suffix"
+"#).unwrap();
+        fs::set_permissions(&compiler, fs::Permissions::from_mode(0o755)).unwrap();
+        for emit in ["asm", "ir", "bc"] {
+            let source = work.path().join("input.wave");
+            fs::write(
+                &source,
+                format!("// wave-test: mode=build, runner=compile, emit={emit}\nfun main() {{}}\n"),
+            )
+            .unwrap();
+            let result = Command::new(env!("CARGO_BIN_EXE_wave-tools"))
+                .arg("test")
+                .arg("--wavec")
+                .arg(&compiler)
+                .arg("--source")
+                .arg(&source)
+                .output()
+                .unwrap();
+            assert!(result.status.success(), "{emit}: {}", String::from_utf8_lossy(&result.stderr));
+        }
+    }
 }

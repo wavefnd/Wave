@@ -545,7 +545,16 @@ fn run_one(source: &Path, metadata: &Metadata, options: &Options, row: &mut Valu
             }
         },
     };
-    let artifact = output.path().join(format!("case.{suffix}"));
+    let named_output = !compile || emit == "obj";
+    let stem = if named_output {
+        std::ffi::OsStr::new("case")
+    } else {
+        source.file_stem().ok_or_else(|| error("case source has no stem"))?
+    };
+    let mut artifact_name = stem.to_os_string();
+    artifact_name.push(".");
+    artifact_name.push(suffix);
+    let artifact = output.path().join(artifact_name);
     let mut args: Vec<OsString> = vec![
         options.compiler.clone().into_os_string(),
         if metadata.mode == "check" { "check" } else { "build" }.into(),
@@ -556,11 +565,12 @@ fn run_one(source: &Path, metadata: &Metadata, options: &Options, row: &mut Valu
         output.path().as_os_str().into(),
     ];
     if metadata.mode != "check" {
-        args.extend([
-            "-o".into(),
-            artifact.clone().into_os_string(),
-            options.optimization.clone().into(),
-        ]);
+        args.push(options.optimization.clone().into());
+        // Wave accepts -o for a binary or one object, but names assembly,
+        // textual IR and bitcode from the input stem inside --out-dir.
+        if named_output {
+            args.extend(["-o".into(), artifact.clone().into_os_string()]);
+        }
     }
     if let Some(target) = &target {
         args.extend(["--target".into(), target.into()]);

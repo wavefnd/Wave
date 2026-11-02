@@ -91,3 +91,26 @@ fn loader_waits_for_each_echo_and_handles_read_errors_and_eof() {
         assert!(error.contains(if failure { "serial read failed" } else { "console closed" }));
     }
 }
+
+#[test]
+fn cache_outputs_preserve_the_restore_prefix_key_and_full_identity() {
+    let directory = tempfile::tempdir().unwrap();
+    let output = directory.path().join("outputs");
+    let cache = directory.path().join("cache with spaces");
+    let result = std::process::Command::new(env!("CARGO_BIN_EXE_wave-tools"))
+        .args(["freebsd", "cache-key", "--github-output"])
+        .arg(&output)
+        .env("WAVE_FREEBSD_CACHE_DIR", &cache)
+        .output()
+        .unwrap();
+    assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stderr));
+    let contents = std::fs::read_to_string(output).unwrap();
+    let fields: std::collections::BTreeMap<_, _> =
+        contents.lines().map(|line| line.split_once('=').unwrap()).collect();
+    assert_eq!(fields.len(), 3);
+    assert_eq!(fields["path"], cache.to_str().unwrap());
+    let prefix = fields["restore-prefix"];
+    assert!(prefix.starts_with("wave-freebsd-v2-"));
+    assert!(fields["key"].starts_with(prefix));
+    assert_eq!(fields["key"].len(), prefix.len() + 40);
+}

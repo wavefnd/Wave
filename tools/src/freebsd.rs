@@ -132,8 +132,9 @@ impl Vm {
         use std::os::unix::net::UnixStream;
         let socket = work.join("serial.sock");
         command.extend([
-            "-display".into(),
-            "none".into(),
+            // -nographic also enables firmware/loader output on the serial
+            // console. -display none alone leaves BIOS output on hidden VGA.
+            "-nographic".into(),
             "-monitor".into(),
             "none".into(),
             "-chardev".into(),
@@ -679,6 +680,7 @@ fn provider_cases(args: &mut Args) -> Result<i32> {
         Value::string(if action.is_ok() { "pass" } else { "fail" }),
     )?;
     if let Err(e) = &action {
+        eprintln!("FreeBSD provider validation failed: {e}");
         config::field(&mut data, "error", Value::string(e.to_string()))?;
     }
     storage::validate_output(&report, &inputs)?;
@@ -709,7 +711,7 @@ pub fn main(arguments: &[OsString]) -> Result<i32> {
             ("key", format!("{prefix}{}", source.trim())),
             ("restore-prefix", prefix),
         ] {
-            config::append_env(&output, name, &value)?;
+            config::append_output(&output, name, &value)?;
         }
         return Ok(0);
     }

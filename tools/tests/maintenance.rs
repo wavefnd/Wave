@@ -145,6 +145,11 @@ fn patch_verification_restores_owned_branch_on_success_dco_and_apply_failures() 
         let root = work.path().join("repo");
         fs::create_dir(&root).unwrap();
         git(&root, &["init", "--quiet", "-b", "original"]);
+        // The child verifier runs git am independently of this fixture's git
+        // helper. Its committer must not depend on the developer's global Git.
+        git(&root, &["config", "--local", "user.name", "Fixture"]);
+        git(&root, &["config", "--local", "user.email", "fixture@example.invalid"]);
+        git(&root, &["config", "--local", "commit.gpgsign", "false"]);
         fs::create_dir_all(root.join("tools/ci")).unwrap();
         fs::copy(
             wave_tools::root().join("tools/ci/toolchains.json"),
@@ -186,6 +191,8 @@ fn patch_verification_restores_owned_branch_on_success_dco_and_apply_failures() 
             .args(["maintain", "verify-patch"])
             .arg(patch)
             .env("WAVE_REPOSITORY", &root)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
             .env("PATH", paths)
             .output()
             .unwrap();
