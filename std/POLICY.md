@@ -6,7 +6,7 @@ This document defines non-negotiable rules for the Wave standard library (`std/`
 
 - General-purpose C library bindings belong in external libraries, not `std/`.
 - `extern(c)` declarations are limited to the target-specific C ABI providers
-  explicitly approved by `tools/check_std_policy.py`. This includes hosted OS
+  explicitly approved by `wave-tools check std-policy`. This includes hosted OS
   APIs and WASI imports; it does not require replacing existing OS bindings.
 - Portable modules use Wave code and the target-selected `std/sys/**` provider
   surface. No standard library module may import the removed `std::libc::*`
@@ -36,7 +36,7 @@ This document defines non-negotiable rules for the Wave standard library (`std/`
 Run:
 
 ```bash
-./tools/check_std_policy.sh
+build-tools/wave-tools check std-policy
 ```
 
 The checker validates:

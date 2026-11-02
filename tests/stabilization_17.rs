@@ -305,7 +305,14 @@ fn webassembly_checked_numeric_runtime() {
             }
             ok(link.arg(object).arg("-o").arg(&module).output().unwrap());
             // An external deadline also bounds a broken target runtime.
-            ok(Command::new("python3").current_dir(env!("CARGO_MANIFEST_DIR")).args(["-c", "import subprocess,sys; subprocess.run(['node','--experimental-wasm-memory64',sys.argv[1],sys.argv[2]],check=True,timeout=20)"]).arg(root.join("wasm.cjs")).arg(module).output().unwrap());
+            ok(wave_tools::build::test_command()
+                .unwrap()
+                .current_dir(env!("CARGO_MANIFEST_DIR"))
+                .args(["exec", "--timeout", "20", "--", "node", "--experimental-wasm-memory64"])
+                .arg(root.join("wasm.cjs"))
+                .arg(module)
+                .output()
+                .unwrap());
         }
     }
 }

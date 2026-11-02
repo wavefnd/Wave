@@ -1,4 +1,4 @@
-option('compiler', type: 'boolean', value: true, description: 'Enable compiler targets; disable for CI planning/matrix jobs without Rust')
+option('compiler', type: 'boolean', value: true, description: 'Enable compiler targets; disable for Rust-tooling-only CI/matrix jobs without LLVM')
 option('toolchain', type: 'string', value: '', description: 'Rustup toolchain alias; must report the pinned Rust version')
 option('compiler_target', type: 'combo', value: 'native', choices: [
     'native',
@@ -18,9 +18,3 @@ option('llvm_features', type: 'combo', value: 'auto', choices: [
 option('cargo_target_dir', type: 'string', value: 'target',
     description: 'Cargo output directory, relative to the source root or absolute')
 option('llvm_prefix', type: 'string', value: '', description: 'LLVM 21 prefix; empty inherits environment')
-option('ci_family', type: 'combo', value: 'test', choices: ['build', 'test', 'validate', 'package'],
-    description: 'Shared CI procedure family for the ci target')
-option('ci_target', type: 'string', value: 'linux-amd64', description: 'Shared CI target identifier')
-option('ci_lanes', type: 'array', value: [], description: 'Explicit CI lanes; empty uses target defaults')
-option('ci_provision', type: 'boolean', value: false, description: 'Allow CI prerequisite provisioning')
-option('ci_report', type: 'string', value: '', description: 'CI JSON report path relative to source root')

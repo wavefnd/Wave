@@ -27,13 +27,8 @@ env:
   CARGO_TERM_COLOR: always
   CARGO_BUILD_JOBS: '2'
   NO_COLOR: '1'
-  PYTHONUNBUFFERED: '1'
-  PYTHONUTF8: '1'
-  PYTHONIOENCODING: utf-8
   RELEASE_VERSION: ${{ inputs.version }}
 jobs:
-
-  # Shared
   release-gate:
     name: Shared / Release gate
     runs-on: ubuntu-latest
@@ -47,24 +42,52 @@ jobs:
         python-version: '3.12'
     - name: Install pinned Meson and Ninja
       run: python -m pip install --disable-pip-version-check -r tools/ci/requirements-build.txt
-    - name: Validate release identity
-      id: procedure
+    - name: Setup pinned native Rust tooling
+      uses: dtolnay/rust-toolchain@1.89.0
+    - name: Build native Rust maintenance tool
+      id: tooling_bootstrap
+      shell: bash
+      timeout-minutes: 10
+      run: |
+        set -euo pipefail
+        python -m mesonbuild.mesonmain setup build-ci -Dcompiler=false
+        ./build-ci/wave-tools prepare tooling --github-env "$GITHUB_ENV"
+        ./build-ci/wave-tools prepare pins --github-env "$GITHUB_ENV"
+    - name: Validate branch, version, and tag
+      id: stage-3
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" release --stage gate
       env:
-        WAVE_CI_MATRIX: ${{ toJSON(matrix || fromJSON('{}')) }}
-        WAVE_RELEASE_INPUTS: ${{ toJSON(inputs || fromJSON('{}')) }}
-      run: python3 -m tools.ci.release --target "linux-amd64" --lane release/gate --report-json ci-report.json
+        GH_TOKEN: ${{ github.token }}
+    - name: Record native Actions outcomes
+      id: ci_report
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" ci report --target-id "$WAVE_CI_TARGET" --output ci-report.json
+      env:
+        WAVE_STEP_OUTCOMES: ${{ toJSON(steps) }}
+      if: |-
+        ${{ always() && steps.tooling_bootstrap.outcome == 'success' }}
     - name: Upload logs and summary
       if: ${{ always() }}
       uses: actions/upload-artifact@v6
       with:
         name: reports-release-shared-gate
-        path: |
-          ci-report.json
+        path: 'ci-report.json
+
           ${{ runner.temp }}/wave-ci-*/*.log
+
+          '
         if-no-files-found: warn
         retention-days: 7
-
-  # Linux
+    env:
+      WAVE_CI_TARGET: linux-amd64
+      WAVE_RELEASE_INPUTS: ${{ toJSON(inputs || fromJSON('{}')) }}
   linux-amd64-validate:
     name: Linux / amd64 / Validate
     needs:
@@ -84,20 +107,141 @@ jobs:
         python-version: '3.12'
     - name: Install pinned Meson and Ninja
       run: python -m pip install --disable-pip-version-check -r tools/ci/requirements-build.txt
-    - name: Validate release
-      id: procedure
+    - name: Build native Rust maintenance tool
+      id: tooling_bootstrap
+      shell: bash
+      timeout-minutes: 10
+      run: |
+        set -euo pipefail
+        python -m mesonbuild.mesonmain setup build-ci -Dcompiler=false
+        ./build-ci/wave-tools prepare tooling --github-env "$GITHUB_ENV"
+        ./build-ci/wave-tools prepare pins --github-env "$GITHUB_ENV"
+    - name: Validate branch, version, and tag
+      id: stage-3
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" release --stage gate
       env:
-        WAVE_CI_MATRIX: ${{ toJSON(matrix || fromJSON('{}')) }}
-        WAVE_RELEASE_INPUTS: ${{ toJSON(inputs || fromJSON('{}')) }}
-      run: python3 -m tools.ci.release --target "linux-amd64" --lane release/validate --provision --report-json
-        ci-report.json
+        GH_TOKEN: ${{ github.token }}
+    - name: Install LLVM 21
+      id: stage-4
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" prepare host --target "$WAVE_CI_TARGET" --provision
+    - name: Verify LLVM tools
+      id: stage-5
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        llvm-config --version
+        llvm-config --targets-built
+        llvm-mc --version
+        llc --version
+        ld.lld --version
+    - name: Check formatting
+      id: stage-6
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" maintain format --check
+    - name: Check standard library policy
+      id: stage-7
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" check std-policy
+    - name: Run Clippy
+      id: stage-8
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        cargo clippy --jobs 2 --locked --all-targets -- -D warnings
+    - name: Build warning-free Rust documentation
+      id: stage-9
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        cargo doc --locked --no-deps --jobs 2
+      env:
+        RUSTDOCFLAGS: -D warnings
+    - name: Run native Rust tooling contracts
+      id: stage-10
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        python -m mesonbuild.mesonmain test -C build-ci --suite tooling --print-errorlogs
+    - name: Run Rust tests
+      id: stage-11
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        cargo test --jobs 2 --locked --all-targets --verbose
+    - name: Build release compiler
+      id: stage-12
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        python -m mesonbuild.mesonmain setup --reconfigure .tmp/meson/build_release_compiler-0 . -Dcompiler_target=native -Dbuildtype=release -Dllvm_features=auto
+        python -m mesonbuild.mesonmain compile -C .tmp/meson/build_release_compiler-0 --jobs 2 wavec
+    - name: Install Wave stdlib
+      id: stage-13
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" prepare std
+    - name: Print compiler version
+      id: stage-14
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        target/release/wavec -V
+    - name: Check examples and standard library corpus
+      id: stage-15
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" corpus --wavec target/release/wavec --run-std-examples --report-json wave-corpus.json
+    - name: Run Wave end-to-end tests
+      id: stage-16
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" test --report-json wave-e2e-report.json
+    - name: Record native Actions outcomes
+      id: ci_report
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" ci report --target-id "$WAVE_CI_TARGET" --output ci-report.json
+      env:
+        WAVE_STEP_OUTCOMES: ${{ toJSON(steps) }}
+      if: |-
+        ${{ always() && steps.tooling_bootstrap.outcome == 'success' }}
     - name: Upload Wave end-to-end report
       if: ${{ always() }}
       uses: actions/upload-artifact@v6
       with:
         name: evidence-release-linux-amd64-validate-e2e
-        path: |
-          wave-e2e-report.json
+        path: 'wave-e2e-report.json
+
+          '
         if-no-files-found: warn
         retention-days: 7
     - name: Upload logs and summary
@@ -105,11 +249,16 @@ jobs:
       uses: actions/upload-artifact@v6
       with:
         name: reports-release-linux-amd64-validate
-        path: |
-          ci-report.json
+        path: 'ci-report.json
+
           ${{ runner.temp }}/wave-ci-*/*.log
+
+          '
         if-no-files-found: warn
         retention-days: 7
+    env:
+      WAVE_CI_TARGET: linux-amd64
+      WAVE_RELEASE_INPUTS: ${{ toJSON(inputs || fromJSON('{}')) }}
   linux-loong64-validate:
     name: Linux / loong64 / Validate
     needs:
@@ -125,23 +274,88 @@ jobs:
         python-version: '3.12'
     - name: Install pinned Meson and Ninja
       run: python -m pip install --disable-pip-version-check -r tools/ci/requirements-build.txt
-    - name: Validate release
-      id: procedure
+    - name: Build native Rust maintenance tool
+      id: tooling_bootstrap
+      shell: bash
+      timeout-minutes: 10
+      run: |
+        set -euo pipefail
+        python -m mesonbuild.mesonmain setup build-ci -Dcompiler=false
+        ./build-ci/wave-tools prepare tooling --github-env "$GITHUB_ENV"
+        ./build-ci/wave-tools prepare pins --github-env "$GITHUB_ENV"
+    - name: Install LLVM 21, LLD, and QEMU
+      id: stage-2
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" prepare host --target "$WAVE_CI_TARGET" --provision
+    - name: Install pinned official LoongArch64 toolchain
+      id: stage-3
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" prepare loongarch --provision
+    - name: Install Wave stdlib
+      id: stage-4
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" prepare std
+    - name: Build compiler target sets
+      id: stage-5
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        python -m mesonbuild.mesonmain setup --reconfigure .tmp/meson/build_compiler_target_sets-0 . -Dcompiler_target=native -Dbuildtype=release -Dllvm_features=auto
+        python -m mesonbuild.mesonmain compile -C .tmp/meson/build_compiler_target_sets-0 --jobs 2 wavec
+        python -m mesonbuild.mesonmain setup --reconfigure .tmp/meson/build_compiler_target_sets-1 . -Dcompiler_target=native -Dbuildtype=debug -Dllvm_features=llvm-target-loongarch
+        python -m mesonbuild.mesonmain compile -C .tmp/meson/build_compiler_target_sets-1 --jobs 2 wavec
+    - name: Run LoongArch64 contracts
+      id: stage-6
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        cargo test --locked --test codegen_regressions loongarch64 --jobs 2 -- --nocapture
       env:
-        WAVE_CI_MATRIX: ${{ toJSON(matrix || fromJSON('{}')) }}
-        WAVE_RELEASE_INPUTS: ${{ toJSON(inputs || fromJSON('{}')) }}
-      run: python3 -m tools.ci.release --target "linux-loong64" --lane release/validate-loongarch64 --provision
-        --report-json ci-report.json
+        WAVE_RUN_LOONGARCH64_INTEROP_TESTS: '1'
+    - name: Link and run Linux LoongArch64 Hello World
+      id: stage-7
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" test --wavec target/release/wavec --target-id "$WAVE_CI_TARGET" --source tests/cases/shared/test2.wave --hosted-abi --stdout-exact 'Hello World'
+    - name: Record native Actions outcomes
+      id: ci_report
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" ci report --target-id "$WAVE_CI_TARGET" --output ci-report.json
+      env:
+        WAVE_STEP_OUTCOMES: ${{ toJSON(steps) }}
+      if: |-
+        ${{ always() && steps.tooling_bootstrap.outcome == 'success' }}
     - name: Upload logs and summary
       if: ${{ always() }}
       uses: actions/upload-artifact@v6
       with:
         name: reports-release-linux-loong64-validate
-        path: |
-          ci-report.json
+        path: 'ci-report.json
+
           ${{ runner.temp }}/wave-ci-*/*.log
+
+          '
         if-no-files-found: warn
         retention-days: 7
+    env:
+      WAVE_CI_TARGET: linux-loong64
+      WAVE_RELEASE_INPUTS: ${{ toJSON(inputs || fromJSON('{}')) }}
   linux-riscv64-validate:
     name: Linux / riscv64 / Validate
     needs:
@@ -157,23 +371,106 @@ jobs:
         python-version: '3.12'
     - name: Install pinned Meson and Ninja
       run: python -m pip install --disable-pip-version-check -r tools/ci/requirements-build.txt
-    - name: Validate release
-      id: procedure
+    - name: Build native Rust maintenance tool
+      id: tooling_bootstrap
+      shell: bash
+      timeout-minutes: 10
+      run: |
+        set -euo pipefail
+        python -m mesonbuild.mesonmain setup build-ci -Dcompiler=false
+        ./build-ci/wave-tools prepare tooling --github-env "$GITHUB_ENV"
+        ./build-ci/wave-tools prepare pins --github-env "$GITHUB_ENV"
+    - name: Install LLVM 21 and RISC-V runtime tools
+      id: stage-2
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" prepare host --target "$WAVE_CI_TARGET" --provision
+    - name: Verify RISC-V toolchain
+      id: stage-3
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        llvm-config --version
+        ld.lld --version
+        riscv64-linux-gnu-gcc --version
+        riscv64-linux-gnu-readelf --version
+        qemu-riscv64 --version
+    - name: Install Wave stdlib
+      id: stage-4
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" prepare std
+    - name: Build release compiler
+      id: stage-5
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        python -m mesonbuild.mesonmain setup --reconfigure .tmp/meson/build_release_compiler_2-0 . -Dcompiler_target=native -Dbuildtype=release -Dllvm_features=auto
+        python -m mesonbuild.mesonmain compile -C .tmp/meson/build_release_compiler_2-0 --jobs 2 wavec
+    - name: Build RISC-V-only LLVM feature set
+      id: stage-6
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        python -m mesonbuild.mesonmain setup --reconfigure .tmp/meson/build_with_the_risc_v_only_llvm_feature-0 . -Dcompiler_target=native -Dbuildtype=debug -Dllvm_features=llvm-target-riscv
+        python -m mesonbuild.mesonmain compile -C .tmp/meson/build_with_the_risc_v_only_llvm_feature-0 --jobs 2 wavec
+    - name: Build core 64-bit LLVM feature set
+      id: stage-7
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        python -m mesonbuild.mesonmain setup --reconfigure .tmp/meson/build_core_64_bit_llvm_feature_set-0 . -Dcompiler_target=native -Dbuildtype=debug -Dllvm_features=llvm-target-core64
+        python -m mesonbuild.mesonmain compile -C .tmp/meson/build_core_64_bit_llvm_feature_set-0 --jobs 2 wavec
+    - name: Run RISC-V contract tests
+      id: stage-8
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        cargo test --locked --test codegen_regressions riscv64_ --jobs 2 --verbose
       env:
-        WAVE_CI_MATRIX: ${{ toJSON(matrix || fromJSON('{}')) }}
-        WAVE_RELEASE_INPUTS: ${{ toJSON(inputs || fromJSON('{}')) }}
-      run: python3 -m tools.ci.release --target "linux-riscv64" --lane release/validate-riscv64 --provision --report-json
-        ci-report.json
+        WAVE_RUN_RISCV64_INTEROP_TESTS: '1'
+    - name: Link and run Linux riscv64 Hello World
+      id: stage-9
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" test --wavec target/release/wavec --target-id "$WAVE_CI_TARGET" --source tests/cases/shared/test2.wave --hosted-abi --stdout-exact 'Hello World'
+    - name: Record native Actions outcomes
+      id: ci_report
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" ci report --target-id "$WAVE_CI_TARGET" --output ci-report.json
+      env:
+        WAVE_STEP_OUTCOMES: ${{ toJSON(steps) }}
+      if: |-
+        ${{ always() && steps.tooling_bootstrap.outcome == 'success' }}
     - name: Upload logs and summary
       if: ${{ always() }}
       uses: actions/upload-artifact@v6
       with:
         name: reports-release-linux-riscv64-validate
-        path: |
-          ci-report.json
+        path: 'ci-report.json
+
           ${{ runner.temp }}/wave-ci-*/*.log
+
+          '
         if-no-files-found: warn
         retention-days: 7
+    env:
+      WAVE_CI_TARGET: linux-riscv64
+      WAVE_RELEASE_INPUTS: ${{ toJSON(inputs || fromJSON('{}')) }}
   linux-native-package:
     name: Linux / ${{ matrix.display_arch }} / Package
     needs:
@@ -203,20 +500,81 @@ jobs:
         python-version: '3.12'
     - name: Install pinned Meson and Ninja
       run: python -m pip install --disable-pip-version-check -r tools/ci/requirements-build.txt
-    - name: Build and verify package
-      id: procedure
+    - name: Build native Rust maintenance tool
+      id: tooling_bootstrap
+      shell: bash
+      timeout-minutes: 10
+      run: |
+        set -euo pipefail
+        python -m mesonbuild.mesonmain setup build-ci -Dcompiler=false
+        ./build-ci/wave-tools prepare tooling --github-env "$GITHUB_ENV"
+        ./build-ci/wave-tools prepare pins --github-env "$GITHUB_ENV"
+    - name: Resolve canonical distribution identity
+      id: package_paths
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" ci artifact --target "$WAVE_CI_TARGET" --github-output "$GITHUB_OUTPUT"
+    - name: Install packaging dependencies
+      id: stage-3
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" prepare host --target "$WAVE_CI_TARGET" --provision
+    - name: Verify release tools
+      id: stage-4
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        llvm-config --version
+        llvm-config --targets-built
+        llvm-mc --version
+        llc --version
+        ld.lld --version
+    - name: Build and package
+      id: stage-5
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        python -m mesonbuild.mesonmain setup --reconfigure .tmp/meson/build_and_package-0 . "-Dcompiler_target=$WAVE_MATRIX_TARGET" -Dbuildtype=release -Dllvm_features=auto
+        python -m mesonbuild.mesonmain compile -C .tmp/meson/build_and_package-0 --jobs 2 release
       env:
-        WAVE_CI_MATRIX: ${{ toJSON(matrix || fromJSON('{}')) }}
-        WAVE_RELEASE_INPUTS: ${{ toJSON(inputs || fromJSON('{}')) }}
-      run: python3 -m tools.ci.release --target "${{ matrix.target }}" --lane release/package-linux --provision
-        --report-json ci-report.json
+        WAVE_MATRIX_TARGET: ${{ matrix.target }}
+    - name: Smoke test packaged compiler
+      id: stage-6
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" check extracted-package --archive "$WAVE_STEPS_PACKAGE_PATHS_OUTPUTS_ARCHIVE" --target "$WAVE_STEPS_PACKAGE_PATHS_OUTPUTS_TARGET" --output "$RUNNER_TEMP/extracted-package"
+      env:
+        WAVE_STEPS_PACKAGE_PATHS_OUTPUTS_ARCHIVE: ${{ steps.package_paths.outputs.archive }}
+        WAVE_STEPS_PACKAGE_PATHS_OUTPUTS_TARGET: ${{ steps.package_paths.outputs.target }}
+    - name: Record native Actions outcomes
+      id: ci_report
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" ci report --target-id "$WAVE_CI_TARGET" --output ci-report.json
+      env:
+        WAVE_STEP_OUTCOMES: ${{ toJSON(steps) }}
+      if: |-
+        ${{ always() && steps.tooling_bootstrap.outcome == 'success' }}
     - uses: actions/upload-artifact@v6
       with:
         name: release-package-linux-${{ matrix.display_arch }}
-        path: |
-          wave-v${{ inputs.version }}-${{ matrix.archive_target }}.tar.gz
+        path: 'wave-v${{ inputs.version }}-${{ matrix.archive_target }}.tar.gz
+
           wave-v${{ inputs.version }}-${{ matrix.archive_target }}.tar.gz.sha256
+
           wave-v${{ inputs.version }}-${{ matrix.archive_target }}.tar.gz.metadata.json
+
+          '
         if-no-files-found: error
         retention-days: 7
       name: Upload package
@@ -225,11 +583,16 @@ jobs:
       uses: actions/upload-artifact@v6
       with:
         name: reports-release-linux-${{ matrix.display_arch }}-package
-        path: |
-          ci-report.json
+        path: 'ci-report.json
+
           ${{ runner.temp }}/wave-ci-*/*.log
+
+          '
         if-no-files-found: warn
         retention-days: 7
+    env:
+      WAVE_CI_TARGET: ${{ matrix.target }}
+      WAVE_RELEASE_INPUTS: ${{ toJSON(inputs || fromJSON('{}')) }}
   linux-loong64-package:
     name: Linux / loong64 / Package
     needs:
@@ -249,20 +612,76 @@ jobs:
         python-version: '3.12'
     - name: Install pinned Meson and Ninja
       run: python -m pip install --disable-pip-version-check -r tools/ci/requirements-build.txt
-    - name: Build and verify package
-      id: procedure
+    - name: Build native Rust maintenance tool
+      id: tooling_bootstrap
+      shell: bash
+      timeout-minutes: 10
+      run: |
+        set -euo pipefail
+        python -m mesonbuild.mesonmain setup build-ci -Dcompiler=false
+        ./build-ci/wave-tools prepare tooling --github-env "$GITHUB_ENV"
+        ./build-ci/wave-tools prepare pins --github-env "$GITHUB_ENV"
+    - name: Resolve canonical distribution identity
+      id: package_paths
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" ci artifact --target "$WAVE_CI_TARGET" --github-output "$GITHUB_OUTPUT"
+    - name: Install host build and emulation tools
+      id: stage-3
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" prepare host --target "$WAVE_CI_TARGET" --provision
+    - name: Install pinned LoongArch toolchain
+      id: stage-5-prerequisites-loongarch
+      shell: bash
+      timeout-minutes: 240
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" prepare loongarch --provision
+    - name: Validate pinned target SDK and configure Cargo
+      id: stage-5-sdk
+      shell: bash
+      timeout-minutes: 240
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" prepare cross --target "$WAVE_CI_TARGET" --work-dir "$RUNNER_TEMP/wave-cross-package" --sysroot "$WAVE_LOONGARCH64_SYSROOT" --cross-prefix "$WAVE_LOONGARCH64_SYSROOT/../bin/loongarch64-unknown-linux-gnu-" --host-llvm-bin "$LLVM_SYS_211_PREFIX/bin"
+    - name: Build and smoke-test native LoongArch64 release
+      id: stage-5
+      shell: bash
+      timeout-minutes: 240
+      run: |
+        set -euo pipefail
+        python -m mesonbuild.mesonmain setup --reconfigure .tmp/meson/cross-package . "-Dcompiler_target=$WAVE_STEPS_PACKAGE_PATHS_OUTPUTS_TARGET" -Dbuildtype=release
+        python -m mesonbuild.mesonmain compile -C .tmp/meson/cross-package --jobs 2 release
+        "$WAVE_TOOLS" check extracted-package --archive "$WAVE_STEPS_PACKAGE_PATHS_OUTPUTS_ARCHIVE" --target "$WAVE_STEPS_PACKAGE_PATHS_OUTPUTS_TARGET" --output "$RUNNER_TEMP/extracted-package"
       env:
-        WAVE_CI_MATRIX: ${{ toJSON(matrix || fromJSON('{}')) }}
-        WAVE_RELEASE_INPUTS: ${{ toJSON(inputs || fromJSON('{}')) }}
-      run: python3 -m tools.ci.release --target "linux-loong64" --lane release/package-linux-loongarch64 --provision
-        --report-json ci-report.json
+        WAVE_STEPS_PACKAGE_PATHS_OUTPUTS_TARGET: ${{ steps.package_paths.outputs.target }}
+        WAVE_STEPS_PACKAGE_PATHS_OUTPUTS_ARCHIVE: ${{ steps.package_paths.outputs.archive }}
+    - name: Record native Actions outcomes
+      id: ci_report
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" ci report --target-id "$WAVE_CI_TARGET" --output ci-report.json
+      env:
+        WAVE_STEP_OUTCOMES: ${{ toJSON(steps) }}
+      if: |-
+        ${{ always() && steps.tooling_bootstrap.outcome == 'success' }}
     - uses: actions/upload-artifact@v6
       with:
         name: release-package-linux-loong64
-        path: |
-          wave-v${{ inputs.version }}-loongarch64-linux-gnu.tar.gz
+        path: 'wave-v${{ inputs.version }}-loongarch64-linux-gnu.tar.gz
+
           wave-v${{ inputs.version }}-loongarch64-linux-gnu.tar.gz.sha256
+
           wave-v${{ inputs.version }}-loongarch64-linux-gnu.tar.gz.metadata.json
+
+          '
         if-no-files-found: error
         retention-days: 7
       name: Upload package
@@ -271,11 +690,16 @@ jobs:
       uses: actions/upload-artifact@v6
       with:
         name: reports-release-linux-loong64-package
-        path: |
-          ci-report.json
+        path: 'ci-report.json
+
           ${{ runner.temp }}/wave-ci-*/*.log
+
+          '
         if-no-files-found: warn
         retention-days: 7
+    env:
+      WAVE_CI_TARGET: linux-loong64
+      WAVE_RELEASE_INPUTS: ${{ toJSON(inputs || fromJSON('{}')) }}
   linux-riscv64-package:
     name: Linux / riscv64 / Package
     needs:
@@ -289,14 +713,13 @@ jobs:
     - name: Cache Cargo build inputs
       uses: actions/cache@v5
       with:
-        path: |-
-          ~/.cargo/registry
+        path: '~/.cargo/registry
+
           ~/.cargo/git
-          target/riscv64gc-unknown-linux-gnu
-        key: release-cargo-riscv64-${{ hashFiles('Cargo.lock', 'tools/ci/toolchains.json', 'tools/ci/cross_package.py')
-          }}-${{ github.sha }}
-        restore-keys: release-cargo-riscv64-${{ hashFiles('Cargo.lock', 'tools/ci/toolchains.json', 'tools/ci/cross_package.py')
-          }}-
+
+          target/riscv64gc-unknown-linux-gnu'
+        key: release-cargo-riscv64-${{ hashFiles('Cargo.lock', 'tools/ci/toolchains.json', 'tools/src/provision.rs', 'tools/src/sdk.rs', 'tools/src/package.rs') }}-${{ github.sha }}
+        restore-keys: release-cargo-riscv64-${{ hashFiles('Cargo.lock', 'tools/ci/toolchains.json', 'tools/src/provision.rs', 'tools/src/sdk.rs', 'tools/src/package.rs') }}-
     - name: Enable RISC-V container execution
       uses: docker/setup-qemu-action@v4
       with:
@@ -306,20 +729,69 @@ jobs:
         python-version: '3.12'
     - name: Install pinned Meson and Ninja
       run: python -m pip install --disable-pip-version-check -r tools/ci/requirements-build.txt
-    - name: Build and verify package
-      id: procedure
+    - name: Build native Rust maintenance tool
+      id: tooling_bootstrap
+      shell: bash
+      timeout-minutes: 10
+      run: |
+        set -euo pipefail
+        python -m mesonbuild.mesonmain setup build-ci -Dcompiler=false
+        ./build-ci/wave-tools prepare tooling --github-env "$GITHUB_ENV"
+        ./build-ci/wave-tools prepare pins --github-env "$GITHUB_ENV"
+    - name: Resolve canonical distribution identity
+      id: package_paths
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" ci artifact --target "$WAVE_CI_TARGET" --github-output "$GITHUB_OUTPUT"
+    - name: Prepare host tools for pinned cross SDK
+      id: stage-2-prerequisites
+      shell: bash
+      timeout-minutes: 300
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" prepare host --target "$WAVE_CI_TARGET" --provision
+    - name: Validate pinned target SDK and configure Cargo
+      id: stage-2-sdk
+      shell: bash
+      timeout-minutes: 300
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" prepare cross --target "$WAVE_CI_TARGET" --work-dir "$RUNNER_TEMP/wave-cross-package" --sysroot /usr/riscv64-linux-gnu --cross-prefix riscv64-linux-gnu- --host-llvm-bin "$LLVM_SYS_211_PREFIX/bin"
+    - name: Build and smoke-test the native RISC-V release
+      id: stage-2
+      shell: bash
+      timeout-minutes: 300
+      run: |
+        set -euo pipefail
+        python -m mesonbuild.mesonmain setup --reconfigure .tmp/meson/cross-package . "-Dcompiler_target=$WAVE_STEPS_PACKAGE_PATHS_OUTPUTS_TARGET" -Dbuildtype=release
+        python -m mesonbuild.mesonmain compile -C .tmp/meson/cross-package --jobs 2 release
+        "$WAVE_TOOLS" check extracted-package --archive "$WAVE_STEPS_PACKAGE_PATHS_OUTPUTS_ARCHIVE" --target "$WAVE_STEPS_PACKAGE_PATHS_OUTPUTS_TARGET" --output "$RUNNER_TEMP/extracted-package"
       env:
-        WAVE_CI_MATRIX: ${{ toJSON(matrix || fromJSON('{}')) }}
-        WAVE_RELEASE_INPUTS: ${{ toJSON(inputs || fromJSON('{}')) }}
-      run: python3 -m tools.ci.release --target "linux-riscv64" --lane release/package-linux-riscv64 --provision
-        --report-json ci-report.json
+        WAVE_STEPS_PACKAGE_PATHS_OUTPUTS_TARGET: ${{ steps.package_paths.outputs.target }}
+        WAVE_STEPS_PACKAGE_PATHS_OUTPUTS_ARCHIVE: ${{ steps.package_paths.outputs.archive }}
+    - name: Record native Actions outcomes
+      id: ci_report
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" ci report --target-id "$WAVE_CI_TARGET" --output ci-report.json
+      env:
+        WAVE_STEP_OUTCOMES: ${{ toJSON(steps) }}
+      if: |-
+        ${{ always() && steps.tooling_bootstrap.outcome == 'success' }}
     - uses: actions/upload-artifact@v6
       with:
         name: release-package-linux-riscv64
-        path: |
-          wave-v${{ inputs.version }}-riscv64-linux-gnu.tar.gz
+        path: 'wave-v${{ inputs.version }}-riscv64-linux-gnu.tar.gz
+
           wave-v${{ inputs.version }}-riscv64-linux-gnu.tar.gz.sha256
+
           wave-v${{ inputs.version }}-riscv64-linux-gnu.tar.gz.metadata.json
+
+          '
         if-no-files-found: error
         retention-days: 7
       name: Upload package
@@ -328,13 +800,16 @@ jobs:
       uses: actions/upload-artifact@v6
       with:
         name: reports-release-linux-riscv64-package
-        path: |
-          ci-report.json
+        path: 'ci-report.json
+
           ${{ runner.temp }}/wave-ci-*/*.log
+
+          '
         if-no-files-found: warn
         retention-days: 7
-
-  # macOS
+    env:
+      WAVE_CI_TARGET: linux-riscv64
+      WAVE_RELEASE_INPUTS: ${{ toJSON(inputs || fromJSON('{}')) }}
   macos-native-package:
     name: macOS / ${{ matrix.display_arch }} / Package
     needs:
@@ -362,20 +837,81 @@ jobs:
         python-version: '3.12'
     - name: Install pinned Meson and Ninja
       run: python -m pip install --disable-pip-version-check -r tools/ci/requirements-build.txt
-    - name: Build and verify package
-      id: procedure
+    - name: Build native Rust maintenance tool
+      id: tooling_bootstrap
+      shell: bash
+      timeout-minutes: 10
+      run: |
+        set -euo pipefail
+        python -m mesonbuild.mesonmain setup build-ci -Dcompiler=false
+        ./build-ci/wave-tools prepare tooling --github-env "$GITHUB_ENV"
+        ./build-ci/wave-tools prepare pins --github-env "$GITHUB_ENV"
+    - name: Resolve canonical distribution identity
+      id: package_paths
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" ci artifact --target "$WAVE_CI_TARGET" --github-output "$GITHUB_OUTPUT"
+    - name: Install LLVM 21 and LLD
+      id: stage-3
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" prepare host --target "$WAVE_CI_TARGET" --provision
+    - name: Verify release tools
+      id: stage-4
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        llvm-config --version
+        llvm-config --targets-built
+        llvm-mc --version
+        llc --version
+        ld.lld --version
+    - name: Build and package
+      id: stage-5
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        python -m mesonbuild.mesonmain setup --reconfigure .tmp/meson/build_and_package-0 . "-Dcompiler_target=$WAVE_MATRIX_TARGET" -Dbuildtype=release -Dllvm_features=auto
+        python -m mesonbuild.mesonmain compile -C .tmp/meson/build_and_package-0 --jobs 2 release
       env:
-        WAVE_CI_MATRIX: ${{ toJSON(matrix || fromJSON('{}')) }}
-        WAVE_RELEASE_INPUTS: ${{ toJSON(inputs || fromJSON('{}')) }}
-      run: python3 -m tools.ci.release --target "${{ matrix.target }}" --lane release/package-macos --provision
-        --report-json ci-report.json
+        WAVE_MATRIX_TARGET: ${{ matrix.target }}
+    - name: Smoke test packaged compiler
+      id: stage-6
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" check extracted-package --archive "$WAVE_STEPS_PACKAGE_PATHS_OUTPUTS_ARCHIVE" --target "$WAVE_STEPS_PACKAGE_PATHS_OUTPUTS_TARGET" --output "$RUNNER_TEMP/extracted-package"
+      env:
+        WAVE_STEPS_PACKAGE_PATHS_OUTPUTS_ARCHIVE: ${{ steps.package_paths.outputs.archive }}
+        WAVE_STEPS_PACKAGE_PATHS_OUTPUTS_TARGET: ${{ steps.package_paths.outputs.target }}
+    - name: Record native Actions outcomes
+      id: ci_report
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" ci report --target-id "$WAVE_CI_TARGET" --output ci-report.json
+      env:
+        WAVE_STEP_OUTCOMES: ${{ toJSON(steps) }}
+      if: |-
+        ${{ always() && steps.tooling_bootstrap.outcome == 'success' }}
     - uses: actions/upload-artifact@v6
       with:
         name: release-package-macos-${{ matrix.display_arch }}
-        path: |
-          wave-v${{ inputs.version }}-${{ matrix.target }}.tar.gz
+        path: 'wave-v${{ inputs.version }}-${{ matrix.target }}.tar.gz
+
           wave-v${{ inputs.version }}-${{ matrix.target }}.tar.gz.sha256
+
           wave-v${{ inputs.version }}-${{ matrix.target }}.tar.gz.metadata.json
+
+          '
         if-no-files-found: error
         retention-days: 7
       name: Upload package
@@ -384,13 +920,16 @@ jobs:
       uses: actions/upload-artifact@v6
       with:
         name: reports-release-macos-${{ matrix.display_arch }}-package
-        path: |
-          ci-report.json
+        path: 'ci-report.json
+
           ${{ runner.temp }}/wave-ci-*/*.log
+
+          '
         if-no-files-found: warn
         retention-days: 7
-
-  # Windows
+    env:
+      WAVE_CI_TARGET: ${{ matrix.target }}
+      WAVE_RELEASE_INPUTS: ${{ toJSON(inputs || fromJSON('{}')) }}
   windows-amd64-package:
     name: Windows / amd64 / Package
     needs:
@@ -408,15 +947,111 @@ jobs:
         architecture: x64
     - name: Install pinned Meson and Ninja
       run: python -m pip install --disable-pip-version-check -r tools/ci/requirements-build.txt
-    - name: Build and verify package
-      id: procedure
+    - name: Build native Rust maintenance tool
+      id: tooling_bootstrap
+      shell: pwsh
+      timeout-minutes: 10
+      run: |
+        $ErrorActionPreference = "Stop"
+        & 'python' '-m' 'mesonbuild.mesonmain' 'setup' 'build-ci' '-Dcompiler=false'
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        & './build-ci/wave-tools.exe' 'prepare' 'tooling' '--github-env' "$env:GITHUB_ENV"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        & './build-ci/wave-tools.exe' 'prepare' 'pins' '--github-env' "$env:GITHUB_ENV"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Resolve canonical distribution identity
+      id: package_paths
+      shell: pwsh
+      timeout-minutes: 30
+      run: |
+        $ErrorActionPreference = "Stop"
+        & $env:WAVE_TOOLS 'ci' 'artifact' '--target' "$env:WAVE_CI_TARGET" '--github-output' "$env:GITHUB_OUTPUT"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Install pinned native LLVM SDK
+      id: stage-3
+      shell: pwsh
+      timeout-minutes: 30
+      run: |
+        $ErrorActionPreference = "Stop"
+        & 'pwsh' '-NoProfile' '-File' './tools/provision_windows_msvc_llvm.ps1' '-Architecture' 'x64'
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Provision matching LLVM dependencies and MSVC environment
+      id: stage-4
+      shell: pwsh
+      timeout-minutes: 30
+      run: |
+        $ErrorActionPreference = "Stop"
+        & 'pwsh' '-NoProfile' '-File' './tools/provision_windows_msvc_libxml2.ps1' '-Architecture' 'x64'
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Install Wave standard library
+      id: stage-5
+      shell: pwsh
+      timeout-minutes: 30
+      run: |
+        $ErrorActionPreference = "Stop"
+        & $env:WAVE_TOOLS 'prepare' 'std'
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Build native MSVC compiler
+      id: stage-6
+      shell: pwsh
+      timeout-minutes: 30
+      run: |
+        $ErrorActionPreference = "Stop"
+        & 'python' '-m' 'mesonbuild.mesonmain' 'setup' '--reconfigure' '.tmp/meson/build_release_compiler_3-0' '.' '-Dcompiler_target=x86_64-pc-windows-msvc' '-Dbuildtype=release' '-Dllvm_features=llvm-target-core64'
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        & 'python' '-m' 'mesonbuild.mesonmain' 'compile' '-C' '.tmp/meson/build_release_compiler_3-0' '--jobs' '2' 'wavec'
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Execute native CRT, ABI, stack, DLL and response-file acceptance
+      id: native_acceptance
+      shell: pwsh
+      timeout-minutes: 20
+      run: |
+        $ErrorActionPreference = "Stop"
+        & $env:WAVE_TOOLS 'msvc-acceptance' '--wavec' 'target/x86_64-pc-windows-msvc/release/wavec.exe' '--llvm-bin' "$env:WAVE_WINDOWS_LLVM_BIN" '--target' 'x86_64-pc-windows-msvc' '--output' "$env:RUNNER_TEMP/wave-msvc-native-x64"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Execute complete Windows case selection
+      id: stage-9
+      shell: pwsh
+      timeout-minutes: 30
+      run: |
+        $ErrorActionPreference = "Stop"
+        & $env:WAVE_TOOLS 'test' '--wavec' 'target/x86_64-pc-windows-msvc/release/wavec.exe' '--target-id' 'windows-amd64' '--report-json' 'wave-cases-windows-amd64.json'
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Stage native MSVC release package
+      id: stage-11
+      shell: pwsh
+      timeout-minutes: 30
+      run: |
+        $ErrorActionPreference = "Stop"
+        & 'python' '-m' 'mesonbuild.mesonmain' 'setup' '--reconfigure' '.tmp/meson/stage_native_msvc_release_package-0' '.' '-Dcompiler_target=x86_64-pc-windows-msvc' '-Dbuildtype=release' '-Dllvm_features=auto'
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        & 'python' '-m' 'mesonbuild.mesonmain' 'compile' '-C' '.tmp/meson/stage_native_msvc_release_package-0' '--jobs' '2' 'package-existing'
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Verify extracted package in a controlled environment
+      id: package_smoke
+      shell: pwsh
+      timeout-minutes: 10
+      run: |
+        $ErrorActionPreference = "Stop"
+        & $env:WAVE_TOOLS 'check' 'extracted-package' '--archive' "$env:WAVE_STEPS_PACKAGE_PATHS_OUTPUTS_ARCHIVE" '--target' "$env:WAVE_STEPS_PACKAGE_PATHS_OUTPUTS_TARGET" '--output' "$env:RUNNER_TEMP/wave-package-x64"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       env:
-        WAVE_CI_MATRIX: ${{ toJSON(matrix || fromJSON('{}')) }}
-        WAVE_RELEASE_INPUTS: ${{ toJSON(inputs || fromJSON('{}')) }}
-      run: python -m tools.ci.release --target "windows-amd64" --lane release/package-windows --provision --report-json
-        ci-report.json
+        WAVE_STEPS_PACKAGE_PATHS_OUTPUTS_ARCHIVE: ${{ steps.package_paths.outputs.archive }}
+        WAVE_STEPS_PACKAGE_PATHS_OUTPUTS_TARGET: ${{ steps.package_paths.outputs.target }}
+    - name: Record native Actions outcomes
+      id: ci_report
+      shell: pwsh
+      timeout-minutes: 30
+      run: |
+        $ErrorActionPreference = "Stop"
+        & $env:WAVE_TOOLS 'ci' 'report' '--target-id' "$env:WAVE_CI_TARGET" '--output' 'ci-report.json'
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      env:
+        WAVE_STEP_OUTCOMES: ${{ toJSON(steps) }}
+      if: |-
+        ${{ always() && steps.tooling_bootstrap.outcome == 'success' }}
     - name: Preserve native execution evidence
-      if: ${{ always() && steps.procedure.outputs.native_acceptance != 'skipped' }}
+      if: ${{ always() && steps.native_acceptance.outcome != 'skipped' }}
       uses: actions/upload-artifact@v6
       with:
         name: evidence-release-windows-amd64-package-native-tests
@@ -429,7 +1064,7 @@ jobs:
         name: evidence-release-windows-amd64-package-cases
         path: wave-cases-windows-amd64.json
     - name: Preserve package acceptance evidence
-      if: ${{ always() && steps.procedure.outputs.package_smoke != 'skipped' }}
+      if: ${{ always() && steps.package_smoke.outcome != 'skipped' }}
       uses: actions/upload-artifact@v6
       with:
         name: evidence-release-windows-amd64-package-package-tests
@@ -438,10 +1073,13 @@ jobs:
     - uses: actions/upload-artifact@v6
       with:
         name: release-package-windows-amd64
-        path: |
-          wave-v${{ inputs.version }}-x86_64-pc-windows-msvc.zip
+        path: 'wave-v${{ inputs.version }}-x86_64-pc-windows-msvc.zip
+
           wave-v${{ inputs.version }}-x86_64-pc-windows-msvc.zip.sha256
+
           wave-v${{ inputs.version }}-x86_64-pc-windows-msvc.zip.metadata.json
+
+          '
         if-no-files-found: error
       name: Upload package
     - name: Upload logs and summary
@@ -449,11 +1087,16 @@ jobs:
       uses: actions/upload-artifact@v6
       with:
         name: reports-release-windows-amd64-package
-        path: |
-          ci-report.json
+        path: 'ci-report.json
+
           ${{ runner.temp }}/wave-ci-*/*.log
+
+          '
         if-no-files-found: warn
         retention-days: 7
+    env:
+      WAVE_CI_TARGET: windows-amd64
+      WAVE_RELEASE_INPUTS: ${{ toJSON(inputs || fromJSON('{}')) }}
   windows-arm64-package:
     name: Windows / arm64 / Package
     needs:
@@ -471,15 +1114,111 @@ jobs:
         architecture: arm64
     - name: Install pinned Meson and Ninja
       run: python -m pip install --disable-pip-version-check -r tools/ci/requirements-build.txt
-    - name: Build and verify package
-      id: procedure
+    - name: Build native Rust maintenance tool
+      id: tooling_bootstrap
+      shell: pwsh
+      timeout-minutes: 10
+      run: |
+        $ErrorActionPreference = "Stop"
+        & 'python' '-m' 'mesonbuild.mesonmain' 'setup' 'build-ci' '-Dcompiler=false'
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        & './build-ci/wave-tools.exe' 'prepare' 'tooling' '--github-env' "$env:GITHUB_ENV"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        & './build-ci/wave-tools.exe' 'prepare' 'pins' '--github-env' "$env:GITHUB_ENV"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Resolve canonical distribution identity
+      id: package_paths
+      shell: pwsh
+      timeout-minutes: 30
+      run: |
+        $ErrorActionPreference = "Stop"
+        & $env:WAVE_TOOLS 'ci' 'artifact' '--target' "$env:WAVE_CI_TARGET" '--github-output' "$env:GITHUB_OUTPUT"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Install pinned native LLVM SDK
+      id: stage-3
+      shell: pwsh
+      timeout-minutes: 30
+      run: |
+        $ErrorActionPreference = "Stop"
+        & 'pwsh' '-NoProfile' '-File' './tools/provision_windows_msvc_llvm.ps1' '-Architecture' 'arm64'
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Provision matching LLVM dependencies and MSVC environment
+      id: stage-4
+      shell: pwsh
+      timeout-minutes: 30
+      run: |
+        $ErrorActionPreference = "Stop"
+        & 'pwsh' '-NoProfile' '-File' './tools/provision_windows_msvc_libxml2.ps1' '-Architecture' 'arm64'
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Install Wave standard library
+      id: stage-5
+      shell: pwsh
+      timeout-minutes: 30
+      run: |
+        $ErrorActionPreference = "Stop"
+        & $env:WAVE_TOOLS 'prepare' 'std'
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Build native MSVC compiler
+      id: stage-6
+      shell: pwsh
+      timeout-minutes: 30
+      run: |
+        $ErrorActionPreference = "Stop"
+        & 'python' '-m' 'mesonbuild.mesonmain' 'setup' '--reconfigure' '.tmp/meson/build_native_arm64_compiler-0' '.' '-Dcompiler_target=aarch64-pc-windows-msvc' '-Dbuildtype=release' '-Dllvm_features=llvm-target-aarch64'
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        & 'python' '-m' 'mesonbuild.mesonmain' 'compile' '-C' '.tmp/meson/build_native_arm64_compiler-0' '--jobs' '2' 'wavec'
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Execute native CRT, ABI, stack, DLL and response-file acceptance
+      id: native_acceptance
+      shell: pwsh
+      timeout-minutes: 20
+      run: |
+        $ErrorActionPreference = "Stop"
+        & $env:WAVE_TOOLS 'msvc-acceptance' '--wavec' 'target/aarch64-pc-windows-msvc/release/wavec.exe' '--llvm-bin' "$env:WAVE_WINDOWS_LLVM_BIN" '--target' 'aarch64-pc-windows-msvc' '--output' "$env:RUNNER_TEMP/wave-msvc-native-arm64"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Execute complete Windows case selection
+      id: stage-9
+      shell: pwsh
+      timeout-minutes: 30
+      run: |
+        $ErrorActionPreference = "Stop"
+        & $env:WAVE_TOOLS 'test' '--wavec' 'target/aarch64-pc-windows-msvc/release/wavec.exe' '--target-id' 'windows-arm64' '--report-json' 'wave-cases-windows-arm64.json'
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Stage native MSVC release package
+      id: stage-11
+      shell: pwsh
+      timeout-minutes: 30
+      run: |
+        $ErrorActionPreference = "Stop"
+        & 'python' '-m' 'mesonbuild.mesonmain' 'setup' '--reconfigure' '.tmp/meson/stage_native_msvc_release_package_2-0' '.' '-Dcompiler_target=aarch64-pc-windows-msvc' '-Dbuildtype=release' '-Dllvm_features=auto'
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+        & 'python' '-m' 'mesonbuild.mesonmain' 'compile' '-C' '.tmp/meson/stage_native_msvc_release_package_2-0' '--jobs' '2' 'package-existing'
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    - name: Verify extracted package in a controlled environment
+      id: package_smoke
+      shell: pwsh
+      timeout-minutes: 10
+      run: |
+        $ErrorActionPreference = "Stop"
+        & $env:WAVE_TOOLS 'check' 'extracted-package' '--archive' "$env:WAVE_STEPS_PACKAGE_PATHS_OUTPUTS_ARCHIVE" '--target' "$env:WAVE_STEPS_PACKAGE_PATHS_OUTPUTS_TARGET" '--output' "$env:RUNNER_TEMP/wave-package-arm64"
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
       env:
-        WAVE_CI_MATRIX: ${{ toJSON(matrix || fromJSON('{}')) }}
-        WAVE_RELEASE_INPUTS: ${{ toJSON(inputs || fromJSON('{}')) }}
-      run: python -m tools.ci.release --target "windows-arm64" --lane release/package-windows-arm64 --provision
-        --report-json ci-report.json
+        WAVE_STEPS_PACKAGE_PATHS_OUTPUTS_ARCHIVE: ${{ steps.package_paths.outputs.archive }}
+        WAVE_STEPS_PACKAGE_PATHS_OUTPUTS_TARGET: ${{ steps.package_paths.outputs.target }}
+    - name: Record native Actions outcomes
+      id: ci_report
+      shell: pwsh
+      timeout-minutes: 30
+      run: |
+        $ErrorActionPreference = "Stop"
+        & $env:WAVE_TOOLS 'ci' 'report' '--target-id' "$env:WAVE_CI_TARGET" '--output' 'ci-report.json'
+        if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+      env:
+        WAVE_STEP_OUTCOMES: ${{ toJSON(steps) }}
+      if: |-
+        ${{ always() && steps.tooling_bootstrap.outcome == 'success' }}
     - name: Preserve native execution evidence
-      if: ${{ always() && steps.procedure.outputs.native_acceptance != 'skipped' }}
+      if: ${{ always() && steps.native_acceptance.outcome != 'skipped' }}
       uses: actions/upload-artifact@v6
       with:
         name: evidence-release-windows-arm64-package-native-tests
@@ -492,7 +1231,7 @@ jobs:
         name: evidence-release-windows-arm64-package-cases
         path: wave-cases-windows-arm64.json
     - name: Preserve package acceptance evidence
-      if: ${{ always() && steps.procedure.outputs.package_smoke != 'skipped' }}
+      if: ${{ always() && steps.package_smoke.outcome != 'skipped' }}
       uses: actions/upload-artifact@v6
       with:
         name: evidence-release-windows-arm64-package-package-tests
@@ -501,10 +1240,13 @@ jobs:
     - uses: actions/upload-artifact@v6
       with:
         name: release-package-windows-arm64
-        path: |
-          wave-v${{ inputs.version }}-aarch64-pc-windows-msvc.zip
+        path: 'wave-v${{ inputs.version }}-aarch64-pc-windows-msvc.zip
+
           wave-v${{ inputs.version }}-aarch64-pc-windows-msvc.zip.sha256
+
           wave-v${{ inputs.version }}-aarch64-pc-windows-msvc.zip.metadata.json
+
+          '
         if-no-files-found: error
       name: Upload package
     - name: Upload logs and summary
@@ -512,13 +1254,16 @@ jobs:
       uses: actions/upload-artifact@v6
       with:
         name: reports-release-windows-arm64-package
-        path: |
-          ci-report.json
+        path: 'ci-report.json
+
           ${{ runner.temp }}/wave-ci-*/*.log
+
+          '
         if-no-files-found: warn
         retention-days: 7
-
-  # FreeBSD
+    env:
+      WAVE_CI_TARGET: windows-arm64
+      WAVE_RELEASE_INPUTS: ${{ toJSON(inputs || fromJSON('{}')) }}
   freebsd-amd64-package:
     name: FreeBSD / amd64 / Package
     needs:
@@ -535,22 +1280,57 @@ jobs:
         python-version: '3.12'
     - name: Install pinned Meson and Ninja
       run: python -m pip install --disable-pip-version-check -r tools/ci/requirements-build.txt
+    - name: Setup pinned native Rust tooling
+      uses: dtolnay/rust-toolchain@1.89.0
+    - name: Build native Rust maintenance tool
+      id: tooling_bootstrap
+      shell: bash
+      timeout-minutes: 10
+      run: |
+        set -euo pipefail
+        python -m mesonbuild.mesonmain setup build-ci -Dcompiler=false
+        ./build-ci/wave-tools prepare tooling --github-env "$GITHUB_ENV"
+        ./build-ci/wave-tools prepare pins --github-env "$GITHUB_ENV"
+    - name: Resolve canonical distribution identity
+      id: package_paths
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" ci artifact --target "$WAVE_CI_TARGET" --github-output "$GITHUB_OUTPUT"
     - name: Select FreeBSD VM cache
       id: freebsd-cache
-      run: python3 -m tools.ci.freebsd_cache --github-output "$GITHUB_OUTPUT"
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" freebsd cache-key --github-output "$GITHUB_OUTPUT"
     - name: Restore FreeBSD tools and Cargo cache
       uses: actions/cache@v5
       with:
         path: ${{ steps.freebsd-cache.outputs.path }}
         key: ${{ steps.freebsd-cache.outputs.key }}
         restore-keys: ${{ steps.freebsd-cache.outputs.restore-prefix }}
-    - name: Build and validate FreeBSD package
+    - name: Build and validate native FreeBSD package
+      id: freebsd-package
+      shell: bash
+      timeout-minutes: 300
+      run: |
+        set -euo pipefail
+        sudo apt-get update
+        sudo apt-get install -y qemu-system-x86 qemu-utils genisoimage openssh-client xz-utils curl
+        "$WAVE_TOOLS" freebsd package --provision --output . --cache "$RUNNER_TEMP/wave-freebsd-cache"
+    - name: Record native Actions outcomes
+      id: ci_report
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" ci report --target-id "$WAVE_CI_TARGET" --output ci-report.json
       env:
-        GH_TOKEN: ${{ github.token }}
-      run: >-
-        python3 -m mesonbuild.mesonmain setup build-ci "-Dcompiler=false" "-Dci_family=package"
-        "-Dci_target=freebsd-amd64" "-Dci_provision=true" "-Dci_report=ci-report.json" && python3 -m
-        mesonbuild.mesonmain compile -C build-ci ci
+        WAVE_STEP_OUTCOMES: ${{ toJSON(steps) }}
+      if: |-
+        ${{ always() && steps.tooling_bootstrap.outcome == 'success' }}
     - uses: actions/upload-artifact@v6
       with:
         name: release-package-freebsd-amd64
@@ -563,15 +1343,15 @@ jobs:
       uses: actions/upload-artifact@v6
       with:
         name: reports-release-freebsd-amd64-package
-        path: |-
-          ci-report.json
-          ${{ runner.temp }}/wave-ci-*/*.log
+        path: 'ci-report.json
+
+          ${{ runner.temp }}/wave-ci-*/*.log'
         if-no-files-found: warn
         retention-days: 7
     env:
       RELEASE_VERSION: ${{ inputs.version }}
-
-  # Publication
+      WAVE_CI_TARGET: freebsd-amd64
+      WAVE_RELEASE_INPUTS: ${{ toJSON(inputs || fromJSON('{}')) }}
   publish:
     name: Shared / Publish
     needs:
@@ -597,26 +1377,61 @@ jobs:
         python-version: '3.12'
     - name: Install pinned Meson and Ninja
       run: python -m pip install --disable-pip-version-check -r tools/ci/requirements-build.txt
+    - name: Setup pinned native Rust tooling
+      uses: dtolnay/rust-toolchain@1.89.0
+    - name: Build native Rust maintenance tool
+      id: tooling_bootstrap
+      shell: bash
+      timeout-minutes: 10
+      run: |
+        set -euo pipefail
+        python -m mesonbuild.mesonmain setup build-ci -Dcompiler=false
+        ./build-ci/wave-tools prepare tooling --github-env "$GITHUB_ENV"
+        ./build-ci/wave-tools prepare pins --github-env "$GITHUB_ENV"
     - uses: actions/download-artifact@v7
       with:
         pattern: release-package-*
         path: release-assets
         merge-multiple: true
-    - name: Publish release
-      id: procedure
+    - name: Verify release assets
+      id: stage-3
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" check release-assets --directory release-assets --version "$RELEASE_VERSION"
+    - name: Create GitHub release
+      id: stage-4
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" release --stage publish --publish
       env:
-        WAVE_CI_MATRIX: ${{ toJSON(matrix || fromJSON('{}')) }}
-        WAVE_RELEASE_INPUTS: ${{ toJSON(inputs || fromJSON('{}')) }}
         GH_TOKEN: ${{ github.token }}
-      run: python3 -m tools.ci.release --target "linux-amd64" --lane release/publish --provision --report-json ci-report.json
-        --publish
+    - name: Record native Actions outcomes
+      id: ci_report
+      shell: bash
+      timeout-minutes: 30
+      run: |
+        set -euo pipefail
+        "$WAVE_TOOLS" ci report --target-id "$WAVE_CI_TARGET" --output ci-report.json
+      env:
+        WAVE_STEP_OUTCOMES: ${{ toJSON(steps) }}
+      if: |-
+        ${{ always() && steps.tooling_bootstrap.outcome == 'success' }}
     - name: Upload logs and summary
       if: ${{ always() }}
       uses: actions/upload-artifact@v6
       with:
         name: reports-release-shared-publish
-        path: |
-          ci-report.json
+        path: 'ci-report.json
+
           ${{ runner.temp }}/wave-ci-*/*.log
+
+          '
         if-no-files-found: warn
         retention-days: 7
+    env:
+      WAVE_CI_TARGET: linux-amd64
+      WAVE_RELEASE_INPUTS: ${{ toJSON(inputs || fromJSON('{}')) }}

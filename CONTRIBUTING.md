@@ -33,7 +33,7 @@ This includes installation instructions for Rust, LLVM, Clang tools, and other
 dependencies required to build Wave.
 
 Build automation uses Meson and Ninja; Cargo still compiles the Rust workspace.
-Python 3.11 or newer is required. Install the pinned automation tools and build:
+Python 3.11 or newer runs Meson. The pinned Rust toolchain also builds the native maintenance tool, including when `compiler=false`. Install the pinned automation tools and build:
 
 ```bash
 python3 -m pip install -r tools/ci/requirements-build.txt
@@ -135,18 +135,20 @@ documentation comments and doctests need the relevant Rust checks below.
 ### Code and tooling changes
 
 For compiler or standard-library changes, complete the development setup and
-run the common checks below from the repository root. For Python-only tooling
-changes, start with `python3 -m py_compile` on the changed files and the relevant
-unit tests, then run any compiler or runtime checks affected by the change.
+run the common checks below from the repository root. Project maintenance,
+validation and packaging use the native `wave-tools` Cargo package. For tooling
+changes, `meson setup build-tools -Dcompiler=false` and
+`meson test -C build-tools --suite tooling --print-errorlogs` run its contracts
+without building wavec or requiring LLVM. The pinned Rust toolchain is required.
+Python remains the runtime for Meson; the offline trigonometric reference-vector
+generator additionally uses mpmath. Node runs WebAssembly hosts, and the Windows
+bootstrap scripts provision native SDK inputs before compiler builds.
 
-The current CI entry point is [`.github/workflows/ci.yml`](.github/workflows/ci.yml).
-Its [plans](tools/ci/plans.json) and [procedures](tools/ci/procedures.json) are the
-source of truth for the full target-specific checks. To inspect the Linux amd64
-build-and-test plan without installing tools or running its checks:
-
-```bash
-python3 -m tools.ci.test --target linux-amd64 --lane rust/build-linux-amd64 --plan
-```
+[`.github/workflows/ci.yml`](.github/workflows/ci.yml) contains the target-specific
+job graph and explicit check steps. Cargo owns compilation, Meson owns local build
+dependencies and test suites, and Actions owns job conditions and artifact transport.
+`build-tools/wave-tools matrix --json` prints the validated case manifest projection;
+`build-tools/wave-tools check ci-jobs` lists the required canonical CI job names.
 
 CI job names follow `<OS> / <architecture> / <operation>`,
 for example `Linux / amd64 / Build & test`.
@@ -160,66 +162,49 @@ Prefer `--jobs 2` on resource-intensive Cargo commands
 (CI sets `CARGO_BUILD_JOBS=2`). Common local checks include:
 
 ```bash
-cargo fmt --all --check
-./tools/check_std_policy.sh
+meson setup build-tools -Dcompiler=false
+meson test -C build-tools --suite tooling --suite policy --print-errorlogs
+build-tools/wave-tools maintain format --check
 RUSTDOCFLAGS="-D warnings" cargo doc --locked --workspace --no-deps --jobs 2
-cargo clippy --locked --workspace --all-targets -- -D warnings
-python3 -m py_compile tools/build/cargo_env.py tools/build/runtime.py \
-  tools/build/package.py tools/build/install.py tools/check_wave_corpus.py tools/case_manifest.py \
-  tools/populate_case_matrix.py tools/run_tests.py tools/test_contracts.py \
-  tools/tests/test_case_manifest.py tools/tests/test_test_contracts.py tools/process_tree.py \
-  tools/tests/test_process_tree.py tools/tests/test_run_tests.py tools/tests/test_get_maintainer.py
-python3 -m unittest tools.tests.test_case_manifest tools.tests.test_test_contracts tools.tests.test_process_tree \
-  tools.tests.test_run_tests tools.tests.test_get_maintainer tools.tests.test_check_wave_corpus \
-  tools.tests.test_corpus_execution tools.tests.test_freebsd_console
-cargo build --locked --release --jobs 2
-cargo test --locked --workspace --all-targets --verbose
-python3 tools/check_wave_corpus.py --wavec target/release/wavec --run-std-examples
+cargo clippy --locked --workspace --all-targets --jobs 2 -- -D warnings
+meson setup build -Dbuildtype=release
+meson compile -C build --jobs 2 wavec
+cargo test --locked --workspace --all-targets --jobs 2
+build-tools/wave-tools corpus --wavec target/release/wavec --run-std-examples
 ```
 
-Notes:
+The Rust tooling contracts cover process-tree ownership, timeout/output limits,
+configuration and report codecs, artifact inspection, package transactions and
+publication policy. Tests use malformed binary/archive fixtures and disposable Git
+repositories; they do not publish releases or require LLVM. Compiler execution,
+platform ABI probes and extracted-package smoke checks remain separate evidence.
+`maintain format --check` combines rustfmt with function-spacing validation.
+`check std-policy` enforces std provider/import/declaration rules.
 
-- Formatting must use `cargo fmt --all --check` (not bare `cargo fmt --check`).
-- Clippy denies warnings: `cargo clippy --locked --workspace --all-targets -- -D warnings`.
-- rustdoc must be warning-free via `RUSTDOCFLAGS="-D warnings"`.
-- Standard-library policy is enforced by `./tools/check_std_policy.sh`.
-- Wave language corpus / std examples are checked with `tools/check_wave_corpus.py`
-  after a release `wavec` build.
+Trace a failing CI step directly to its Cargo, Meson or `wave-tools` command.
+The shared process owner in [`tools/src/process.rs`](tools/src/process.rs) bounds
+and records child output and reaps descendants on failure, timeout or cancellation.
+Case execution in [`tools/src/runner.rs`](tools/src/runner.rs) checks build success
+and the produced artifact before launching the program. A compiler failure cannot
+satisfy a program's expected nonzero exit status. Platform-specific acceptance
+commands retain their own ABI/runtime assertions.
 
-When tracing a CI check, follow its operation from the plan to its handler:
-[`tools/ci/procedures.json`](tools/ci/procedures.json) names an operation,
-[`tools/ci/common.py`](tools/ci/common.py) dispatches it to a handler such as
-[`windows_object`](tools/ci/test.py#L320), and command handlers use
-[`Runner.run`](tools/ci/common.py#L236). `Runner.run` records the command result
-and raises if its exit status differs from the expected status; the handler
-continues to artifact checks only after that command succeeds. For example,
-the Windows ARM64 object-output procedure calls `windows_object`, which runs
-the compiler before reading `test1.o`. If a check’s failure or artifact seems
-misleading, inspect both the handler and `Runner.run`, then look for regression
-tests in [`tools/tests/test_ci.py`](tools/tests/test_ci.py).
+Case reports (`wave-tools test --report-json PATH`) retain `schema_version: 1`,
+`host`, `compiler`, `selection`, `summary` and `tests`. Selection distinguishes
+`auto`, `target` and `suites`, with the selected manifest ID, default target,
+executor, shard and suites. Each case records separate build/artifact/run phases;
+failures preserve reasons and exact exit codes. Captured stream excerpts are
+bounded at 4096 characters and include truncation flags. Timeouts record their
+limit. Cancelled active cases are interrupted and pending cases stay `not_run`.
 
-Case runner JSON reports (`tools/run_tests.py --report-json PATH`) use
-`schema_version: 1`. `selection.mode` distinguishes automatic native selection
-(`auto`), an explicit manifest target (`target`), and explicit suites (`suites`).
-The selection includes its manifest `id` (null for explicit suites), target triple,
-executor and ordered, normalized `suites`. The target is the selection's default;
-individual case metadata can override it. Existing `host`, `compiler`, `summary`
-and `tests` fields remain available. These reports can be read without inferring
-the selected target from an artifact filename.
-Failed records retain `reason`, `phase`, and, when a process exited, `actual_exit`
-and `expected_exit` without reducing native crash codes. Captured `stdout` and
-`stderr` excerpts are limited to 4096 characters each; a corresponding
-`*_truncated` flag indicates omitted output. Timeouts retain `timeout_seconds`.
-Existing skip reasons and summary counts keep their meaning.
-
-QEMU and WebAssembly CI upload separate `*-compile.json` and `*-runtime.json`
-reports. `phase` identifies compile-only, native, or runtime verification.
-`tools/run_runtime_cases.py` records the selected sources' build/run commands,
-exit status, bounded output, and timeout or launch errors. QEMU build and program
-execution are distinct commands; WebAssembly uses Wave's combined `build-and-run`
-host command. Independent cases continue after a failure. On interruption the
-active case is `interrupted` and pending cases remain `not_run`, never `pass`.
-The existing manifest selector remains responsible for runtime eligibility.
+QEMU and WebAssembly cases share one executor. Eligible sources produce their
+object and executable in one build; other sources retain compile-only checks.
+`wave-tools ci runtime-evidence` validates the same shard's successful run records
+and emits a derived runtime report without compiling or executing them a second
+time. ABI smoke probes and isolated extracted-package execution remain independent.
+Corpus socket skips are limited to explicit local permission/family restrictions
+and retain their reason; other socket failures are errors. Nightly eligibility
+still requires every canonical CI job to succeed.
 
 ### Native Windows ARM64 LLVM dependency
 
@@ -256,7 +241,7 @@ it does not replace them.
 Maintainers must verify incoming email patches using:
 
 ```bash
-tools/verify_patch.sh your_patch.patch
+build-tools/wave-tools maintain verify-patch your_patch.patch
 ```
 
 When reviewing GitHub PRs, use the checks appropriate to the change above and
@@ -269,7 +254,7 @@ confirm the configured CI checks pass.
 To determine which maintainer should review your patch, use:
 
 ```bash
-python3 tools/get_maintainer.py path/to/changed/file.rs
+build-tools/wave-tools maintain maintainers path/to/changed/file.rs
 ```
 
 This script reads the repository's `MAINTAINERS` file and prints the appropriate
@@ -319,9 +304,9 @@ All additional functionality should be provided through external libraries
 Wave uses:
 
 - Locked Rust tests: `cargo test --locked --workspace --all-targets`
-- Automated `.wave` language cases and std examples via
-  `python3 tools/check_wave_corpus.py`
-- Python tooling unit tests: `python3 -m unittest discover -s tools/tests -t . -p "test_*.py"`
+- Automated `.wave` language cases: `build-tools/wave-tools test`
+- Std/examples checks and execution: `build-tools/wave-tools corpus --run-std-examples`
+- Native tooling contracts: `meson test -C build-tools --suite tooling --print-errorlogs`
 
 Contributors should:
 
@@ -378,7 +363,7 @@ of Wave.
 
 ### Standard-library documentation
 
-After changing a public std declaration or provider, run `python3 tools/document_std.py`
-and verify `python3 tools/document_std.py --check`. Review the capability summary,
-`tests/cases/cases.toml` and `tools/ci/plans.json` when behavior changes. Public
+After changing a public std declaration or provider, run `build-tools/wave-tools maintain std-api`
+and verify `build-tools/wave-tools maintain std-api --check`. Review the capability summary,
+`tests/cases/cases.toml` and `.github/workflows/ci.yml` when behavior changes. Public
 imports belong in the inventory; private implementation imports do not.

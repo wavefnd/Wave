@@ -51,7 +51,6 @@ M: luna@lunastev.org
 F: tools/
 F: meson.build
 F: meson.options
-F: tools/build/
 F: build.rs
 F: Cargo.toml
 F: Cargo.lock
