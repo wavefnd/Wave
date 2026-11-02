@@ -452,9 +452,37 @@ pub fn resolve_target_types(nodes: &mut [ASTNode], pointer_bits: u16) -> Result<
 }
 
 fn canonicalize_syntax_types(nodes: &mut [ASTNode]) {
-    let named = collect_named_types(nodes);
+    let mut named = collect_named_types(nodes);
+    compress_named_alias_chains(&mut named);
     for node in nodes {
         canonicalize_node_types(node, &named);
+    }
+}
+
+// Resolve flat alias chains once rather than rewalking every suffix for
+// each declaration. Wrapped and generic types retain the normal canonicalizer.
+fn compress_named_alias_chains(named: &mut HashMap<String, WaveType>) {
+    let names: Vec<_> = named.keys().cloned().collect();
+    for name in names {
+        let mut path = Vec::new();
+        let mut seen = HashSet::new();
+        let mut current = name;
+        loop {
+            if !seen.insert(current.clone()) {
+                break;
+            }
+            let Some(WaveType::Struct(next)) = named.get(&current) else { break };
+            if !named.contains_key(next) {
+                break;
+            }
+            path.push(current);
+            current = next.clone();
+        }
+        if let Some(terminal) = named.get(&current).cloned() {
+            for alias in path {
+                named.insert(alias, terminal.clone());
+            }
+        }
     }
 }
 
@@ -843,5 +871,32 @@ fn walk_pattern(pattern: &MatchPattern, visit: &mut impl FnMut(&MatchPattern)) {
         for payload in payloads {
             walk_pattern(payload, visit);
         }
+    }
+}
+
+// A long acyclic chain is legal even though it is much deeper than Rust's
+// ordinary call stack can handle if each alias triggers a recursive expansion.
+#[cfg(test)]
+mod alias_chain_tests {
+    use super::*;
+
+    #[test]
+    fn compressed_named_aliases_reuse_a_long_resolved_suffix() {
+        let mut named = HashMap::new();
+        for index in 0..16_383 {
+            named.insert(
+                format!("A{index}"),
+                WaveType::Struct(format!("A{}", index + 1)),
+            );
+        }
+        named.insert("A16383".into(), WaveType::Int(64));
+        compress_named_alias_chains(&mut named);
+        for index in [0, 1, 4096, 8192, 16_383] {
+            assert_eq!(named[&format!("A{index}")], WaveType::Int(64));
+        }
+        assert_eq!(
+            canonical_type(&WaveType::Struct("A0".into()), &named, &mut HashSet::new()),
+            WaveType::Int(64)
+        );
     }
 }
