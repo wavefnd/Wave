@@ -100,11 +100,15 @@ fn parse_parameters_with_receiver(
                 .with_context(context));
         }
         skip_ws(tokens);
-        let param_type = if name == "self"
-            && matches!(tokens.peek().map(|t| &t.token_type), Some(TokenType::Comma | TokenType::Rparen))
-            && receiver_type.is_some()
-        {
-            receiver_type.unwrap().clone()
+        let receiver = receiver_type.filter(|_| {
+            name == "self"
+                && matches!(
+                    tokens.peek().map(|t| &t.token_type),
+                    Some(TokenType::Comma | TokenType::Rparen)
+                )
+        });
+        let param_type = if let Some(receiver) = receiver {
+            receiver.clone()
         } else {
             crate::expr::expect_token(tokens, anchor, TokenType::Colon, "':'", context)?;
             skip_ws(tokens);

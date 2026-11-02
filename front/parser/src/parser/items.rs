@@ -128,13 +128,8 @@ pub fn parse_proto(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, ParseE
         (None, first)
     };
     skip_ws(tokens);
-    crate::expr::expect_token(
-        tokens,
-        anchor,
-        TokenType::Lbrace,
-        "'{' or ':'",
-        context,
-    )?;
+    let opener = if name.is_some() { "'{'" } else { "'{' or ':'" };
+    crate::expr::expect_token(tokens, anchor, TokenType::Lbrace, opener, context)?;
     let mut methods = Vec::new();
     loop {
         skip_ws(tokens);
@@ -144,11 +139,12 @@ pub fn parse_proto(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, ParseE
                 break;
             },
             Some(TokenType::Fun | TokenType::Async) => {
-                let ASTNode::Function(mut method) = (if name.is_some() {
+                let parsed = if name.is_some() {
                     parse_function_with_receiver(tokens, WaveType::Struct(target.clone()))?
                 } else {
                     parse_function(tokens)?
-                }) else {
+                };
+                let ASTNode::Function(mut method) = parsed else {
                     unreachable!("function parser returns a function node");
                 };
                 if method.return_type.is_none() {
