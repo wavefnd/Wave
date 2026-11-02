@@ -325,7 +325,7 @@ fn dispatch(mut global: Global, cmd: CliCommand) -> Result<(), CliError> {
         CliCommand::Build(build) => {
             if let Some(graph) = &global.dep.package_graph {
                 for path in &build.inputs {
-                    if path.extension().is_some_and(|e| e == "wave") {
+                    if matches!(resolve_input_kind(path, build.input_type)?, InputKind::Wave) {
                         graph.validate_entry(path).map_err(CliError::usage)?;
                     }
                 }

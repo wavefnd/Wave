@@ -172,6 +172,14 @@ fn scoped_graph_rejects_wrong_input_owner_cycles_and_ambiguous_bindings() {
     let failure = c.run(&graph, &["build", "left/src/lib.wave", "--emit=obj", "-o", "prior.o"]);
     assert!(!failure.status.success());
     assert_eq!(fs::read(c.0.join("prior.o")).unwrap(), b"previous generation");
+    fs::write(c.0.join("left/src/foreign.source"), "export(c) fun foreign()->i32{return 1;}")
+        .unwrap();
+    let forced = c.run(
+        &graph,
+        &["build", "--input-type=wave", "left/src/foreign.source", "--emit=obj", "-o", "prior.o"],
+    );
+    assert!(!forced.status.success());
+    assert_eq!(fs::read(c.0.join("prior.o")).unwrap(), b"previous generation");
     let raw = wson::dumps(&graph, wson::Format::Json, false).unwrap();
     for invalid in [
         raw.replacen("\"schema_version\":1", "\"schema_version\":2", 1),
