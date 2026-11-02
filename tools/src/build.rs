@@ -197,6 +197,28 @@ pub fn clean_outputs(root: &Path, selected: &Path, dist: &Path) -> Result<()> {
     Ok(())
 }
 
+// Override repository cross-linker defaults as well as inherited target flags.
+// Clearing environment overrides alone exposes .cargo/config.toml again.
+fn native_cargo(host: &str) -> std::process::Command {
+    let mut cargo = std::process::Command::new("cargo");
+    for (name, _) in std::env::vars_os() {
+        let text = name.to_string_lossy();
+        if text.starts_with("CARGO_TARGET_")
+            || text.starts_with("RUSTFLAGS")
+            || text == "CARGO_ENCODED_RUSTFLAGS"
+            || text == "CARGO_BUILD_TARGET"
+            || text == "RUSTC_WRAPPER"
+            || text == "RUSTC_WORKSPACE_WRAPPER"
+        {
+            cargo.env_remove(name);
+        }
+    }
+    if cfg!(unix) {
+        cargo.env(format!("CARGO_TARGET_{}_LINKER", host.replace('-', "_").to_uppercase()), "cc");
+    }
+    cargo
+}
+
 /// Cargo tests can run directly without Meson. Their native helper is built in
 /// a separate directory, so target-specific LLVM/link flags cannot leak into it.
 pub fn test_command() -> Result<std::process::Command> {
@@ -223,7 +245,7 @@ pub fn test_command() -> Result<std::process::Command> {
                 .find_map(|v| v.strip_prefix("host: "))
                 .ok_or_else(|| error("Rust host triple missing"))?;
             let directory = crate::root().join("target/wave-tools-native");
-            let mut cargo = std::process::Command::new("cargo");
+            let mut cargo = native_cargo(host);
             cargo
                 .current_dir(crate::root())
                 .args([
@@ -240,18 +262,6 @@ pub fn test_command() -> Result<std::process::Command> {
                     "--target-dir",
                 ])
                 .arg(&directory);
-            for (name, _) in std::env::vars_os() {
-                let text = name.to_string_lossy();
-                if text.starts_with("CARGO_TARGET_")
-                    || text.starts_with("RUSTFLAGS")
-                    || text == "CARGO_ENCODED_RUSTFLAGS"
-                    || text == "CARGO_BUILD_TARGET"
-                    || text == "RUSTC_WRAPPER"
-                    || text == "RUSTC_WORKSPACE_WRAPPER"
-                {
-                    cargo.env_remove(name);
-                }
-            }
             // This is the pre-helper Cargo bootstrap; normal commands use Spec.
             let output = cargo.output()?;
             if !output.status.success() {
@@ -304,4 +314,61 @@ pub fn cargo_receipt(messages: &str, binary: &Path) -> Result<Value> {
         ("binary_sha256", Value::string(storage::digest(binary)?)),
         ("llvm_out_dir", Value::string(directories.into_iter().next().unwrap())),
     ]))
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn native_bootstrap_overrides_repository_cross_linkers() {
+        let directory = tempfile::tempdir().unwrap();
+        let pin = crate::config::pin("RUST_VERSION").unwrap();
+        let identity =
+            std::process::Command::new("rustc").args([&format!("+{pin}"), "-vV"]).output().unwrap();
+        assert!(identity.status.success());
+        let identity = String::from_utf8(identity.stdout).unwrap();
+        let host = identity.lines().find_map(|line| line.strip_prefix("host: ")).unwrap();
+        fs::create_dir(directory.path().join(".cargo")).unwrap();
+        fs::write(
+            directory.path().join(".cargo/config.toml"),
+            format!("[target.{host}]\nlinker = \"wave-missing-cross-linker\"\n"),
+        )
+        .unwrap();
+        fs::write(
+            directory.path().join("Cargo.toml"),
+            "[package]\nname = \"native-bootstrap-probe\"\nversion = \"0.1.0\"\nedition = \"2021\"\n[workspace]\n",
+        )
+        .unwrap();
+        fs::write(
+            directory.path().join("Cargo.lock"),
+            "version = 4\n[[package]]\nname = \"native-bootstrap-probe\"\nversion = \"0.1.0\"\n",
+        )
+        .unwrap();
+        fs::create_dir(directory.path().join("src")).unwrap();
+        fs::write(directory.path().join("src/main.rs"), "fn main() { println!(\"native\"); }\n")
+            .unwrap();
+        let result = native_cargo(host)
+            .current_dir(directory.path())
+            .args([
+                &format!("+{pin}"),
+                "build",
+                "--locked",
+                "--offline",
+                "--jobs",
+                "2",
+                "--target",
+                host,
+            ])
+            .output()
+            .unwrap();
+        assert!(result.status.success(), "{}", String::from_utf8_lossy(&result.stderr));
+        let result = std::process::Command::new(
+            directory.path().join("target").join(host).join("debug/native-bootstrap-probe"),
+        )
+        .output()
+        .unwrap();
+        assert!(result.status.success());
+        assert_eq!(result.stdout, b"native\n");
+    }
 }

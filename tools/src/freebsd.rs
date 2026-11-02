@@ -47,26 +47,36 @@ impl<S: Read + Write> Console<S> {
             if Instant::now() >= deadline {
                 return Err(error(format!("guest did not reach {pattern:?} before deadline")));
             }
-            let mut bytes = [0; 16384];
-            match self.stream.read(&mut bytes) {
-                Ok(0) => return Err(error(format!("guest console closed before {pattern:?}"))),
-                Ok(count) => {
-                    self.log.write_all(&bytes[..count])?;
-                    self.log.flush()?;
-                    self.buffer.push_str(&String::from_utf8_lossy(&bytes[..count]));
-                    if self.buffer.len() > 1024 * 1024 {
-                        return Err(error("guest console unmatched output exceeded 1 MiB"));
-                    }
-                },
-                Err(e)
-                    if matches!(
-                        e.kind(),
-                        std::io::ErrorKind::WouldBlock
-                            | std::io::ErrorKind::TimedOut
-                            | std::io::ErrorKind::Interrupted
-                    ) => {},
-                Err(e) => return Err(e.into()),
+            if !self.read_output()? {
+                return Err(error(format!("guest console closed before {pattern:?}")));
             }
+        }
+    }
+
+    fn read_output(&mut self) -> Result<bool> {
+        let mut bytes = [0; 16384];
+        match self.stream.read(&mut bytes) {
+            Ok(0) => Ok(false),
+            Ok(count) => {
+                self.log.write_all(&bytes[..count])?;
+                self.log.flush()?;
+                self.buffer.push_str(&String::from_utf8_lossy(&bytes[..count]));
+                if self.buffer.len() > 1024 * 1024 {
+                    return Err(error("guest console unmatched output exceeded 1 MiB"));
+                }
+                Ok(true)
+            },
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    std::io::ErrorKind::WouldBlock
+                        | std::io::ErrorKind::TimedOut
+                        | std::io::ErrorKind::Interrupted
+                ) =>
+            {
+                Ok(true)
+            },
+            Err(e) => Err(e.into()),
         }
     }
 
@@ -191,7 +201,11 @@ impl Vm {
             if started.elapsed() >= timeout {
                 return Err(error("VM did not power off cleanly; cache not saved"));
             }
-            std::thread::sleep(Duration::from_millis(50));
+            // QEMU writes the serial socket synchronously. Waiting without
+            // draining it can block the guest before ACPI powers the VM off.
+            if !self.console.read_output()? {
+                std::thread::sleep(Duration::from_millis(20));
+            }
         }
         let result =
             self.owner.task.take().unwrap().join().map_err(|_| error("VM owner panicked"))??;
@@ -1015,4 +1029,39 @@ fn build_package(output: &Path, cache: &Path, provision: bool) -> Result<()> {
     storage::replace_set(&entries)?;
     save_image(&overlay, cache, &identity, source)?;
     Ok(())
+}
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn shutdown_drains_serial_backpressure_before_waiting_for_the_vm() {
+        use std::os::unix::net::UnixStream;
+        let directory = tempfile::tempdir().unwrap();
+        let log = directory.path().join("guest.log");
+        let (stream, mut peer) = UnixStream::pair().unwrap();
+        stream.set_read_timeout(Some(Duration::from_millis(10))).unwrap();
+        peer.set_write_timeout(Some(Duration::from_secs(2))).unwrap();
+        let bytes = vec![b'x'; 512 * 1024];
+        let expected = bytes.len();
+        let task = std::thread::spawn(move || -> Result<Output> {
+            peer.write_all(&bytes)?;
+            Ok(Output {
+                status: 0,
+                stdout: vec![],
+                stderr: vec![],
+                failure: None,
+                elapsed: Duration::ZERO,
+            })
+        });
+        let mut vm = Vm {
+            console: Console::new(stream, File::create(&log).unwrap(), Duration::from_secs(1)),
+            owner: GuestOwner { stop: Arc::new(AtomicBool::new(false)), task: Some(task) },
+        };
+        vm.shutdown(Duration::from_secs(1)).unwrap();
+        // The final write can complete before the last buffered chunk is read.
+        while vm.console.read_output().unwrap() {}
+        assert_eq!(fs::read(&log).unwrap().len(), expected);
+    }
 }

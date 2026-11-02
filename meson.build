@@ -37,10 +37,16 @@ endif
 native_env = environment()
 foreach name : ['RUSTFLAGS', 'CARGO_ENCODED_RUSTFLAGS', 'CARGO_BUILD_TARGET',
     'RUSTC_WRAPPER', 'RUSTC_WORKSPACE_WRAPPER', 'LLVM_SYS_211_PREFIX', 'LLVM_CONFIG_PATH',
-    'CARGO_TARGET_' + native_target.to_upper().replace('-', '_') + '_RUSTFLAGS',
-    'CARGO_TARGET_' + native_target.to_upper().replace('-', '_') + '_LINKER']
+    'CARGO_TARGET_' + native_target.to_upper().replace('-', '_') + '_RUSTFLAGS']
     native_env.unset(name)
 endforeach
+# Repository target tables describe cross builds. Native tools must use the
+# host C driver, including FreeBSD where the table names a cross-only linker.
+if build_machine.system() != 'windows'
+    native_env.set('CARGO_TARGET_' + native_target.to_upper().replace('-', '_') + '_LINKER', 'cc')
+else
+    native_env.unset('CARGO_TARGET_' + native_target.to_upper().replace('-', '_') + '_LINKER')
+endif
 native_env.set('CARGO_BUILD_JOBS', '2')
 # Share one host-only Cargo cache across feature/profile Meson build directories.
 tools_dir = source_root / 'target' / 'wave-tools-native'
