@@ -1,0 +1,30 @@
+[package]
+name = "wave-tools"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.89"
+publish = false
+
+[dependencies]
+utils = { path = "../utils" }
+syn = { version = "=2.0.118", features = ["full", "visit"] }
+proc-macro2 = { version = "=1.0.106", features = ["span-locations"] }
+toml = "=0.8.23"
+regex-lite = "=0.1.9"
+base64 = "=0.22.1"
+getrandom = "=0.4.3"
+yaml-rust2 = { version = "=0.13.0", default-features = false }
+time = { version = "=0.3.44", features = ["formatting", "parsing"] }
+sha2 = "=0.10.9"
+object = { version = "=0.37.3", default-features = false, features = ["read", "std"] }
+tempfile = "=3.27.0"
+tar = { version = "=0.4.46", default-features = false }
+flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
+zip = { version = "=8.6.0", default-features = false, features = ["deflate-flate2"] }
+
+[target.'cfg(unix)'.dependencies]
+nix = { version = "=0.31.3", default-features = false, features = ["signal", "process", "fs", "resource", "term", "user"] }
+signal-hook = { version = "=0.4.5", default-features = false }
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "=0.61.2", features = ["Win32_Foundation", "Win32_Security", "Win32_System_JobObjects", "Win32_System_Threading", "Win32_System_SystemInformation", "Win32_System_Console", "Win32_Storage_FileSystem"] }

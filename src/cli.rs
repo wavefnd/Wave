@@ -277,6 +277,28 @@ where
 }
 
 fn dispatch(mut global: Global, cmd: CliCommand) -> Result<(), CliError> {
+    if global.dep.package_graph_stdin {
+        if !matches!(cmd, CliCommand::Build(_)) {
+            return Err(CliError::usage("--package-graph-stdin requires build or check"));
+        }
+        if !global.dep.packages.is_empty() || !global.dep.roots.is_empty() {
+            return Err(CliError::usage(
+                "package graph cannot be mixed with legacy dependency mappings",
+            ));
+        }
+        let mut raw = String::new();
+        std::io::stdin()
+            .take(8 * 1024 * 1024 + 1)
+            .read_to_string(&mut raw)
+            .map_err(|e| CliError::usage(format!("cannot read package graph: {e}")))?;
+        let graph = utils::build_contract::PackageGraph::parse(&raw).map_err(CliError::usage)?;
+        global.dep.package_graph = Some(std::sync::Arc::new(graph));
+    }
+    let mut roots =
+        global.dep.package_graph.as_ref().map(|g| g.logical_roots()).unwrap_or_default();
+    roots.extend(global.dep.path_remappings.clone());
+    utils::build_contract::configure_paths(roots).map_err(CliError::usage)?;
+
     if global.std_root.is_some() && matches!(&cmd, CliCommand::Build(_) | CliCommand::Print { .. })
     {
         let root = parser::import::ResolvedStdRoot::resolve(global.std_root.as_deref()).map_err(
@@ -300,7 +322,16 @@ fn dispatch(mut global: Global, cmd: CliCommand) -> Result<(), CliError> {
             print_help();
             Ok(())
         },
-        CliCommand::Build(build) => dispatch_build(&global, &build),
+        CliCommand::Build(build) => {
+            if let Some(graph) = &global.dep.package_graph {
+                for path in &build.inputs {
+                    if matches!(resolve_input_kind(path, build.input_type)?, InputKind::Wave) {
+                        graph.validate_entry(path).map_err(CliError::usage)?;
+                    }
+                }
+            }
+            dispatch_build(&global, &build)
+        },
         CliCommand::Print { item, target, format } => {
             dispatch_print(&global, &item, target.as_deref(), format)
         },
@@ -679,6 +710,18 @@ fn dispatch_print_human(global: &Global, item: &str, target: &str) -> Result<(),
 
 fn dispatch_print_json(global: &Global, item: &str, target: &str) -> Result<(), CliError> {
     match item {
+        "vex-capabilities" => {
+            println!(
+                "{}",
+                schema_json(&Value::object([
+                    ("schema_version", Value::integer(1)),
+                    ("package_graph", Value::integer(1)),
+                    ("path_remap", Value::integer(1)),
+                    ("source_inputs", Value::integer(1))
+                ]))
+            );
+            Ok(())
+        },
         "host-target" | "default-target" => {
             println!("{}", json_string(&host_target_triple()));
             Ok(())
@@ -871,6 +914,29 @@ fn parse_global(args: Vec<String>) -> Result<(Global, Vec<String>), CliError> {
             continue;
         }
 
+        if a == "--package-graph-stdin" {
+            if g.dep.package_graph_stdin {
+                return Err(CliError::usage("pass --package-graph-stdin only once"));
+            }
+            g.dep.package_graph_stdin = true;
+            i += 1;
+            continue;
+        }
+        if let Some(value) = a.strip_prefix("--remap-path-prefix=") {
+            let (real, logical) = value.split_once('=').ok_or_else(|| {
+                CliError::usage("expected --remap-path-prefix=<absolute-root>=<logical-root>")
+            })?;
+            let requested = Path::new(real);
+            if !requested.is_absolute() {
+                return Err(CliError::usage("remapped source root must be absolute"));
+            }
+            let root = requested
+                .canonicalize()
+                .map_err(|e| CliError::usage(format!("invalid remapped root: {e}")))?;
+            g.dep.path_remappings.push((root, logical.to_owned()));
+            i += 1;
+            continue;
+        }
         if a == "--std-root" || a.starts_with("--std-root=") {
             let (path, consumed) = if let Some(path) = a.strip_prefix("--std-root=") {
                 (path, 1)
@@ -3803,6 +3869,39 @@ fn print_dry_run_json(
     };
     let value = Value::object([
         ("schema_version", Value::integer(1)),
+        (
+            "package_graph",
+            global.dep.package_graph.as_ref().map(|g| g.value()).unwrap_or(Value::Null),
+        ),
+        (
+            "path_remappings",
+            Value::Array(
+                global
+                    .dep
+                    .path_remappings
+                    .iter()
+                    .map(|(real, logical)| {
+                        Value::object([
+                            ("real", Value::string(real.to_string_lossy())),
+                            ("logical", Value::string(logical)),
+                        ])
+                    })
+                    .collect(),
+            ),
+        ),
+        (
+            "source_inputs",
+            Value::Array(
+                classified
+                    .iter()
+                    .filter(|i| i.kind == InputKind::Wave)
+                    .flat_map(|i| runner::wave_input_paths(&i.path, &global.dep, &global.llvm))
+                    .collect::<BTreeSet<_>>()
+                    .into_iter()
+                    .map(|p| Value::string(p.to_string_lossy()))
+                    .collect(),
+            ),
+        ),
         ("mode", Value::string(build_mode_label(build))),
         ("target", Value::string(target)),
         ("cpu", Value::string(&target_options.cpu)),
@@ -4465,6 +4564,7 @@ fn print_version_for_backend(whale: bool) {
 }
 
 pub fn print_help() {
+    println!("Build-system contracts: --package-graph-stdin, --remap-path-prefix=<real>=<logical>; print vex-capabilities --format=json");
     println!("{}", "Wave Compiler".color("145,161,2"));
     print_usage();
 

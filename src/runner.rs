@@ -315,6 +315,7 @@ fn emit_codegen_panic_and_exit(
 
 fn build_import_config(dep: &DepFlags, target: TargetConditionContext) -> ImportConfig {
     let mut config = ImportConfig {
+        package_graph: dep.package_graph.clone(),
         target,
         dep_roots: Vec::new(),
         dep_packages: std::collections::HashMap::new(),

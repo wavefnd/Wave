@@ -13,18 +13,10 @@ fn native_standard_io_preserves_data_descriptors_and_deadlines() {
         eprintln!("native I/O fixtures skipped: LLVM target {host} is disabled");
         return;
     }
-    let output = Command::new(if cfg!(windows) { "python" } else { "python3" })
+    let output = wave_tools::build::test_command()
+        .unwrap()
         .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .env("WAVE_TEST_COMPILER", compiler)
-        .env("WAVE_TEST_TARGET", host)
-        .args([
-            "-m",
-            "unittest",
-            "-v",
-            "tools.test_std_io_runtime",
-            "tools.test_std_boundary_runtime",
-            "tools.test_std_socket_boundaries",
-        ])
+        .args(["native-std", "--wavec", compiler, "--target", &host])
         .output()
         .unwrap();
     assert!(

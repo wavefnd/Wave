@@ -4,7 +4,7 @@ End-to-end Wave programs live here. `shared/` contains portable tests; other
 folders contain architecture or operating-system tests. `cases.toml` selects
 supported targets and their CI execution.
 
-Run `python3 tools/run_tests.py` from the repository root.
+Run `build-tools/wave-tools test` from the repository root.
 
 `shared/test142.wave` exercises `std::env` boundaries using only the variables
 in `tests/fixtures/env_boundaries.json`: missing and empty values, UTF-8 bytes,

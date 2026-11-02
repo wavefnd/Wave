@@ -338,7 +338,7 @@ lockfile change. Wave does not require a separately installed Whale executable.
 ## Target families
 
 The table below is a family overview. Registered triples and CI execution levels
-are defined in `tests/cases/cases.toml` and `tools/ci/plans.json`.
+are defined in `tests/cases/cases.toml` and `.github/workflows/ci.yml`.
 
 | Architecture | Hosted targets | Freestanding target |
 | --- | --- | --- |

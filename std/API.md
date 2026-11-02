@@ -1,6 +1,6 @@
 # Public standard-library API
 
-Generated with `python3 tools/document_std.py`; run the same command after changing
+Generated with `wave-tools maintain std-api`; run the same command after changing
 public declarations. `--check` detects a stale inventory. Signatures and public
 re-exports below come from source; private imports are omitted. A source path under
 `sys/<os>/<arch>` is target-specific even when no additional attribute is shown.

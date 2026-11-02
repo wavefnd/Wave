@@ -74,12 +74,10 @@ fn run_native_fixture(name: &str) {
         String::from_utf8_lossy(&output.stderr)
     );
     // The fixture forks children: bound and reap the whole tree on failure.
-    let output = Command::new(if cfg!(windows) { "python" } else { "python3" })
+    let output = wave_tools::build::test_command()
+        .unwrap()
         .current_dir(&root)
-        .args([
-            "-c",
-            "import sys; from tools.process_tree import run_process; r = run_process([sys.argv[1]], timeout=20); raise SystemExit(r.returncode)",
-        ])
+        .args(["exec", "--timeout", "20", "--"])
         .arg(executable)
         .output()
         .unwrap();
@@ -106,26 +104,17 @@ fn executor_imports_compile_with_a_one_mib_process_stack() {
     let home = directory.0.join("home");
     copy_tree(&root.join("std"), &home.join(".wave/lib/wave/std"));
     for phase in ["check", "ir", "obj"] {
-        let mut command = Command::new("python3");
+        let mut command = wave_tools::build::test_command().unwrap();
         command
             .current_dir(&root)
             .env("HOME", &home)
             .args([
-                "-c",
-                r#"
-import resource
-import sys
-from tools.process_tree import run_process
-
-resource.setrlimit(
-    resource.RLIMIT_STACK,
-    (1048576, resource.getrlimit(resource.RLIMIT_STACK)[1]),
-)
-result = run_process(sys.argv[1:], capture_output=True, text=True, timeout=30)
-print(result.stdout)
-print(result.stderr, file=sys.stderr)
-raise SystemExit(result.returncode)
-"#,
+                "exec",
+                "--timeout",
+                "30",
+                "--stack",
+                "1048576",
+                "--",
                 env!("CARGO_BIN_EXE_wavec"),
                 if phase == "check" { "check" } else { "build" },
             ])

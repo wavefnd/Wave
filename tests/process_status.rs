@@ -19,11 +19,10 @@ fn native_wait_status_and_descriptor_boundaries() {
         eprintln!("native I/O fixtures skipped: LLVM target {host} is disabled");
         return;
     }
-    let output = Command::new(if cfg!(windows) { "python" } else { "python3" })
+    let output = wave_tools::build::test_command()
+        .unwrap()
         .current_dir(env!("CARGO_MANIFEST_DIR"))
-        .env("WAVE_TEST_COMPILER", compiler)
-        .env("WAVE_TEST_TARGET", host)
-        .args(["-m", "unittest", "-v", "tools.test_std_process_runtime"])
+        .args(["native-std", "--wavec", compiler, "--target", &host, "--process-only"])
         .output()
         .unwrap();
     assert!(

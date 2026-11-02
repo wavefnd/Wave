@@ -68,6 +68,9 @@ pub struct DepPackage {
 
 #[derive(Default, Clone)]
 pub struct DepFlags {
+    pub package_graph: Option<std::sync::Arc<utils::build_contract::PackageGraph>>,
+    pub package_graph_stdin: bool,
+    pub path_remappings: Vec<(std::path::PathBuf, String)>,
     pub resolved_std_root: Option<Result<parser::import::ResolvedStdRoot, error::WaveError>>,
     pub roots: Vec<String>,
     pub packages: Vec<DepPackage>,

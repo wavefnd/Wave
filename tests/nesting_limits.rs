@@ -18,13 +18,12 @@ impl Case {
             .unwrap();
         let target = String::from_utf8(targets.stdout).unwrap().lines().next().unwrap().to_string();
         for mode in ["check", "ir", "ast"] {
-            let mut command = if cfg!(target_os = "linux") {
-                let mut command = Command::new("python3");
-                command.args(["-c", "import os,resource,sys; resource.setrlimit(resource.RLIMIT_STACK,(1048576,1048576)); os.execv(sys.argv[1],sys.argv[1:])", env!("CARGO_BIN_EXE_wavec")]);
-                command
-            } else {
-                Command::new(env!("CARGO_BIN_EXE_wavec"))
-            };
+            let mut command = wave_tools::build::test_command().unwrap();
+            command.args(["exec", "--timeout", "30"]);
+            if cfg!(target_os = "linux") {
+                command.args(["--stack", "1048576"]);
+            }
+            command.args(["--", env!("CARGO_BIN_EXE_wavec")]);
             command.current_dir(&self.0).args([
                 "--error-format=json",
                 if mode == "check" { "check" } else { "build" },

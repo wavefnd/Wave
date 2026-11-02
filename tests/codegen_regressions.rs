@@ -6724,7 +6724,7 @@ fn msvc_native_fixtures_compile_and_arm64_hfas_match_clang() {
             }
         }
     }
-    // This is compile/contract evidence. check_msvc_native.py separately requires
+    // This is compile/contract evidence. the native MSVC acceptance tool separately requires
     // actual Windows execution; cross-compilation cannot satisfy that gate.
 }
 

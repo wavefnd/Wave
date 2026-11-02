@@ -18,7 +18,7 @@ licensed under the repository's [Mozilla Public License 2.0](../LICENSE).
 
 - General-purpose C library bindings are not bundled with the standard library.
 - Target providers under `std/sys/*` may use the small set of hosted C ABI
-  bindings explicitly approved by `tools/check_std_policy.sh` when the OS does
+  bindings explicitly approved by `wave-tools check std-policy` when the OS does
   not expose an equivalent stable raw syscall contract.
 - `std/sys/wasm/*` maps its raw imports to WASI Preview 1 capabilities. The
   provider covers descriptor I/O, clocks and sleep, preopened paths,
@@ -66,4 +66,4 @@ an external library for the required target ABI. The target providers under
 
 See the [public declaration inventory](API.md) for exact signatures and public re-exports,
 and [system capabilities](SYSTEMS.md) for provider boundaries. Refresh both inventories
-with `python3 tools/document_std.py` after changing public std declarations.
+with `wave-tools maintain std-api` after changing public std declarations.

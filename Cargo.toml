@@ -26,8 +26,12 @@ llvm-target-riscv = ["llvm/llvm-target-riscv"]
 llvm-target-wasm = ["llvm/llvm-target-wasm"]
 llvm-target-x86 = ["llvm/llvm-target-x86"]
 
+[dev-dependencies]
+wave-tools = { path = "tools" }
+
 [workspace]
 members = [
+    "tools",
     "front/lexer",
     "front/parser",
     "front/hir",

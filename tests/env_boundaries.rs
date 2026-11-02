@@ -85,17 +85,24 @@ fn build(case: &Case, fixture: &Path, opt: &str, target: &str, object: bool) -> 
 }
 
 fn run(executable: &Path, variables: bool) {
-    let result = Command::new(if cfg!(windows) { "python" } else { "python3" })
-        .current_dir(root())
-        .args([
-            "-c",
-            "import json, os, sys; from tools.process_tree import run_process; env = dict(os.environ); env.pop('WAVE_TEST_ENV_ABSENT_427_428', None); env.update(json.load(open(sys.argv[2], encoding='utf-8')) if sys.argv[3] == 'yes' else {}); r = run_process([sys.argv[1]], env=env, timeout=30); raise SystemExit(r.returncode)",
-        ])
-        .arg(executable)
-        .arg(root().join("tests/fixtures/env_boundaries.json"))
-        .arg(if variables { "yes" } else { "no" })
-        .output()
+    let mut command = wave_tools::build::test_command().unwrap();
+    command.current_dir(root()).env_remove("WAVE_TEST_ENV_ABSENT_427_428");
+    if variables {
+        let values = utils::wson::parse_json(
+            &fs::read_to_string(root().join("tests/fixtures/env_boundaries.json")).unwrap(),
+        )
         .unwrap();
+        let utils::wson::Value::Object(fields) = values else {
+            panic!("environment fixture must be an object");
+        };
+        for (name, value) in fields {
+            let utils::wson::Value::String(value) = value else {
+                panic!("fixture must contain strings");
+            };
+            command.env(name, value);
+        }
+    }
+    let result = command.args(["exec", "--timeout", "30", "--"]).arg(executable).output().unwrap();
     assert!(result.status.success(), "{result:?}");
 }
 

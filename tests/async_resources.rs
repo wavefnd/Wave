@@ -70,12 +70,10 @@ fn run(case: &Case, fixture: &str, opt: &str) {
         .unwrap();
     assert!(output.status.success(), "{fixture}: {}", String::from_utf8_lossy(&output.stderr));
     // Bound execution through the same process-tree helper used by runtime tests.
-    let output = Command::new(if cfg!(windows) { "python" } else { "python3" })
+    let output = wave_tools::build::test_command()
+        .unwrap()
         .current_dir(root())
-        .args([
-            "-c",
-            "import sys; from tools.process_tree import run_process; r = run_process([sys.argv[1]], timeout=30); raise SystemExit(r.returncode)",
-        ])
+        .args(["exec", "--timeout", "30", "--"])
         .arg(executable)
         .output()
         .unwrap();

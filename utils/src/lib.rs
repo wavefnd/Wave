@@ -25,3 +25,5 @@ pub mod wson;
 pub use colorex::Colorize;
 
 pub mod suggestions;
+
+pub mod build_contract;

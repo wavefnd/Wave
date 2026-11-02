@@ -202,5 +202,5 @@ as fully implemented from its filename. Follow its exact declarations in the API
 | [sys/windows/tty.wave](sys/windows/tty.wave) | implementation source; unavailability markers present: inspect the operation contract; runtime coverage must be checked separately |
 | [sys/windows/vector_io.wave](sys/windows/vector_io.wave) | implementation source; runtime coverage must be checked separately |
 
-Refresh this index with `python3 tools/document_std.py` after adding a provider.
+Refresh this index with `wave-tools maintain std-api` after adding a provider.
 Review the capability summary and exact target/CI table when its contract changes.
