@@ -441,6 +441,7 @@ impl ResolvedStdRoot {
 
 #[derive(Debug, Clone)]
 pub struct ImportConfig {
+    pub package_graph: Option<std::sync::Arc<utils::build_contract::PackageGraph>>,
     pub dep_roots: Vec<PathBuf>,
     pub dep_packages: HashMap<String, PathBuf>,
     pub target: TargetConditionContext,
@@ -451,6 +452,7 @@ pub struct ImportConfig {
 impl Default for ImportConfig {
     fn default() -> Self {
         Self {
+            package_graph: None,
             dep_roots: Vec::new(),
             dep_packages: HashMap::new(),
             target: TargetConditionContext::default(),
@@ -488,7 +490,7 @@ pub fn local_import_unit_with_config(
     }
 
     if !path.starts_with("./") {
-        return external_import_unit(path, already_imported, config);
+        return external_import_unit(path, already_imported, base_dir, config);
     }
 
     if path.contains('\\') || path.split('/').any(|segment| segment == "..") {
@@ -584,7 +586,11 @@ pub fn local_import_with_config(
 fn resolve_external_package_root(
     package: &str,
     config: &ImportConfig,
+    base_dir: &Path,
 ) -> Result<Option<PathBuf>, Vec<PathBuf>> {
+    if let Some(graph) = &config.package_graph {
+        return Ok(graph.resolve(base_dir, package));
+    }
     if let Some(path) = config.dep_packages.get(package) {
         return Ok(Some(path.clone()));
     }
@@ -607,6 +613,7 @@ fn resolve_external_package_root(
 fn external_import_unit(
     path: &str,
     already_imported: &mut HashSet<String>,
+    base_dir: &Path,
     config: &ImportConfig,
 ) -> Result<ImportedUnit, WaveError> {
     let mut parts = path.split("::");
@@ -633,7 +640,7 @@ fn external_import_unit(
         .with_help("use `package` or `package::module`; local files must use `./path`"));
     }
 
-    let package_root = match resolve_external_package_root(package, config) {
+    let package_root = match resolve_external_package_root(package, config, base_dir) {
         Ok(Some(root)) => root,
         Ok(None) => {
             let mut err = WaveError::new(

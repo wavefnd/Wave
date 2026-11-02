@@ -504,7 +504,7 @@ fn internal_name(path: &Path, name: &str, is_entry: bool) -> String {
         return name.to_string();
     }
     let mut hash = 0xcbf29ce484222325_u64;
-    for byte in path.to_string_lossy().as_bytes() {
+    for byte in utils::build_contract::logical_path(path).as_bytes() {
         hash ^= u64::from(*byte);
         hash = hash.wrapping_mul(0x100000001b3);
     }
