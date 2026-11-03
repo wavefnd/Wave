@@ -239,7 +239,9 @@ fn profiles(
             || enabled && !supported[&(os.clone(), arch.clone())]
             || ci && !enabled
         {
-            return Err(error(format!("invalid base architecture or status for profile: {profile}")));
+            return Err(error(format!(
+                "invalid base architecture or status for profile: {profile}"
+            )));
         }
         result.insert(profile.clone(), Profile { os, arch, enabled, ci });
     }
@@ -260,7 +262,9 @@ impl Manifest {
         let table = data.as_table().ok_or_else(|| error("manifest must be a table"))?;
         if table
             .keys()
-            .any(|key| !matches!(key.as_str(), "version" | "supported" | "ci" | "profiles" | "target"))
+            .any(|key| {
+                !matches!(key.as_str(), "version" | "supported" | "ci" | "profiles" | "target")
+            })
             || data.get("version").and_then(toml::Value::as_integer) != Some(3)
         {
             return Err(error("unknown manifest fields or unsupported version"));

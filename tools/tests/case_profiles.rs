@@ -84,22 +84,37 @@ fn invalid_profile_architecture_status_and_names_are_rejected() {
 
 #[test]
 fn profile_target_tables_must_match_the_profile_mapping() {
-    let invalid = format!(
-        "{MANIFEST}
-[[target]]
-id = \"linux-rhea\"
-os = \"linux\"
-arch = \"riscv64\"
-profile = \"rhea\"
-executor = \"native\"
-"
-    );
-    assert!(parse(&invalid).is_err());
-    let invalid = MANIFEST.replace(
+    let enabled = MANIFEST.replace(
         "rhea = { os = \"linux\", arch = \"arm64\", supported = false",
         "rhea = { os = \"linux\", arch = \"arm64\", supported = true",
     );
-    assert!(parse(&invalid).is_err(), "enabled profile without execution table");
+    assert!(parse(&enabled).is_err(), "enabled profile without execution table");
+
+    let valid = format!(
+        "{enabled}
+[[target]]
+id = \"linux-rhea\"
+os = \"linux\"
+arch = \"arm64\"
+profile = \"rhea\"
+executor = \"compile\"
+target = \"aarch64-unknown-linux-gnu\"
+"
+    );
+    let parsed = parse(&valid).unwrap();
+    let target = parsed.target("linux-rhea").unwrap();
+    assert!(target.enabled);
+    assert_eq!(target.profile.as_deref(), Some("rhea"));
+    assert_eq!(target.arch, "arm64");
+    assert_eq!(target.rust_target().unwrap(), "aarch64-unknown-linux-gnu");
+
+    let mismatch = valid.replace(
+        "arch = \"arm64\"\nprofile = \"rhea\"",
+        "arch = \"riscv64\"\nprofile = \"rhea\"",
+    );
+    assert!(parse(&mismatch).is_err(), "accepted mismatched profile base");
+    let unknown = valid.replace("profile = \"rhea\"", "profile = \"other\"");
+    assert!(parse(&unknown).is_err(), "accepted unknown target profile");
 }
 
 #[test]
