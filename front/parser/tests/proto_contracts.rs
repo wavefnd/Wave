@@ -23,7 +23,7 @@ fn failure(source: &str, expected: &str) {
 
 #[test]
 fn named_and_inherent_proto_forms_remain_distinct() {
-    let source = "proto Printable : Buffer { fun print(self) { return; } }
+    let source = "proto Printable : Buffer { fun render(self) { return; } }
                   proto Buffer { fun clear(self: ptr<Buffer>) {} }";
     let nodes = parse(source);
     assert_eq!(nodes.len(), 2);
@@ -52,7 +52,7 @@ fn named_and_inherent_proto_forms_remain_distinct() {
 #[test]
 fn public_named_contract_preserves_target_generic_arguments_and_visibility() {
     let nodes = parse("pub proto Printable: Buffer<i32> {
-        fun print(self) {}
+        fun render(self) {}
         fun copy(self: ptr<Buffer<i32>>) {}
     }");
     let ASTNode::ProtoImpl(contract) = nodes[0].unspanned() else { panic!("proto") };
@@ -78,7 +78,7 @@ fn malformed_named_proto_syntax_has_located_diagnostics() {
         ("proto Printable: {}", "type"),
         ("proto Printable: Buffer", "'{'"),
         ("proto Printable: Buffer {", "'}'"),
-        ("proto Printable: Buffer { fun print(self) }", "function"),
+        ("proto Printable: Buffer { fun render(self) }", "function"),
         ("pub proto Buffer {}", "only named proto"),
     ] {
         failure(source, expected);
