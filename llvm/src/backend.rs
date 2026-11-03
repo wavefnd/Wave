@@ -318,7 +318,9 @@ fn append_lld_target_args(
             backend.sysroot.as_deref(),
             None,
         )
-        .map_err(|message| CodegenError::new(CodegenPhase::Link, "macOS platform version", message))?;
+        .map_err(|message| {
+            CodegenError::new(CodegenPhase::Link, "macOS platform version", message)
+        })?;
         cmd.arg("-arch")
             .arg(if spec.architecture.name() == "aarch64" {
                 "arm64"

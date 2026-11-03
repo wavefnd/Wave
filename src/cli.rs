@@ -4765,6 +4765,16 @@ pub fn print_help() {
         "Intermediate/default artifact root"
     );
     println!("  {:<24} {}", "--dry-run".color("38,139,235"), "Plan only, no compile/link/exec");
+    println!(
+        "  {:<24} {}",
+        "--macos-deployment-target".color("38,139,235"),
+        "macOS minimum (flag > MACOSX_DEPLOYMENT_TARGET > 11.0)"
+    );
+    println!(
+        "  {:<24} {}",
+        "--macos-sdk-version".color("38,139,235"),
+        "macOS SDK version (flag > env > SDK root > discovered SDK)"
+    );
     println!("  {:<24} {}", "--error-format=...".color("38,139,235"), "human, json");
 
     println!("\nLink mode options:");

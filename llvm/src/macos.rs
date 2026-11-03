@@ -108,7 +108,17 @@ mod tests {
 
     #[test]
     fn bad_versions_and_incompatible_sdks_are_rejected() {
-        for invalid in ["", "11", "11.", ".1", "11.0.0.1", "11.a", "11.0 -arch", "0.0", "999999999999999999.1"] {
+        for invalid in [
+            "",
+            "11",
+            "11.",
+            ".1",
+            "11.0.0.1",
+            "11.a",
+            "11.0 -arch",
+            "0.0",
+            "999999999999999999.1",
+        ] {
             assert!(resolve_versions(Some(invalid), None, None, None, None, None).is_err());
             assert!(resolve_versions(None, None, Some(invalid), None, None, None).is_err());
         }
