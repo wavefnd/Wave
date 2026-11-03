@@ -153,32 +153,6 @@ fn run_shared_case_at_both_optimization_levels(case: &str) -> String {
     fs::read_to_string(dir.join("-O0").join(format!("{case}.ll"))).unwrap()
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 fn run_wavec<I, S>(args: I)
 where
     I: IntoIterator<Item = S>,
@@ -241,12 +215,6 @@ where
         String::from_utf8_lossy(&output.stderr)
     )
 }
-
-
-
-
-
-
 
 #[cfg(any(
     feature = "llvm-target-all",
@@ -327,109 +295,9 @@ fn write_minimal_elf64_object(path: &Path, machine: u16) {
     fs::write(path, header).unwrap();
 }
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 fn run_link_tests_enabled() -> bool {
     std::env::var_os("WAVE_RUN_LINK_TESTS").is_some()
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 fn clang_for_contract_tests() -> Option<PathBuf> {
     if let Some(value) = std::env::var_os("CLANG") {
@@ -457,22 +325,6 @@ fn llvm_ar_for_contract_tests() -> Option<PathBuf> {
         .map(PathBuf::from)
         .find(|path| Command::new(path).arg("--version").output().is_ok())
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 #[cfg(any(
     feature = "llvm-target-all",
@@ -576,18 +428,6 @@ fn pe_machine(path: &Path) -> u16 {
     );
     u16::from_le_bytes(bytes[pe_offset + 4..pe_offset + 6].try_into().unwrap())
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 #[cfg(any(feature = "llvm-target-all", feature = "llvm-target-loongarch"))]
 fn run_loongarch64_c_abi_fixture(abi: &str, fixture_name: &str) {
@@ -701,18 +541,6 @@ fn run_loongarch64_c_abi_fixture(abi: &str, fixture_name: &str) {
         String::from_utf8_lossy(&run.stderr)
     );
 }
-
-
-
-
-
-
-
-
-
-
-
-
 
 #[cfg(any(
     feature = "llvm-target-all",
