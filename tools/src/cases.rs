@@ -14,7 +14,9 @@ const CAPABILITIES: &[&str] =
 pub struct Target {
     pub id: String,
     pub os: String,
+    /// Base ISA, independent of the optional processor profile.
     pub arch: String,
+    pub profile: Option<String>,
     pub executor: String,
     pub runner: Option<String>,
     pub group: Option<String>,
@@ -29,7 +31,15 @@ pub struct Target {
 
 impl Target {
     pub fn suites(&self) -> Vec<String> {
-        vec!["shared".into(), format!("shared/{}", self.arch), format!("{}/{}", self.os, self.arch)]
+        let mut suites = vec!["shared".into(), format!("shared/{}", self.arch)];
+        if let Some(profile) = &self.profile {
+            suites.push(format!("shared/{profile}"));
+        }
+        suites.push(format!("{}/{}", self.os, self.arch));
+        if let Some(profile) = &self.profile {
+            suites.push(format!("{}/{profile}", self.os));
+        }
+        suites
     }
 
     pub fn rust_target(&self) -> Result<String> {
@@ -62,8 +72,13 @@ impl Target {
             ("id", Value::string(&self.id)),
             ("os", Value::string(&self.os)),
             ("arch", Value::string(&self.arch)),
+            ("profile", Value::optional_string(self.profile.as_deref())),
             ("executor", Value::string(&self.executor)),
-            ("suite", Value::string(format!("{}/{}", self.os, self.arch))),
+            ("suite", Value::string(format!(
+                "{}/{}",
+                self.os,
+                self.profile.as_deref().unwrap_or(&self.arch)
+            ))),
             ("suites", Value::strings(self.suites())),
             (
                 "status",
@@ -92,6 +107,14 @@ impl Target {
 pub struct Manifest {
     pub targets: Vec<Target>,
     pub root: PathBuf,
+}
+
+#[derive(Debug)]
+struct Profile {
+    os: String,
+    arch: String,
+    enabled: bool,
+    ci: bool,
 }
 
 fn name(value: &str) -> bool {
@@ -162,14 +185,63 @@ fn matrix(value: &toml::Value, key: &str) -> Result<BTreeMap<(String, String), b
             .filter(|t| !t.is_empty())
             .ok_or_else(|| error("empty architecture row"))?;
         for (arch, enabled) in arches {
-            if !name(arch) {
-                return Err(error("invalid architecture name"));
+            if !name(arch)
+                || !["amd64", "arm64", "riscv64", "loong64", "wasm32", "wasm64"]
+                    .contains(&arch.as_str())
+            {
+                return Err(error("invalid base architecture name"));
             }
             result.insert(
                 (os.clone(), arch.clone()),
                 enabled.as_bool().ok_or_else(|| error("support/CI cells must be booleans"))?,
             );
         }
+    }
+    Ok(result)
+}
+
+
+fn profiles(
+    data: &toml::Value,
+    supported: &BTreeMap<(String, String), bool>,
+) -> Result<BTreeMap<String, Profile>> {
+    let table = data
+        .get("profiles")
+        .and_then(toml::Value::as_table)
+        .ok_or_else(|| error("missing [profiles] table"))?;
+    let mut result = BTreeMap::new();
+    for (profile, fields) in table {
+        let base_arch = match profile.as_str() {
+            "rhea" => "arm64",
+            "shakti" | "xiangshan" | "t-head" => "riscv64",
+            _ => return Err(error(format!("unknown CPU profile: {profile}"))),
+        };
+        let fields =
+            fields.as_table().ok_or_else(|| error(format!("invalid CPU profile: {profile}")))?;
+        if fields.keys().any(|key| {
+            !matches!(key.as_str(), "os" | "arch" | "supported" | "ci")
+        }) {
+            return Err(error(format!("unknown field in CPU profile: {profile}")));
+        }
+        let os = required(fields, "os")?;
+        let arch = required(fields, "arch")?;
+        let enabled = fields
+            .get("supported")
+            .and_then(toml::Value::as_bool)
+            .ok_or_else(|| error(format!("missing boolean support for profile: {profile}")))?;
+        let ci = fields
+            .get("ci")
+            .and_then(toml::Value::as_bool)
+            .ok_or_else(|| error(format!("missing boolean CI for profile: {profile}")))?;
+        if os != "linux"
+            || arch != base_arch
+            || !supported.contains_key(&(os.clone(), arch.clone()))
+            || enabled && !supported[&(os.clone(), arch.clone())]
+            || ci && !enabled
+        {
+            return Err(error(format!("invalid base architecture or status for profile: {profile}")));
+        }
+        result.insert(profile.clone(), Profile { os, arch, enabled, ci });
     }
     Ok(result)
 }
@@ -188,8 +260,8 @@ impl Manifest {
         let table = data.as_table().ok_or_else(|| error("manifest must be a table"))?;
         if table
             .keys()
-            .any(|key| !matches!(key.as_str(), "version" | "supported" | "ci" | "target"))
-            || data.get("version").and_then(toml::Value::as_integer) != Some(2)
+            .any(|key| !matches!(key.as_str(), "version" | "supported" | "ci" | "profiles" | "target"))
+            || data.get("version").and_then(toml::Value::as_integer) != Some(3)
         {
             return Err(error("unknown manifest fields or unsupported version"));
         }
@@ -198,6 +270,7 @@ impl Manifest {
         if supported.keys().ne(ci.keys()) || supported.iter().any(|(k, v)| ci[k] && !*v) {
             return Err(error("support/CI matrices disagree"));
         }
+        let profiles = profiles(&data, &supported)?;
         let mut targets = Vec::new();
         let mut configured = BTreeSet::new();
         let mut ids = BTreeSet::new();
@@ -212,6 +285,7 @@ impl Manifest {
                     k.as_str(),
                     "id" | "os"
                         | "arch"
+                        | "profile"
                         | "executor"
                         | "runner"
                         | "ci_group"
@@ -227,11 +301,25 @@ impl Manifest {
             let id = required(raw, "id")?;
             let os = required(raw, "os")?;
             let arch = required(raw, "arch")?;
+            let profile = optional(raw, "profile")?;
             let pair = (os.clone(), arch.clone());
+            let (enabled, target_ci) = if let Some(profile_name) = &profile {
+                let defined = profiles.get(profile_name).ok_or_else(|| {
+                    error(format!("unknown CPU profile: {profile_name}"))
+                })?;
+                if defined.os != os || defined.arch != arch {
+                    return Err(error(format!(
+                        "profile {profile_name} does not match target {id} base architecture"
+                    )));
+                }
+                (defined.enabled, defined.ci)
+            } else {
+                (supported.get(&pair) == Some(&true), ci.get(&pair).copied().unwrap_or(false))
+            };
             if !name(&id)
                 || !ids.insert(id.clone())
-                || !configured.insert(pair.clone())
-                || supported.get(&pair) != Some(&true)
+                || !configured.insert((os.clone(), arch.clone(), profile.clone()))
+                || !enabled
             {
                 return Err(error(format!("invalid/duplicate/unsupported target {id}")));
             }
@@ -240,6 +328,7 @@ impl Manifest {
                 id,
                 os,
                 arch,
+                profile,
                 executor,
                 runner: optional(raw, "runner")?,
                 group: optional(raw, "ci_group")?,
@@ -249,7 +338,7 @@ impl Manifest {
                 exclude: strings(raw, "exclude")?,
                 capabilities: strings(raw, "capabilities")?,
                 enabled: true,
-                ci: ci[&pair],
+                ci: target_ci,
             };
             if !["native", "compile", "qemu", "wasm"].contains(&target.executor.as_str())
                 || target.executor != "native" && target.triple.is_none()
@@ -297,7 +386,7 @@ impl Manifest {
             targets.push(target);
         }
         for ((os, arch), enabled) in &supported {
-            if *enabled && !configured.contains(&(os.clone(), arch.clone())) {
+            if *enabled && !configured.contains(&(os.clone(), arch.clone(), None)) {
                 return Err(error("supported target has no execution table"));
             }
             if !enabled {
@@ -309,6 +398,42 @@ impl Manifest {
                     id,
                     os: os.clone(),
                     arch: arch.clone(),
+                    profile: None,
+                    executor: "none".into(),
+                    runner: None,
+                    group: None,
+                    triple: None,
+                    smoke_case: None,
+                    smoke_stdout: None,
+                    exclude: vec![],
+                    capabilities: vec![],
+                    enabled: false,
+                    ci: false,
+                });
+            }
+        }
+        for (profile_name, profile) in &profiles {
+            if profile.enabled
+                && !configured.contains(&(
+                    profile.os.clone(),
+                    profile.arch.clone(),
+                    Some(profile_name.clone()),
+                ))
+            {
+                return Err(error(format!(
+                    "supported CPU profile has no execution table: {profile_name}"
+                )));
+            }
+            if !profile.enabled {
+                let id = format!("{}-{profile_name}", profile.os);
+                if !ids.insert(id.clone()) {
+                    return Err(error("duplicate planned CPU profile ID"));
+                }
+                targets.push(Target {
+                    id,
+                    os: profile.os.clone(),
+                    arch: profile.arch.clone(),
+                    profile: Some(profile_name.clone()),
                     executor: "none".into(),
                     runner: None,
                     group: None,
@@ -343,7 +468,11 @@ impl Manifest {
         let matches: Vec<_> = self
             .targets
             .iter()
-            .filter(|t| t.enabled && t.executor == "native" && t.os == os && t.arch == arch)
+            .filter(|t| t.enabled
+                    && t.profile.is_none()
+                    && t.executor == "native"
+                    && t.os == os
+                    && t.arch == arch)
             .collect();
         if matches.len() != 1 {
             return Err(error("expected one native target for this host"));
@@ -546,6 +675,9 @@ impl Manifest {
                     ("shard_index", Value::integer(index)),
                     ("shard_count", Value::integer(2)),
                 ]);
+                if let Some(profile) = &target.profile {
+                    config::field(&mut value, "profile", Value::string(profile))?;
+                }
                 for (key, item) in [
                     ("target", &target.triple),
                     ("smoke_case", &target.smoke_case),
