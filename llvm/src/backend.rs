@@ -482,3 +482,50 @@ fn llvm_tool_search_dirs() -> Vec<PathBuf> {
 
     dirs
 }
+
+#[cfg(test)]
+mod macos_platform_tests {
+    use super::*;
+
+    #[test]
+    fn both_darwin_linkers_receive_independent_platform_versions() {
+        for (triple, arch) in [
+            ("x86_64-apple-darwin", "x86_64"),
+            ("aarch64-apple-darwin", "arm64"),
+        ] {
+            if target_spec_for_triple(triple).is_none() {
+                continue;
+            }
+            let backend = BackendOptions {
+                target: Some(triple.to_string()),
+                sysroot: Some("/SDKs/MacOSX15.4.sdk".into()),
+                macos_deployment_target: Some("12.1".into()),
+                macos_sdk_version: Some("15.4".into()),
+                ..Default::default()
+            };
+            let mut command = Command::new("ld64.lld");
+            append_lld_target_args(&mut command, triple, &backend).unwrap();
+            let args: Vec<_> =
+                command.get_args().map(|arg| arg.to_string_lossy().to_string()).collect();
+            assert_eq!(&args[..6], ["-arch", arch, "-platform_version", "macos", "12.1", "15.4"]);
+            assert_eq!(&args[6..], ["-syslibroot", "/SDKs/MacOSX15.4.sdk"]);
+        }
+    }
+
+    #[test]
+    fn invalid_darwin_backend_versions_fail_before_running_linker() {
+        for triple in ["x86_64-apple-darwin", "aarch64-apple-darwin"] {
+            if target_spec_for_triple(triple).is_none() {
+                continue;
+            }
+            let backend = BackendOptions {
+                macos_deployment_target: Some("15.1".into()),
+                macos_sdk_version: Some("14.0".into()),
+                ..Default::default()
+            };
+            let error = append_lld_target_args(&mut Command::new("ld64.lld"), triple, &backend)
+                .unwrap_err();
+            assert_eq!(error.phase, CodegenPhase::Link);
+        }
+    }
+}
