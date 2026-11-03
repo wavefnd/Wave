@@ -3,11 +3,11 @@
 // select tests with `--test codegen_regressions <name filter>`.
 include!("codegen/support.rs");
 
-#[path = "codegen/language.rs"]
-mod language;
 #[path = "codegen/abi.rs"]
 mod abi;
-#[path = "codegen/platform.rs"]
-mod platform;
 #[path = "codegen/diagnostics.rs"]
 mod diagnostics;
+#[path = "codegen/language.rs"]
+mod language;
+#[path = "codegen/platform.rs"]
+mod platform;
