@@ -32,6 +32,8 @@ pub struct BackendOptions {
     pub code_model: Option<String>,
     pub relocation_model: Option<String>,
     pub sysroot: Option<String>,
+    pub macos_deployment_target: Option<String>,
+    pub macos_sdk_version: Option<String>,
     pub linker: Option<String>,
     pub link_args: Vec<String>,
     pub no_default_libs: bool,
@@ -246,7 +248,7 @@ pub fn link_objects(
             .arg("--export-if-defined=main")
             .arg("--export-memory");
     } else if backend.linker.is_none() {
-        append_lld_target_args(&mut cmd, target, backend);
+        append_lld_target_args(&mut cmd, target, backend)?;
     }
 
     for obj in objects {
@@ -300,10 +302,23 @@ fn default_lld_for_target(target: &str) -> String {
     }
 }
 
-fn append_lld_target_args(cmd: &mut Command, target: &str, backend: &BackendOptions) {
+fn append_lld_target_args(
+    cmd: &mut Command,
+    target: &str,
+    backend: &BackendOptions,
+) -> Result<(), CodegenError> {
     if is_darwin_target(target) {
         let spec = target_spec_for_triple(target)
             .expect("Darwin linker configuration requires a registered target");
+        let versions = crate::macos::resolve_versions(
+            backend.macos_deployment_target.as_deref(),
+            None,
+            backend.macos_sdk_version.as_deref(),
+            None,
+            backend.sysroot.as_deref(),
+            None,
+        )
+        .map_err(|message| CodegenError::new(CodegenPhase::Link, "macOS platform version", message))?;
         cmd.arg("-arch")
             .arg(if spec.architecture.name() == "aarch64" {
                 "arm64"
@@ -312,13 +327,13 @@ fn append_lld_target_args(cmd: &mut Command, target: &str, backend: &BackendOpti
             })
             .arg("-platform_version")
             .arg("macos")
-            .arg("11.0")
-            .arg("11.0");
+            .arg(&versions.deployment)
+            .arg(&versions.sdk);
 
         if let Some(sysroot) = &backend.sysroot {
             cmd.arg("-syslibroot").arg(sysroot);
         }
-        return;
+        return Ok(());
     }
 
     if let Some(emulation) = elf_lld_emulation(target) {
@@ -327,6 +342,7 @@ fn append_lld_target_args(cmd: &mut Command, target: &str, backend: &BackendOpti
     if let Some(sysroot) = &backend.sysroot {
         cmd.arg(format!("--sysroot={}", sysroot));
     }
+    Ok(())
 }
 
 fn expand_lld_link_args(link_args: &[String]) -> Vec<String> {
