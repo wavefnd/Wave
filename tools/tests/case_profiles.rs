@@ -68,13 +68,17 @@ fn profiles_inherit_base_suites_and_retain_separate_identities() {
 #[test]
 fn invalid_profile_architecture_status_and_names_are_rejected() {
     for invalid in [
-        MANIFEST.replace("rhea = { os = \"linux\", arch = \"arm64\"",
-            "rhea = { os = \"linux\", arch = \"riscv64\""),
+        MANIFEST.replace(
+            "rhea = { os = \"linux\", arch = \"arm64\"",
+            "rhea = { os = \"linux\", arch = \"riscv64\"",
+        ),
         MANIFEST.replace("rhea = {", "unknown = {"),
         MANIFEST.replace("shakti = { os = \"linux\"", "shakti = { os = \"windows\""),
         MANIFEST.replace("supported = false, ci = false }", "supported = false, ci = true }"),
-        MANIFEST.replace("rhea = { os = \"linux\", arch = \"arm64\", supported = false",
-            "rhea = { os = \"linux\", arch = \"arm64\", supported = true"),
+        MANIFEST.replace(
+            "rhea = { os = \"linux\", arch = \"arm64\", supported = false",
+            "rhea = { os = \"linux\", arch = \"arm64\", supported = true",
+        ),
         MANIFEST.replace("arch = \"arm64\"\nexecutor", "arch = \"rhea\"\nexecutor"),
         MANIFEST.replace("version = 3", "version = 2"),
     ] {
@@ -121,9 +125,14 @@ target = \"aarch64-unknown-linux-gnu\"
 fn repository_enabled_matrices_remain_at_thirty_jobs() {
     let manifest = Manifest::load(&wave_tools::root(), true).unwrap();
     let matrix = manifest.matrices().unwrap();
-    let utils::wson::Value::Object(groups) = matrix else { panic!("matrix groups") };
+    let utils::wson::Value::Object(groups) = matrix else {
+        panic!("matrix groups")
+    };
     assert_eq!(
-        groups.iter().map(|(_, v)| v.get_arr("include").unwrap().len()).sum::<usize>(),
+        groups
+            .iter()
+            .map(|(_, v)| v.get_arr("include").unwrap().len())
+            .sum::<usize>(),
         30
     );
     let rhea = manifest.target("linux-rhea").unwrap();
