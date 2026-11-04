@@ -1,11 +1,11 @@
 // SPDX-License-Identifier: MPL-2.0
 //! Diagnose statically invalid checked numeric operations using the same ordered
 //! HIR conversions as runtime lowering. Mutable bindings are never propagated.
+use super::traversal::walk_pattern;
 use super::{conversions::*, *};
 use parser::ast::visit::{walk_expression, walk_node};
 use parser::ast::{FunctionNode, Literal, Mutability, Operator, StatementNode};
 use std::collections::HashSet;
-use super::traversal::walk_pattern;
 use utils::const_int::ConstInt;
 
 /// Fully converted numeric value, independent of backend representation.
