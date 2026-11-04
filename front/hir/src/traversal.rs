@@ -82,7 +82,7 @@ fn walk_patterns_in_statement(statement: &StatementNode, visit: &mut impl FnMut(
     }
 }
 
-fn walk_pattern(pattern: &MatchPattern, visit: &mut impl FnMut(&MatchPattern)) {
+pub(super) fn walk_pattern(pattern: &MatchPattern, visit: &mut impl FnMut(&MatchPattern)) {
     visit(pattern);
     if let MatchPattern::Variant { payloads, .. } = pattern {
         for payload in payloads {
