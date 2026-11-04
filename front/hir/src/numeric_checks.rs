@@ -2,7 +2,10 @@
 //! Diagnose statically invalid checked numeric operations using the same ordered
 //! HIR conversions as runtime lowering. Mutable bindings are never propagated.
 use super::{conversions::*, *};
-use parser::ast::{FunctionNode, Literal, Mutability, Operator};
+use parser::ast::visit::{walk_expression, walk_node};
+use parser::ast::{FunctionNode, Literal, Mutability, Operator, StatementNode};
+use std::collections::HashSet;
+use super::traversal::walk_pattern;
 use utils::const_int::ConstInt;
 
 /// Fully converted numeric value, independent of backend representation.
@@ -498,7 +501,7 @@ impl Checker<'_> {
                 self.inspect(value, scope)?;
                 for arm in arms {
                     let mut scope = scope.clone();
-                    super::walk_pattern(&arm.pattern, &mut |p| {
+                    walk_pattern(&arm.pattern, &mut |p| {
                         if let MatchPattern::Binding(name) = p {
                             scope.insert(name.clone(), None);
                         }
@@ -509,11 +512,11 @@ impl Checker<'_> {
             _ => {
                 let mut result = Ok(());
                 let mut visited = HashSet::new();
-                super::walk_node(node, &mut |expr| {
+                walk_node(node, &mut |expr| {
                     let id = self.program.expression_id(expr).unwrap();
                     if result.is_ok() && !visited.contains(&id) {
                         result = self.inspect(expr, scope);
-                        super::walk_expression(expr, &mut |child| {
+                        walk_expression(expr, &mut |child| {
                             visited.insert(self.program.expression_id(child).unwrap());
                         });
                     }
@@ -557,7 +560,7 @@ pub(super) fn validate(
     // errors still follow short-circuiting and whose overflow policy is unchanged.
     for (index, node) in program.syntax().iter().enumerate() {
         let mut result = Ok(());
-        super::walk_node(node, &mut |expr| {
+        walk_node(node, &mut |expr| {
             if result.is_ok() {
                 result = checker.literal_range(expr);
             }
@@ -599,7 +602,7 @@ pub(super) fn validate(
                 checker.globals.insert(name, value);
             } else if visited.insert(name.clone()) {
                 stack.push((name, true));
-                super::walk_expression(expr, &mut |e| {
+                walk_expression(expr, &mut |e| {
                     if let Expression::Variable(name) = e {
                         if definitions.contains_key(name) {
                             stack.push((name.clone(), false));
