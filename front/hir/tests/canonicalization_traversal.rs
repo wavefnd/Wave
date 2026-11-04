@@ -14,8 +14,12 @@ fn target_width_resolution_keeps_its_public_api_and_values() {
         let tokens = Lexer::new("type Signed = isz; type Unsigned = usz;").tokenize().unwrap();
         let mut nodes = parse_syntax_only(&tokens).unwrap();
         resolve_target_types(&mut nodes, width).unwrap();
-        let ASTNode::TypeAlias(s) = nodes[0].unspanned() else { panic!("signed alias") };
-        let ASTNode::TypeAlias(u) = nodes[1].unspanned() else { panic!("unsigned alias") };
+        let ASTNode::TypeAlias(s) = nodes[0].unspanned() else {
+            panic!("signed alias")
+        };
+        let ASTNode::TypeAlias(u) = nodes[1].unspanned() else {
+            panic!("unsigned alias")
+        };
         assert_eq!(s.target, signed);
         assert_eq!(u.target, unsigned);
         assert!(resolve_target_types(&mut nodes, 16).is_err());
@@ -30,12 +34,16 @@ fn nested_patterns_keep_depth_first_ids_and_source_spans() {
     let syntax = parse_syntax_with_spans(&tokens).unwrap();
     let program = TypedProgram::lower(monomorphize_generics(syntax).unwrap()).unwrap();
 
-    let ASTNode::Function(function) = &program.syntax()[1] else { panic!("function") };
+    let ASTNode::Function(function) = &program.syntax()[1] else {
+        panic!("function")
+    };
     let ASTNode::Statement(StatementNode::Match { arms, .. }) = &function.body[0] else {
         panic!("match");
     };
     let outer = &arms[0].pattern;
-    let MatchPattern::Variant { payloads, .. } = outer else { panic!("outer pattern") };
+    let MatchPattern::Variant { payloads, .. } = outer else {
+        panic!("outer pattern")
+    };
     let nested = &payloads[0];
     let sibling = &arms[1].pattern;
 
