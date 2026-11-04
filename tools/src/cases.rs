@@ -74,11 +74,14 @@ impl Target {
             ("arch", Value::string(&self.arch)),
             ("profile", Value::optional_string(self.profile.as_deref())),
             ("executor", Value::string(&self.executor)),
-            ("suite", Value::string(format!(
-                "{}/{}",
-                self.os,
-                self.profile.as_deref().unwrap_or(&self.arch)
-            ))),
+            (
+                "suite",
+                Value::string(format!(
+                    "{}/{}",
+                    self.os,
+                    self.profile.as_deref().unwrap_or(&self.arch)
+                )),
+            ),
             ("suites", Value::strings(self.suites())),
             (
                 "status",
@@ -200,7 +203,6 @@ fn matrix(value: &toml::Value, key: &str) -> Result<BTreeMap<(String, String), b
     Ok(result)
 }
 
-
 fn profiles(
     data: &toml::Value,
     supported: &BTreeMap<(String, String), bool>,
@@ -216,11 +218,13 @@ fn profiles(
             "shakti" | "xiangshan" | "t-head" => "riscv64",
             _ => return Err(error(format!("unknown CPU profile: {profile}"))),
         };
-        let fields =
-            fields.as_table().ok_or_else(|| error(format!("invalid CPU profile: {profile}")))?;
-        if fields.keys().any(|key| {
-            !matches!(key.as_str(), "os" | "arch" | "supported" | "ci")
-        }) {
+        let fields = fields
+            .as_table()
+            .ok_or_else(|| error(format!("invalid CPU profile: {profile}")))?;
+        if fields
+            .keys()
+            .any(|key| !matches!(key.as_str(), "os" | "arch" | "supported" | "ci"))
+        {
             return Err(error(format!("unknown field in CPU profile: {profile}")));
         }
         let os = required(fields, "os")?;
@@ -472,11 +476,13 @@ impl Manifest {
         let matches: Vec<_> = self
             .targets
             .iter()
-            .filter(|t| t.enabled
+            .filter(|t| {
+                t.enabled
                     && t.profile.is_none()
                     && t.executor == "native"
                     && t.os == os
-                    && t.arch == arch)
+                    && t.arch == arch
+            })
             .collect();
         if matches.len() != 1 {
             return Err(error("expected one native target for this host"));
