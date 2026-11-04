@@ -3495,6 +3495,7 @@ fn macos_versions_for(llvm: &LlvmFlags) -> Result<llvm::macos::PlatformVersions,
     let discovered_sdk = if llvm.macos_sdk_version.is_none()
         && sdk_env.is_none()
         && from_path.is_none()
+        && sysroot.is_none()
     {
         ProcessCommand::new("xcrun")
             .args(["--sdk", "macosx", "--show-sdk-version"])
