@@ -132,3 +132,60 @@ fn invalid_macos_settings_fail_as_usage_errors() {
         assert!(out.contains("macOS") || out.contains("--macos"), "{out}");
     }
 }
+
+#[cfg(unix)]
+#[test]
+fn selected_sdk_alias_and_metadata_override_host_discovery_for_both_architectures() {
+    use std::os::unix::fs::symlink;
+
+    let root = case_dir();
+    let source = root.join("main.wave");
+    fs::write(&source, "fun main() -> i32 { return 0; }\n").unwrap();
+
+    let named = root.join("MacOSX14.4.sdk");
+    fs::create_dir_all(&named).unwrap();
+    let alias = root.join("Pinned.sdk");
+    symlink(&named, &alias).unwrap();
+
+    let unversioned = root.join("Unversioned.sdk");
+    fs::create_dir_all(&unversioned).unwrap();
+    fs::write(unversioned.join("SDKSettings.json"), "{\"Version\":\"14.4\"}\n").unwrap();
+
+    for triple in ["x86_64-apple-darwin", "aarch64-apple-darwin"] {
+        if llvm::codegen::target::target_spec_for_triple(triple).is_none() {
+            continue;
+        }
+        for selected in [&alias, &unversioned] {
+            let (ok, output) = output_text(run(
+                &[
+                    "print",
+                    "target-spec",
+                    "--format=json",
+                    &format!("--target={triple}"),
+                    &format!("--sysroot={}", selected.display()),
+                    "--macos-deployment-target=15.0",
+                ],
+                &[],
+            ));
+            assert!(!ok, "{triple}, {}: {output}", selected.display());
+            assert!(output.contains("older than deployment target"), "{output}");
+
+            let (ok, output) = output_text(run(
+                &[
+                    "build",
+                    source.to_str().unwrap(),
+                    &format!("--target={triple}"),
+                    "--emit=bin",
+                    "--dry-run",
+                    "--error-format=json",
+                    &format!("--sysroot={}", selected.display()),
+                    "--macos-deployment-target=12.0",
+                ],
+                &[],
+            ));
+            assert!(ok, "{triple}, {}: {output}", selected.display());
+            assert!(output.contains(r#""macos_sdk_version":"14.4""#), "{output}");
+            assert!(output.contains(r#""-platform_version","macos","12.0","14.4""#), "{output}");
+        }
+    }
+}
