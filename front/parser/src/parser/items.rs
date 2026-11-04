@@ -170,12 +170,7 @@ pub fn parse_proto(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, ParseE
             },
         }
     }
-    Ok(ASTNode::ProtoImpl(ProtoImplNode {
-        name,
-        target,
-        methods,
-        visibility: Visibility::Private,
-    }))
+    Ok(ASTNode::ProtoImpl(ProtoImplNode { name, target, methods, visibility: Visibility::Private }))
 }
 
 pub fn parse_struct(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, ParseError> {
