@@ -44,11 +44,54 @@ fn parsed_version(text: &str, label: &str) -> Result<[u32; 3], String> {
     Ok(version)
 }
 
-/// Extract a version only from a versioned macOS SDK bundle name.
-pub fn sdk_version_from_path(sysroot: &str) -> Option<String> {
-    let file = std::path::Path::new(sysroot).file_name()?.to_str()?;
+fn sdk_bundle_version(path: &std::path::Path) -> Option<String> {
+    let file = path.file_name()?.to_str()?;
     let value = file.strip_prefix("MacOSX")?.strip_suffix(".sdk")?;
-    parsed_version(value, "macOS SDK").ok().map(|_| value.to_string())
+    parsed_version(value, "macOS SDK")
+        .ok()
+        .map(|_| value.to_string())
+}
+
+fn sdk_metadata_version(path: &std::path::Path) -> Option<String> {
+    if let Ok(data) = std::fs::read_to_string(path.join("SDKSettings.json")) {
+        if let Some((_, rest)) = data.split_once("\"Version\"") {
+            if let Some((_, value)) = rest.split_once(':') {
+                if let Some(value) = value.trim_start().strip_prefix('"') {
+                    if let Some((version, _)) = value.split_once('"') {
+                        if parsed_version(version, "macOS SDK").is_ok() {
+                            return Some(version.to_string());
+                        }
+                    }
+                }
+            }
+        }
+    }
+    if let Ok(data) = std::fs::read_to_string(path.join("SDKSettings.plist")) {
+        if let Some((_, rest)) = data.split_once("<key>Version</key>") {
+            if let Some((_, value)) = rest.split_once("<string>") {
+                if let Some((version, _)) = value.split_once("</string>") {
+                    let version = version.trim();
+                    if parsed_version(version, "macOS SDK").is_ok() {
+                        return Some(version.to_string());
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Extract the selected SDK's version, following aliases and SDK metadata.
+/// A selected SDK is never identified by an unrelated host-default SDK.
+pub fn sdk_version_from_path(sysroot: &str) -> Option<String> {
+    let path = std::path::Path::new(sysroot);
+    let resolved = path.canonicalize().ok();
+    resolved
+        .as_deref()
+        .and_then(sdk_bundle_version)
+        .or_else(|| resolved.as_deref().and_then(sdk_metadata_version))
+        .or_else(|| sdk_bundle_version(path))
+        .or_else(|| sdk_metadata_version(path))
 }
 
 /// Resolve and validate both linker versions before constructing a link command.
@@ -69,6 +112,16 @@ pub fn resolve_versions(
         .or(deployment_env)
         .unwrap_or(DEFAULT_DEPLOYMENT_TARGET);
     let path_sdk = sysroot.and_then(sdk_version_from_path);
+    if sysroot.is_some()
+        && path_sdk.is_none()
+        && sdk_override.is_none()
+        && sdk_env.is_none()
+    {
+        return Err(
+            "cannot determine macOS SDK version from the selected SDK; supply --macos-sdk-version"
+                .to_string(),
+        );
+    }
     let sdk = sdk_override
         .or(sdk_env)
         .or(path_sdk.as_deref())
