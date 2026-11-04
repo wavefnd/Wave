@@ -55,10 +55,12 @@ fn named_and_inherent_proto_forms_remain_distinct() {
 
 #[test]
 fn public_named_contract_preserves_target_generic_arguments_and_visibility() {
-    let nodes = parse("pub proto Printable: Buffer<i32> {
+    let nodes = parse(
+        "pub proto Printable: Buffer<i32> {
         fun render(self) {}
         fun copy(self: ptr<Buffer<i32>>) {}
-    }");
+    }",
+    );
     let ASTNode::ProtoImpl(contract) = nodes[0].unspanned() else {
         panic!("proto")
     };
