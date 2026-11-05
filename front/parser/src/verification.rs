@@ -2601,7 +2601,9 @@ fn validate_alias_cycle(
                     WaveType::Struct(name) if program.aliases.contains_key(name) => {
                         break Some(name.as_str());
                     },
-                    WaveType::Future(inner) | WaveType::Pointer(inner) | WaveType::Array(inner, _) => {
+                    WaveType::Future(inner)
+                    | WaveType::Pointer(inner)
+                    | WaveType::Array(inner, _) => {
                         ty = inner;
                     },
                     _ => break None,
@@ -2678,22 +2680,20 @@ mod alias_cycle_tests {
     fn long_alias_dependency_checks_do_not_recurse() {
         let mut program = ProgramTypes::default();
         for index in 0..16_383 {
-            program.aliases.insert(
-                format!("A{index}"),
-                WaveType::Struct(format!("A{}", index + 1)),
-            );
+            program
+                .aliases
+                .insert(format!("A{index}"), WaveType::Struct(format!("A{}", index + 1)));
         }
         program.aliases.insert("A16383".into(), WaveType::Int(32));
         let mut checked = HashSet::new();
         validate_alias_cycle("A0", &program, &mut HashSet::new(), &mut checked).unwrap();
         assert_eq!(checked.len(), 16_384);
 
-        program.aliases.insert("A16383".into(), WaveType::Pointer(Box::new(
-            WaveType::Struct("A0".into()),
-        )));
-        let error =
-            validate_alias_cycle("A0", &program, &mut HashSet::new(), &mut HashSet::new())
-                .unwrap_err();
+        program
+            .aliases
+            .insert("A16383".into(), WaveType::Pointer(Box::new(WaveType::Struct("A0".into()))));
+        let error = validate_alias_cycle("A0", &program, &mut HashSet::new(), &mut HashSet::new())
+            .unwrap_err();
         assert!(error.contains("cyclic type alias"), "{error}");
     }
 }

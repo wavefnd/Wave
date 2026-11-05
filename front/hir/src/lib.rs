@@ -884,10 +884,7 @@ mod alias_chain_tests {
     fn compressed_named_aliases_reuse_a_long_resolved_suffix() {
         let mut named = HashMap::new();
         for index in 0..16_383 {
-            named.insert(
-                format!("A{index}"),
-                WaveType::Struct(format!("A{}", index + 1)),
-            );
+            named.insert(format!("A{index}"), WaveType::Struct(format!("A{}", index + 1)));
         }
         named.insert("A16383".into(), WaveType::Int(64));
         compress_named_alias_chains(&mut named);

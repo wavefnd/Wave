@@ -1,7 +1,10 @@
 //! Long acyclic aliases must not exhaust the Rust stack during frontend lowering.
 use hir::TypedProgram;
 use lexer::Lexer;
-use parser::{ast::{ASTNode, WaveType}, parse_syntax_with_spans};
+use parser::{
+    ast::{ASTNode, WaveType},
+    parse_syntax_with_spans,
+};
 
 fn lower_chain(count: usize, reverse: bool) -> TypedProgram {
     let mut source = String::new();
@@ -45,8 +48,7 @@ fn recursive_aliases_keep_a_normal_semantic_error() {
         "type A = ptr<B>; type B = A; fun main() {}",
     ] {
         let tokens = Lexer::new(source).tokenize().unwrap();
-        let error =
-            TypedProgram::lower(parse_syntax_with_spans(&tokens).unwrap()).unwrap_err();
+        let error = TypedProgram::lower(parse_syntax_with_spans(&tokens).unwrap()).unwrap_err();
         assert!(error.diagnostic().message.contains("cyclic type alias"), "{error:?}");
     }
 }

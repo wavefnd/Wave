@@ -519,7 +519,6 @@ impl ProgramTypes {
             _ => ty.clone(),
         }
     }
-
 }
 
 fn insert_unique_value_name(names: &mut HashSet<String>, name: &str) -> Result<(), String> {
@@ -666,16 +665,12 @@ mod alias_chain_tests {
     fn long_forward_alias_chain_canonicalizes_without_recursive_frames() {
         let mut program = ProgramTypes::default();
         for index in 0..16_383 {
-            program.aliases.insert(
-                format!("A{index}"),
-                WaveType::Struct(format!("A{}", index + 1)),
-            );
+            program
+                .aliases
+                .insert(format!("A{index}"), WaveType::Struct(format!("A{}", index + 1)));
         }
         program.aliases.insert("A16383".into(), WaveType::Int(32));
-        assert_eq!(
-            program.canonical_type(&WaveType::Struct("A0".into())),
-            WaveType::Int(32)
-        );
+        assert_eq!(program.canonical_type(&WaveType::Struct("A0".into())), WaveType::Int(32));
         assert_eq!(
             program.canonical_type(&WaveType::Pointer(Box::new(WaveType::Struct("A0".into())))),
             WaveType::Pointer(Box::new(WaveType::Int(32)))
