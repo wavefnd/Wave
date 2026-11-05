@@ -2580,35 +2580,46 @@ fn validate_alias_cycle(
     active: &mut HashSet<String>,
     checked: &mut HashSet<String>,
 ) -> Result<(), String> {
-    if checked.contains(alias) {
-        return Ok(());
-    }
-    if !active.insert(alias.to_string()) {
-        return Err(format!("cyclic type alias involving `{}`", alias));
-    }
-    if let Some(target) = program.aliases.get(alias) {
-        validate_alias_type_cycle(target, program, active, checked)?;
-    }
-    active.remove(alias);
-    checked.insert(alias.to_string());
-    Ok(())
-}
+    // An alias declaration has one nested type. Walk the named dependency chain
+    // without a Rust call frame per alias; the syntax nesting limit still
+    // bounds Future, pointer and array wrappers within each declaration.
+    let mut current = alias;
+    let mut path = Vec::new();
+    loop {
+        if checked.contains(current) {
+            break;
+        }
+        if !active.insert(current.to_string()) {
+            return Err(format!("cyclic type alias involving `{}`", current));
+        }
+        path.push(current.to_string());
 
-fn validate_alias_type_cycle(
-    ty: &WaveType,
-    program: &ProgramTypes,
-    active: &mut HashSet<String>,
-    checked: &mut HashSet<String>,
-) -> Result<(), String> {
-    match ty {
-        WaveType::Struct(name) if program.aliases.contains_key(name) => {
-            validate_alias_cycle(name, program, active, checked)
-        },
-        WaveType::Future(inner) | WaveType::Pointer(inner) | WaveType::Array(inner, _) => {
-            validate_alias_type_cycle(inner, program, active, checked)
-        },
-        _ => Ok(()),
+        let next = program.aliases.get(current).and_then(|target| {
+            let mut ty = target;
+            loop {
+                match ty {
+                    WaveType::Struct(name) if program.aliases.contains_key(name) => {
+                        break Some(name.as_str());
+                    },
+                    WaveType::Future(inner)
+                    | WaveType::Pointer(inner)
+                    | WaveType::Array(inner, _) => {
+                        ty = inner;
+                    },
+                    _ => break None,
+                }
+            }
+        });
+        match next {
+            Some(name) => current = name,
+            None => break,
+        }
     }
+    for name in path {
+        active.remove(&name);
+        checked.insert(name);
+    }
+    Ok(())
 }
 
 fn validate_unique_generic_params(params: &[String], owner: &str) -> Result<(), String> {
@@ -2658,5 +2669,31 @@ fn analyzed_expression_type(program: &ProgramTypes, ty: &ExpressionType) -> Anal
         ExpressionType::ArrayLiteral(_) => AnalyzedExpressionType::ArrayLiteral,
         ExpressionType::AddressedArrayLiteral(_) => AnalyzedExpressionType::AddressedArrayLiteral,
         ExpressionType::Unknown => AnalyzedExpressionType::Unknown,
+    }
+}
+
+#[cfg(test)]
+mod alias_cycle_tests {
+    use super::*;
+
+    #[test]
+    fn long_alias_dependency_checks_do_not_recurse() {
+        let mut program = ProgramTypes::default();
+        for index in 0..16_383 {
+            program
+                .aliases
+                .insert(format!("A{index}"), WaveType::Struct(format!("A{}", index + 1)));
+        }
+        program.aliases.insert("A16383".into(), WaveType::Int(32));
+        let mut checked = HashSet::new();
+        validate_alias_cycle("A0", &program, &mut HashSet::new(), &mut checked).unwrap();
+        assert_eq!(checked.len(), 16_384);
+
+        program
+            .aliases
+            .insert("A16383".into(), WaveType::Pointer(Box::new(WaveType::Struct("A0".into()))));
+        let error = validate_alias_cycle("A0", &program, &mut HashSet::new(), &mut HashSet::new())
+            .unwrap_err();
+        assert!(error.contains("cyclic type alias"), "{error}");
     }
 }

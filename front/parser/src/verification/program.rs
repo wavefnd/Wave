@@ -458,34 +458,52 @@ impl ProgramTypes {
         seen: &mut HashSet<String>,
     ) -> WaveType {
         match ty {
-            WaveType::Struct(name) => {
-                if !seen.insert(name.clone()) {
-                    return ty.clone();
-                }
-                let resolved = if let Some(target) =
-                    self.aliases.get(name).or_else(|| self.enum_reprs.get(name))
-                {
-                    self.canonical_type_inner(target, seen)
-                } else if let Some((base, arguments)) = parse_named_type_application(name) {
-                    let arguments = arguments
-                        .iter()
-                        .map(|argument| {
-                            display_wave_type(&self.canonical_type_inner(argument, seen))
-                        })
-                        .collect::<Vec<_>>()
-                        .join(",");
-                    let name = format!("{}<{}>", base, arguments);
-                    if self.variants.contains_key(&base) {
-                        WaveType::Variant(name)
-                    } else {
-                        WaveType::Struct(name)
+            WaveType::Struct(_) => {
+                // Common forward-alias chains may be thousands of declarations
+                // long even though every individual type is syntactically flat.
+                let mut target = ty;
+                let mut visited = Vec::new();
+                loop {
+                    let WaveType::Struct(name) = target else { break };
+                    if !seen.insert(name.clone()) {
+                        for name in visited {
+                            seen.remove(&name);
+                        }
+                        return target.clone();
                     }
-                } else if self.variants.contains_key(name) {
-                    WaveType::Variant(name.clone())
-                } else {
-                    ty.clone()
+                    visited.push(name.clone());
+                    match self.aliases.get(name).or_else(|| self.enum_reprs.get(name)) {
+                        Some(next) => target = next,
+                        None => break,
+                    }
+                }
+                let resolved = match target {
+                    WaveType::Struct(name) => {
+                        if let Some((base, arguments)) = parse_named_type_application(name) {
+                            let arguments = arguments
+                                .iter()
+                                .map(|argument| {
+                                    display_wave_type(&self.canonical_type_inner(argument, seen))
+                                })
+                                .collect::<Vec<_>>()
+                                .join(",");
+                            let name = format!("{}<{}>", base, arguments);
+                            if self.variants.contains_key(&base) {
+                                WaveType::Variant(name)
+                            } else {
+                                WaveType::Struct(name)
+                            }
+                        } else if self.variants.contains_key(name) {
+                            WaveType::Variant(name.clone())
+                        } else {
+                            target.clone()
+                        }
+                    },
+                    _ => self.canonical_type_inner(target, seen),
                 };
-                seen.remove(name);
+                for name in visited {
+                    seen.remove(&name);
+                }
                 resolved
             },
             WaveType::Future(inner) => {
@@ -636,5 +654,26 @@ pub(super) fn substitute_function_type(
         return_type: substitute_wave_type(&signature.return_type, substitutions),
         generic_params: signature.generic_params.clone(),
         variadic: signature.variadic,
+    }
+}
+
+#[cfg(test)]
+mod alias_chain_tests {
+    use super::*;
+
+    #[test]
+    fn long_forward_alias_chain_canonicalizes_without_recursive_frames() {
+        let mut program = ProgramTypes::default();
+        for index in 0..16_383 {
+            program
+                .aliases
+                .insert(format!("A{index}"), WaveType::Struct(format!("A{}", index + 1)));
+        }
+        program.aliases.insert("A16383".into(), WaveType::Int(32));
+        assert_eq!(program.canonical_type(&WaveType::Struct("A0".into())), WaveType::Int(32));
+        assert_eq!(
+            program.canonical_type(&WaveType::Pointer(Box::new(WaveType::Struct("A0".into())))),
+            WaveType::Pointer(Box::new(WaveType::Int(32)))
+        );
     }
 }
