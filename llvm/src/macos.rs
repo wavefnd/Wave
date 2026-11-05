@@ -34,9 +34,8 @@ fn parsed_version(text: &str, label: &str) -> Result<[u32; 3], String> {
     }
     let mut version = [0; 3];
     for (index, part) in parts.iter().enumerate() {
-        version[index] = part
-            .parse::<u32>()
-            .map_err(|_| format!("invalid {label} version {text:?}"))?;
+        version[index] =
+            part.parse::<u32>().map_err(|_| format!("invalid {label} version {text:?}"))?;
     }
     if !(10..=999).contains(&version[0]) {
         return Err(format!("invalid {label} version {text:?}; major must be at least 10"));
@@ -47,33 +46,24 @@ fn parsed_version(text: &str, label: &str) -> Result<[u32; 3], String> {
 fn sdk_bundle_version(path: &std::path::Path) -> Option<String> {
     let file = path.file_name()?.to_str()?;
     let value = file.strip_prefix("MacOSX")?.strip_suffix(".sdk")?;
-    parsed_version(value, "macOS SDK")
-        .ok()
-        .map(|_| value.to_string())
+    parsed_version(value, "macOS SDK").ok().map(|_| value.to_string())
 }
 
 fn sdk_metadata_version(path: &std::path::Path) -> Option<String> {
     if let Ok(data) = std::fs::read_to_string(path.join("SDKSettings.json")) {
-        if let Some((_, rest)) = data.split_once("\"Version\"") {
-            if let Some((_, value)) = rest.split_once(':') {
-                if let Some(value) = value.trim_start().strip_prefix('"') {
-                    if let Some((version, _)) = value.split_once('"') {
-                        if parsed_version(version, "macOS SDK").is_ok() {
-                            return Some(version.to_string());
-                        }
-                    }
+        if let Ok(document) = utils::wson::parse_json(&data) {
+            if let Some(version) = document.get_str("Version") {
+                if parsed_version(version, "macOS SDK").is_ok() {
+                    return Some(version.to_string());
                 }
             }
         }
     }
-    if let Ok(data) = std::fs::read_to_string(path.join("SDKSettings.plist")) {
-        if let Some((_, rest)) = data.split_once("<key>Version</key>") {
-            if let Some((_, value)) = rest.split_once("<string>") {
-                if let Some((version, _)) = value.split_once("</string>") {
-                    let version = version.trim();
-                    if parsed_version(version, "macOS SDK").is_ok() {
-                        return Some(version.to_string());
-                    }
+    if let Ok(document) = plist::Value::from_file(path.join("SDKSettings.plist")) {
+        if let Some(version) = document.as_dictionary().and_then(|dict| dict.get("Version")) {
+            if let Some(version) = version.as_string().map(str::trim) {
+                if parsed_version(version, "macOS SDK").is_ok() {
+                    return Some(version.to_string());
                 }
             }
         }
@@ -108,15 +98,9 @@ pub fn resolve_versions(
     sysroot: Option<&str>,
     discovered_sdk: Option<&str>,
 ) -> Result<PlatformVersions, String> {
-    let deployment = deployment_override
-        .or(deployment_env)
-        .unwrap_or(DEFAULT_DEPLOYMENT_TARGET);
+    let deployment = deployment_override.or(deployment_env).unwrap_or(DEFAULT_DEPLOYMENT_TARGET);
     let path_sdk = sysroot.and_then(sdk_version_from_path);
-    if sysroot.is_some()
-        && path_sdk.is_none()
-        && sdk_override.is_none()
-        && sdk_env.is_none()
-    {
+    if sysroot.is_some() && path_sdk.is_none() && sdk_override.is_none() && sdk_env.is_none() {
         return Err(
             "cannot determine macOS SDK version from the selected SDK; supply --macos-sdk-version"
                 .to_string(),
@@ -142,36 +126,81 @@ mod tests {
     use super::*;
 
     #[test]
+    fn sdk_json_version_must_be_a_valid_root_string() {
+        let root = std::env::temp_dir().join(format!("wave-sdk-json-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let metadata = root.join("SDKSettings.json");
+        for (json, expected) in [
+            (r#"{"Version":"14.4"}"#, Some("14.4")),
+            (r#"{"Nested":{"Version":"15.0"},"Version":"14.4"}"#, Some("14.4")),
+            (r#"{"Description":"Version","Other":"15.0","Version":"14.4"}"#, Some("14.4")),
+            (r#"{"Nested":{"Version":"15.0"}}"#, None),
+            (r#"{"Version":"15.0""#, None),
+            (r#"{"Version":15.0,"Other":"15.0"}"#, None),
+            (r#"{"Version":"14.4","Version":"15.0"}"#, None),
+        ] {
+            std::fs::write(&metadata, json).unwrap();
+            assert_eq!(sdk_metadata_version(&root).as_deref(), expected, "{json}");
+            let selected = root.to_str().unwrap();
+            assert!(resolve_versions(Some("15.0"), None, None, None, Some(selected), None).is_err());
+        }
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn sdk_plist_version_must_belong_to_the_root_key() {
+        let root = std::env::temp_dir().join(format!("wave-sdk-plist-{}", std::process::id()));
+        std::fs::create_dir_all(&root).unwrap();
+        let metadata = root.join("SDKSettings.plist");
+        for (fields, expected) in [
+            ("<key>Version</key><string>14.4</string>", Some("14.4")),
+            ("<key>Nested</key><dict><key>Version</key><string>15.0</string></dict><key>Version</key><string>14.4</string>", Some("14.4")),
+            ("<key>Version</key><integer>15</integer><key>Other</key><string>15.0</string>", None),
+            ("<key>Nested</key><dict><key>Version</key><string>15.0</string></dict>", None),
+        ] {
+            let plist = format!("<?xml version=\"1.0\"?><plist version=\"1.0\"><dict>{fields}</dict></plist>");
+            std::fs::write(&metadata, plist).unwrap();
+            assert_eq!(sdk_metadata_version(&root).as_deref(), expected, "{fields}");
+        }
+        std::fs::write(&metadata, "<plist><dict><key>Version</key><string>15.0").unwrap();
+        assert_eq!(sdk_metadata_version(&root), None);
+        std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn explicit_overrides_env_and_sdk_path() {
         let versions = resolve_versions(
-            Some("12.3"), Some("11.2"), Some("16.1"), Some("15.2"),
-            Some("/SDKs/MacOSX14.4.sdk"), Some("13.3"),
-        ).unwrap();
+            Some("12.3"),
+            Some("11.2"),
+            Some("16.1"),
+            Some("15.2"),
+            Some("/SDKs/MacOSX14.4.sdk"),
+            Some("13.3"),
+        )
+        .unwrap();
         assert_eq!(versions.deployment, "12.3");
         assert_eq!(versions.sdk, "16.1");
         let versions = resolve_versions(
-            None, Some("11.2"), None, None,
-            Some("/SDKs/MacOSX14.4.sdk"), Some("13.3"),
-        ).unwrap();
+            None,
+            Some("11.2"),
+            None,
+            None,
+            Some("/SDKs/MacOSX14.4.sdk"),
+            Some("13.3"),
+        )
+        .unwrap();
         assert_eq!(versions.deployment, "11.2");
         assert_eq!(versions.sdk, "14.4");
-        let versions = resolve_versions(None, None, None, Some("15.2"), None, Some("14.0")).unwrap();
+        let versions =
+            resolve_versions(None, None, None, Some("15.2"), None, Some("14.0")).unwrap();
         assert_eq!(versions.sdk, "15.2");
     }
 
     #[test]
     fn bad_versions_and_incompatible_sdks_are_rejected() {
-        for invalid in [
-            "",
-            "11",
-            "11.",
-            ".1",
-            "11.0.0.1",
-            "11.a",
-            "11.0 -arch",
-            "0.0",
-            "999999999999999999.1",
-        ] {
+        for invalid in
+            ["", "11", "11.", ".1", "11.0.0.1", "11.a", "11.0 -arch", "0.0", "999999999999999999.1"]
+        {
             assert!(resolve_versions(Some(invalid), None, None, None, None, None).is_err());
             assert!(resolve_versions(None, None, Some(invalid), None, None, None).is_err());
         }

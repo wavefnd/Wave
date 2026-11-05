@@ -1132,7 +1132,6 @@ fn parse_llvm_backend_option(
         return Ok(true);
     }
 
-
     for (flag, field) in [
         ("--macos-deployment-target", &mut llvm.macos_deployment_target),
         ("--macos-sdk-version", &mut llvm.macos_sdk_version),
@@ -1146,9 +1145,9 @@ fn parse_llvm_backend_option(
             return Ok(true);
         }
         if a == flag {
-            let value = args.get(*i + 1).ok_or_else(|| {
-                CliError::usage(format!("missing value: {flag} <major.minor>"))
-            })?;
+            let value = args
+                .get(*i + 1)
+                .ok_or_else(|| CliError::usage(format!("missing value: {flag} <major.minor>")))?;
             if value.trim().is_empty() {
                 return Err(CliError::usage(format!("missing value: {flag} <major.minor>")));
             }
@@ -3782,8 +3781,8 @@ fn print_dry_run_human(
     println!("  sysroot: {}", global.llvm.sysroot.as_deref().unwrap_or(""));
     println!("  sysroot-source: {}", global.llvm.sysroot_source.as_deref().unwrap_or(""));
     if is_darwin_target(&target) {
-        let versions = macos_versions_for(&global.llvm)
-            .expect("dry-run requires validated macOS versions");
+        let versions =
+            macos_versions_for(&global.llvm).expect("dry-run requires validated macOS versions");
         println!("  macos-deployment-target: {}", versions.deployment);
         println!("  macos-sdk-version: {}", versions.sdk);
     }

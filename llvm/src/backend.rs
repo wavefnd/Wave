@@ -491,10 +491,8 @@ mod macos_platform_tests {
 
     #[test]
     fn both_darwin_linkers_receive_independent_platform_versions() {
-        for (triple, arch) in [
-            ("x86_64-apple-darwin", "x86_64"),
-            ("aarch64-apple-darwin", "arm64"),
-        ] {
+        for (triple, arch) in [("x86_64-apple-darwin", "x86_64"), ("aarch64-apple-darwin", "arm64")]
+        {
             if target_spec_for_triple(triple).is_none() {
                 continue;
             }
