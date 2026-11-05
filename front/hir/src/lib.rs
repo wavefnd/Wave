@@ -23,8 +23,8 @@
 #![allow(clippy::result_large_err)]
 
 pub mod async_lower;
-pub mod conversions;
 mod canonicalization;
+pub mod conversions;
 mod defaults;
 pub mod enums;
 pub use enums::{EnumConversion, EnumType, EnumVariant, TypeId};
@@ -33,9 +33,9 @@ mod traversal;
 use canonicalization::canonicalize_syntax_types;
 pub use canonicalization::resolve_target_types;
 use conversions::{ConversionError, NumericExpressionInfo};
-use traversal::walk_patterns_in_nodes;
 pub use numeric_checks::{integer_literal_float, ConstantValue};
 use parser::ast::visit::walk_nodes;
+use traversal::walk_patterns_in_nodes;
 
 use parser::ast::{ASTNode, Expression, MatchPattern, WaveType};
 use parser::verification::{analyze_semantic_facts, SemanticDiagnostic, SemanticFacts};
