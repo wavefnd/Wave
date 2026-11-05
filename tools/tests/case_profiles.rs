@@ -35,12 +35,8 @@ fn profiles_inherit_base_suites_and_retain_separate_identities() {
     let base = manifest.target("linux-arm64").unwrap();
     assert_eq!(base.suites(), ["shared", "shared/arm64", "linux/arm64"]);
     assert_eq!(base.profile, None);
-    let expected = [
-        ("rhea", "arm64"),
-        ("shakti", "riscv64"),
-        ("xiangshan", "riscv64"),
-        ("t-head", "riscv64"),
-    ];
+    let expected =
+        [("rhea", "arm64"), ("shakti", "riscv64"), ("xiangshan", "riscv64"), ("t-head", "riscv64")];
     for (name, arch) in expected {
         let target = manifest.target(&format!("linux-{name}")).unwrap();
         assert_eq!(target.arch, arch);
@@ -112,10 +108,8 @@ target = \"aarch64-unknown-linux-gnu\"
     assert_eq!(target.arch, "arm64");
     assert_eq!(target.rust_target().unwrap(), "aarch64-unknown-linux-gnu");
 
-    let mismatch = valid.replace(
-        "arch = \"arm64\"\nprofile = \"rhea\"",
-        "arch = \"riscv64\"\nprofile = \"rhea\"",
-    );
+    let mismatch = valid
+        .replace("arch = \"arm64\"\nprofile = \"rhea\"", "arch = \"riscv64\"\nprofile = \"rhea\"");
     assert!(parse(&mismatch).is_err(), "accepted mismatched profile base");
     let unknown = valid.replace("profile = \"rhea\"", "profile = \"other\"");
     assert!(parse(&unknown).is_err(), "accepted unknown target profile");
@@ -125,16 +119,8 @@ target = \"aarch64-unknown-linux-gnu\"
 fn repository_enabled_matrices_remain_at_thirty_jobs() {
     let manifest = Manifest::load(&wave_tools::root(), true).unwrap();
     let matrix = manifest.matrices().unwrap();
-    let utils::wson::Value::Object(groups) = matrix else {
-        panic!("matrix groups")
-    };
-    assert_eq!(
-        groups
-            .iter()
-            .map(|(_, v)| v.get_arr("include").unwrap().len())
-            .sum::<usize>(),
-        30
-    );
+    let utils::wson::Value::Object(groups) = matrix else { panic!("matrix groups") };
+    assert_eq!(groups.iter().map(|(_, v)| v.get_arr("include").unwrap().len()).sum::<usize>(), 30);
     let rhea = manifest.target("linux-rhea").unwrap();
     assert_eq!(rhea.profile.as_deref(), Some("rhea"));
     assert!(!rhea.enabled);

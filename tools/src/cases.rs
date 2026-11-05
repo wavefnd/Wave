@@ -218,13 +218,9 @@ fn profiles(
             "shakti" | "xiangshan" | "t-head" => "riscv64",
             _ => return Err(error(format!("unknown CPU profile: {profile}"))),
         };
-        let fields = fields
-            .as_table()
-            .ok_or_else(|| error(format!("invalid CPU profile: {profile}")))?;
-        if fields
-            .keys()
-            .any(|key| !matches!(key.as_str(), "os" | "arch" | "supported" | "ci"))
-        {
+        let fields =
+            fields.as_table().ok_or_else(|| error(format!("invalid CPU profile: {profile}")))?;
+        if fields.keys().any(|key| !matches!(key.as_str(), "os" | "arch" | "supported" | "ci")) {
             return Err(error(format!("unknown field in CPU profile: {profile}")));
         }
         let os = required(fields, "os")?;
@@ -264,12 +260,9 @@ impl Manifest {
     pub fn parse(text: &str, root: PathBuf, validate_layout: bool) -> Result<Self> {
         let data: toml::Value = text.parse()?;
         let table = data.as_table().ok_or_else(|| error("manifest must be a table"))?;
-        if table
-            .keys()
-            .any(|key| {
-                !matches!(key.as_str(), "version" | "supported" | "ci" | "profiles" | "target")
-            })
-            || data.get("version").and_then(toml::Value::as_integer) != Some(3)
+        if table.keys().any(|key| {
+            !matches!(key.as_str(), "version" | "supported" | "ci" | "profiles" | "target")
+        }) || data.get("version").and_then(toml::Value::as_integer) != Some(3)
         {
             return Err(error("unknown manifest fields or unsupported version"));
         }
@@ -312,9 +305,9 @@ impl Manifest {
             let profile = optional(raw, "profile")?;
             let pair = (os.clone(), arch.clone());
             let (enabled, target_ci) = if let Some(profile_name) = &profile {
-                let defined = profiles.get(profile_name).ok_or_else(|| {
-                    error(format!("unknown CPU profile: {profile_name}"))
-                })?;
+                let defined = profiles
+                    .get(profile_name)
+                    .ok_or_else(|| error(format!("unknown CPU profile: {profile_name}")))?;
                 if defined.os != os || defined.arch != arch {
                     return Err(error(format!(
                         "profile {profile_name} does not match target {id} base architecture"
