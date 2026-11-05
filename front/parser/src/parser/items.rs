@@ -189,9 +189,7 @@ pub fn parse_struct(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, Parse
                 break;
             },
             Some(TokenType::Fun | TokenType::Async) => {
-                let ASTNode::Function(mut method) = parse_function(tokens)? else {
-                    unreachable!()
-                };
+                let ASTNode::Function(mut method) = parse_function(tokens)? else { unreachable!() };
                 if method.return_type.is_none() {
                     method.return_type = Some(WaveType::Void);
                 }
