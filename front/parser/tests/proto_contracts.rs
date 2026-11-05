@@ -83,3 +83,8 @@ fn malformed_named_proto_syntax_has_located_diagnostics() {
         failure(source, expected);
     }
 }
+
+#[test]
+fn incomplete_inherent_proto_preserves_the_existing_diagnostic() {
+    failure("proto Buffer {", "method declaration or '}'");
+}

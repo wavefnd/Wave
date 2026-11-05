@@ -152,7 +152,7 @@ pub fn parse_proto(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, ParseE
                 }
                 methods.push(method);
             },
-            None | Some(TokenType::Eof) => {
+            None | Some(TokenType::Eof) if name.is_some() => {
                 return Err(ParseError::expected_at(
                     tokens.peek().copied(),
                     anchor,
