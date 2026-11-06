@@ -1,4 +1,4 @@
-version = 2
+version = 3
 
 # List only existing OS ports or publicly documented porting work. Every listed
 # cell must appear in both tables; false means planned in Wave, not an invented
@@ -13,7 +13,7 @@ version = 2
 # Fuchsia RISC-V: https://fuchsia.dev/fuchsia-src/contribute/governance/rfcs/0211_fuchsia_on_risc-v
 # iOS amd64 is reserved for the simulator, not physical iOS devices (Wave #473).
 [supported]
-linux        = { amd64 = true,  arm64 = true,  riscv64 = true, loong64 = true,  rhea = false, shakti = false, xiangshan = false, t-head = false }
+linux        = { amd64 = true,  arm64 = true,  riscv64 = true, loong64 = true }
 macos        = { amd64 = true,  arm64 = true }
 windows      = { amd64 = true,  arm64 = true }
 freebsd      = { amd64 = true,  arm64 = true,  riscv64 = true }
@@ -28,7 +28,7 @@ wasm         = { wasm32 = true, wasm64 = true }
 wasi         = { wasm32 = true, wasm64 = false }
 
 [ci]
-linux        = { amd64 = true,  arm64 = true,  riscv64 = true, loong64 = true,  rhea = false, shakti = false, xiangshan = false, t-head = false }
+linux        = { amd64 = true,  arm64 = true,  riscv64 = true, loong64 = true }
 macos        = { amd64 = true,  arm64 = true }
 windows      = { amd64 = true,  arm64 = true }
 freebsd      = { amd64 = true,  arm64 = true,  riscv64 = true }
@@ -42,9 +42,18 @@ ios          = { amd64 = false, arm64 = false }
 wasm         = { wasm32 = true, wasm64 = true }
 wasi         = { wasm32 = true, wasm64 = false }
 
+# Processor names are profiles of base ISAs, not architectures or compiler
+# targets. They remain disabled until the compiler and runtime support them.
+[profiles]
+rhea      = { os = "linux", arch = "arm64",   supported = false, ci = false }
+shakti    = { os = "linux", arch = "riscv64", supported = false, ci = false }
+xiangshan = { os = "linux", arch = "riscv64", supported = false, ci = false }
+t-head    = { os = "linux", arch = "riscv64", supported = false, ci = false }
+
 # Only supported=true cells need execution details below. Every target gets
-# shared, shared/<arch>, and <os>/<arch> suites automatically. Support=false
-# cells become disabled planned targets.
+# shared, shared/<arch>, and <os>/<arch> suites automatically. Profile targets
+# also get shared/<profile> and <os>/<profile> after the base suites.
+# Support=false entries remain disabled planned targets.
 
 [[target]]
 id = "linux-amd64"
