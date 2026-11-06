@@ -474,6 +474,7 @@ fn dispatch_build(global: &Global, build: &BuildRequest) -> Result<(), CliError>
     let mut effective_global = effective_global_for_build(global, &build);
     resolve_target_configuration(&mut effective_global.llvm)?;
     resolve_build_sysroot(&mut effective_global.llvm, &build);
+    resolve_macos_versions(&mut effective_global.llvm)?;
     if effective_global.dep.resolved_std_root.is_none() {
         effective_global.dep.resolved_std_root =
             Some(parser::import::ResolvedStdRoot::resolve(None));
@@ -1129,6 +1130,31 @@ fn parse_llvm_backend_option(
         llvm.abi = Some(v.to_string());
         *i += 2;
         return Ok(true);
+    }
+
+    for (flag, field) in [
+        ("--macos-deployment-target", &mut llvm.macos_deployment_target),
+        ("--macos-sdk-version", &mut llvm.macos_sdk_version),
+    ] {
+        if let Some(value) = a.strip_prefix(flag).and_then(|tail| tail.strip_prefix('=')) {
+            if value.trim().is_empty() {
+                return Err(CliError::usage(format!("missing value: {flag}=<major.minor>")));
+            }
+            *field = Some(value.to_string());
+            *i += 1;
+            return Ok(true);
+        }
+        if a == flag {
+            let value = args
+                .get(*i + 1)
+                .ok_or_else(|| CliError::usage(format!("missing value: {flag} <major.minor>")))?;
+            if value.trim().is_empty() {
+                return Err(CliError::usage(format!("missing value: {flag} <major.minor>")));
+            }
+            *field = Some(value.to_string());
+            *i += 2;
+            return Ok(true);
+        }
     }
 
     if let Some(v) = a.strip_prefix("--sysroot=") {
@@ -2952,11 +2978,12 @@ fn build_darwin_lld_args(
     args.push("-arch".to_string());
     args.push(darwin_arch(target).to_string());
 
-    let macos_version = macos_deployment_version();
+    let versions = macos_versions_for(&global.llvm)
+        .expect("Darwin linking requires validated macOS platform versions");
     args.push("-platform_version".to_string());
     args.push("macos".to_string());
-    args.push(macos_version.clone());
-    args.push(macos_version);
+    args.push(versions.deployment);
+    args.push(versions.sdk);
 
     let detected_sysroot = detect_macos_sysroot_owned();
     if let Some(sysroot) = global.llvm.sysroot.as_deref().or(detected_sysroot.as_deref()) {
@@ -3459,22 +3486,49 @@ fn sysroot_path(sysroot: &str, suffix: &str) -> PathBuf {
     }
 }
 
-fn macos_deployment_version() -> String {
-    if let Ok(value) = env::var("MACOSX_DEPLOYMENT_TARGET") {
-        let value = value.trim();
-        if !value.is_empty() {
-            return value.to_string();
-        }
-    }
+fn macos_versions_for(llvm: &LlvmFlags) -> Result<llvm::macos::PlatformVersions, CliError> {
+    let deployment_env = env::var("MACOSX_DEPLOYMENT_TARGET").ok();
+    let sdk_env = env::var("MACOSX_SDK_VERSION").ok();
+    let sysroot = llvm.sysroot.clone().or_else(detect_macos_sysroot_owned);
+    let from_path = sysroot.as_deref().and_then(llvm::macos::sdk_version_from_path);
+    let discovered_sdk = if llvm.macos_sdk_version.is_none()
+        && sdk_env.is_none()
+        && from_path.is_none()
+        && sysroot.is_none()
+    {
+        ProcessCommand::new("xcrun")
+            .args(["--sdk", "macosx", "--show-sdk-version"])
+            .output()
+            .ok()
+            .filter(|output| output.status.success())
+            .map(|output| String::from_utf8_lossy(&output.stdout).trim().to_string())
+            .filter(|version| !version.is_empty())
+    } else {
+        None
+    };
+    llvm::macos::resolve_versions(
+        llvm.macos_deployment_target.as_deref(),
+        deployment_env.as_deref(),
+        llvm.macos_sdk_version.as_deref(),
+        sdk_env.as_deref(),
+        sysroot.as_deref(),
+        discovered_sdk.as_deref(),
+    )
+    .map_err(CliError::usage)
+}
 
-    ProcessCommand::new("sw_vers")
-        .arg("-productVersion")
-        .output()
-        .ok()
-        .filter(|out| out.status.success())
-        .map(|out| String::from_utf8_lossy(&out.stdout).trim().to_string())
-        .filter(|value| !value.is_empty())
-        .unwrap_or_else(|| "11.0".to_string())
+fn resolve_macos_versions(llvm: &mut LlvmFlags) -> Result<(), CliError> {
+    let target = llvm.target.as_deref().unwrap_or("");
+    if is_darwin_target(target) {
+        let versions = macos_versions_for(llvm)?;
+        llvm.macos_deployment_target = Some(versions.deployment);
+        llvm.macos_sdk_version = Some(versions.sdk);
+    } else if llvm.macos_deployment_target.is_some() || llvm.macos_sdk_version.is_some() {
+        return Err(CliError::usage(
+            "--macos-deployment-target and --macos-sdk-version require a macOS target",
+        ));
+    }
+    Ok(())
 }
 
 fn detect_macos_sysroot_owned() -> Option<String> {
@@ -3726,6 +3780,12 @@ fn print_dry_run_human(
     println!("  isa: {}", target_options.isa.as_deref().unwrap_or(""));
     println!("  sysroot: {}", global.llvm.sysroot.as_deref().unwrap_or(""));
     println!("  sysroot-source: {}", global.llvm.sysroot_source.as_deref().unwrap_or(""));
+    if is_darwin_target(&target) {
+        let versions =
+            macos_versions_for(&global.llvm).expect("dry-run requires validated macOS versions");
+        println!("  macos-deployment-target: {}", versions.deployment);
+        println!("  macos-sdk-version: {}", versions.sdk);
+    }
     println!("  emit: {}", render_emit_spec(&build.emit));
     println!("  link-only: {}", build.link_only);
     println!("  run: {}", build.run);
@@ -3867,6 +3927,11 @@ fn print_dry_run_json(
         EmitSpec::Check => Value::strings(["check"]),
         EmitSpec::Set(set) => Value::strings(set.iter().map(|kind| emit_kind_name(*kind))),
     };
+    let macos_versions = if is_darwin_target(&target) {
+        Some(macos_versions_for(&global.llvm).expect("validated macOS versions"))
+    } else {
+        None
+    };
     let value = Value::object([
         ("schema_version", Value::integer(1)),
         (
@@ -3910,6 +3975,14 @@ fn print_dry_run_json(
         ("isa", Value::optional_string(target_options.isa.as_deref())),
         ("sysroot", Value::optional_string(global.llvm.sysroot.as_deref())),
         ("sysroot_source", Value::optional_string(global.llvm.sysroot_source.as_deref())),
+        (
+            "macos_deployment_target",
+            Value::optional_string(macos_versions.as_ref().map(|v| v.deployment.as_str())),
+        ),
+        (
+            "macos_sdk_version",
+            Value::optional_string(macos_versions.as_ref().map(|v| v.sdk.as_str())),
+        ),
         ("emit", Value::string(render_emit_spec(&build.emit))),
         ("emit_kinds", emit_kinds),
         ("control_mode", Value::optional_string(build.emit.is_check().then_some("check"))),
@@ -4147,6 +4220,12 @@ fn print_target_spec_human(global: &Global, target: &str) {
     println!("freestanding: {}", !spec.hosted);
     println!("supported: {}", spec.supported);
     println!("default-linker: {}", default_linker_name(&target_global));
+    if is_darwin_target(target) {
+        let versions = macos_versions_for(&global.llvm)
+            .expect("target spec requires validated macOS versions");
+        println!("macos-deployment-target: {}", versions.deployment);
+        println!("macos-sdk-version: {}", versions.sdk);
+    }
     println!("sysroot: {}", sysroot.as_ref().map(|value| value.path.as_str()).unwrap_or(""));
     println!(
         "sysroot-source: {}",
@@ -4159,6 +4238,11 @@ fn target_spec_json(global: &Global, target: &str) -> String {
     let target_global = global_with_target(global, target);
     let sysroot = effective_sysroot_selection(global, target)
         .expect("target spec rendering requires validated target options");
+    let macos_versions = if is_darwin_target(target) {
+        Some(macos_versions_for(&global.llvm).expect("validated macOS versions"))
+    } else {
+        None
+    };
     schema_json(&Value::object([
         ("triple", Value::string(&spec.triple)),
         ("arch", Value::string(&spec.arch)),
@@ -4174,6 +4258,14 @@ fn target_spec_json(global: &Global, target: &str) -> String {
         ("freestanding", Value::Bool(!spec.hosted)),
         ("supported", Value::Bool(spec.supported)),
         ("default_linker", Value::string(default_linker_name(&target_global))),
+        (
+            "macos_deployment_target",
+            Value::optional_string(macos_versions.as_ref().map(|v| v.deployment.as_str())),
+        ),
+        (
+            "macos_sdk_version",
+            Value::optional_string(macos_versions.as_ref().map(|v| v.sdk.as_str())),
+        ),
         ("sysroot", Value::optional_string(sysroot.as_ref().map(|v| v.path.as_str()))),
         ("sysroot_source", Value::optional_string(sysroot.as_ref().map(|v| v.source.as_str()))),
     ]))
@@ -4246,7 +4338,15 @@ fn resolve_build_sysroot(llvm: &mut LlvmFlags, build: &BuildRequest) {
 }
 
 fn validate_target_options_for(target: &str, llvm: &LlvmFlags) -> Result<(), CliError> {
-    target_options_for(target, llvm).map(|_| ())
+    target_options_for(target, llvm)?;
+    if is_darwin_target(target) {
+        macos_versions_for(llvm)?;
+    } else if llvm.macos_deployment_target.is_some() || llvm.macos_sdk_version.is_some() {
+        return Err(CliError::usage(
+            "--macos-deployment-target and --macos-sdk-version require a macOS target",
+        ));
+    }
+    Ok(())
 }
 
 fn effective_sysroot_selection(
@@ -4665,6 +4765,16 @@ pub fn print_help() {
         "Intermediate/default artifact root"
     );
     println!("  {:<24} {}", "--dry-run".color("38,139,235"), "Plan only, no compile/link/exec");
+    println!(
+        "  {:<24} {}",
+        "--macos-deployment-target".color("38,139,235"),
+        "macOS minimum (flag > MACOSX_DEPLOYMENT_TARGET > 11.0)"
+    );
+    println!(
+        "  {:<24} {}",
+        "--macos-sdk-version".color("38,139,235"),
+        "macOS SDK version (flag > env > SDK root > discovered SDK)"
+    );
     println!("  {:<24} {}", "--error-format=...".color("38,139,235"), "human, json");
 
     println!("\nLink mode options:");
