@@ -26,6 +26,7 @@ struct Remote {
     tag: Option<String>,
     calls: Vec<String>,
     next: u64,
+    next_asset: u64,
     fault: Option<(String, String, bool)>,
     upload_failure: bool,
     corrupt: bool,
@@ -69,6 +70,7 @@ impl Remote {
             tag: None,
             calls: vec![],
             next: 1,
+            next_asset: 1000,
             fault: None,
             upload_failure: false,
             corrupt: false,
@@ -206,9 +208,13 @@ impl Api for Remote {
         let name = path.file_name().unwrap().to_string_lossy();
         self.calls.push(format!("UPLOAD {name}"));
         let digest = if self.corrupt { "0".repeat(64) } else { storage::digest(path)? };
+        // GitHub assigns asset IDs globally, not relative to each release.
+        // A staging delete must never alias an active public asset ID.
+        let asset_id = self.next_asset;
+        self.next_asset += 1;
         let assets = self.assets.get_mut(id).unwrap();
         assets.push(obj([
-            ("id", Value::integer(assets.len() as u64 + 100)),
+            ("id", Value::integer(asset_id)),
             ("name", Value::string(name)),
             ("state", Value::string("uploaded")),
             ("size", Value::integer(std::fs::metadata(path)?.len())),
@@ -388,4 +394,150 @@ fn stale_generations_cannot_replace_a_newer_published_release() {
     let (dir, mut state) = generation(temp.path(), 'a', 2);
     assert_eq!(publication::promote(&mut remote, &dir, &mut state).unwrap(), "stale");
     assert_eq!(remote.tag.as_deref(), Some(source('b').as_str()));
+}
+
+fn partial_staging_after_a_publication(
+    remote: &mut Remote,
+    root: &Path,
+) -> (u64, Value, u64) {
+    let (directory, mut first) = generation(root, 'a', 1);
+    assert_eq!(publication::promote(remote, &directory, &mut first).unwrap(), "published");
+    let public_id = *remote
+        .releases
+        .iter()
+        .find(|(_, release)| release.get_str("tag_name") == Some("nightly"))
+        .unwrap()
+        .0;
+    let old_public = remote.releases[&public_id].clone();
+
+    let (directory, mut partial) = generation(root, 'b', 2);
+    remote.fault = Some((
+        "GET".into(),
+        "releases/2/assets?per_page=100&page=1".into(),
+        false,
+    ));
+    assert!(publication::promote(remote, &directory, &mut partial).is_err());
+    let staged = storage::files(&directory).unwrap().into_iter().next().unwrap();
+    remote.upload(&staged, "nightly-staging").unwrap();
+    let staging_id = *remote
+        .releases
+        .iter()
+        .find(|(_, release)| release.get_str("tag_name") == Some("nightly-staging"))
+        .unwrap()
+        .0;
+    assert_eq!(remote.assets[&staging_id].len(), 1);
+    (public_id, old_public, staging_id)
+}
+
+#[test]
+fn partial_staging_generation_is_reconciled_before_exact_verification() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut remote = Remote::new();
+    let (public_id, old_public, staging_id) =
+        partial_staging_after_a_publication(&mut remote, temp.path());
+    let stale_id = remote.assets[&staging_id][0].get_u64("id").unwrap();
+
+    let (directory, mut next) = generation(temp.path(), 'c', 3);
+    remote.calls.clear();
+    assert_eq!(
+        publication::promote(&mut remote, &directory, &mut next).unwrap(),
+        "published"
+    );
+    assert!(remote.calls.iter().any(|call| {
+        call == &format!("DELETE releases/assets/{stale_id}")
+    }));
+    assert_eq!(remote.assets[&staging_id].len(), 29);
+    assert_eq!(remote.tag.as_deref(), Some(source('c').as_str()));
+    assert_eq!(remote.releases.len(), 1);
+    assert!(!remote.releases.contains_key(&public_id));
+    assert_ne!(remote.releases[&staging_id], old_public);
+    publication::verify_remote(&mut remote, staging_id, &next).unwrap();
+    assert_eq!(
+        publication::promote(&mut remote, &directory, &mut next).unwrap(),
+        "unchanged"
+    );
+    let (directory, mut stale) = generation(temp.path(), 'b', 4);
+    remote.calls.clear();
+    assert_eq!(
+        publication::promote(&mut remote, &directory, &mut stale).unwrap(),
+        "stale"
+    );
+    assert!(!remote.calls.iter().any(|call| call.starts_with("DELETE ")));
+}
+
+#[test]
+fn cleanup_failure_keeps_public_nightly_usable_and_can_be_retried() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut remote = Remote::new();
+    let (public_id, old_public, staging_id) =
+        partial_staging_after_a_publication(&mut remote, temp.path());
+    let old_public_assets = remote.assets[&public_id].clone();
+    let stale_id = remote.assets[&staging_id][0].get_u64("id").unwrap();
+
+    let (directory, mut next) = generation(temp.path(), 'c', 3);
+    remote.fault = Some((
+        "DELETE".into(),
+        format!("releases/assets/{stale_id}"),
+        false,
+    ));
+    assert!(publication::promote(&mut remote, &directory, &mut next).is_err());
+    assert_eq!(remote.releases[&public_id], old_public);
+    assert_eq!(remote.assets[&public_id], old_public_assets);
+    assert_eq!(remote.tag.as_deref(), Some(source('a').as_str()));
+    assert_eq!(remote.assets[&staging_id].len(), 30);
+
+    assert_eq!(
+        publication::promote(&mut remote, &directory, &mut next).unwrap(),
+        "published"
+    );
+    assert_eq!(remote.assets[&staging_id].len(), 29);
+    publication::verify_remote(&mut remote, staging_id, &next).unwrap();
+}
+
+#[test]
+fn conflicting_current_generation_assets_are_not_deleted_or_overwritten() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut remote = Remote::new();
+    let (public_id, old_public, staging_id) =
+        partial_staging_after_a_publication(&mut remote, temp.path());
+    let old_public_assets = remote.assets[&public_id].clone();
+    let (directory, mut next) = generation(temp.path(), 'c', 3);
+    let current_asset = storage::files(&directory).unwrap().into_iter().next().unwrap();
+    remote.corrupt = true;
+    remote.upload(&current_asset, "nightly-staging").unwrap();
+    remote.corrupt = false;
+
+    remote.calls.clear();
+    let result = publication::promote(&mut remote, &directory, &mut next);
+    assert!(
+        result.unwrap_err().to_string().contains("conflicting immutable Nightly asset")
+    );
+    assert!(!remote.calls.iter().any(|call| {
+        call.starts_with("DELETE ") || call.starts_with("UPLOAD ")
+    }));
+    assert_eq!(remote.releases[&public_id], old_public);
+    assert_eq!(remote.assets[&public_id], old_public_assets);
+    assert_eq!(remote.assets[&staging_id].len(), 2);
+    assert_eq!(remote.tag.as_deref(), Some(source('a').as_str()));
+}
+
+#[test]
+fn interrupted_new_generation_upload_retries_with_old_staging_assets() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut remote = Remote::new();
+    let (public_id, old_public, staging_id) =
+        partial_staging_after_a_publication(&mut remote, temp.path());
+    let (directory, mut next) = generation(temp.path(), 'c', 3);
+    remote.upload_failure = true;
+    assert!(publication::promote(&mut remote, &directory, &mut next).is_err());
+    assert_eq!(remote.releases[&public_id], old_public);
+    assert_eq!(remote.tag.as_deref(), Some(source('a').as_str()));
+    remote.upload_failure = false;
+
+    assert_eq!(
+        publication::promote(&mut remote, &directory, &mut next).unwrap(),
+        "published"
+    );
+    assert_eq!(remote.assets[&staging_id].len(), 29);
+    publication::verify_remote(&mut remote, staging_id, &next).unwrap();
 }
