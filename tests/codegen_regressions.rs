@@ -5,6 +5,8 @@ include!("codegen/support.rs");
 
 #[path = "codegen/abi.rs"]
 mod abi;
+#[path = "codegen/asm_results.rs"]
+mod asm_results;
 #[path = "codegen/diagnostics.rs"]
 mod diagnostics;
 #[path = "codegen/language.rs"]

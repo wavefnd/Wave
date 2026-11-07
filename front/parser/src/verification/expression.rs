@@ -602,15 +602,47 @@ impl Validator<'_> {
     fn validate_expr_asm_block(
         &mut self,
         expression: &Expression,
-        _expected: Option<&WaveType>,
+        expected: Option<&WaveType>,
     ) -> Result<ExpressionType, String> {
         let Expression::AsmBlock { inputs, outputs, .. } = expression else {
             unreachable!("expression dispatch")
         };
 
-        for (_, expression) in inputs.iter().chain(outputs.iter()) {
-            self.validate_expr(expression)?;
+        for (_, input) in inputs {
+            self.validate_expr(input)?;
         }
-        Ok(ExpressionType::Unknown)
+        match outputs.as_slice() {
+            [] if expected.is_none() => Ok(ExpressionType::Unknown),
+            [] => Err("asm expression without an output cannot supply a value".into()),
+            [(_, output)] => {
+                let actual = self.validate_expr(output)?;
+                let ExpressionType::Known(ty) = actual else {
+                    return Err("asm expression output must have a concrete scalar type".into());
+                };
+                let ty = self.program.canonical_type(&ty);
+                if !matches!(
+                    ty,
+                    WaveType::Int(_)
+                        | WaveType::Uint(_)
+                        | WaveType::Float(_)
+                        | WaveType::Bool
+                        | WaveType::Byte
+                        | WaveType::Char
+                        | WaveType::Isz
+                        | WaveType::Usz
+                        | WaveType::Pointer(_)
+                        | WaveType::String
+                ) {
+                    return Err(format!(
+                        "asm expression output must be scalar, found `{}`",
+                        display_wave_type(&ty)
+                    ));
+                }
+                // Record the actual result type, not the caller's expected
+                // type: HIR must plan implicit conversions in source order.
+                Ok(ExpressionType::Known(ty))
+            },
+            _ => Err("asm expression requires exactly one output".into()),
+        }
     }
 }
