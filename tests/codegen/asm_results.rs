@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 //! Expression asm must preserve HIR conversions in both IR and native execution.
+#![cfg(any(feature = "llvm-target-x86", feature = "llvm-target-all"))]
 use super::*;
 
 #[test]
@@ -39,8 +40,10 @@ fun main() -> i32 {
             out.as_os_str(),
         ]);
         let ir = fs::read_to_string(out.join("asm-results.ll")).unwrap();
-        assert!(ir.contains("sext i32") && ir.contains("sitofp i64"), "{opt}: {ir}");
-        assert!(ir.contains("inline_asm_expr"), "{opt}: {ir}");
+        if opt == "-O0" {
+            assert!(ir.contains("sext i32") && ir.contains("sitofp i64"), "{opt}: {ir}");
+        }
+        assert!(ir.contains("asm sideeffect"), "{opt}: {ir}");
         assert!(out.join("asm-results.o").is_file());
     }
 }

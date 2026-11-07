@@ -33,7 +33,10 @@ fun main() {
     program.verify_conversions().unwrap();
 
     let extended = initializer(&program, 1);
-    assert_eq!(program.type_of(extended), Some(&HirExpressionType::Resolved(WaveType::Int(32))));
+    assert_eq!(
+        program.type_of(extended),
+        Some(&HirExpressionType::Resolved(WaveType::Int(32)))
+    );
     let fact = program.numeric_expression_of(extended).unwrap();
     assert_eq!(fact.evaluation_type, WaveType::Int(32));
     assert_eq!(fact.result_type, WaveType::Int(64));
@@ -43,7 +46,10 @@ fun main() {
     assert_eq!(fact.conversions[0].span.file, "asm-results.wave");
 
     let floating = initializer(&program, 3);
-    assert_eq!(program.type_of(floating), Some(&HirExpressionType::Resolved(WaveType::Int(64))));
+    assert_eq!(
+        program.type_of(floating),
+        Some(&HirExpressionType::Resolved(WaveType::Int(64)))
+    );
     let fact = program.numeric_expression_of(floating).unwrap();
     assert_eq!(fact.evaluation_type, WaveType::Int(64));
     assert_eq!(fact.result_type, WaveType::Float(64));
@@ -55,7 +61,7 @@ fun main() {
 #[test]
 fn asm_results_participate_in_explicit_casts_arithmetic_and_returns() {
     let source = r#"
-fun main() -> i64 {
+fun compute() -> i64 {
     var sink: i32 = 0;
     var flag: bool = (asm { "mov eax, 7" out("eax") sink }) as bool;
     var sum: i32 = asm { "mov eax, 7" out("eax") sink } + 2;
@@ -73,7 +79,10 @@ fun main() -> i64 {
     let fact = program.numeric_expression_of(sum).unwrap();
     assert_eq!(fact.computation_type, Some(WaveType::Int(32)));
     let Expression::BinaryExpression { left, .. } = sum else { panic!("arithmetic") };
-    assert_eq!(program.type_of(left), Some(&HirExpressionType::Resolved(WaveType::Int(32))));
+    assert_eq!(
+        program.type_of(left),
+        Some(&HirExpressionType::Resolved(WaveType::Int(32)))
+    );
 
     let ASTNode::Function(function) = &program.syntax()[0] else { panic!("function") };
     let ASTNode::Statement(StatementNode::Return(Some(value))) = &function.body[3] else {
