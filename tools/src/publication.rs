@@ -787,7 +787,9 @@ pub fn promote(api: &mut impl Api, directory: &Path, state: &mut Value) -> Resul
             api.upload(&directory.join(name), &tag)?;
         }
     }
-    verify_remote(api, id, state)?;
+    // Older, partially uploaded staging generations have different immutable
+    // asset names. Reconcile those only in the private draft before requiring
+    // an exact remote set; never touch the still-active public Nightly here.
     for asset in existing {
         let name = config::text(&asset, "name")?;
         if !assets.iter().any(|(n, _)| n == name) {
@@ -799,6 +801,7 @@ pub fn promote(api: &mut impl Api, directory: &Path, state: &mut Value) -> Resul
             )?;
         }
     }
+    verify_remote(api, id, state)?;
     let master = api.get("git/ref/heads/master")?;
     let master =
         config::text(master.get("object").ok_or_else(|| error("missing master object"))?, "sha")?;
