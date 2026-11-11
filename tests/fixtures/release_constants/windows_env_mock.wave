@@ -23,5 +23,13 @@ fun main() -> i32 {
     if (env_read(&data[0], 20) != -13 || releases() != 1 || conversions() != 1) { return 7; }
     choose(5);
     if (env_read(&data[0], 20) != -13 || releases() != 1) { return 8; }
+    choose(0);
+    if (env_key_matches("Path" as ptr<u8>, 4, "PATH" as ptr<u8>, 4) != 1) { return 9; }
+    if (env_key_matches("Path" as ptr<u8>, 4, "PAT" as ptr<u8>, 3) != 0) { return 10; }
+    if (env_key_matches("Ä" as ptr<u8>, 2, "Ä" as ptr<u8>, 2) != 1) { return 11; }
+    choose(6);
+    if (env_key_matches("Path" as ptr<u8>, 4, "PATH" as ptr<u8>, 4) != -22) { return 12; }
+    choose(7);
+    if (env_key_matches("Path" as ptr<u8>, 4, "PATH" as ptr<u8>, 4) != -22) { return 13; }
     return failures();
 }

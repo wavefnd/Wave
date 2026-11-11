@@ -21,7 +21,7 @@ import("std::sys::env")::{
 };
 import("std::env::parse")::{
     _env_key_len,
-    _env_match_key,
+    _env_match_key_sized,
     _env_copy_value,
     _env_parse_i64,
 };
@@ -43,7 +43,9 @@ fun _env_source_needs_space(status: i64) -> bool { return status == -28; }
 #[target(os="macos")]
 fun _env_source_needs_space(status: i64) -> bool { return status == -28; }
 #[target(os="freebsd")]
-fun _env_source_needs_space(status: i64) -> bool { return false; }
+fun _env_source_needs_space(status: i64) -> bool {
+    return status == -28;
+}
 #[target(os="wasi")]
 fun _env_source_needs_space(status: i64) -> bool { return status == ENV_READ_NEEDS_SPACE; }
 
@@ -74,6 +76,58 @@ pub fun env_unwrap_or<T>(result: EnvResult<T>, default_value: T) -> T {
     return default_value;
 }
 
+#[target(os="freebsd")]
+import("std::sys::env")::{env_required_capacity};
+#[target(os="freebsd")]
+fun _env_next_capacity(current: i64, reads: i32) -> i64 {
+    if (reads >= 3) {
+        return ENV_ERR_SOURCE_INCOMPLETE;
+    }
+    var required: i64 = env_required_capacity();
+    if (required < 0) {
+        return ENV_ERR_READ;
+    }
+    var next: i64 = required;
+    if (next <= current) {
+        next = current * 2;
+    }
+    if (next > 16777216) {
+        return ENV_ERR_SOURCE_INCOMPLETE;
+    }
+    return next;
+}
+#[target(os="linux")]
+fun _env_next_capacity(current: i64, reads: i32) -> i64 {
+    if (current > 4611686018427387903) {
+        return ENV_ERR_NO_MEMORY;
+    }
+    return current * 2;
+}
+#[target(os="windows")]
+fun _env_next_capacity(current: i64, reads: i32) -> i64 {
+    if (current > 4611686018427387903) {
+        return ENV_ERR_NO_MEMORY;
+    }
+    return current * 2;
+}
+#[target(os="macos")]
+fun _env_next_capacity(current: i64, reads: i32) -> i64 {
+    if (current > 4611686018427387903) {
+        return ENV_ERR_NO_MEMORY;
+    }
+    return current * 2;
+}
+#[target(os="wasi")]
+fun _env_next_capacity(current: i64, reads: i32) -> i64 {
+    if (current > 4611686018427387903) {
+        return ENV_ERR_NO_MEMORY;
+    }
+    return current * 2;
+}
+
+// POSIX keys compare exact UTF-8 bytes; Windows uses native ordinal Unicode
+// case-insensitive comparison. Hidden Windows drive entries are not keys.
+// FreeBSD source reads stop after three attempts or 16 MiB, leaving dst intact.
 pub fun env_get(name: str, dst: ptr<u8>, dst_cap: i64) -> i64 {
     var key_len: i64 = _env_key_len(name);
     if (key_len <= 0) { return ENV_ERR_INVALID_KEY; }
@@ -83,14 +137,19 @@ pub fun env_get(name: str, dst: ptr<u8>, dst_cap: i64) -> i64 {
     var raw: ptr<u8> = &initial[0];
     var capacity: i64 = 32768;
     var allocated: bool = false;
+    var reads: i32 = 1;
     var n: i64 = env_read(raw, capacity);
     while (_env_source_needs_space(n)) {
+        var next: i64 = _env_next_capacity(capacity, reads);
         if (allocated) { sys_free(raw, capacity); }
-        if (capacity > 4611686018427387903) { return ENV_ERR_NO_MEMORY; }
-        capacity *= 2;
+        if (next < 0) {
+            return next;
+        }
+        capacity = next;
         raw = sys_alloc(capacity);
         if (raw == null) { return ENV_ERR_NO_MEMORY; }
         allocated = true;
+        reads += 1;
         n = env_read(raw, capacity);
     }
     var result: i64 = ENV_ERR_READ;
@@ -125,15 +184,18 @@ fun _env_lookup(raw: ptr<u8>, n: i64, name: str, key_len: i64, dst: ptr<u8>, dst
             i += 1;
         }
 
-        if (eq_pos < 0) {
+        if (eq_pos <= entry_start) {
             continue;
         }
 
-        if ((eq_pos - entry_start) != key_len) {
-            continue;
+        var matched: i32 = _env_match_key_sized(&raw[0], entry_start, eq_pos - entry_start, name, key_len);
+        if (matched == -12) {
+            return ENV_ERR_NO_MEMORY;
         }
-
-        if (!_env_match_key(&raw[0], entry_start, name, key_len)) {
+        if (matched < 0) {
+            return ENV_ERR_READ;
+        }
+        if (matched == 0) {
             continue;
         }
 

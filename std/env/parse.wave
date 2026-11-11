@@ -31,7 +31,7 @@ pub fun _env_key_len(name: str) -> i64 {
     return n;
 }
 
-pub fun _env_match_key(blob: ptr<u8>, start: i64, name: str, key_len: i64) -> bool {
+fun _env_match_key_bytes(blob: ptr<u8>, start: i64, name: str, key_len: i64) -> bool {
     var blob_idx: i64 = start;
     var name_idx: i64 = 0;
 
@@ -111,4 +111,49 @@ pub fun _env_parse_i64(raw: ptr<u8>, out_value: ptr<i64>) -> bool {
 
     deref out_value = value;
     return true;
+}
+
+
+#[target(os="windows")]
+import("std::sys::windows::env")::{env_key_matches};
+#[target(os="windows")]
+pub fun _env_match_key_sized(blob: ptr<u8>, start: i64, entry_len: i64, name: str, key_len: i64) -> i32 {
+    return env_key_matches(blob + start, entry_len, name as ptr<u8>, key_len);
+}
+
+#[target(os="linux")]
+pub fun _env_match_key_sized(blob: ptr<u8>, start: i64, entry_len: i64, name: str, key_len: i64) -> i32 {
+    if (entry_len != key_len) {
+        return 0;
+    }
+    return _env_match_key_bytes(blob, start, name, key_len) as i32;
+}
+
+#[target(os="macos")]
+pub fun _env_match_key_sized(blob: ptr<u8>, start: i64, entry_len: i64, name: str, key_len: i64) -> i32 {
+    if (entry_len != key_len) {
+        return 0;
+    }
+    return _env_match_key_bytes(blob, start, name, key_len) as i32;
+}
+
+#[target(os="freebsd")]
+pub fun _env_match_key_sized(blob: ptr<u8>, start: i64, entry_len: i64, name: str, key_len: i64) -> i32 {
+    if (entry_len != key_len) {
+        return 0;
+    }
+    return _env_match_key_bytes(blob, start, name, key_len) as i32;
+}
+
+#[target(os="wasi")]
+pub fun _env_match_key_sized(blob: ptr<u8>, start: i64, entry_len: i64, name: str, key_len: i64) -> i32 {
+    if (entry_len != key_len) {
+        return 0;
+    }
+    return _env_match_key_bytes(blob, start, name, key_len) as i32;
+}
+
+// Compatibility helper for callers that already established equal byte lengths.
+pub fun _env_match_key(blob: ptr<u8>, start: i64, name: str, key_len: i64) -> bool {
+    return _env_match_key_sized(blob, start, key_len, name, key_len) == 1;
 }

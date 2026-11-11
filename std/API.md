@@ -1427,7 +1427,7 @@ pub fun env_access(path: str, mode: i32) -> i64
 
 [Source](env/environ.wave)
 
-[Declaration](env/environ.wave#L50)
+[Declaration](env/environ.wave#L52)
 
 ```wave
 pub struct EnvResult<T> {
@@ -1436,55 +1436,55 @@ pub struct EnvResult<T> {
 }
 ```
 
-[Declaration](env/environ.wave#L55)
+[Declaration](env/environ.wave#L57)
 
 ```wave
 pub fun env_result_ok<T>(value: T) -> EnvResult<T>
 ```
 
-[Declaration](env/environ.wave#L62)
+[Declaration](env/environ.wave#L64)
 
 ```wave
 pub fun env_result_err<T>(fallback: T) -> EnvResult<T>
 ```
 
-[Declaration](env/environ.wave#L69)
+[Declaration](env/environ.wave#L71)
 
 ```wave
 pub fun env_unwrap_or<T>(result: EnvResult<T>, default_value: T) -> T
 ```
 
-[Declaration](env/environ.wave#L77)
+[Declaration](env/environ.wave#L131)
 
 ```wave
 pub fun env_get(name: str, dst: ptr<u8>, dst_cap: i64) -> i64
 ```
 
-[Declaration](env/environ.wave#L146)
+[Declaration](env/environ.wave#L208)
 
 ```wave
 pub fun env_exists(name: str) -> bool
 ```
 
-[Declaration](env/environ.wave#L154)
+[Declaration](env/environ.wave#L216)
 
 ```wave
 pub fun env_get_i64(name: str) -> EnvResult<i64>
 ```
 
-[Declaration](env/environ.wave#L170)
+[Declaration](env/environ.wave#L232)
 
 ```wave
 pub fun env_get_i32(name: str) -> EnvResult<i32>
 ```
 
-[Declaration](env/environ.wave#L190)
+[Declaration](env/environ.wave#L252)
 
 ```wave
 pub fun env_get_i32_default(name: str, default_value: i32) -> i32
 ```
 
-[Declaration](env/environ.wave#L194)
+[Declaration](env/environ.wave#L256)
 
 ```wave
 pub fun env_get_i64_default(name: str, default_value: i64) -> i64
@@ -1498,12 +1498,6 @@ pub fun env_get_i64_default(name: str, default_value: i64) -> i64
 
 ```wave
 pub fun _env_key_len(name: str) -> i64
-```
-
-[Declaration](env/parse.wave#L34)
-
-```wave
-pub fun _env_match_key(blob: ptr<u8>, start: i64, name: str, key_len: i64) -> bool
 ```
 
 [Declaration](env/parse.wave#L49)
@@ -1522,6 +1516,47 @@ pub fun _env_copy_value(
 
 ```wave
 pub fun _env_parse_i64(raw: ptr<u8>, out_value: ptr<i64>) -> bool
+```
+
+[Declaration](env/parse.wave#L120)
+
+```wave
+#[target(os="windows")]
+pub fun _env_match_key_sized(blob: ptr<u8>, start: i64, entry_len: i64, name: str, key_len: i64) -> i32
+```
+
+[Declaration](env/parse.wave#L125)
+
+```wave
+#[target(os="linux")]
+pub fun _env_match_key_sized(blob: ptr<u8>, start: i64, entry_len: i64, name: str, key_len: i64) -> i32
+```
+
+[Declaration](env/parse.wave#L133)
+
+```wave
+#[target(os="macos")]
+pub fun _env_match_key_sized(blob: ptr<u8>, start: i64, entry_len: i64, name: str, key_len: i64) -> i32
+```
+
+[Declaration](env/parse.wave#L141)
+
+```wave
+#[target(os="freebsd")]
+pub fun _env_match_key_sized(blob: ptr<u8>, start: i64, entry_len: i64, name: str, key_len: i64) -> i32
+```
+
+[Declaration](env/parse.wave#L149)
+
+```wave
+#[target(os="wasi")]
+pub fun _env_match_key_sized(blob: ptr<u8>, start: i64, entry_len: i64, name: str, key_len: i64) -> i32
+```
+
+[Declaration](env/parse.wave#L157)
+
+```wave
+pub fun _env_match_key(blob: ptr<u8>, start: i64, name: str, key_len: i64) -> bool
 ```
 
 ## `std::fs::consts`
@@ -6667,7 +6702,7 @@ pub import("std::sys::windows::env")::{env_read};
 
 ```wave
 #[target(os="freebsd")]
-pub import("std::sys::freebsd::env")::{env_read};
+pub import("std::sys::freebsd::env")::{env_read, env_required_capacity};
 ```
 
 [Declaration](sys/env.wave#L40)
@@ -6886,7 +6921,7 @@ pub import("std::sys::windows::event")::{
 
 ```wave
 pub import("std::sys::freebsd::common::env")::{
-    ERR_NOT_IMPLEMENTED, env_read
+    ERR_NOT_IMPLEMENTED, env_read, env_required_capacity
 };
 ```
 
@@ -7046,7 +7081,7 @@ pub import("std::sys::freebsd::common::tty")::{
 
 ```wave
 pub import("std::sys::freebsd::common::env")::{
-    ERR_NOT_IMPLEMENTED, env_read
+    ERR_NOT_IMPLEMENTED, env_read, env_required_capacity
 };
 ```
 
@@ -7192,7 +7227,13 @@ pub import("std::sys::freebsd::common::tty")::{
 pub const ERR_NOT_IMPLEMENTED: i64 = -78;
 ```
 
-[Declaration](sys/freebsd/common/env.wave#L24)
+[Declaration](sys/freebsd/common/env.wave#L26)
+
+```wave
+pub fun env_required_capacity() -> i64
+```
+
+[Declaration](sys/freebsd/common/env.wave#L43)
 
 ```wave
 pub fun env_read(buf: ptr<u8>, cap: i64) -> i64
@@ -8145,7 +8186,7 @@ pub fun tty_restore(fd: i32, st: ptr<TtyRawState>)
 
 ```wave
 #[target(arch="x86_64")]
-pub import("std::sys::freebsd::amd64::env")::{env_read};
+pub import("std::sys::freebsd::amd64::env")::{env_read, env_required_capacity};
 ```
 
 [Declaration](sys/freebsd/env.wave#L11)
@@ -8153,7 +8194,7 @@ pub import("std::sys::freebsd::amd64::env")::{env_read};
 ```wave
 #[target(arch="aarch64")]
 pub import("std::sys::freebsd::arm64::env")::{
-    env_read
+    env_read, env_required_capacity
 };
 ```
 
@@ -8162,7 +8203,7 @@ pub import("std::sys::freebsd::arm64::env")::{
 ```wave
 #[target(arch="riscv64")]
 pub import("std::sys::freebsd::riscv64::env")::{
-    env_read
+    env_read, env_required_capacity
 };
 ```
 
@@ -8541,7 +8582,7 @@ pub fun resolver_next(result: ptr<NativeAddrInfo>) -> ptr<NativeAddrInfo>
 
 ```wave
 pub import("std::sys::freebsd::common::env")::{
-    ERR_NOT_IMPLEMENTED, env_read
+    ERR_NOT_IMPLEMENTED, env_read, env_required_capacity
 };
 ```
 
@@ -16944,6 +16985,12 @@ pub fun completion_port_release_executor()
 
 ```wave
 pub fun env_read(buf: ptr<u8>, cap: i64) -> i64
+```
+
+[Declaration](sys/windows/env.wave#L56)
+
+```wave
+pub fun env_key_matches(left: ptr<u8>, left_len: i64, right: ptr<u8>, right_len: i64) -> i32
 ```
 
 ## `std::sys::windows::event`
