@@ -36,3 +36,27 @@ pub fun vector_recv(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32
     if (result != 0) { return socket_last_error(); }
     return transferred as i64;
 }
+
+// UDP WSAEMSGSIZE fills the available buffers and discards the excess bytes.
+// Do not rely on the transferred output when WSARecv returned an error.
+pub fun vector_recv_datagram(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32, capacity: i64, truncated: ptr<bool>, original_size: ptr<i64>) -> i64 {
+    if (count <= 0 || capacity < 0 || capacity > 4294967295 || truncated == null || original_size == null) {
+        return -22;
+    }
+    var transferred: u32 = 0;
+    var receive_flags: u32 = flags as u32;
+    var result: i32 = native_wsa_recv(fd, vectors, count as u32, &transferred, &receive_flags, null, null);
+    if (result != 0) {
+        var failure: i64 = socket_last_error();
+        if (failure != -10040) {
+            return failure;
+        }
+        deref truncated = true;
+        deref original_size = -1;
+        return capacity;
+    }
+    var cut: bool = (receive_flags & 32768) != 0;
+    deref truncated = cut;
+    if (cut) { deref original_size = -1; } else { deref original_size = transferred as i64; }
+    return transferred as i64;
+}

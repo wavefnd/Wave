@@ -653,3 +653,59 @@ fun main() -> i32 {
         checked(&mut Command::new(output), "getcwd provider convention", &case.0);
     }
 }
+
+#[test]
+fn zero_capacity_datagrams_use_a_private_native_buffer_and_preserve_user_storage() {
+    let target = host_target();
+    if !supported(&target) {
+        return;
+    }
+    let case = Case::new();
+    let portable = fs::read_to_string(root().join("std/net/vectored.wave")).unwrap();
+    let portable =
+        portable.lines().filter(|line| !line.starts_with("import(")).collect::<Vec<_>>().join("\n");
+    let mock = r#"
+import("std::net::error")::{NetIoResult, net_io_ok, net_io_eof, net_io_error, NetDatagramResult, net_datagram_error, net_error_none};
+const MSG_NOSIGNAL: i32 = 0;
+struct NativeIoSlice { data: ptr<u8>; length: i64; }
+static calls: i32 = 0;
+static empty: bool = false;
+fun net_fd_valid(fd: i64) -> bool { return fd == 7; }
+fun native_io_slice(data: ptr<u8>, length: i64, output: ptr<NativeIoSlice>) -> i64 {
+    if (length < 0 || data == null && length > 0) { return -22; }
+    deref output = NativeIoSlice { data: data, length: length };
+    return 0;
+}
+fun vector_send(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32) -> i64 { return -38; }
+fun vector_recv(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32) -> i64 { return -38; }
+fun vector_recv_datagram(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32, capacity: i64, truncated: ptr<bool>, original: ptr<i64>) -> i64 {
+    calls += 1;
+    // Model providers that cannot consume a message with zero native capacity.
+    if (count != 1 || capacity != 1 || vectors[0].data == null || vectors[0].length != 1) { return -22; }
+    deref truncated = false;
+    if (empty) { deref original = 0; return 0; }
+    vectors[0].data[0] = 63;
+    deref original = 1;
+    return 1;
+}
+fun main() -> i32 {
+    var result: NetDatagramResult = net_recv_vectored_datagram(7, null, 0);
+    if (result.error.native_code != 0 || result.count != 0 || !result.truncated || !result.original_size_known || result.original_size != 1) { return 1; }
+    var sentinel: u8 = 91;
+    var slices: array<NetIoSlice, 2> = [NetIoSlice { data: &sentinel, length: 0 }, NetIoSlice { data: null, length: 0 }];
+    result = net_recv_vectored_datagram(7, &slices[0], 2);
+    if (result.error.native_code != 0 || result.count != 0 || !result.truncated || sentinel != 91) { return 2; }
+    empty = true;
+    result = net_recv_vectored_datagram(7, null, 0);
+    if (result.error.native_code != 0 || result.count != 0 || result.truncated || !result.original_size_known || result.original_size != 0 || calls != 3) { return 3; }
+    return 0;
+}
+"#;
+    let source = case.0.join("zero-datagram.wave");
+    fs::write(&source, format!("{portable}\n{mock}")).unwrap();
+    for opt in ["-O0", "-O2"] {
+        let binary = case.0.join(format!("probe{}", std::env::consts::EXE_SUFFIX));
+        build(&case, &source, &target, opt, &binary, false);
+        checked(&mut Command::new(binary), "zero-capacity native provider", &case.0);
+    }
+}

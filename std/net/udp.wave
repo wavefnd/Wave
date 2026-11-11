@@ -16,7 +16,7 @@ import("std::net::address")::{
     net_addr_to_socket_v4, socket_addr_to_net_v4,
 };
 import("std::net::error")::{
-    NetError, NetResult, NetIoResult,
+    NetError, NetResult, NetIoResult, NetDatagramResult,
     net_error_none, net_error_from_native,
     net_result_ok, net_result_err, net_io_ok, net_io_error,
 };
@@ -48,7 +48,7 @@ import("std::net::socketopt")::{
     net_set_multicast_loop_v6, net_get_multicast_loop_v6,
 };
 import("std::string::len")::{len};
-import("std::net::vectored")::{NetIoSlice, net_send_vectored, net_recv_vectored};
+import("std::net::vectored")::{NetIoSlice, net_send_vectored, net_recv_vectored, net_recv_vectored_datagram};
 
 pub struct UdpSocket {
     fd: i64;
@@ -476,4 +476,15 @@ pub fun udp_close(sock: UdpSocket) -> NetError {
     var result: i64 = net_close(sock.fd);
     if (result < 0) { return net_error_from_native(result); }
     return net_error_none();
+}
+
+// Extended receive APIs expose datagram truncation. Existing APIs retain their
+// count-only contracts; callers requiring completeness must use these results.
+pub fun udp_recv_datagram(sock: UdpSocket, buf: ptr<u8>, size: i64) -> NetDatagramResult {
+    var slice: NetIoSlice = NetIoSlice { data: buf, length: size };
+    return net_recv_vectored_datagram(sock.fd, &slice, 1);
+}
+
+pub fun udp_recv_vectored_datagram(sock: UdpSocket, slices: ptr<NetIoSlice>, count: i32) -> NetDatagramResult {
+    return net_recv_vectored_datagram(sock.fd, slices, count);
 }

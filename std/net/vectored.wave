@@ -1,9 +1,9 @@
 // One message-oriented scatter/gather operation over caller-owned slices.
 
 import("std::net::socket_base")::{net_fd_valid};
-import("std::sys::vector_io")::{NativeIoSlice, native_io_slice, vector_send, vector_recv};
+import("std::sys::vector_io")::{NativeIoSlice, native_io_slice, vector_send, vector_recv, vector_recv_datagram};
 import("std::sys::socket")::{MSG_NOSIGNAL};
-import("std::net::error")::{NetIoResult, net_io_ok, net_io_eof, net_io_error};
+import("std::net::error")::{NetIoResult, net_io_ok, net_io_eof, net_io_error, NetDatagramResult, net_datagram_error, net_error_none};
 
 pub const NET_IOV_MAX: i32 = 32;
 
@@ -68,4 +68,49 @@ pub fun net_recv_vectored(
     if (result < 0) { return net_io_error(0, result); }
     if (result == 0 && eof_on_zero) { return net_io_eof(0); }
     return net_io_ok(result);
+}
+
+// Receives exactly one datagram, including when the supplied capacity is zero.
+pub fun net_recv_vectored_datagram(fd: i64, slices: ptr<NetIoSlice>, count: i32) -> NetDatagramResult {
+    if (!net_fd_valid(fd)) {
+        return net_datagram_error(-22);
+    }
+    var native: array<NativeIoSlice, 32>;
+    var prepared: i64 = _native_slices(slices, count, &native[0]);
+    if (prepared < 0) {
+        return net_datagram_error(prepared);
+    }
+    var capacity: i64 = 0;
+    var i: i32 = 0;
+    while (i < count) {
+        if (slices[i].length > 9223372036854775807 - capacity) {
+            return net_datagram_error(-22);
+        }
+        capacity += slices[i].length;
+        i += 1;
+    }
+    var native_count: i32 = count;
+    var native_capacity: i64 = capacity;
+    var discard: u8 = 0;
+    if (capacity == 0) {
+        // Some providers return immediately for zero native capacity. A
+        // private byte consumes one message without touching caller storage.
+        native_io_slice(&discard, 1, &native[0]);
+        native_count = 1;
+        native_capacity = 1;
+    }
+    var cut: bool = false;
+    var original: i64 = -1;
+    var stored: i64 = vector_recv_datagram(fd, &native[0], native_count, 0, native_capacity, &cut, &original);
+    if (stored < 0) {
+        return net_datagram_error(stored);
+    }
+    if (capacity == 0) {
+        cut = cut || stored > 0;
+        stored = 0;
+    }
+    if (original >= 0) {
+        return NetDatagramResult { count: stored, truncated: cut, original_size_known: true, original_size: original, error: net_error_none() };
+    }
+    return NetDatagramResult { count: stored, truncated: cut, original_size_known: false, original_size: 0, error: net_error_none() };
 }

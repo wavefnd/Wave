@@ -40,3 +40,22 @@ pub fun vector_recv(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32
     var message: NativeMessage = _message(vectors, count);
     return _result(native_recvmsg(fd as i32, &message, flags));
 }
+
+// One datagram; report the bytes stored separately from the wire size.
+pub fun vector_recv_datagram(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32, capacity: i64, truncated: ptr<bool>, original_size: ptr<i64>) -> i64 {
+    if (count <= 0 || capacity < 0 || truncated == null || original_size == null) {
+        return -22;
+    }
+    var message: NativeMessage = _message(vectors, count);
+    var result: i64 = _result(native_recvmsg(fd as i32, &message, flags | 32));
+    if (result < 0) {
+        return result;
+    }
+    var cut: bool = (message.flags & 32) != 0 || result > capacity;
+    deref truncated = cut;
+    deref original_size = result;
+    if (result > capacity) {
+        return capacity;
+    }
+    return result;
+}

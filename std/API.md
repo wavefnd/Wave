@@ -4237,6 +4237,24 @@ pub const NET_NATIVE_TIMEOUT: i64 = -73;
 pub fun net_connect_pending(code: i64) -> bool
 ```
 
+[Declaration](net/error.wave#L258)
+
+```wave
+pub struct NetDatagramResult {
+    count: i64;
+    truncated: bool;
+    original_size_known: bool;
+    original_size: i64;
+    error: NetError;
+}
+```
+
+[Declaration](net/error.wave#L266)
+
+```wave
+pub fun net_datagram_error(native_code: i64) -> NetDatagramResult
+```
+
 ## `std::net::event`
 
 [Source](net/event.wave)
@@ -4459,21 +4477,21 @@ pub fun net_wait_connected(fd: i64, timeout_ms: i32) -> i64
 
 [Source](net/posix_timeout.wave)
 
-[Declaration](net/posix_timeout.wave#L23)
+[Declaration](net/posix_timeout.wave#L24)
 
 ```wave
 #[target(os="linux")]
 pub fun net_io_timeout(fd: i64, buffer: ptr<u8>, size: i64, timeout_ms: i32, writing: bool) -> NetIoResult
 ```
 
-[Declaration](net/posix_timeout.wave#L27)
+[Declaration](net/posix_timeout.wave#L28)
 
 ```wave
 #[target(os="macos")]
 pub fun net_io_timeout(fd: i64, buffer: ptr<u8>, size: i64, timeout_ms: i32, writing: bool) -> NetIoResult
 ```
 
-[Declaration](net/posix_timeout.wave#L31)
+[Declaration](net/posix_timeout.wave#L32)
 
 ```wave
 #[target(os="freebsd")]
@@ -5350,7 +5368,7 @@ pub fun tcp_read_timeout(
 ) -> NetIoResult
 ```
 
-[Declaration](net/tcp.wave#L380)
+[Declaration](net/tcp.wave#L381)
 
 ```wave
 pub fun tcp_write_timeout(
@@ -5358,25 +5376,25 @@ pub fun tcp_write_timeout(
 ) -> NetIoResult
 ```
 
-[Declaration](net/tcp.wave#L390)
+[Declaration](net/tcp.wave#L392)
 
 ```wave
 pub fun tcp_write_result(stream: TcpStream, buf: ptr<u8>, size: i64) -> NetIoResult
 ```
 
-[Declaration](net/tcp.wave#L396)
+[Declaration](net/tcp.wave#L398)
 
 ```wave
 pub fun tcp_write_all_result(stream: TcpStream, buf: ptr<u8>, size: i64) -> NetIoResult
 ```
 
-[Declaration](net/tcp.wave#L400)
+[Declaration](net/tcp.wave#L402)
 
 ```wave
 pub fun tcp_read_exact_result(stream: TcpStream, buf: ptr<u8>, size: i64) -> NetIoResult
 ```
 
-[Declaration](net/tcp.wave#L404)
+[Declaration](net/tcp.wave#L406)
 
 ```wave
 pub fun tcp_write_vectored(
@@ -5384,7 +5402,7 @@ pub fun tcp_write_vectored(
 ) -> NetIoResult
 ```
 
-[Declaration](net/tcp.wave#L410)
+[Declaration](net/tcp.wave#L412)
 
 ```wave
 pub fun tcp_read_vectored(
@@ -5392,133 +5410,133 @@ pub fun tcp_read_vectored(
 ) -> NetIoResult
 ```
 
-[Declaration](net/tcp.wave#L416)
+[Declaration](net/tcp.wave#L418)
 
 ```wave
 pub fun tcp_write_str(stream: TcpStream, text: str) -> NetIoResult
 ```
 
-[Declaration](net/tcp.wave#L421)
+[Declaration](net/tcp.wave#L423)
 
 ```wave
 pub fun tcp_shutdown_read(stream: TcpStream) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L427)
+[Declaration](net/tcp.wave#L429)
 
 ```wave
 pub fun tcp_shutdown_write(stream: TcpStream) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L433)
+[Declaration](net/tcp.wave#L435)
 
 ```wave
 pub fun tcp_shutdown_both(stream: TcpStream) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L439)
+[Declaration](net/tcp.wave#L441)
 
 ```wave
 pub fun tcp_stream_set_nonblock(stream: TcpStream, enabled: bool) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L445)
+[Declaration](net/tcp.wave#L447)
 
 ```wave
 pub fun tcp_listener_set_nonblock(listener: TcpListener, enabled: bool) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L451)
+[Declaration](net/tcp.wave#L453)
 
 ```wave
 pub fun tcp_stream_is_nonblock(stream: TcpStream) -> NetResult<bool>
 ```
 
-[Declaration](net/tcp.wave#L459)
+[Declaration](net/tcp.wave#L461)
 
 ```wave
 pub fun tcp_listener_is_nonblock(listener: TcpListener) -> NetResult<bool>
 ```
 
-[Declaration](net/tcp.wave#L486)
+[Declaration](net/tcp.wave#L488)
 
 ```wave
 pub fun tcp_set_nodelay(stream: TcpStream, enabled: bool) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L490)
+[Declaration](net/tcp.wave#L492)
 
 ```wave
 pub fun tcp_nodelay(stream: TcpStream) -> NetResult<bool>
 ```
 
-[Declaration](net/tcp.wave#L494)
+[Declaration](net/tcp.wave#L496)
 
 ```wave
 pub fun tcp_set_keepalive(stream: TcpStream, enabled: bool) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L498)
+[Declaration](net/tcp.wave#L500)
 
 ```wave
 pub fun tcp_keepalive(stream: TcpStream) -> NetResult<bool>
 ```
 
-[Declaration](net/tcp.wave#L502)
+[Declaration](net/tcp.wave#L504)
 
 ```wave
 pub fun tcp_set_recv_buffer(stream: TcpStream, size: i32) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L506)
+[Declaration](net/tcp.wave#L508)
 
 ```wave
 pub fun tcp_recv_buffer(stream: TcpStream) -> NetResult<i64>
 ```
 
-[Declaration](net/tcp.wave#L510)
+[Declaration](net/tcp.wave#L512)
 
 ```wave
 pub fun tcp_set_send_buffer(stream: TcpStream, size: i32) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L514)
+[Declaration](net/tcp.wave#L516)
 
 ```wave
 pub fun tcp_send_buffer(stream: TcpStream) -> NetResult<i64>
 ```
 
-[Declaration](net/tcp.wave#L519)
+[Declaration](net/tcp.wave#L521)
 
 ```wave
 pub fun tcp_from_fd(fd: i64) -> NetResult<TcpStream>
 ```
 
-[Declaration](net/tcp.wave#L524)
+[Declaration](net/tcp.wave#L526)
 
 ```wave
 pub fun tcp_listener_from_fd(fd: i64) -> NetResult<TcpListener>
 ```
 
-[Declaration](net/tcp.wave#L529)
+[Declaration](net/tcp.wave#L531)
 
 ```wave
 pub fun tcp_stream_valid(stream: TcpStream) -> bool
 ```
 
-[Declaration](net/tcp.wave#L530)
+[Declaration](net/tcp.wave#L532)
 
 ```wave
 pub fun tcp_listener_valid(listener: TcpListener) -> bool
 ```
 
-[Declaration](net/tcp.wave#L532)
+[Declaration](net/tcp.wave#L534)
 
 ```wave
 pub fun tcp_close(stream: TcpStream) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L538)
+[Declaration](net/tcp.wave#L540)
 
 ```wave
 pub fun tcp_close_listener(listener: TcpListener) -> NetError
@@ -5889,6 +5907,18 @@ pub fun udp_socket_valid(sock: UdpSocket) -> bool
 pub fun udp_close(sock: UdpSocket) -> NetError
 ```
 
+[Declaration](net/udp.wave#L483)
+
+```wave
+pub fun udp_recv_datagram(sock: UdpSocket, buf: ptr<u8>, size: i64) -> NetDatagramResult
+```
+
+[Declaration](net/udp.wave#L488)
+
+```wave
+pub fun udp_recv_vectored_datagram(sock: UdpSocket, slices: ptr<NetIoSlice>, count: i32) -> NetDatagramResult
+```
+
 ## `std::net::unix`
 
 [Source](net/unix.wave)
@@ -6088,6 +6118,12 @@ pub fun net_send_vectored(
 pub fun net_recv_vectored(
     fd: i64, slices: ptr<NetIoSlice>, count: i32, flags: i32, eof_on_zero: bool
 ) -> NetIoResult
+```
+
+[Declaration](net/vectored.wave#L74)
+
+```wave
+pub fun net_recv_vectored_datagram(fd: i64, slices: ptr<NetIoSlice>, count: i32) -> NetDatagramResult
 ```
 
 ## `std::net::windows_timeout`
@@ -8983,6 +9019,12 @@ pub fun vector_send(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32
 
 ```wave
 pub fun vector_recv(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32) -> i64
+```
+
+[Declaration](sys/freebsd/vector_io.wave#L35)
+
+```wave
+pub fun vector_recv_datagram(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32, capacity: i64, truncated: ptr<bool>, original_size: ptr<i64>) -> i64
 ```
 
 ## `std::sys::fs`
@@ -13055,6 +13097,12 @@ pub fun vector_send(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32
 pub fun vector_recv(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32) -> i64
 ```
 
+[Declaration](sys/linux/vector_io.wave#L45)
+
+```wave
+pub fun vector_recv_datagram(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32, capacity: i64, truncated: ptr<bool>, original_size: ptr<i64>) -> i64
+```
+
 ## `std::sys::local_addr`
 
 [Source](sys/local_addr.wave)
@@ -15703,6 +15751,12 @@ pub fun vector_send(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32
 pub fun vector_recv(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32) -> i64
 ```
 
+[Declaration](sys/macos/vector_io.wave#L42)
+
+```wave
+pub fun vector_recv_datagram(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32, capacity: i64, truncated: ptr<bool>, original_size: ptr<i64>) -> i64
+```
+
 ## `std::sys::memory`
 
 [Source](sys/memory.wave)
@@ -16387,28 +16441,28 @@ pub import("std::sys::freebsd::tty")::{
 
 ```wave
 #[target(os="linux")]
-pub import("std::sys::linux::vector_io")::{NativeIoSlice, native_io_slice, vector_send, vector_recv};
+pub import("std::sys::linux::vector_io")::{NativeIoSlice, native_io_slice, vector_send, vector_recv, vector_recv_datagram};
 ```
 
 [Declaration](sys/vector_io.wave#L4)
 
 ```wave
 #[target(os="macos")]
-pub import("std::sys::macos::vector_io")::{NativeIoSlice, native_io_slice, vector_send, vector_recv};
+pub import("std::sys::macos::vector_io")::{NativeIoSlice, native_io_slice, vector_send, vector_recv, vector_recv_datagram};
 ```
 
 [Declaration](sys/vector_io.wave#L6)
 
 ```wave
 #[target(os="freebsd")]
-pub import("std::sys::freebsd::vector_io")::{NativeIoSlice, native_io_slice, vector_send, vector_recv};
+pub import("std::sys::freebsd::vector_io")::{NativeIoSlice, native_io_slice, vector_send, vector_recv, vector_recv_datagram};
 ```
 
 [Declaration](sys/vector_io.wave#L8)
 
 ```wave
 #[target(os="windows")]
-pub import("std::sys::windows::vector_io")::{NativeIoSlice, native_io_slice, vector_send, vector_recv};
+pub import("std::sys::windows::vector_io")::{NativeIoSlice, native_io_slice, vector_send, vector_recv, vector_recv_datagram};
 ```
 
 ## `std::sys::wasm::env`
@@ -18351,6 +18405,12 @@ pub fun vector_send(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32
 
 ```wave
 pub fun vector_recv(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32) -> i64
+```
+
+[Declaration](sys/windows/vector_io.wave#L42)
+
+```wave
+pub fun vector_recv_datagram(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32, capacity: i64, truncated: ptr<bool>, original_size: ptr<i64>) -> i64
 ```
 
 ## `std::task::net`
