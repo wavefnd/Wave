@@ -675,33 +675,174 @@ pub fn stage(binary: &Path, target: &str, directory: &Path) -> Result<()> {
     Ok(())
 }
 
-pub fn archive(stage: &Path, output: &Path, name: &str) -> Result<()> {
-    if output.extension().is_some_and(|v| v == "zip") {
-        let mut zip = zip::ZipWriter::new(fs::File::create(output)?);
-        for path in storage::files(stage)? {
-            if fs::symlink_metadata(&path)?.is_symlink() {
-                return Err(error("archive staging contains a symlink"));
+fn archive_epoch() -> Result<u64> {
+    archive_epoch_value(std::env::var_os("SOURCE_DATE_EPOCH"), || {
+        let mut spec = Spec::new(["git", "show", "-s", "--format=%ct", "HEAD"]);
+        spec.cwd = crate::root();
+        Ok(spec.checked()?.strict_stdout()?.trim().to_string())
+    })
+}
+
+fn archive_epoch_value(
+    explicit: Option<std::ffi::OsString>,
+    source_timestamp: impl FnOnce() -> Result<String>,
+) -> Result<u64> {
+    let raw = match explicit {
+        Some(value) => value.into_string().map_err(|_| error("SOURCE_DATE_EPOCH must be UTF-8"))?,
+        None => source_timestamp()?,
+    };
+    if raw.is_empty() || !raw.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err(error("archive epoch must be a nonnegative integer"));
+    }
+    raw.parse().map_err(|_| error("archive epoch is out of range"))
+}
+
+fn archive_mode(path: &Path, directory: bool) -> Result<u32> {
+    if directory {
+        return Ok(0o755);
+    }
+    #[cfg(unix)]
+    let executable = {
+        use std::os::unix::fs::PermissionsExt;
+        fs::metadata(path)?.permissions().mode() & 0o111 != 0
+    };
+    #[cfg(not(unix))]
+    let executable = path.extension().is_some_and(|ext| ext.eq_ignore_ascii_case("exe"));
+    Ok(if executable { 0o755 } else { 0o644 })
+}
+
+fn archive_entries(stage: &Path) -> Result<BTreeMap<String, PathBuf>> {
+    fn visit(stage: &Path, path: &Path, entries: &mut BTreeMap<String, PathBuf>) -> Result<()> {
+        for item in fs::read_dir(path)? {
+            let item = item?;
+            let path = item.path();
+            let relative = path
+                .strip_prefix(stage)?
+                .components()
+                .map(|part| {
+                    part.as_os_str().to_str().ok_or_else(|| error("archive paths must be UTF-8"))
+                })
+                .collect::<Result<Vec<_>>>()?
+                .join("/");
+            cases::relative(&relative)?;
+            if entries.insert(relative, path.clone()).is_some() {
+                return Err(error("duplicate archive path"));
             }
-            let relative = Path::new(name).join(path.strip_prefix(stage)?);
+            if item.file_type()?.is_dir() {
+                visit(stage, &path, entries)?;
+            }
+        }
+        Ok(())
+    }
+    let mut entries = BTreeMap::new();
+    visit(stage, stage, &mut entries)?;
+    Ok(entries)
+}
+
+pub fn archive(stage: &Path, output: &Path, name: &str) -> Result<()> {
+    archive_at_epoch(stage, output, name, archive_epoch()?)
+}
+
+fn archive_at_epoch(stage: &Path, output: &Path, name: &str, epoch: u64) -> Result<()> {
+    cases::relative(name)?;
+    crate::sdk::check_tree(stage)?;
+    let entries = archive_entries(stage)?;
+    if output.extension().is_some_and(|v| v == "zip") {
+        if entries
+            .values()
+            .any(|path| fs::symlink_metadata(path).is_ok_and(|meta| meta.is_symlink()))
+        {
+            return Err(error("archive staging contains a symlink"));
+        }
+        let minimum =
+            time::Date::from_calendar_date(1980, time::Month::January, 1)?.midnight().assume_utc();
+        let maximum = time::Date::from_calendar_date(2107, time::Month::December, 31)?
+            .with_hms(23, 59, 58)?
+            .assume_utc();
+        let date = time::OffsetDateTime::from_unix_timestamp(
+            epoch.clamp(minimum.unix_timestamp() as u64, maximum.unix_timestamp() as u64) as i64,
+        )?;
+        let stamp = zip::DateTime::from_date_and_time(
+            date.year() as u16,
+            date.month() as u8,
+            date.day(),
+            date.hour(),
+            date.minute(),
+            date.second() & !1,
+        )
+        .map_err(|_| error("invalid ZIP archive epoch"))?;
+        let mut zip = zip::ZipWriter::new(fs::File::create(output)?);
+        zip.add_directory(
+            format!("{name}/"),
+            zip::write::SimpleFileOptions::default()
+                .last_modified_time(stamp)
+                .unix_permissions(0o755),
+        )?;
+        for (relative, path) in entries {
+            let directory = path.is_dir();
             let options = zip::write::SimpleFileOptions::default()
-                .compression_method(zip::CompressionMethod::Deflated);
-            #[cfg(unix)]
-            let options = {
-                use std::os::unix::fs::PermissionsExt;
-                options.unix_permissions(fs::metadata(&path)?.permissions().mode())
-            };
-            zip.start_file(relative.to_string_lossy().replace('\\', "/"), options)?;
-            std::io::copy(&mut fs::File::open(path)?, &mut zip)?;
+                .compression_method(zip::CompressionMethod::Deflated)
+                .last_modified_time(stamp)
+                .unix_permissions(archive_mode(&path, directory)?);
+            if directory {
+                zip.add_directory(format!("{name}/{relative}/"), options)?;
+            } else {
+                zip.start_file(format!("{name}/{relative}"), options)?;
+                std::io::copy(&mut fs::File::open(path)?, &mut zip)?;
+            }
         }
         zip.finish()?;
     } else {
-        let gzip = flate2::write::GzEncoder::new(
-            fs::File::create(output)?,
-            flate2::Compression::default(),
-        );
+        let gzip = flate2::GzBuilder::new()
+            .mtime(0)
+            .write(fs::File::create(output)?, flate2::Compression::default());
         let mut archive = tar::Builder::new(gzip);
-        archive.follow_symlinks(false);
-        archive.append_dir_all(name, stage)?;
+        fn header(epoch: u64, mode: u32, kind: tar::EntryType, size: u64) -> tar::Header {
+            let mut header = tar::Header::new_gnu();
+            header.set_uid(0);
+            header.set_gid(0);
+            header.set_mtime(epoch);
+            header.set_mode(mode);
+            header.set_entry_type(kind);
+            header.set_size(size);
+            header.set_cksum();
+            header
+        }
+        archive.append_data(
+            &mut header(epoch, 0o755, tar::EntryType::Directory, 0),
+            name,
+            std::io::empty(),
+        )?;
+        for (relative, path) in entries {
+            let metadata = fs::symlink_metadata(&path)?;
+            let name = format!("{name}/{relative}");
+            if metadata.is_symlink() {
+                archive.append_link(
+                    &mut header(epoch, 0o777, tar::EntryType::Symlink, 0),
+                    name,
+                    fs::read_link(path)?,
+                )?;
+            } else if metadata.is_dir() {
+                archive.append_data(
+                    &mut header(epoch, 0o755, tar::EntryType::Directory, 0),
+                    name,
+                    std::io::empty(),
+                )?;
+            } else if metadata.is_file() {
+                archive.append_data(
+                    &mut header(
+                        epoch,
+                        archive_mode(&path, false)?,
+                        tar::EntryType::Regular,
+                        metadata.len(),
+                    ),
+                    name,
+                    fs::File::open(path)?,
+                )?;
+            } else {
+                return Err(error("unsupported archive input"));
+            }
+        }
         archive.into_inner()?.finish()?;
     }
     Ok(())
@@ -1282,5 +1423,145 @@ mod tests {
             Path::new("/reviewed-freebsd-base-other/lib/libc.so.7"),
             root
         ));
+    }
+
+    #[test]
+    fn archive_bytes_ignore_ambient_times_order_and_nonsemantic_permissions() {
+        let temp = tempfile::tempdir().unwrap();
+        let stage = temp.path().join("stage");
+        fs::create_dir_all(stage.join("empty")).unwrap();
+        fs::create_dir_all(stage.join("bin")).unwrap();
+        let payload = stage.join("payload");
+        let executable = stage.join("bin/wavec.exe");
+        fs::write(&payload, b"unchanged bytes").unwrap();
+        fs::write(&executable, b"executable bytes").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&payload, fs::Permissions::from_mode(0o600)).unwrap();
+            fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+        }
+        for extension in ["tar.gz", "zip"] {
+            // Windows requires write-attributes access for set_times; a
+            // read-only handle is insufficient even for a writable file.
+            fs::OpenOptions::new()
+                .write(true)
+                .open(&payload)
+                .unwrap()
+                .set_times(fs::FileTimes::new().set_modified(
+                    std::time::UNIX_EPOCH + std::time::Duration::from_secs(1500000000),
+                ))
+                .unwrap();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                fs::set_permissions(&payload, fs::Permissions::from_mode(0o600)).unwrap();
+                fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+            }
+            let first = temp.path().join(format!("first.{extension}"));
+            let second = temp.path().join(format!("second.{extension}"));
+            archive_at_epoch(&stage, &first, "wave", 1600000001).unwrap();
+            fs::OpenOptions::new()
+                .write(true)
+                .open(&payload)
+                .unwrap()
+                .set_times(fs::FileTimes::new().set_modified(
+                    std::time::UNIX_EPOCH + std::time::Duration::from_secs(1700000000),
+                ))
+                .unwrap();
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::PermissionsExt;
+                fs::set_permissions(&payload, fs::Permissions::from_mode(0o644)).unwrap();
+                fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
+            }
+            // Recreate a directory to change ambient directory timestamps/order.
+            fs::remove_dir(stage.join("empty")).unwrap();
+            fs::create_dir(stage.join("empty")).unwrap();
+            archive_at_epoch(&stage, &second, "wave", 1600000001).unwrap();
+            assert_eq!(fs::read(&first).unwrap(), fs::read(&second).unwrap(), "{extension}");
+            if extension == "tar.gz" {
+                let mut archive =
+                    tar::Archive::new(flate2::read::GzDecoder::new(fs::File::open(first).unwrap()));
+                let mut names = Vec::new();
+                for entry in archive.entries().unwrap() {
+                    let entry = entry.unwrap();
+                    let header = entry.header();
+                    assert_eq!(header.uid().unwrap(), 0);
+                    assert_eq!(header.gid().unwrap(), 0);
+                    assert_eq!(header.mtime().unwrap(), 1600000001);
+                    let path = entry.path().unwrap().into_owned();
+                    let expected = if path == Path::new("wave/payload") { 0o644 } else { 0o755 };
+                    assert_eq!(header.mode().unwrap(), expected, "{}", path.display());
+                    names.push(path);
+                }
+                assert_eq!(
+                    names,
+                    ["wave", "wave/bin", "wave/bin/wavec.exe", "wave/empty", "wave/payload"]
+                        .map(PathBuf::from)
+                );
+            } else {
+                let mut archive = zip::ZipArchive::new(fs::File::open(first).unwrap()).unwrap();
+                assert_eq!(archive.len(), 5);
+                assert_eq!(
+                    archive.by_name("wave/bin/wavec.exe").unwrap().unix_mode().unwrap() & 0o777,
+                    0o755
+                );
+                assert_eq!(
+                    archive.by_name("wave/payload").unwrap().unix_mode().unwrap() & 0o777,
+                    0o644
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn archive_epoch_selects_explicit_values_without_consulting_the_repository() {
+        for text in ["0", "1600000001"] {
+            assert_eq!(
+                archive_epoch_value(Some(text.into()), || panic!("unexpected Git lookup"))
+                    .unwrap()
+                    .to_string(),
+                text
+            );
+        }
+        for text in ["", "-1", "+1", " 1", "1\n", "18446744073709551616"] {
+            assert!(archive_epoch_value(Some(text.into()), || panic!(
+                "invalid explicit value must fail"
+            ))
+            .is_err());
+        }
+        assert_eq!(archive_epoch_value(None, || Ok("1600000001".into())).unwrap(), 1600000001);
+        assert!(archive_epoch_value(None, || Err(error("Git unavailable"))).is_err());
+        #[cfg(unix)]
+        {
+            use std::os::unix::ffi::OsStringExt;
+            assert!(archive_epoch_value(Some(std::ffi::OsString::from_vec(vec![255])), || panic!(
+                "invalid UTF-8"
+            ))
+            .is_err());
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn normalized_tar_keeps_only_safe_relative_links() {
+        let temp = tempfile::tempdir().unwrap();
+        let stage = temp.path().join("stage");
+        fs::create_dir(&stage).unwrap();
+        fs::write(stage.join("real"), b"payload").unwrap();
+        std::os::unix::fs::symlink("real", stage.join("alias")).unwrap();
+        let output = temp.path().join("test.tar.gz");
+        archive_at_epoch(&stage, &output, "wave", 1).unwrap();
+        let mut archive =
+            tar::Archive::new(flate2::read::GzDecoder::new(fs::File::open(&output).unwrap()));
+        assert!(archive.entries().unwrap().any(|entry| entry
+            .unwrap()
+            .header()
+            .entry_type()
+            .is_symlink()));
+        fs::remove_file(stage.join("alias")).unwrap();
+        std::os::unix::fs::symlink("../outside", stage.join("alias")).unwrap();
+        assert!(archive_at_epoch(&stage, &output, "wave", 1).is_err());
     }
 }

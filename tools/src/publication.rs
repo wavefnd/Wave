@@ -544,7 +544,7 @@ pub fn active_state(release: Option<&Value>, tag: &str) -> Result<Option<Value>>
     }
     let body = release.get_str("body").unwrap_or("");
     let marker = "<!-- wave-nightly-state:";
-    let state = if let Some((_, tail)) = body.split_once(marker) {
+    let state = if let Some((_, tail)) = body.rsplit_once(marker) {
         let (state, _) =
             tail.split_once(" -->").ok_or_else(|| error("unterminated Nightly recovery state"))?;
         config::parse_json(state)?
@@ -590,6 +590,23 @@ fn validate_asset_records(state: &Value) -> Result<()> {
 
 pub fn verify_remote(api: &mut impl Api, id: u64, state: &Value) -> Result<()> {
     validate_asset_records(state)?;
+    let release = api.get(&format!("releases/{id}"))?;
+    if let Some(journal) = transition(&release)? {
+        let active = active_state(Some(&release), "nightly")?
+            .ok_or_else(|| error("missing active Nightly state"))?;
+        if !config::equivalent(state, &active) {
+            return Err(error("requested verification is not the active Nightly generation"));
+        }
+        let from = journal.get("from").unwrap();
+        let to = journal.get("to").unwrap();
+        verify_owned(
+            api,
+            id,
+            state,
+            Some(if config::equivalent(state, from) { to } else { from }),
+        )?;
+        return Ok(());
+    }
     let assets = api.assets(id)?;
     let Value::Object(expected) =
         state.get("assets").ok_or_else(|| error("missing Nightly assets"))?
@@ -677,6 +694,12 @@ fn set_tag(api: &mut impl Api, source: &str) -> Result<()> {
     Ok(())
 }
 
+fn comment_state(state: &Value) -> Result<String> {
+    Ok(utils::wson::dumps(state, utils::wson::Format::Json, false)?
+        .replace('<', "\\u003c")
+        .replace('>', "\\u003e"))
+}
+
 pub fn notes(state: &Value) -> Result<String> {
     let source = config::text(state, "source_sha")?;
     let mut text=format!("{}\n\nCommit: [{source}](https://github.com/{REPO}/commit/{source})\nBranch: master\nBuilt: {}\nCompiler version: {}\nBuild: https://github.com/{REPO}/actions/runs/{}\nValidated CI: https://github.com/{REPO}/actions/runs/{}\n\nThis release tracks the latest successfully validated master build.\n\nDownload manually below. Nightly is not available through install.sh or install.ps1.\n\n",title(state)?,config::text(state,"built_at")?,config::text(state,"compiler_version")?,state.get_u64("run_id").ok_or_else(||error("missing workflow run ID"))?,state.get_u64("ci_run_id").ok_or_else(||error("missing canonical CI ID"))?);
@@ -693,17 +716,342 @@ pub fn notes(state: &Value) -> Result<String> {
         text +=
             &format!("- [{name}](https://github.com/{REPO}/releases/download/nightly/{name})\n");
     }
-    text += &format!(
-        "\n<!-- wave-nightly-state:{} -->",
-        utils::wson::dumps(state, utils::wson::Format::Json, false)?
-    );
+    text += &format!("\n<!-- wave-nightly-state:{} -->", comment_state(state)?);
     Ok(text)
 }
 
+// A durable journal lives beside the active state in the same public release.
+// Asset generations overlap only while this validated journal owns both sets.
+const TRANSITION_MARKER: &str = "<!-- wave-nightly-transition:";
+
+fn generation_records(state: &Value) -> Result<BTreeMap<String, Value>> {
+    validate_asset_records(state)?;
+    sha(config::text(state, "source_sha")?)?;
+    let generation = config::text(state, "generation")?;
+    let suffix = generation
+        .strip_prefix(&format!("{}-", config::text(state, "source_sha")?))
+        .ok_or_else(|| error("generation source mismatch"))?;
+    let (run, attempt) =
+        suffix.split_once('-').ok_or_else(|| error("missing generation attempt"))?;
+    let run_id = state.get_u64("run_id").filter(|id| *id > 0);
+    let attempt_id = attempt.parse::<u64>().ok().filter(|id| *id > 0);
+    if run_id.is_none()
+        || run_id.map(|id| id.to_string()).as_deref() != Some(run)
+        || attempt_id.map(|id| id.to_string()).as_deref() != Some(attempt)
+        || state.get_u64("publication_number").is_none_or(|v| v == 0)
+        || state.get_u64("ci_run_id").is_none_or(|v| v == 0)
+        || state.get_u64("schema_version") != Some(1)
+    {
+        return Err(error("invalid generation identity"));
+    }
+    let manifest = cases::Manifest::load(&crate::root(), false)?;
+    let mut names = BTreeSet::new();
+    let mut targets = 0;
+    for target in manifest.targets.iter().filter(|t| {
+        t.enabled
+            && (matches!(t.os.as_str(), "linux" | "macos" | "windows")
+                || t.os == "freebsd" && t.arch == "amd64")
+    }) {
+        targets += 1;
+        let target = target.archive_target()?;
+        let archive = format!(
+            "wave-nightly-{generation}-{target}{}",
+            if target.contains("windows") { ".zip" } else { ".tar.gz" }
+        );
+        for suffix in ["", ".sha256", ".metadata.json"] {
+            names.insert(format!("{archive}{suffix}"));
+        }
+    }
+    names.insert(format!("nightly-{generation}-SHA256SUMS"));
+    names.insert(format!("nightly-{generation}.json"));
+    let Value::Object(records) = state.get("assets").unwrap() else { unreachable!() };
+    let records: BTreeMap<_, _> = records.iter().cloned().collect();
+    if targets != 9 || records.len() != 29 || names != records.keys().cloned().collect() {
+        return Err(error("Nightly generation must own exactly nine targets and 29 named assets"));
+    }
+    Ok(records)
+}
+
+fn transition(release: &Value) -> Result<Option<Value>> {
+    let body = release.get_str("body").unwrap_or("").trim_end();
+    let Some(line) = body.lines().last().filter(|line| line.starts_with(TRANSITION_MARKER)) else {
+        return Ok(None);
+    };
+    let text = line
+        .strip_prefix(TRANSITION_MARKER)
+        .unwrap()
+        .strip_suffix(" -->")
+        .ok_or_else(|| error("unterminated Nightly transition"))?;
+    let journal = config::parse_json(text)?;
+    let from = journal.get("from").ok_or_else(|| error("transition missing prior generation"))?;
+    let to = journal.get("to").ok_or_else(|| error("transition missing pending generation"))?;
+    let left = generation_records(from)?;
+    let right = generation_records(to)?;
+    if left.keys().any(|name| right.contains_key(name))
+        || journal.get_u64("schema_version") != Some(1)
+        || config::text(&journal, "previous_tag")? != config::text(from, "source_sha")?
+        || to.get_u64("publication_number")
+            != from.get_u64("publication_number").and_then(|v| v.checked_add(1))
+    {
+        return Err(error("invalid or overlapping Nightly transition identities"));
+    }
+    let active = active_state(Some(release), "nightly")?
+        .ok_or_else(|| error("transition has no active generation"))?;
+    if !config::equivalent(&active, from) && !config::equivalent(&active, to) {
+        return Err(error("active generation is outside its transition"));
+    }
+    Ok(Some(journal))
+}
+
+fn verify_owned(
+    api: &mut impl Api,
+    id: u64,
+    required: &Value,
+    optional: Option<&Value>,
+) -> Result<bool> {
+    let required = generation_records(required)?;
+    let optional = optional.map(generation_records).transpose()?.unwrap_or_default();
+    let assets = api.assets(id)?;
+    let mut present = BTreeSet::new();
+    for asset in &assets {
+        let name = config::text(asset, "name")?;
+        if !present.insert(name.to_string()) {
+            return Err(error("duplicate remote Nightly asset"));
+        }
+        let record = required
+            .get(name)
+            .or_else(|| optional.get(name))
+            .ok_or_else(|| error(format!("unowned Nightly asset: {name}")))?;
+        if asset.get_str("state") != Some("uploaded")
+            || asset.get_u64("size") != record.get_u64("size")
+            || asset.get_str("digest")
+                != Some(format!("sha256:{}", config::text(record, "sha256")?).as_str())
+        {
+            return Err(error(format!("conflicting immutable Nightly asset: {name}")));
+        }
+    }
+    if required.keys().any(|name| !present.contains(name)) {
+        return Err(error("active Nightly generation is incomplete"));
+    }
+    Ok(optional.keys().all(|name| present.contains(name)))
+}
+
+fn tag_source(api: &mut impl Api) -> Result<String> {
+    let tag = api.get("git/ref/tags/nightly")?;
+    let object = tag.get("object").ok_or_else(|| error("missing Nightly tag object"))?;
+    if object.get_str("type") != Some("commit") {
+        return Err(error("Nightly tag must remain a lightweight commit tag"));
+    }
+    Ok(sha(config::text(object, "sha")?)?.into())
+}
+
+fn tag_reconciled(api: &mut impl Api, source: &str) -> Result<()> {
+    if let Err(failure) = set_tag(api, source) {
+        if tag_source(api)? != source {
+            return Err(failure);
+        }
+    }
+    if tag_source(api)? != source {
+        return Err(error("Nightly tag mutation was not observed"));
+    }
+    Ok(())
+}
+
+fn write_active(
+    api: &mut impl Api,
+    id: u64,
+    state: &Value,
+    journal: Option<&Value>,
+) -> Result<Value> {
+    let mut body = notes(state)?;
+    if let Some(journal) = journal {
+        body += &format!("\n{TRANSITION_MARKER}{} -->", comment_state(journal)?);
+    }
+    let name = title(state)?;
+    let payload = Value::object([
+        ("body", Value::string(&body)),
+        ("name", Value::string(&name)),
+        ("make_latest", Value::string("false")),
+    ]);
+    let mutation = api.request("PATCH", &format!("releases/{id}"), Some(&payload), false);
+    let observed = api.get(&format!("releases/{id}"))?;
+    if observed.get_str("body") != Some(body.as_str())
+        || observed.get_str("name") != Some(name.as_str())
+        || observed.get("draft") != Some(&Value::Bool(false))
+    {
+        mutation?;
+        return Err(error("Nightly release mutation was not observed"));
+    }
+    Ok(observed)
+}
+
+fn delete_generation(api: &mut impl Api, id: u64, state: &Value) -> Result<()> {
+    let records = generation_records(state)?;
+    for asset in api.assets(id)? {
+        if records.contains_key(config::text(&asset, "name")?) {
+            let asset_id = release_id(&asset)?;
+            if let Err(failure) =
+                api.request("DELETE", &format!("releases/assets/{asset_id}"), None, false)
+            {
+                if api.assets(id)?.iter().any(|a| a.get_u64("id") == Some(asset_id)) {
+                    return Err(failure);
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
+fn transition_to_active(api: &mut impl Api, id: u64, journal: &Value) -> Result<Value> {
+    let from = journal.get("from").unwrap();
+    let to = journal.get("to").unwrap();
+    if config::text(from, "source_sha")? == config::text(to, "source_sha")?
+        || !ancestor(api, config::text(from, "source_sha")?, config::text(to, "source_sha")?)?
+    {
+        return Err(error("pending generation is not newer than the active source"));
+    }
+    // The new generation must be complete before either tag or active links move.
+    verify_owned(api, id, to, Some(from))?;
+    let tag = tag_source(api)?;
+    if tag != config::text(from, "source_sha")? && tag != config::text(to, "source_sha")? {
+        return Err(error("Nightly tag left the recorded transition"));
+    }
+    let master = api.get("git/ref/heads/master")?;
+    let master = config::text(
+        master.get("object").ok_or_else(|| error("missing canonical master"))?,
+        "sha",
+    )?;
+    if !ancestor(api, config::text(to, "source_sha")?, master)? {
+        return Err(error("pending source left canonical master history"));
+    }
+    tag_reconciled(api, config::text(to, "source_sha")?)?;
+    write_active(api, id, to, Some(journal))?;
+    // Verify active identity and tag independently before deleting an old byte.
+    if tag_source(api)? != config::text(to, "source_sha")? {
+        return Err(error("Nightly tag disagrees with activated generation"));
+    }
+    verify_owned(api, id, to, Some(from))?;
+    delete_generation(api, id, from)?;
+    verify_owned(api, id, to, None)?;
+    write_active(api, id, to, None)
+}
+
+fn promote_public(
+    api: &mut impl Api,
+    directory: &Path,
+    requested: &mut Value,
+    mut release: Value,
+) -> Result<String> {
+    let id = release_id(&release)?;
+    let mut completed = false;
+    if let Some(journal) = transition(&release)? {
+        let from = journal.get("from").unwrap();
+        let to = journal.get("to").unwrap();
+        let active = active_state(Some(&release), "nightly")?.unwrap();
+        let pending_complete = verify_owned(
+            api,
+            id,
+            &active,
+            Some(if config::equivalent(&active, from) { to } else { from }),
+        )?;
+        if config::equivalent(&active, to) || pending_complete {
+            release = transition_to_active(api, id, &journal)?;
+            completed = true;
+        } else {
+            if tag_source(api)? != config::text(from, "source_sha")? {
+                return Err(error("incomplete pending generation cannot own the Nightly tag"));
+            }
+            if requested.get_str("generation") != to.get_str("generation") {
+                let source = config::text(requested, "source_sha")?;
+                if !ancestor(api, config::text(to, "source_sha")?, source)? {
+                    return Ok("stale".into());
+                }
+                // Abandon only verified, owned incomplete uploads. Keep the old
+                // active body and journal until their removal is confirmed.
+                delete_generation(api, id, to)?;
+                verify_owned(api, id, from, None)?;
+                release = write_active(api, id, from, None)?;
+            } else {
+                config::field(
+                    requested,
+                    "publication_number",
+                    to.get("publication_number").unwrap().clone(),
+                )?;
+                if !config::equivalent(requested, to) {
+                    return Err(error(
+                        "retry identity differs from its recorded pending generation",
+                    ));
+                }
+                return upload_public(api, directory, requested, release, journal);
+            }
+        }
+    }
+    let active = active_state(Some(&release), "nightly")?.unwrap();
+    verify_owned(api, id, &active, None)?;
+    let source = config::text(requested, "source_sha")?;
+    let old = config::text(&active, "source_sha")?.to_string();
+    if tag_source(api)? != old {
+        return Err(error("active Nightly tag differs from its recorded source"));
+    }
+    if source == old {
+        *requested = active;
+        return Ok(if completed { "published" } else { "unchanged" }.into());
+    }
+    if !ancestor(api, &old, source)? {
+        return Ok("stale".into());
+    }
+    let number = active
+        .get_u64("publication_number")
+        .unwrap_or(1)
+        .checked_add(1)
+        .ok_or_else(|| error("Nightly publication number overflow"))?;
+    config::field(requested, "publication_number", Value::integer(number))?;
+    generation_records(requested)?;
+    let journal = Value::object([
+        ("schema_version", Value::integer(1)),
+        ("from", active),
+        ("to", requested.clone()),
+        ("previous_tag", Value::string(old)),
+    ]);
+    release = write_active(api, id, journal.get("from").unwrap(), Some(&journal))?;
+    upload_public(api, directory, requested, release, journal)
+}
+
+fn upload_public(
+    api: &mut impl Api,
+    directory: &Path,
+    requested: &Value,
+    release: Value,
+    journal: Value,
+) -> Result<String> {
+    let id = release_id(&release)?;
+    let from = journal.get("from").unwrap();
+    let records = generation_records(requested)?;
+    // Validate every local candidate before the first upload; never clobber a name.
+    for (name, record) in &records {
+        if !config::equivalent(&file_record(&directory.join(name))?, record) {
+            return Err(error(format!("Nightly asset changed before upload: {name}")));
+        }
+    }
+    verify_owned(api, id, from, Some(requested))?;
+    let existing = api.assets(id)?;
+    for name in records.keys() {
+        if !existing.iter().any(|asset| asset.get_str("name") == Some(name.as_str())) {
+            // An ambiguous upload is reconciled on retry by digest, never clobber.
+            api.upload(&directory.join(name), "nightly")?;
+        }
+    }
+    transition_to_active(api, id, &journal)?;
+    Ok("published".into())
+}
+
 pub fn promote(api: &mut impl Api, directory: &Path, state: &mut Value) -> Result<String> {
-    let mut release = find_release(api, "nightly")?;
-    let mut previous = active_state(release.as_ref(), "nightly")?;
     let source = sha(config::text(state, "source_sha")?)?.to_string();
+    let mut release = find_release(api, "nightly")?;
+    if let Some(public) = release.as_ref().filter(|r| r.get("draft") == Some(&Value::Bool(false))) {
+        return promote_public(api, directory, state, public.clone());
+    }
+    let mut previous = active_state(release.as_ref(), "nightly")?;
     let legacy = release.as_ref().is_some_and(|r| r.get("draft") == Some(&Value::Bool(true)));
     if let Some(old) = previous.as_ref().filter(|_| !legacy) {
         verify_remote(api, release_id(release.as_ref().unwrap())?, old)?;
