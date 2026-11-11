@@ -271,3 +271,32 @@ fn constant_fixed_array_bounds_respect_types_conversions_and_dead_code() {
         lower(source).unwrap_or_else(|e| panic!("{source}: {e}"));
     }
 }
+
+#[test]
+fn target_layout_facts_are_attached_transactionally_at_each_intrinsic() {
+    let mut program =
+        lower("fun probe() -> u64 { return __wave_size_of<i32>() + __wave_align_of<i32>(); }");
+    let mut ids = Vec::new();
+    parser::ast::visit::walk_nodes(program.syntax(), &mut |expr| {
+        if let Expression::FunctionCall { .. } = expr {
+            ids.push(program.expression_id(expr).unwrap());
+        }
+    });
+    assert_eq!(ids.len(), 2);
+    program
+        .prepare_layout_intrinsics(|ty| {
+            assert_eq!(ty, &WaveType::Int(32));
+            Ok((4, 4))
+        })
+        .unwrap();
+    assert!(program
+        .prepare_layout_intrinsics(|_| Err("layout provider unavailable".into()))
+        .is_err());
+    let mut values = Vec::new();
+    parser::ast::visit::walk_nodes(program.syntax(), &mut |expr| {
+        if let Some(value) = program.layout_value_of(expr) {
+            values.push(value);
+        }
+    });
+    assert_eq!(values, [4, 4]);
+}

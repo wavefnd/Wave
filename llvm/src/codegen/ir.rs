@@ -1498,3 +1498,47 @@ fn add_enum_consts_to_globals(
         next += 1;
     }
 }
+
+/// Resolve scalar layout using the same selected-target data and ABI type
+/// representation used by LLVM's layout intrinsic lowering. This produces no
+/// program IR and is not a fallback execution/code-generation path for Whale.
+pub fn prepare_scalar_layout_hir(
+    program: &mut hir::TypedProgram,
+    target_triple: &str,
+) -> Result<(), hir::LayoutQueryError> {
+    let context = Context::create();
+    let mut data = None;
+    program.prepare_layout_intrinsics(|ty| {
+        if !matches!(
+            ty,
+            parser::ast::WaveType::Int(8 | 16 | 32 | 64 | 128)
+                | parser::ast::WaveType::Uint(8 | 16 | 32 | 64 | 128)
+                | parser::ast::WaveType::Bool
+                | parser::ast::WaveType::Byte
+                | parser::ast::WaveType::Char
+                | parser::ast::WaveType::Float(32 | 64)
+        ) {
+            return Err(format!("Whale backend does not yet support layout query for {ty:?}"));
+        }
+        if data.is_none() {
+            initialize_llvm_targets();
+            if target_spec_for_triple(target_triple).is_none() {
+                return Err(format!("unsupported layout target {target_triple}"));
+            }
+            let triple = TargetTriple::create(target_triple);
+            let target = Target::from_triple(&triple).map_err(|e| e.to_string())?;
+            let machine = target
+                .create_target_machine_from_options(&triple, TargetMachineOptions::new())
+                .ok_or_else(|| "cannot create selected-target layout provider".to_string())?;
+            data = Some(machine.get_target_data());
+        }
+        let ty = super::types::wave_type_to_llvm_type(
+            &context,
+            ty,
+            &std::collections::HashMap::new(),
+            super::types::TypeFlavor::AbiC,
+        );
+        let data = data.as_ref().unwrap();
+        Ok((data.get_abi_size(&ty), data.get_abi_alignment(&ty)))
+    })
+}

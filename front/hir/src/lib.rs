@@ -95,6 +95,7 @@ pub struct TypedProgram {
     expected_types: Vec<Option<WaveType>>,
     numeric_expressions: Vec<Option<NumericExpressionInfo>>,
     constant_values: HashMap<ExpressionId, ConstantValue>,
+    layout_values: HashMap<ExpressionId, u64>,
     expression_spans: Vec<Option<error::SourceSpan>>,
     variant_constructions: Vec<Option<HirVariantConstruction>>,
     pattern_ids: HashMap<usize, PatternId>,
@@ -136,8 +137,64 @@ impl std::error::Error for HirLoweringError {
     }
 }
 
+/// Failure while attaching authoritative selected-target layout facts.
+#[derive(Debug, Clone)]
+pub struct LayoutQueryError {
+    pub message: String,
+    pub span: Option<error::SourceSpan>,
+}
+
 impl TypedProgram {
     /// Validates a final AST and builds its stable typed frontend representation.
+    /// The driver supplies the selected target's layout provider. Backends
+    /// consume the resulting per-expression facts without reinterpreting T.
+    pub fn prepare_layout_intrinsics(
+        &mut self,
+        mut resolve: impl FnMut(&WaveType) -> Result<(u64, u32), String>,
+    ) -> Result<(), LayoutQueryError> {
+        let mut values = HashMap::new();
+        let mut failure = None;
+        walk_nodes(&self.syntax, &mut |expression| {
+            if failure.is_some() {
+                return;
+            }
+            if let Expression::FunctionCall { name, type_args, .. } = expression.unspanned() {
+                if parser::layout_intrinsics::is_intrinsic(name) {
+                    let id = self.expression_id(expression).expect("typed layout query");
+                    let value = type_args
+                        .first()
+                        .ok_or_else(|| {
+                            "internal compiler error: layout query has no type".to_string()
+                        })
+                        .and_then(&mut resolve);
+                    match value {
+                        Ok((size, align)) => {
+                            values.insert(
+                                id,
+                                if name == "__wave_size_of" { size } else { u64::from(align) },
+                            );
+                        },
+                        Err(message) => {
+                            failure = Some(LayoutQueryError {
+                                message,
+                                span: self.expression_span(id).cloned(),
+                            });
+                        },
+                    }
+                }
+            }
+        });
+        if let Some(error) = failure {
+            return Err(error);
+        }
+        self.layout_values = values;
+        Ok(())
+    }
+
+    pub fn layout_value_of(&self, expression: &Expression) -> Option<u64> {
+        self.expression_id(expression).and_then(|id| self.layout_values.get(&id).copied())
+    }
+
     pub fn lower(syntax: Vec<ASTNode>) -> Result<Self, HirLoweringError> {
         let mut syntax = syntax.into_boxed_slice();
         if let Err(diagnostic) = parser::expression_depth::validate(&syntax) {
@@ -235,6 +292,7 @@ impl TypedProgram {
             expected_types,
             numeric_expressions: Vec::new(),
             constant_values: HashMap::new(),
+            layout_values: HashMap::new(),
             expression_spans,
             variant_constructions,
             pattern_ids,

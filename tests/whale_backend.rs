@@ -201,7 +201,10 @@ fn unsupported_alias_targets_and_declarations_keep_source_diagnostics_and_previo
         ("type Values = array<i32, 2>;\nfun main() -> i32 { return 0; }\n", "type Array"),
         ("type Pointer = ptr<i32>;\nfun main() -> i32 { return 0; }\n", "type Pointer"),
         ("type Wide = u256;\nfun main() -> i32 { return 0; }\n", "type Uint(256)"),
-        ("static LIMIT: i32 = 3;\nfun main() -> i32 { return LIMIT; }\n", "mutable global storage"),
+        (
+            "static LIMIT: i32;\nfun main() -> i32 { return LIMIT; }\n",
+            "uninitialized mutable global storage",
+        ),
     ] {
         fs::write(case.root.join("main.wave"), source).unwrap();
         fs::write(case.root.join("main.wir"), "previous verified IR").unwrap();
@@ -667,4 +670,22 @@ fn scalar_enums_and_local_increments_reach_cli_ir() {
     );
     let ir = case.ir();
     assert!(ir.contains("format_version 8"), "{ir}");
+}
+
+#[test]
+#[cfg(any(feature = "llvm-target-x86", feature = "llvm-target-all"))]
+fn selected_target_layout_queries_lower_from_prepared_hir_facts() {
+    let case = Case::new("layout-facts", "type Word = i64; fun main() -> i32 { return (__wave_size_of<Word>() + __wave_align_of<i32>()) as i32; }");
+    let ir = case.ir();
+    assert!(ir.contains("u64"));
+    assert!(!ir.contains("__wave_size_of"));
+    let bad = Case::new(
+        "layout-unsupported",
+        "struct Pair { field: i32; } fun main() -> i32 { return __wave_size_of<Pair>() as i32; }",
+    );
+    fs::write(bad.root.join("main.wir"), "previous output").unwrap();
+    let result = bad.run(&["--whale", "build", "main.wave", "--emit=ir", "--error-format=json"]);
+    assert!(!result.status.success());
+    assert!(String::from_utf8_lossy(&result.stderr).contains("layout query"));
+    assert_eq!(fs::read_to_string(bad.root.join("main.wir")).unwrap(), "previous output");
 }

@@ -214,6 +214,10 @@ fn verification_limits_are_normal_diagnostics_and_invalid_output_remains_interna
     assert!(error.message.contains("resource limit exceeded"), "{error:?}");
     let mut invalid = module("fun probe() -> i32 { return 7; }");
     invalid.functions[0].blocks[0].terminator = None;
+    invalid
+        .sources
+        .mappings
+        .retain(|mapping| !matches!(mapping.target, SourceTarget::Terminator { .. }));
     let error = verify_output(&invalid, IrLimits::default()).unwrap_err();
     assert!(error.message.contains("internal compiler error"), "{error:?}");
     assert!(error.message.contains("UnterminatedBlock"), "{error:?}");

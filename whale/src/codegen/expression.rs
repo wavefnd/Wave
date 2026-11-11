@@ -22,9 +22,21 @@ pub(super) fn constant_value(value: &hir::ConstantValue, ty: &WaveType) -> Resul
 
 impl Lowerer<'_> {
     pub(super) fn effect(&mut self, e: &Expression) -> Result<()> {
+        self.origin = self
+            .program
+            .expression_id(e)
+            .and_then(|id| self.program.expression_span(id))
+            .cloned()
+            .or_else(|| e.span().cloned());
+        if self.program.layout_value_of(e).is_some() {
+            return Ok(());
+        }
         let mut e = e;
         while let Expression::Grouped(inner) = e.unspanned() {
             e = inner;
+        }
+        if self.program.layout_value_of(e).is_some() {
+            return Ok(());
         }
         if let Expression::FunctionCall { name, args, .. } = e.unspanned() {
             self.call(name, args).map(|_| ()).map_err(|mut error| {
@@ -184,10 +196,12 @@ impl Lowerer<'_> {
     }
 
     fn call(&mut self, name: &str, args: &[Expression]) -> Result<Option<Value>> {
+        let origin = self.origin.clone();
         let mut values = Vec::with_capacity(args.len());
         for arg in args {
             values.push(self.expr(arg)?);
         }
+        self.origin = origin;
         self.call_values(name, values)
     }
 
