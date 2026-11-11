@@ -7,3 +7,5 @@ edition = "2021"
 lexer = { path = "../lexer" }
 error = { path = "../error" }
 utils = { path = "../../utils" }
+cap-std = "=3.4.4"
+cap-fs-ext = "=3.4.4"

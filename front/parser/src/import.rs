@@ -24,6 +24,7 @@ use crate::{parse_syntax_with_spans, ParseError};
 use error::error::{WaveError, WaveErrorKind};
 use lexer::Lexer;
 use std::collections::{HashMap, HashSet};
+use std::io::Read;
 use std::path::{Path, PathBuf};
 
 /// Compiler/standard-library syntax contract understood by this parser.
@@ -542,6 +543,7 @@ pub fn local_import_unit_with_config(
             0,
         )
     })?;
+    let bound_root = bind_import_root(&canonical_base, path)?;
     let canonical_target = found_path.canonicalize().map_err(|error| {
         WaveError::new(
             WaveErrorKind::SyntaxError("Canonicalization failed".to_string()),
@@ -562,7 +564,14 @@ pub fn local_import_unit_with_config(
         .with_help("remove symlink or path traversal components from the local import"));
     }
 
-    parse_wave_file(&canonical_target, &target_file_name, already_imported, config)
+    parse_wave_file(
+        &canonical_target,
+        &canonical_base,
+        &bound_root,
+        &target_file_name,
+        already_imported,
+        config,
+    )
 }
 
 pub fn local_import(
@@ -719,6 +728,7 @@ fn external_import_unit(
         )
     })?;
 
+    let bound_root = bind_import_root(&canonical_package_root, path)?;
     for candidate in &candidates {
         if candidate.exists() && candidate.is_file() {
             let canonical_candidate = candidate.canonicalize().map_err(|error| {
@@ -742,7 +752,14 @@ fn external_import_unit(
                 )
                 .with_help("remove symlinks that point outside the dependency package"));
             }
-            return parse_wave_file(&canonical_candidate, path, already_imported, config);
+            return parse_wave_file(
+                &canonical_candidate,
+                &canonical_package_root,
+                &bound_root,
+                path,
+                already_imported,
+                config,
+            );
         }
     }
 
@@ -777,9 +794,11 @@ fn std_import_unit(
     }
 
     let std_root = config.std_root.as_ref().map_err(Clone::clone)?;
-    let found_path = resolve_std_import_path(std_root.path(), path)?;
+    let root_path = std_root.path();
+    let bound_root = bind_import_root(root_path, path)?;
+    let found_path = resolve_std_import_path(root_path, path)?;
 
-    parse_wave_file(&found_path, path, already_imported, config)
+    parse_wave_file(&found_path, root_path, &bound_root, path, already_imported, config)
 }
 
 fn resolve_std_import_path(std_root: &Path, path: &str) -> Result<PathBuf, WaveError> {
@@ -871,21 +890,100 @@ fn std_root_dir(import_path: &str) -> Result<PathBuf, WaveError> {
     })
 }
 
+fn import_read_error(path: &str, error: std::io::Error) -> WaveError {
+    WaveError::new(
+        WaveErrorKind::SyntaxError("Read error".into()),
+        format!("cannot read import within its validated root: {error}"),
+        path,
+        0,
+        0,
+    )
+}
+
+#[cfg(unix)]
+fn import_filesystem_root(display: &str) -> Result<cap_std::fs::Dir, WaveError> {
+    use cap_std::fs::MetadataExt;
+    let fail = |error| import_read_error(display, error);
+    let mut directory =
+        cap_std::fs::Dir::open_ambient_dir(".", cap_std::ambient_authority()).map_err(fail)?;
+    let depth = std::env::current_dir().map_err(fail)?.components().count();
+    // QEMU -L may redirect an absolute "/" open to its interpreter sysroot.
+    // Relative parent handles reach the actual filesystem anchor instead.
+    // Confirm the root by identity, never by a possibly remapped pathname.
+    for _ in 0..depth {
+        let parent = directory.open_parent_dir(cap_std::ambient_authority()).map_err(fail)?;
+        let current = directory.dir_metadata().map_err(fail)?;
+        let above = parent.dir_metadata().map_err(fail)?;
+        if (current.dev(), current.ino()) == (above.dev(), above.ino()) {
+            return Ok(directory);
+        }
+        directory = parent;
+    }
+    Err(fail(std::io::Error::new(
+        std::io::ErrorKind::PermissionDenied,
+        "working directory changed while locating the import filesystem root",
+    )))
+}
+
+fn bind_import_root(root: &Path, display: &str) -> Result<cap_std::fs::Dir, WaveError> {
+    use cap_fs_ext::DirExt;
+    let anchor = root.ancestors().last().filter(|path| path.is_absolute()).ok_or_else(|| {
+        import_read_error(
+            display,
+            std::io::Error::new(std::io::ErrorKind::InvalidInput, "import root must be absolute"),
+        )
+    })?;
+    #[cfg(unix)]
+    let mut bound = import_filesystem_root(display)?;
+    #[cfg(not(unix))]
+    let mut bound = cap_std::fs::Dir::open_ambient_dir(anchor, cap_std::ambient_authority())
+        .map_err(|e| import_read_error(display, e))?;
+    // Canonical roots need no symlink traversal. Walk their components from the
+    // filesystem anchor with no-follow opens, so replacing the root itself or
+    // one of its parents cannot substitute a different symlink authority.
+    for part in root.strip_prefix(anchor).unwrap().components() {
+        let std::path::Component::Normal(name) = part else {
+            return Err(import_read_error(
+                display,
+                std::io::Error::new(
+                    std::io::ErrorKind::PermissionDenied,
+                    "invalid canonical import root",
+                ),
+            ));
+        };
+        bound = bound.open_dir_nofollow(name).map_err(|e| import_read_error(display, e))?;
+    }
+    Ok(bound)
+}
+
 fn parse_wave_file(
     found_path: &Path,
+    root_path: &Path,
+    root: &cap_std::fs::Dir,
     display_name: &str,
     already_imported: &mut HashSet<String>,
     config: &ImportConfig,
 ) -> Result<ImportedUnit, WaveError> {
-    let abs_path = found_path.canonicalize().map_err(|e| {
-        WaveError::new(
-            WaveErrorKind::SyntaxError("Canonicalization failed".to_string()),
-            format!("Failed to canonicalize path: {}", e),
+    // The root handle predates target validation. Opening relative to it binds
+    // the bytes to that capability even if any path component is exchanged.
+    // Never canonicalize and reopen the checked filename through ambient paths.
+    let abs_path = found_path.to_path_buf();
+    let relative = found_path.strip_prefix(root_path).map_err(|_| {
+        import_read_error(
             display_name,
-            0,
-            0,
+            std::io::Error::new(
+                std::io::ErrorKind::PermissionDenied,
+                "import escaped its validated root",
+            ),
         )
     })?;
+    let mut input = root.open(relative).map_err(|e| import_read_error(display_name, e))?;
+    if !input.metadata().map_err(|e| import_read_error(display_name, e))?.is_file() {
+        return Err(import_read_error(
+            display_name,
+            std::io::Error::new(std::io::ErrorKind::InvalidInput, "import must be a regular file"),
+        ));
+    }
 
     let abs_path_str = abs_path
         .to_str()
@@ -905,7 +1003,12 @@ fn parse_wave_file(
     }
     already_imported.insert(abs_path_str);
 
-    let raw_content = ::error::SourceManager::read_input(&abs_path).map_err(|e| {
+    let raw_content = ::error::SourceManager::read_bound_input(&abs_path, || {
+        let mut source = String::new();
+        input.read_to_string(&mut source)?;
+        Ok(source)
+    })
+    .map_err(|e| {
         WaveError::new(
             WaveErrorKind::SyntaxError("Read error".to_string()),
             format!("Failed to read '{}': {}", abs_path.display(), e),
@@ -1217,5 +1320,64 @@ mod tests {
             assert!(!processed.contains("fun absent"));
             assert!(processed.contains("fun after"));
         }
+    }
+}
+
+#[cfg(all(test, unix))]
+mod bound_import_tests {
+    use super::*;
+    use std::os::unix::fs::symlink;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+
+    #[test]
+    fn file_and_parent_exchange_cannot_redirect_a_validated_import() {
+        let base = std::env::temp_dir().join(format!(
+            "wave-bound-import-{}-{}",
+            std::process::id(),
+            NEXT.fetch_add(1, Ordering::Relaxed)
+        ));
+        let root_path = base.join("root");
+        let outside = base.join("outside");
+        std::fs::create_dir_all(root_path.join("module")).unwrap();
+        std::fs::create_dir_all(&outside).unwrap();
+        std::fs::write(root_path.join("module/item.wave"), "fun inside() {}\n").unwrap();
+        std::fs::write(outside.join("item.wave"), "fun outside() {}\n").unwrap();
+        let root_path = root_path.canonicalize().unwrap();
+        std::fs::rename(&root_path, base.join("before-bind")).unwrap();
+        symlink(&outside, &root_path).unwrap();
+        assert!(bind_import_root(&root_path, "test").is_err());
+        let config = ImportConfig {
+            std_root: Ok(ResolvedStdRoot { path: root_path.clone() }),
+            ..ImportConfig::default()
+        };
+        assert!(std_import_unit("std::item", &mut HashSet::new(), &config).is_err());
+        std::fs::remove_file(&root_path).unwrap();
+        std::fs::rename(base.join("before-bind"), &root_path).unwrap();
+        let root = bind_import_root(&root_path, "test").unwrap();
+        let target = root_path.join("module/item.wave").canonicalize().unwrap();
+        let config = ImportConfig::default();
+        std::fs::rename(&target, root_path.join("module/saved.wave")).unwrap();
+        symlink(outside.join("item.wave"), &target).unwrap();
+        assert!(parse_wave_file(&target, &root_path, &root, "test", &mut HashSet::new(), &config)
+            .is_err());
+        std::fs::remove_file(&target).unwrap();
+        std::fs::rename(root_path.join("module/saved.wave"), &target).unwrap();
+        std::fs::rename(root_path.join("module"), root_path.join("saved")).unwrap();
+        symlink(&outside, root_path.join("module")).unwrap();
+        assert!(parse_wave_file(&target, &root_path, &root, "test", &mut HashSet::new(), &config)
+            .is_err());
+        std::fs::remove_file(root_path.join("module")).unwrap();
+        std::fs::rename(root_path.join("saved"), root_path.join("module")).unwrap();
+        // Root pathname replacement cannot replace the already-bound directory.
+        std::fs::rename(&root_path, base.join("original")).unwrap();
+        symlink(&outside, &root_path).unwrap();
+        let unit =
+            parse_wave_file(&target, &root_path, &root, "test", &mut HashSet::new(), &config)
+                .unwrap();
+        assert!(unit.source.contains("inside"));
+        assert!(!unit.source.contains("outside"));
+        std::fs::remove_file(&root_path).unwrap();
+        std::fs::remove_dir_all(base).unwrap();
     }
 }

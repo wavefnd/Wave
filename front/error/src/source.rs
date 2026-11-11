@@ -90,6 +90,30 @@ impl SourceManager {
         Ok(source)
     }
 
+    /// Cache bytes supplied by a root-bound loader. The identity is already
+    /// resolved by that loader; ambient canonicalization here would reopen its
+    /// containment race and must not change the snapshot key.
+    pub fn read_bound_input(
+        path: &std::path::Path,
+        read: impl FnOnce() -> std::io::Result<String>,
+    ) -> std::io::Result<String> {
+        let Some(manager) = Self::current() else {
+            return read();
+        };
+        let key = path.display().to_string();
+        if let Some(source) = manager.0.read().expect("source manager lock").inputs.get(&key) {
+            return Ok(source.to_string());
+        }
+        let source = read()?;
+        manager
+            .0
+            .write()
+            .expect("source manager lock")
+            .inputs
+            .insert(key, Arc::from(source.clone()));
+        Ok(source)
+    }
+
     pub fn record(path: impl Into<String>, source: impl Into<String>) {
         if let Some(manager) = Self::current() {
             manager.insert(path.into(), source.into());
@@ -152,5 +176,28 @@ mod file_tests {
         std::fs::remove_file(&path).unwrap();
         assert_eq!(SourceManager::read_input(&alias).unwrap(), "original");
         std::fs::remove_dir(root).unwrap();
+    }
+}
+
+#[cfg(test)]
+mod bound_input_tests {
+    use super::*;
+    #[test]
+    fn bound_inputs_retain_the_loader_identity_and_first_bytes() {
+        let _sources = CompilationSources::begin();
+        let path = std::path::Path::new("bound-source.wave");
+        assert_eq!(
+            SourceManager::read_bound_input(path, || Ok("original".into())).unwrap(),
+            "original"
+        );
+        assert_eq!(
+            SourceManager::read_bound_input(path, || panic!(
+                "must use the immutable bound snapshot"
+            ))
+            .unwrap(),
+            "original"
+        );
+        SourceManager::record(path.display().to_string(), "preprocessed");
+        assert_eq!(SourceManager::snapshot("bound-source.wave").as_deref(), Some("preprocessed"));
     }
 }

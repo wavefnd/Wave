@@ -176,6 +176,170 @@ impl fmt::Display for Error {
 }
 impl std::error::Error for Error {}
 
+/// Opt-in resource limits. Existing entry points retain their current contracts.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct Limits {
+    pub input_bytes: usize,
+    pub value_nodes: usize,
+    pub output_bytes: usize,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LimitKind {
+    InputBytes,
+    ValueNodes,
+    OutputBytes,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum BudgetError {
+    Limit(LimitKind),
+    Format(Error),
+}
+
+impl fmt::Display for BudgetError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Limit(kind) => write!(f, "WSON resource limit exceeded: {kind:?}"),
+            Self::Format(error) => error.fmt(f),
+        }
+    }
+}
+impl std::error::Error for BudgetError {}
+
+pub fn parse_with_limits(
+    input: &str,
+    format: Format,
+    limits: Limits,
+) -> Result<Value, BudgetError> {
+    if input.len() > limits.input_bytes {
+        return Err(BudgetError::Limit(LimitKind::InputBytes));
+    }
+    parser::parse_with_node_limit(input, format, limits.value_nodes).map_err(|error| {
+        if error.message == "value node budget exceeded" {
+            BudgetError::Limit(LimitKind::ValueNodes)
+        } else {
+            BudgetError::Format(error)
+        }
+    })
+}
+
+/// Check node and encoded-byte budgets before allocating the encoded document.
+pub fn dumps_with_limits(
+    value: &Value,
+    format: Format,
+    pretty: bool,
+    limits: Limits,
+) -> Result<String, BudgetError> {
+    let mut budget = OutputBudget { bytes: limits.output_bytes, nodes: limits.value_nodes };
+    budget.value(value, format, pretty, 0)?;
+    dumps(value, format, pretty).map_err(BudgetError::Format)
+}
+
+impl Value {
+    /// Validation and encoding finish before any caller-owned stream is changed.
+    pub fn write_to_with_limits(
+        &self,
+        mut output: impl Write,
+        format: Format,
+        pretty: bool,
+        limits: Limits,
+    ) -> Result<(), BudgetError> {
+        let encoded = dumps_with_limits(self, format, pretty, limits)?;
+        output
+            .write_all(encoded.as_bytes())
+            .map_err(|e| BudgetError::Format(Error::at(&encoded, 0, e.to_string())))
+    }
+}
+
+struct OutputBudget {
+    bytes: usize,
+    nodes: usize,
+}
+impl OutputBudget {
+    fn add(&mut self, bytes: usize) -> Result<(), BudgetError> {
+        self.bytes =
+            self.bytes.checked_sub(bytes).ok_or(BudgetError::Limit(LimitKind::OutputBytes))?;
+        Ok(())
+    }
+
+    fn quoted(&mut self, text: &str) -> Result<(), BudgetError> {
+        self.add(2)?;
+        for c in text.chars() {
+            self.add(match c {
+                '"' | '\\' | '\n' | '\r' | '\t' | '\x08' | '\x0c' => 2,
+                c if c < '\x20' => 6,
+                c => c.len_utf8(),
+            })?;
+        }
+        Ok(())
+    }
+
+    fn line(&mut self, pretty: bool, depth: usize) -> Result<(), BudgetError> {
+        if pretty {
+            self.add(1 + 2 * depth)?;
+        }
+        Ok(())
+    }
+
+    fn value(
+        &mut self,
+        value: &Value,
+        format: Format,
+        pretty: bool,
+        depth: usize,
+    ) -> Result<(), BudgetError> {
+        self.nodes = self.nodes.checked_sub(1).ok_or(BudgetError::Limit(LimitKind::ValueNodes))?;
+        if matches!(value, Value::Array(_) | Value::Object(_)) && depth >= MAX_DEPTH {
+            return Err(BudgetError::Format(Error::at("", 0, "maximum nesting depth exceeded")));
+        }
+        match value {
+            Value::Null => self.add(4),
+            Value::Bool(b) => self.add(if *b { 4 } else { 5 }),
+            Value::Number(n) => self.add(n.as_str().len()),
+            Value::String(s) => self.quoted(s),
+            Value::Date(s) | Value::DateTime(s) => self.add(s.len()),
+            Value::Version(parts) => {
+                for (index, part) in parts.iter().enumerate() {
+                    self.add(usize::from(index > 0))?;
+                    self.add(part.to_string().len())?;
+                }
+                Ok(())
+            },
+            Value::Array(values) => {
+                self.add(2)?;
+                for (index, value) in values.iter().enumerate() {
+                    self.add(usize::from(index > 0))?;
+                    self.line(pretty, depth + 1)?;
+                    self.value(value, format, pretty, depth + 1)?;
+                }
+                if !values.is_empty() {
+                    self.line(pretty, depth)?;
+                }
+                Ok(())
+            },
+            Value::Object(fields) => {
+                self.add(2)?;
+                for (index, (key, value)) in fields.iter().enumerate() {
+                    self.add(usize::from(index > 0))?;
+                    self.line(pretty, depth + 1)?;
+                    self.quoted(key)?;
+                    self.add(match (format, pretty) {
+                        (Format::Wson, _) => 3,
+                        (Format::Json, true) => 2,
+                        _ => 1,
+                    })?;
+                    self.value(value, format, pretty, depth + 1)?;
+                }
+                if !fields.is_empty() {
+                    self.line(pretty, depth)?;
+                }
+                Ok(())
+            },
+        }
+    }
+}
+
 pub fn parse(input: &str, format: Format) -> Result<Value, Error> {
     parser::parse(input, format)
 }

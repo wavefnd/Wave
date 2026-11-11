@@ -152,3 +152,88 @@ fn explicit_writer_budget_does_not_relax_default_or_parser_limits() {
     }
     assert!(dumps_with_depth_limit(&Value::Array(vec![value]), Format::Json, false, 512).is_err());
 }
+
+#[test]
+fn opt_in_budgets_count_utf8_values_and_encoded_bytes() {
+    let value = parse_json(r#"{"키":[null,true,"é\n\u0001"]}"#).unwrap();
+    for format in [Format::Json, Format::Wson] {
+        for pretty in [false, true] {
+            let encoded = dumps(&value, format, pretty).unwrap();
+            let limits =
+                Limits { input_bytes: encoded.len(), value_nodes: 5, output_bytes: encoded.len() };
+            assert_eq!(parse_with_limits(&encoded, format, limits).unwrap(), value);
+            assert_eq!(dumps_with_limits(&value, format, pretty, limits).unwrap(), encoded);
+            assert_eq!(
+                parse_with_limits(
+                    &encoded,
+                    format,
+                    Limits { input_bytes: encoded.len() - 1, ..limits }
+                ),
+                Err(BudgetError::Limit(LimitKind::InputBytes))
+            );
+            assert_eq!(
+                parse_with_limits(&encoded, format, Limits { value_nodes: 4, ..limits }),
+                Err(BudgetError::Limit(LimitKind::ValueNodes))
+            );
+            assert_eq!(
+                dumps_with_limits(&value, format, pretty, Limits { value_nodes: 4, ..limits }),
+                Err(BudgetError::Limit(LimitKind::ValueNodes))
+            );
+            let mut output = b"sentinel".to_vec();
+            let error = value
+                .write_to_with_limits(
+                    &mut output,
+                    format,
+                    pretty,
+                    Limits { output_bytes: encoded.len() - 1, ..limits },
+                )
+                .unwrap_err();
+            assert_eq!(error, BudgetError::Limit(LimitKind::OutputBytes));
+            assert_eq!(output, b"sentinel");
+        }
+    }
+}
+
+#[test]
+fn budgeted_formats_preserve_syntax_and_depth_validation() {
+    let limits =
+        Limits { input_bytes: usize::MAX, value_nodes: usize::MAX, output_bytes: usize::MAX };
+    for input in ["{", "[1,]", r#"{"a":1,"a":2}"#, &"[".repeat(MAX_DEPTH + 1)] {
+        let old = parse_json(input).unwrap_err();
+        assert_eq!(parse_with_limits(input, Format::Json, limits), Err(BudgetError::Format(old)));
+    }
+    for value in [Value::Null, Value::Array(vec![]), Value::Object(vec![])] {
+        assert_eq!(
+            dumps_with_limits(&value, Format::Json, false, Limits { value_nodes: 0, ..limits }),
+            Err(BudgetError::Limit(LimitKind::ValueNodes))
+        );
+    }
+    let value = loads("{ date=2024-01-01, version=1.2.3 }").unwrap();
+    for pretty in [false, true] {
+        let encoded = dumps(&value, Format::Wson, pretty).unwrap();
+        assert_eq!(
+            dumps_with_limits(
+                &value,
+                Format::Wson,
+                pretty,
+                Limits { output_bytes: encoded.len(), ..limits }
+            )
+            .unwrap(),
+            encoded
+        );
+        assert_eq!(
+            dumps_with_limits(
+                &value,
+                Format::Wson,
+                pretty,
+                Limits { output_bytes: encoded.len() - 1, ..limits }
+            ),
+            Err(BudgetError::Limit(LimitKind::OutputBytes))
+        );
+    }
+    let wide = format!("[{}]", "null,".repeat(10000).trim_end_matches(','));
+    assert_eq!(
+        parse_with_limits(&wide, Format::Json, Limits { value_nodes: 2, ..limits }),
+        Err(BudgetError::Limit(LimitKind::ValueNodes))
+    );
+}
