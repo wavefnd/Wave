@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MPL-2.0
 import("std::path::copy")::{path_join2, path_basename_copy, path_dirname_copy};
+import("std::path::core")::{path_is_sep};
 import("std::path::analyze")::{path_ext_start, path_has_ext};
 fun unchanged(p: ptr<u8>) -> bool {
     var i: i32 = 0;
@@ -30,10 +31,13 @@ fun main() -> i32 {
     if (path_join2(&buffer[1], 1, "", "") != 0 || buffer[1] != 0) { return 13; }
     var no_ext: array<str, 9> = [".", "..", "dir/..", "dir/../", "dir/.", "dir/.//", ".gitignore", "plain", "dir\\..\\"];
     i = 0;
-    while (i < 9) {
+    var no_ext_count: i32 = 8;
+    if (path_is_sep(92)) { no_ext_count = 9; }
+    while (i < no_ext_count) {
         if (path_ext_start(no_ext[i]) != -1 || path_has_ext(no_ext[i])) { return 14 + i; }
         i += 1;
     }
+    if (!path_is_sep(92) && path_ext_start("dir\\..\\") != 5) { return 23; }
     if (path_ext_start("archive.tar.gz") != 11 || !path_has_ext("archive.tar.gz")) { return 24; }
     if (path_ext_start("dir/.config.json/") != 11 || !path_has_ext("dir/.config.json/")) { return 25; }
     if (path_ext_start("file.") != 4 || !path_has_ext("file.")) { return 26; }

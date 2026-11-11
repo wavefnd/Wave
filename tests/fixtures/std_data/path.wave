@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MPL-2.0
 import("std::path::core")::{path_is_abs, path_len};
 import("std::path::analyze")::{path_basename_start, path_basename_len, path_dirname_len};
-import("std::path::copy")::{path_basename_copy, path_dirname_copy};
+import("std::path::copy")::{path_basename_copy, path_dirname_copy, path_join2};
 
 fun root(path: str, volume_len: i32) -> bool {
     var base: array<u8, 64>;
@@ -26,6 +26,20 @@ fun root(path: str, volume_len: i32) -> bool {
     return true;
 }
 
+fun joined(left: str, right: str, expected: str) -> bool {
+    var output: array<u8, 128>;
+    var count: i32 = path_join2(&output[0], 128, left, right);
+    if (count != path_len(expected)) { return false; }
+    var i: i32 = 0;
+    while (i <= count) {
+        if (output[i] != expected[i]) { return false; }
+        i += 1;
+    }
+    output[0] = 91;
+    if (count > 0 && (path_join2(&output[0], count, left, right) != -1 || output[0] != 91)) { return false; }
+    return true;
+}
+
 fun main() -> i32 {
     if (path_is_abs("C:/")) {
         if (!root("\\\\server\\share", 14) || !root("\\\\server\\share\\", 14)
@@ -44,6 +58,20 @@ fun main() -> i32 {
         if (path_basename_len("//server/share") != 5 || path_dirname_len("//server/share") != 8
             || !root("/", 1) || path_is_abs("C:/")) { return 5; }
     }
+    if (path_is_abs("C:/")) {
+        if (!joined("C:/left", "D:/right", "D:/right")
+            || !joined("C:/left", "c:right", "C:/left/right")
+            || !joined("C:/left", "D:right", "D:right")
+            || !joined("C:/left", "\\right", "C:\\right")
+            || !joined("\\\\server\\share\\left", "\\right", "\\\\server\\share\\right")
+            || !joined("C:", "child", "C:child")) { return 7; }
+    } else {
+        if (path_basename_start("a\\b") != 0 || path_basename_len("a\\b") != 3
+            || path_dirname_len("a\\b") != 0 || !joined("/left", "/right", "/right")
+            || !joined("left", "a\\b", "left/a\\b")) { return 8; }
+    }
+    if (!joined("", "right", "right") || !joined("left", "", "left")
+        || !joined("left", "right", "left/right")) { return 9; }
     var sentinel: array<u8, 2> = [91, 92];
     if (path_basename_copy(&sentinel[0], 0, "/") != -1 || sentinel[0] != 91
         || path_dirname_copy(&sentinel[0], 1, "/") != -1 || sentinel[1] != 92) { return 6; }

@@ -6113,19 +6113,19 @@ pub const PATH_ERR_NO_SPACE: i32 = -1;
 
 [Source](path/copy.wave)
 
-[Declaration](path/copy.wave#L32)
+[Declaration](path/copy.wave#L33)
 
 ```wave
 pub fun path_join2(dst: ptr<u8>, dst_cap: i32, left: str, right: str) -> i32
 ```
 
-[Declaration](path/copy.wave#L77)
+[Declaration](path/copy.wave#L98)
 
 ```wave
 pub fun path_basename_copy(dst: ptr<u8>, dst_cap: i32, path: str) -> i32
 ```
 
-[Declaration](path/copy.wave#L98)
+[Declaration](path/copy.wave#L119)
 
 ```wave
 pub fun path_dirname_copy(dst: ptr<u8>, dst_cap: i32, path: str) -> i32

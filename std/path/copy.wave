@@ -29,47 +29,68 @@ import("std::path::analyze")::{
     path_has_ext,
 };
 
+// Join according to the selected target's path syntax, without consulting CWD.
 pub fun path_join2(dst: ptr<u8>, dst_cap: i32, left: str, right: str) -> i32 {
     if (dst == null || dst_cap <= 0) { return -1; }
     var ll: i32 = path_len(left);
     var rl: i32 = path_len(right);
-
+    var right_start: i32 = 0;
+    var windows: bool = path_is_sep(92);
+    var left_drive: bool = ll >= 2 && left[1] == 58
+        && ((left[0] >= 65 && left[0] <= 90) || (left[0] >= 97 && left[0] <= 122));
+    var right_drive: bool = windows && rl >= 2 && right[1] == 58
+        && ((right[0] >= 65 && right[0] <= 90) || (right[0] >= 97 && right[0] <= 122));
+    if (path_is_abs(right)) {
+        ll = 0;
+    } else if (right_drive) {
+        if (left_drive && (left[0] | 32) == (right[0] | 32)) {
+            right_start = 2;
+            rl -= 2;
+        } else {
+            ll = 0;
+        }
+    } else if (windows && rl > 0 && path_is_sep(right[0])) {
+        // Root-relative paths retain only the drive or complete UNC volume.
+        if (left_drive) {
+            ll = 2;
+        } else if (ll >= 2 && path_is_sep(left[0]) && path_is_sep(left[1]) && path_is_abs(left)) {
+            var end: i32 = 2;
+            while (left[end] != 0 && !path_is_sep(left[end])) {
+                end += 1;
+            }
+            end += 1;
+            while (left[end] != 0 && !path_is_sep(left[end])) {
+                end += 1;
+            }
+            ll = end;
+        } else {
+            ll = 0;
+        }
+    }
     var need_sep: i32 = 0;
-    if (ll > 0 && rl > 0) {
-        var last_left_idx: i32 = ll;
-        last_left_idx -= 1;
-        var lc: u8 = left[last_left_idx];
-        var rc: u8 = right[0];
-
-        if (!path_is_sep(lc) && !path_is_sep(rc)) {
+    if (ll > 0 && rl > 0 && !path_is_sep(left[ll - 1]) && !path_is_sep(right[right_start])) {
+        // C:child remains drive-relative; C:/child is a different path.
+        if (!(windows && left_drive && ll == 2)) {
             need_sep = 1;
         }
     }
-
-    // Compare against remaining capacity before adding lengths.
     if (ll >= dst_cap || rl >= dst_cap - ll) { return -1; }
     if (need_sep >= dst_cap - ll - rl) { return -1; }
     var total: i32 = ll + rl + need_sep;
-
     var k: i32 = 0;
     while (k < ll) {
         deref dst[k] = left[k];
         k += 1;
     }
-
     if (need_sep == 1) {
         deref dst[k] = 47;
         k += 1;
     }
-
-    var src_idx: i32 = 0;
-    var dst_idx: i32 = k;
-    while (src_idx < rl) {
-        deref dst[dst_idx] = right[src_idx];
-        src_idx += 1;
-        dst_idx += 1;
+    var i: i32 = 0;
+    while (i < rl) {
+        deref dst[k + i] = right[right_start + i];
+        i += 1;
     }
-
     deref dst[total] = 0;
     return total;
 }
