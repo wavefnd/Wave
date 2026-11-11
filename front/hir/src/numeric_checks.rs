@@ -125,6 +125,7 @@ impl Checker<'_> {
                 }
             },
             Expression::IndexAccess { target, index } => {
+                self.check_array_index(target, index, scope)?;
                 match (self.eval(target, scope)?, self.eval(index, scope)?) {
                     (Some(Number::Array(items)), Some(Number::Int(index))) => {
                         index.to_usize().and_then(|i| items.get(i).cloned().flatten())
@@ -380,7 +381,44 @@ impl Checker<'_> {
         Ok(Some(value))
     }
 
+    fn check_array_index(
+        &mut self,
+        target: &Expression,
+        index: &Expression,
+        scope: &Scope,
+    ) -> Result<(), Failure> {
+        let Some(HirExpressionType::Resolved(WaveType::Array(_, length))) =
+            self.program.type_of(target)
+        else {
+            return Ok(());
+        };
+        let length = *length;
+        if let Some(Number::Int(value)) = self.eval(index, scope)? {
+            if value.is_negative() || value >= ConstInt::from_u64(length as u64) {
+                return Err(self.fail(
+                    index,
+                    &format!(
+                        "constant array index {} is out of range for array length {length}",
+                        value.to_literal()
+                    ),
+                ));
+            }
+        }
+        Ok(())
+    }
+
     fn inspect(&mut self, expr: &Expression, scope: &Scope) -> Result<(), Failure> {
+        // Bounds are a syntactic constraint even in a short-circuited operand.
+        // Evaluate only the index with existing ordered conversion semantics.
+        let mut result = Ok(());
+        walk_expression(expr, &mut |child| {
+            if result.is_ok() {
+                if let Expression::IndexAccess { target, index } = child {
+                    result = self.check_array_index(target, index, scope);
+                }
+            }
+        });
+        result?;
         self.eval(expr, scope).map(|_| ())
     }
 

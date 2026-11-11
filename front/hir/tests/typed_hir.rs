@@ -231,3 +231,43 @@ fn bool_ordering_arithmetic_and_mixed_equality_stay_rejected() {
         assert!(TypedProgram::lower(syntax).is_err(), "{expression} should be rejected");
     }
 }
+
+#[test]
+fn constant_fixed_array_bounds_respect_types_conversions_and_dead_code() {
+    fn lower(source: &str) -> Result<hir::TypedProgram, Box<hir::HirLoweringError>> {
+        let tokens = lexer::Lexer::new_with_file(source, "bounds.wave").tokenize().unwrap();
+        hir::TypedProgram::lower(parser::parse_syntax_with_spans(&tokens).unwrap())
+            .map_err(Box::new)
+    }
+    for expression in [
+        "values[2]",
+        "values[-1]",
+        "values[(258 as u8)]",
+        "values[limit]",
+        "false && values[2] == 0",
+    ] {
+        let source = format!("const limit: i32 = 2; fun main() {{ var values: array<i32, 2> = [1, 2]; var bad: bool = ({expression}) == 0; }}");
+        // The logical case has a boolean result and needs a boolean comparison.
+        let source = if expression.starts_with("false") {
+            source.replace(") == 0;", ") == false;")
+        } else {
+            source
+        };
+        let error = lower(&source).unwrap_err();
+        assert!(error.to_string().contains("out of range for array length 2"), "{source}: {error}");
+        assert!(error.diagnostic().span.as_ref().is_some_and(|span| span.file == "bounds.wave"));
+    }
+    for source in [
+        "fun main() { var a: array<i32, 0>; var bad: i32 = a[0]; }",
+        "fun main() { var a: array<i32, 2>; if (false) { var bad: i32 = a[2]; } }",
+    ] {
+        assert!(lower(source).unwrap_err().to_string().contains("out of range"));
+    }
+    for source in [
+        "fun main() { var a: array<i32, 2> = [1, 2]; var first: i32 = a[0]; var last: i32 = a[1]; }",
+        "fun main() { var a: array<i32, 2> = [1, 2]; var index: i32 = 2; var value: i32 = a[index]; }",
+        "fun main() { var p: ptr<i32>; var value: i32 = p[200]; }",
+    ] {
+        lower(source).unwrap_or_else(|e| panic!("{source}: {e}"));
+    }
+}
