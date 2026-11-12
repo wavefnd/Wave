@@ -40,6 +40,7 @@ pub mod backend;
 pub mod codegen;
 pub mod expression;
 pub mod importgen;
+pub mod macos;
 pub mod msvc;
 pub mod statement;
 pub mod toolchain;
