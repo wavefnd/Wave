@@ -14,13 +14,13 @@ regex-lite = "=0.1.9"
 base64 = "=0.22.1"
 getrandom = "=0.4.3"
 yaml-rust2 = { version = "=0.13.0", default-features = false }
-time = { version = "=0.3.44", features = ["formatting", "parsing"] }
+time = { version = "=0.3.55", features = ["formatting", "parsing"] }
 sha2 = "=0.10.9"
 object = { version = "=0.37.3", default-features = false, features = ["read", "std"] }
 tempfile = "=3.27.0"
 tar = { version = "=0.4.46", default-features = false }
 flate2 = { version = "=1.1.10", default-features = false, features = ["rust_backend"] }
-zip = { version = "=8.6.0", default-features = false, features = ["deflate-flate2"] }
+zip = { version = "=9.5.1", default-features = false, features = ["deflate-flate2"] }
 
 [target.'cfg(unix)'.dependencies]
 nix = { version = "=0.31.3", default-features = false, features = ["signal", "process", "fs", "resource", "term", "user"] }
