@@ -2,6 +2,7 @@
 use crate::{error, Result};
 use std::ffi::OsString;
 use std::path::PathBuf;
+use std::time::Duration;
 
 /// Preserve native paths/argv. Only names and manifest text require UTF-8.
 pub struct Args {
@@ -66,6 +67,23 @@ impl Args {
             Err(error(format!("unexpected arguments: {:?}", self.values)))
         }
     }
+}
+
+/// Timeout seconds beyond this bound are ordinary input errors: such values
+/// cannot be turned into a deadline without overflowing `Instant` addition, and
+/// the derived process deadlines stay inside `Duration` arithmetic.
+pub const MAX_TIMEOUT_SECONDS: u64 = u32::MAX as u64;
+
+/// Parse a timeout option once at the shared boundary so every timeout flag
+/// rejects excessive values before any `Duration` or `Instant` arithmetic can
+/// panic. Zero keeps the existing per-command meaning: the FreeBSD provider
+/// rejects it, while `exec` and `test` time out immediately.
+pub fn timeout(value: Option<String>, fallback: u64) -> Result<Duration> {
+    let seconds: u64 = value.map(|value| value.parse()).transpose()?.unwrap_or(fallback);
+    if seconds > MAX_TIMEOUT_SECONDS {
+        return Err(error(format!("timeout must be at most {MAX_TIMEOUT_SECONDS} seconds")));
+    }
+    Ok(Duration::from_secs(seconds))
 }
 
 pub fn main(arguments: &[OsString]) -> Result<i32> {
@@ -140,7 +158,7 @@ pub fn main(arguments: &[OsString]) -> Result<i32> {
     }
     if command == "exec" {
         let mut args = Args::new(rest);
-        let timeout = args.text("--timeout")?.unwrap_or_else(|| "1800".into()).parse::<u64>()?;
+        let timeout = crate::cli::timeout(args.text("--timeout")?, 1800)?;
         let limit =
             args.text("--output-limit")?.unwrap_or_else(|| "67108864".into()).parse::<usize>()?;
         let cwd = args.path("--cwd")?.map(Ok).unwrap_or_else(std::env::current_dir)?;
@@ -151,7 +169,7 @@ pub fn main(arguments: &[OsString]) -> Result<i32> {
         }
         let mut spec = crate::process::Spec::new(args.values);
         spec.stack = stack;
-        spec.timeout = std::time::Duration::from_secs(timeout);
+        spec.timeout = timeout;
         spec.output_limit = limit;
         spec.cwd = cwd;
         spec.stream = !capture;
@@ -181,4 +199,23 @@ pub fn main(arguments: &[OsString]) -> Result<i32> {
         return Ok(0);
     }
     Err(error(format!("unknown command: {}", command.to_string_lossy())))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn timeout_rejects_excessive_values_and_keeps_defined_results() {
+        assert_eq!(timeout(None, 30).unwrap(), Duration::from_secs(30));
+        assert_eq!(timeout(Some("45".into()), 30).unwrap(), Duration::from_secs(45));
+        assert_eq!(timeout(Some("0".into()), 30).unwrap(), Duration::ZERO);
+        let boundary = timeout(Some(MAX_TIMEOUT_SECONDS.to_string()), 30).unwrap();
+        assert_eq!(boundary, Duration::from_secs(MAX_TIMEOUT_SECONDS));
+        for value in [u64::MAX.to_string(), (MAX_TIMEOUT_SECONDS + 1).to_string()] {
+            let error = timeout(Some(value), 30).unwrap_err().to_string();
+            assert!(error.starts_with("timeout must be at most"), "{error}");
+        }
+        assert!(timeout(Some("not-a-number".into()), 30).is_err());
+    }
 }
