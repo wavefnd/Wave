@@ -1,5 +1,64 @@
+import("std::bytes::cursor")::{
+    bytes_writer,
+    bytes_writer_write_be_u8,
+    bytes_writer_write_le_i8,
+    bytes_reader_read_be_u8,
+    bytes_reader_peek_be_u8,
+    bytes_reader_read_le_i8,
+    bytes_writer_write_be_u16,
+    bytes_writer_write_le_i16,
+    bytes_reader_read_be_u16,
+    bytes_reader_peek_be_u16,
+    bytes_reader_read_le_i16,
+    bytes_writer_write_be_u32,
+    bytes_writer_write_le_i32,
+    bytes_reader_read_be_u32,
+    bytes_reader_peek_be_u32,
+    bytes_reader_read_le_i32,
+    bytes_writer_write_be_u64,
+    bytes_writer_write_le_i64,
+    bytes_reader_read_le_i64,
+    bytes_writer_write_be_u128,
+    bytes_writer_write_le_i128,
+    bytes_reader_read_be_u128,
+    bytes_reader_peek_be_u128,
+    bytes_reader_read_le_i128,
+    bytes_writer_write_be_u256,
+    bytes_writer_write_le_i256,
+    bytes_reader_read_be_u256,
+    bytes_reader_peek_be_u256,
+    bytes_reader_read_le_i256,
+    bytes_writer_write_be_u512,
+    bytes_writer_write_le_i512,
+    bytes_reader_read_be_u512,
+    bytes_reader_peek_be_u512,
+    bytes_reader_read_le_i512,
+    bytes_writer_write_be_u1024,
+    bytes_writer_write_le_i1024,
+    bytes_reader_read_be_u1024,
+    bytes_reader_peek_be_u1024,
+    bytes_reader_read_le_i1024
+};
+import("std::bytes::read")::{bytes_read_be_u8,bytes_read_be_i8,bytes_read_le_u8,bytes_read_le_i8};
+import("std::bytes::write")::{bytes_write_be_u8,bytes_write_be_i8,bytes_write_le_u8,bytes_write_le_i8};
+import("std::bytes::read")::{bytes_read_be_u16,bytes_read_be_i16,bytes_read_le_u16,bytes_read_le_i16};
+import("std::bytes::write")::{bytes_write_be_u16,bytes_write_be_i16,bytes_write_le_u16,bytes_write_le_i16};
+import("std::bytes::read")::{bytes_read_be_u32,bytes_read_be_i32,bytes_read_le_u32,bytes_read_le_i32};
+import("std::bytes::write")::{bytes_write_be_u32,bytes_write_be_i32,bytes_write_le_u32,bytes_write_le_i32};
+import("std::bytes::read")::{bytes_read_be_u64,bytes_read_be_i64,bytes_read_le_u64,bytes_read_le_i64};
+import("std::bytes::write")::{bytes_write_be_u64,bytes_write_be_i64,bytes_write_le_u64,bytes_write_le_i64};
+import("std::bytes::read")::{bytes_read_be_u128,bytes_read_be_i128,bytes_read_le_u128,bytes_read_le_i128};
+import("std::bytes::write")::{bytes_write_be_u128,bytes_write_be_i128,bytes_write_le_u128,bytes_write_le_i128};
+import("std::bytes::read")::{bytes_read_be_u256,bytes_read_be_i256,bytes_read_le_u256,bytes_read_le_i256};
+import("std::bytes::write")::{bytes_write_be_u256,bytes_write_be_i256,bytes_write_le_u256,bytes_write_le_i256};
+import("std::bytes::read")::{bytes_read_be_u512,bytes_read_be_i512,bytes_read_le_u512,bytes_read_le_i512};
+import("std::bytes::write")::{bytes_write_be_u512,bytes_write_be_i512,bytes_write_le_u512,bytes_write_le_i512};
+import("std::bytes::read")::{bytes_read_be_u1024,bytes_read_be_i1024,bytes_read_le_u1024,bytes_read_le_i1024};
+import("std::bytes::write")::{bytes_write_be_u1024,bytes_write_be_i1024,bytes_write_le_u1024,bytes_write_le_i1024};
 // SPDX-License-Identifier: MPL-2.0
 import("std::mem::cstr")::{mem_copy_cstr_n};
+import("std::bytes::cursor")::{bytes_reader, bytes_reader_read_be_u64, bytes_reader_peek_be_u64, bytes_reader_read_exact, bytes_reader_read_view};
+import("std::bytes::types")::{ByteReader, ByteWriter};
 import("std::string::ascii")::{
     is_ascii, is_hex_digit, is_control, is_printable, is_graphic, is_punct,
     is_digit, is_lower, is_upper, is_alpha, is_alnum, is_space, to_lower, to_upper,
@@ -9,6 +68,302 @@ import("std::bytes::search")::{bytes_equal, bytes_find_byte, bytes_find};
 import("std::bytes::hex")::{bytes_hex_encode, bytes_hex_decode};
 import("std::buffer::types")::{Buffer};
 import("std::buffer::write")::{buffer_remove};
+
+fun codec_8(value: u8) -> bool {
+    var buffer: array<u8, 3>;
+    buffer[0] = 91;
+    buffer[2] = 92;
+    var dst: BytesMut = bytes_view_mut(&buffer[0], 3);
+    var src: Bytes = bytes_view(&buffer[0], 3);
+    var output: u8 = 0;
+    var signed_output: i8 = 0;
+    if (bytes_write_be_u8(dst, 1, value) != 0 || bytes_read_be_u8(src, 1, &output) != 0 || output != value) { return false; }
+    var low: u8 = (value & 255) as u8;
+    if (buffer[1] != low || buffer[1] != (value >> 0) as u8) { return false; }
+    if (bytes_write_le_i8(dst, 1, value as i8) != 0 || bytes_read_le_i8(src, 1, &signed_output) != 0
+        || signed_output != value as i8 || buffer[1] != low) { return false; }
+    if (bytes_write_be_i8(dst, 1, value as i8) != 0 || bytes_read_be_i8(src, 1, &signed_output) != 0
+        || signed_output != value as i8) { return false; }
+    if (bytes_write_le_u8(dst, 1, value) != 0 || bytes_read_le_u8(src, 1, &output) != 0 || output != value) { return false; }
+    var writer: ByteWriter = bytes_writer(&buffer[1], 1);
+    if (bytes_writer_write_be_u8(&writer, value) != 0 || writer.position != 1) { return false; }
+    var reader: ByteReader = bytes_reader(&buffer[1], 1);
+    if (bytes_reader_peek_be_u8(&reader, &output) != 0 || output != value || reader.position != 0) { return false; }
+    if (bytes_reader_peek_be_u8(&reader, &buffer[1] as ptr<u8>) != -1 || reader.position != 0) { return false; }
+    if (bytes_reader_read_be_u8(&reader, &output) != 0 || output != value || reader.position != 1) { return false; }
+    output = 37;
+    if (bytes_reader_read_be_u8(&reader, &output) == 0 || output != 37 || reader.position != 1) { return false; }
+    writer.position = 0;
+    reader.position = 0;
+    if (bytes_writer_write_le_i8(&writer, value as i8) != 0
+        || bytes_reader_read_le_i8(&reader, &signed_output) != 0 || signed_output != value as i8) { return false; }
+    if (bytes_writer_write_be_u8(&writer, 0) == 0 || writer.position != 1) { return false; }
+    if (bytes_read_le_u8(src, 1, &output) != 0 || output != value) { return false; }
+    output = 37;
+    if (bytes_read_le_u8(bytes_view(&buffer[0], 1), 1, &output) == 0 || output != 37) { return false; }
+    if (bytes_write_be_u8(bytes_view_mut(&buffer[0], 1), 1, value) == 0) { return false; }
+    if (buffer[0] != 91 || buffer[2] != 92) { return false; }
+    return true;
+}
+
+fun codec_16(value: u16) -> bool {
+    var buffer: array<u8, 4>;
+    buffer[0] = 91;
+    buffer[3] = 92;
+    var dst: BytesMut = bytes_view_mut(&buffer[0], 4);
+    var src: Bytes = bytes_view(&buffer[0], 4);
+    var output: u16 = 0;
+    var signed_output: i16 = 0;
+    if (bytes_write_be_u16(dst, 1, value) != 0 || bytes_read_be_u16(src, 1, &output) != 0 || output != value) { return false; }
+    var low: u8 = (value & 255) as u8;
+    if (buffer[2] != low || buffer[1] != (value >> 8) as u8) { return false; }
+    if (bytes_write_le_i16(dst, 1, value as i16) != 0 || bytes_read_le_i16(src, 1, &signed_output) != 0
+        || signed_output != value as i16 || buffer[1] != low) { return false; }
+    if (bytes_write_be_i16(dst, 1, value as i16) != 0 || bytes_read_be_i16(src, 1, &signed_output) != 0
+        || signed_output != value as i16) { return false; }
+    if (bytes_write_le_u16(dst, 1, value) != 0 || bytes_read_le_u16(src, 1, &output) != 0 || output != value) { return false; }
+    var writer: ByteWriter = bytes_writer(&buffer[1], 2);
+    if (bytes_writer_write_be_u16(&writer, value) != 0 || writer.position != 2) { return false; }
+    var reader: ByteReader = bytes_reader(&buffer[1], 2);
+    if (bytes_reader_peek_be_u16(&reader, &output) != 0 || output != value || reader.position != 0) { return false; }
+    if (bytes_reader_peek_be_u16(&reader, &buffer[1] as ptr<u16>) != -1 || reader.position != 0) { return false; }
+    if (bytes_reader_read_be_u16(&reader, &output) != 0 || output != value || reader.position != 2) { return false; }
+    output = 37;
+    if (bytes_reader_read_be_u16(&reader, &output) == 0 || output != 37 || reader.position != 2) { return false; }
+    writer.position = 0;
+    reader.position = 0;
+    if (bytes_writer_write_le_i16(&writer, value as i16) != 0
+        || bytes_reader_read_le_i16(&reader, &signed_output) != 0 || signed_output != value as i16) { return false; }
+    if (bytes_writer_write_be_u16(&writer, 0) == 0 || writer.position != 2) { return false; }
+    if (bytes_read_le_u16(src, 1, &output) != 0 || output != value) { return false; }
+    output = 37;
+    if (bytes_read_le_u16(bytes_view(&buffer[0], 2), 1, &output) == 0 || output != 37) { return false; }
+    if (bytes_write_be_u16(bytes_view_mut(&buffer[0], 2), 1, value) == 0) { return false; }
+    if (buffer[0] != 91 || buffer[3] != 92) { return false; }
+    return true;
+}
+
+fun codec_32(value: u32) -> bool {
+    var buffer: array<u8, 6>;
+    buffer[0] = 91;
+    buffer[5] = 92;
+    var dst: BytesMut = bytes_view_mut(&buffer[0], 6);
+    var src: Bytes = bytes_view(&buffer[0], 6);
+    var output: u32 = 0;
+    var signed_output: i32 = 0;
+    if (bytes_write_be_u32(dst, 1, value) != 0 || bytes_read_be_u32(src, 1, &output) != 0 || output != value) { return false; }
+    var low: u8 = (value & 255) as u8;
+    if (buffer[4] != low || buffer[1] != (value >> 24) as u8) { return false; }
+    if (bytes_write_le_i32(dst, 1, value as i32) != 0 || bytes_read_le_i32(src, 1, &signed_output) != 0
+        || signed_output != value as i32 || buffer[1] != low) { return false; }
+    if (bytes_write_be_i32(dst, 1, value as i32) != 0 || bytes_read_be_i32(src, 1, &signed_output) != 0
+        || signed_output != value as i32) { return false; }
+    if (bytes_write_le_u32(dst, 1, value) != 0 || bytes_read_le_u32(src, 1, &output) != 0 || output != value) { return false; }
+    var writer: ByteWriter = bytes_writer(&buffer[1], 4);
+    if (bytes_writer_write_be_u32(&writer, value) != 0 || writer.position != 4) { return false; }
+    var reader: ByteReader = bytes_reader(&buffer[1], 4);
+    if (bytes_reader_peek_be_u32(&reader, &output) != 0 || output != value || reader.position != 0) { return false; }
+    if (bytes_reader_peek_be_u32(&reader, &buffer[1] as ptr<u32>) != -1 || reader.position != 0) { return false; }
+    if (bytes_reader_read_be_u32(&reader, &output) != 0 || output != value || reader.position != 4) { return false; }
+    output = 37;
+    if (bytes_reader_read_be_u32(&reader, &output) == 0 || output != 37 || reader.position != 4) { return false; }
+    writer.position = 0;
+    reader.position = 0;
+    if (bytes_writer_write_le_i32(&writer, value as i32) != 0
+        || bytes_reader_read_le_i32(&reader, &signed_output) != 0 || signed_output != value as i32) { return false; }
+    if (bytes_writer_write_be_u32(&writer, 0) == 0 || writer.position != 4) { return false; }
+    if (bytes_read_le_u32(src, 1, &output) != 0 || output != value) { return false; }
+    output = 37;
+    if (bytes_read_le_u32(bytes_view(&buffer[0], 4), 1, &output) == 0 || output != 37) { return false; }
+    if (bytes_write_be_u32(bytes_view_mut(&buffer[0], 4), 1, value) == 0) { return false; }
+    if (buffer[0] != 91 || buffer[5] != 92) { return false; }
+    return true;
+}
+
+fun codec_64(value: u64) -> bool {
+    var buffer: array<u8, 10>;
+    buffer[0] = 91;
+    buffer[9] = 92;
+    var dst: BytesMut = bytes_view_mut(&buffer[0], 10);
+    var src: Bytes = bytes_view(&buffer[0], 10);
+    var output: u64 = 0;
+    var signed_output: i64 = 0;
+    if (bytes_write_be_u64(dst, 1, value) != 0 || bytes_read_be_u64(src, 1, &output) != 0 || output != value) { return false; }
+    var low: u8 = (value & 255) as u8;
+    if (buffer[8] != low || buffer[1] != (value >> 56) as u8) { return false; }
+    if (bytes_write_le_i64(dst, 1, value as i64) != 0 || bytes_read_le_i64(src, 1, &signed_output) != 0
+        || signed_output != value as i64 || buffer[1] != low) { return false; }
+    if (bytes_write_be_i64(dst, 1, value as i64) != 0 || bytes_read_be_i64(src, 1, &signed_output) != 0
+        || signed_output != value as i64) { return false; }
+    if (bytes_write_le_u64(dst, 1, value) != 0 || bytes_read_le_u64(src, 1, &output) != 0 || output != value) { return false; }
+    var writer: ByteWriter = bytes_writer(&buffer[1], 8);
+    if (bytes_writer_write_be_u64(&writer, value) != 0 || writer.position != 8) { return false; }
+    var reader: ByteReader = bytes_reader(&buffer[1], 8);
+    if (bytes_reader_peek_be_u64(&reader, &output) != 0 || output != value || reader.position != 0) { return false; }
+    if (bytes_reader_peek_be_u64(&reader, &buffer[1] as ptr<u64>) != -1 || reader.position != 0) { return false; }
+    if (bytes_reader_read_be_u64(&reader, &output) != 0 || output != value || reader.position != 8) { return false; }
+    output = 37;
+    if (bytes_reader_read_be_u64(&reader, &output) == 0 || output != 37 || reader.position != 8) { return false; }
+    writer.position = 0;
+    reader.position = 0;
+    if (bytes_writer_write_le_i64(&writer, value as i64) != 0
+        || bytes_reader_read_le_i64(&reader, &signed_output) != 0 || signed_output != value as i64) { return false; }
+    if (bytes_writer_write_be_u64(&writer, 0) == 0 || writer.position != 8) { return false; }
+    if (bytes_read_le_u64(src, 1, &output) != 0 || output != value) { return false; }
+    output = 37;
+    if (bytes_read_le_u64(bytes_view(&buffer[0], 8), 1, &output) == 0 || output != 37) { return false; }
+    if (bytes_write_be_u64(bytes_view_mut(&buffer[0], 8), 1, value) == 0) { return false; }
+    if (buffer[0] != 91 || buffer[9] != 92) { return false; }
+    return true;
+}
+
+fun codec_128(value: u128) -> bool {
+    var buffer: array<u8, 18>;
+    buffer[0] = 91;
+    buffer[17] = 92;
+    var dst: BytesMut = bytes_view_mut(&buffer[0], 18);
+    var src: Bytes = bytes_view(&buffer[0], 18);
+    var output: u128 = 0;
+    var signed_output: i128 = 0;
+    if (bytes_write_be_u128(dst, 1, value) != 0 || bytes_read_be_u128(src, 1, &output) != 0 || output != value) { return false; }
+    var low: u8 = (value & 255) as u8;
+    if (buffer[16] != low || buffer[1] != (value >> 120) as u8) { return false; }
+    if (bytes_write_le_i128(dst, 1, value as i128) != 0 || bytes_read_le_i128(src, 1, &signed_output) != 0
+        || signed_output != value as i128 || buffer[1] != low) { return false; }
+    if (bytes_write_be_i128(dst, 1, value as i128) != 0 || bytes_read_be_i128(src, 1, &signed_output) != 0
+        || signed_output != value as i128) { return false; }
+    if (bytes_write_le_u128(dst, 1, value) != 0 || bytes_read_le_u128(src, 1, &output) != 0 || output != value) { return false; }
+    var writer: ByteWriter = bytes_writer(&buffer[1], 16);
+    if (bytes_writer_write_be_u128(&writer, value) != 0 || writer.position != 16) { return false; }
+    var reader: ByteReader = bytes_reader(&buffer[1], 16);
+    if (bytes_reader_peek_be_u128(&reader, &output) != 0 || output != value || reader.position != 0) { return false; }
+    if (bytes_reader_peek_be_u128(&reader, &buffer[1] as ptr<u128>) != -1 || reader.position != 0) { return false; }
+    if (bytes_reader_read_be_u128(&reader, &output) != 0 || output != value || reader.position != 16) { return false; }
+    output = 37;
+    if (bytes_reader_read_be_u128(&reader, &output) == 0 || output != 37 || reader.position != 16) { return false; }
+    writer.position = 0;
+    reader.position = 0;
+    if (bytes_writer_write_le_i128(&writer, value as i128) != 0
+        || bytes_reader_read_le_i128(&reader, &signed_output) != 0 || signed_output != value as i128) { return false; }
+    if (bytes_writer_write_be_u128(&writer, 0) == 0 || writer.position != 16) { return false; }
+    if (bytes_read_le_u128(src, 1, &output) != 0 || output != value) { return false; }
+    output = 37;
+    if (bytes_read_le_u128(bytes_view(&buffer[0], 16), 1, &output) == 0 || output != 37) { return false; }
+    if (bytes_write_be_u128(bytes_view_mut(&buffer[0], 16), 1, value) == 0) { return false; }
+    if (buffer[0] != 91 || buffer[17] != 92) { return false; }
+    return true;
+}
+
+fun codec_256(value: u256) -> bool {
+    var buffer: array<u8, 34>;
+    buffer[0] = 91;
+    buffer[33] = 92;
+    var dst: BytesMut = bytes_view_mut(&buffer[0], 34);
+    var src: Bytes = bytes_view(&buffer[0], 34);
+    var output: u256 = 0;
+    var signed_output: i256 = 0;
+    if (bytes_write_be_u256(dst, 1, value) != 0 || bytes_read_be_u256(src, 1, &output) != 0 || output != value) { return false; }
+    var low: u8 = (value & 255) as u8;
+    if (buffer[32] != low || buffer[1] != (value >> 248) as u8) { return false; }
+    if (bytes_write_le_i256(dst, 1, value as i256) != 0 || bytes_read_le_i256(src, 1, &signed_output) != 0
+        || signed_output != value as i256 || buffer[1] != low) { return false; }
+    if (bytes_write_be_i256(dst, 1, value as i256) != 0 || bytes_read_be_i256(src, 1, &signed_output) != 0
+        || signed_output != value as i256) { return false; }
+    if (bytes_write_le_u256(dst, 1, value) != 0 || bytes_read_le_u256(src, 1, &output) != 0 || output != value) { return false; }
+    var writer: ByteWriter = bytes_writer(&buffer[1], 32);
+    if (bytes_writer_write_be_u256(&writer, value) != 0 || writer.position != 32) { return false; }
+    var reader: ByteReader = bytes_reader(&buffer[1], 32);
+    if (bytes_reader_peek_be_u256(&reader, &output) != 0 || output != value || reader.position != 0) { return false; }
+    if (bytes_reader_peek_be_u256(&reader, &buffer[1] as ptr<u256>) != -1 || reader.position != 0) { return false; }
+    if (bytes_reader_read_be_u256(&reader, &output) != 0 || output != value || reader.position != 32) { return false; }
+    output = 37;
+    if (bytes_reader_read_be_u256(&reader, &output) == 0 || output != 37 || reader.position != 32) { return false; }
+    writer.position = 0;
+    reader.position = 0;
+    if (bytes_writer_write_le_i256(&writer, value as i256) != 0
+        || bytes_reader_read_le_i256(&reader, &signed_output) != 0 || signed_output != value as i256) { return false; }
+    if (bytes_writer_write_be_u256(&writer, 0) == 0 || writer.position != 32) { return false; }
+    if (bytes_read_le_u256(src, 1, &output) != 0 || output != value) { return false; }
+    output = 37;
+    if (bytes_read_le_u256(bytes_view(&buffer[0], 32), 1, &output) == 0 || output != 37) { return false; }
+    if (bytes_write_be_u256(bytes_view_mut(&buffer[0], 32), 1, value) == 0) { return false; }
+    if (buffer[0] != 91 || buffer[33] != 92) { return false; }
+    return true;
+}
+
+fun codec_512(value: u512) -> bool {
+    var buffer: array<u8, 66>;
+    buffer[0] = 91;
+    buffer[65] = 92;
+    var dst: BytesMut = bytes_view_mut(&buffer[0], 66);
+    var src: Bytes = bytes_view(&buffer[0], 66);
+    var output: u512 = 0;
+    var signed_output: i512 = 0;
+    if (bytes_write_be_u512(dst, 1, value) != 0 || bytes_read_be_u512(src, 1, &output) != 0 || output != value) { return false; }
+    var low: u8 = (value & 255) as u8;
+    if (buffer[64] != low || buffer[1] != (value >> 504) as u8) { return false; }
+    if (bytes_write_le_i512(dst, 1, value as i512) != 0 || bytes_read_le_i512(src, 1, &signed_output) != 0
+        || signed_output != value as i512 || buffer[1] != low) { return false; }
+    if (bytes_write_be_i512(dst, 1, value as i512) != 0 || bytes_read_be_i512(src, 1, &signed_output) != 0
+        || signed_output != value as i512) { return false; }
+    if (bytes_write_le_u512(dst, 1, value) != 0 || bytes_read_le_u512(src, 1, &output) != 0 || output != value) { return false; }
+    var writer: ByteWriter = bytes_writer(&buffer[1], 64);
+    if (bytes_writer_write_be_u512(&writer, value) != 0 || writer.position != 64) { return false; }
+    var reader: ByteReader = bytes_reader(&buffer[1], 64);
+    if (bytes_reader_peek_be_u512(&reader, &output) != 0 || output != value || reader.position != 0) { return false; }
+    if (bytes_reader_peek_be_u512(&reader, &buffer[1] as ptr<u512>) != -1 || reader.position != 0) { return false; }
+    if (bytes_reader_read_be_u512(&reader, &output) != 0 || output != value || reader.position != 64) { return false; }
+    output = 37;
+    if (bytes_reader_read_be_u512(&reader, &output) == 0 || output != 37 || reader.position != 64) { return false; }
+    writer.position = 0;
+    reader.position = 0;
+    if (bytes_writer_write_le_i512(&writer, value as i512) != 0
+        || bytes_reader_read_le_i512(&reader, &signed_output) != 0 || signed_output != value as i512) { return false; }
+    if (bytes_writer_write_be_u512(&writer, 0) == 0 || writer.position != 64) { return false; }
+    if (bytes_read_le_u512(src, 1, &output) != 0 || output != value) { return false; }
+    output = 37;
+    if (bytes_read_le_u512(bytes_view(&buffer[0], 64), 1, &output) == 0 || output != 37) { return false; }
+    if (bytes_write_be_u512(bytes_view_mut(&buffer[0], 64), 1, value) == 0) { return false; }
+    if (buffer[0] != 91 || buffer[65] != 92) { return false; }
+    return true;
+}
+
+fun codec_1024(value: u1024) -> bool {
+    var buffer: array<u8, 130>;
+    buffer[0] = 91;
+    buffer[129] = 92;
+    var dst: BytesMut = bytes_view_mut(&buffer[0], 130);
+    var src: Bytes = bytes_view(&buffer[0], 130);
+    var output: u1024 = 0;
+    var signed_output: i1024 = 0;
+    if (bytes_write_be_u1024(dst, 1, value) != 0 || bytes_read_be_u1024(src, 1, &output) != 0 || output != value) { return false; }
+    var low: u8 = (value & 255) as u8;
+    if (buffer[128] != low || buffer[1] != (value >> 1016) as u8) { return false; }
+    if (bytes_write_le_i1024(dst, 1, value as i1024) != 0 || bytes_read_le_i1024(src, 1, &signed_output) != 0
+        || signed_output != value as i1024 || buffer[1] != low) { return false; }
+    if (bytes_write_be_i1024(dst, 1, value as i1024) != 0 || bytes_read_be_i1024(src, 1, &signed_output) != 0
+        || signed_output != value as i1024) { return false; }
+    if (bytes_write_le_u1024(dst, 1, value) != 0 || bytes_read_le_u1024(src, 1, &output) != 0 || output != value) { return false; }
+    var writer: ByteWriter = bytes_writer(&buffer[1], 128);
+    if (bytes_writer_write_be_u1024(&writer, value) != 0 || writer.position != 128) { return false; }
+    var reader: ByteReader = bytes_reader(&buffer[1], 128);
+    if (bytes_reader_peek_be_u1024(&reader, &output) != 0 || output != value || reader.position != 0) { return false; }
+    if (bytes_reader_peek_be_u1024(&reader, &buffer[1] as ptr<u1024>) != -1 || reader.position != 0) { return false; }
+    if (bytes_reader_read_be_u1024(&reader, &output) != 0 || output != value || reader.position != 128) { return false; }
+    output = 37;
+    if (bytes_reader_read_be_u1024(&reader, &output) == 0 || output != 37 || reader.position != 128) { return false; }
+    writer.position = 0;
+    reader.position = 0;
+    if (bytes_writer_write_le_i1024(&writer, value as i1024) != 0
+        || bytes_reader_read_le_i1024(&reader, &signed_output) != 0 || signed_output != value as i1024) { return false; }
+    if (bytes_writer_write_be_u1024(&writer, 0) == 0 || writer.position != 128) { return false; }
+    if (bytes_read_le_u1024(src, 1, &output) != 0 || output != value) { return false; }
+    output = 37;
+    if (bytes_read_le_u1024(bytes_view(&buffer[0], 128), 1, &output) == 0 || output != 37) { return false; }
+    if (bytes_write_be_u1024(bytes_view_mut(&buffer[0], 128), 1, value) == 0) { return false; }
+    if (buffer[0] != 91 || buffer[129] != 92) { return false; }
+    return true;
+}
 
 fun main() -> i32 {
     var c: i32 = 0;
@@ -177,5 +532,63 @@ fun main() -> i32 {
     if (buffer_remove(&bad, 0, 0) != -4200 || bad.len != 0 || bad.cap != 8) {
         return 31;
     }
+    var overlap: array<u8, 8> = [97, 98, 99, 0, 91, 92, 93, 94];
+    if (mem_copy_cstr_n(&overlap[1], 7, &overlap[0] as str) != -4096
+        || overlap[0] != 97 || overlap[1] != 98 || overlap[2] != 99 || overlap[3] != 0) { return 40; }
+    if (mem_copy_cstr_n(&overlap[0], 8, &overlap[1] as str) != -4096
+        || overlap[0] != 97 || overlap[1] != 98) { return 41; }
+    if (mem_copy_cstr_n(&overlap[0], 8, &overlap[0] as str) != 3 || overlap[3] != 0) { return 42; }
+    var reader: ByteReader = bytes_reader(&overlap[0], 8);
+    if (bytes_reader_read_be_u64(&reader, &reader.position as ptr<u64>) != -1
+        || reader.position != 0 || reader.len != 8 || reader.data != &overlap[0]) { return 43; }
+    if (bytes_reader_peek_be_u64(&reader, &overlap[0] as ptr<u64>) != -1
+        || reader.position != 0 || overlap[0] != 97 || overlap[7] != 94) { return 44; }
+    if (bytes_reader_read_exact(&reader, bytes_view_mut(&overlap[0], 8)) != -1
+        || reader.position != 0 || overlap[0] != 97) { return 45; }
+    if (bytes_reader_read_view(&reader, 1, &reader as ptr<Bytes>) != -1
+        || reader.position != 0 || reader.len != 8) { return 46; }
+    var independent: u64 = 0;
+    if (bytes_reader_peek_be_u64(&reader, &independent) != 0 || reader.position != 0
+        || bytes_reader_read_be_u64(&reader, &independent) != 0 || reader.position != 8) { return 47; }
+    if (!codec_8(0)) { return 51; }
+    if (!codec_8((-1 as u8))) { return 51; }
+    if (!codec_8(((1 as u8) << 7))) { return 51; }
+    if (!codec_8((((1 as u8) << 7) - 1))) { return 51; }
+    if (!codec_8(0xaa)) { return 51; }
+    if (!codec_16(0)) { return 52; }
+    if (!codec_16((-1 as u16))) { return 52; }
+    if (!codec_16(((1 as u16) << 15))) { return 52; }
+    if (!codec_16((((1 as u16) << 15) - 1))) { return 52; }
+    if (!codec_16(0xaaaa)) { return 52; }
+    if (!codec_32(0)) { return 54; }
+    if (!codec_32((-1 as u32))) { return 54; }
+    if (!codec_32(((1 as u32) << 31))) { return 54; }
+    if (!codec_32((((1 as u32) << 31) - 1))) { return 54; }
+    if (!codec_32(0xaaaaaaaa)) { return 54; }
+    if (!codec_64(0)) { return 58; }
+    if (!codec_64((-1 as u64))) { return 58; }
+    if (!codec_64(((1 as u64) << 63))) { return 58; }
+    if (!codec_64((((1 as u64) << 63) - 1))) { return 58; }
+    if (!codec_64(0xaaaaaaaaaaaaaaaa)) { return 58; }
+    if (!codec_128(0)) { return 66; }
+    if (!codec_128((-1 as u128))) { return 66; }
+    if (!codec_128(((1 as u128) << 127))) { return 66; }
+    if (!codec_128((((1 as u128) << 127) - 1))) { return 66; }
+    if (!codec_128(0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)) { return 66; }
+    if (!codec_256(0)) { return 82; }
+    if (!codec_256((-1 as u256))) { return 82; }
+    if (!codec_256(((1 as u256) << 255))) { return 82; }
+    if (!codec_256((((1 as u256) << 255) - 1))) { return 82; }
+    if (!codec_256(0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)) { return 82; }
+    if (!codec_512(0)) { return 114; }
+    if (!codec_512((-1 as u512))) { return 114; }
+    if (!codec_512(((1 as u512) << 511))) { return 114; }
+    if (!codec_512((((1 as u512) << 511) - 1))) { return 114; }
+    if (!codec_512(0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)) { return 114; }
+    if (!codec_1024(0)) { return 178; }
+    if (!codec_1024((-1 as u1024))) { return 178; }
+    if (!codec_1024(((1 as u1024) << 1023))) { return 178; }
+    if (!codec_1024((((1 as u1024) << 1023) - 1))) { return 178; }
+    if (!codec_1024(0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa)) { return 178; }
     return 0;
 }

@@ -247,7 +247,7 @@ pub fun buffer_remove(buf: ptr<Buffer>, offset: i64, count: i64) -> i64
 pub import("std::bytes::types")::{Bytes, BytesMut, ByteReader, ByteWriter};
 ```
 
-[Declaration](bytes/cursor.wave#L8)
+[Declaration](bytes/cursor.wave#L9)
 
 ```wave
 pub import("std::bytes::errors")::{
@@ -259,292 +259,652 @@ pub import("std::bytes::errors")::{
 };
 ```
 
-[Declaration](bytes/cursor.wave#L36)
+[Declaration](bytes/cursor.wave#L79)
 
 ```wave
 pub fun bytes_reader(data: ptr<u8>, len: i64) -> ByteReader
 ```
 
-[Declaration](bytes/cursor.wave#L40)
+[Declaration](bytes/cursor.wave#L83)
 
 ```wave
 pub fun bytes_reader_from(src: Bytes) -> ByteReader
 ```
 
-[Declaration](bytes/cursor.wave#L44)
+[Declaration](bytes/cursor.wave#L87)
 
 ```wave
 pub fun bytes_writer(data: ptr<u8>, len: i64) -> ByteWriter
 ```
 
-[Declaration](bytes/cursor.wave#L48)
+[Declaration](bytes/cursor.wave#L91)
 
 ```wave
 pub fun bytes_writer_from(dst: BytesMut) -> ByteWriter
 ```
 
-[Declaration](bytes/cursor.wave#L68)
+[Declaration](bytes/cursor.wave#L150)
 
 ```wave
 pub fun bytes_reader_position(reader: ByteReader) -> i64
 ```
 
-[Declaration](bytes/cursor.wave#L69)
+[Declaration](bytes/cursor.wave#L151)
 
 ```wave
 pub fun bytes_writer_position(writer: ByteWriter) -> i64
 ```
 
-[Declaration](bytes/cursor.wave#L71)
+[Declaration](bytes/cursor.wave#L153)
 
 ```wave
 pub fun bytes_reader_remaining(reader: ByteReader) -> i64
 ```
 
-[Declaration](bytes/cursor.wave#L81)
+[Declaration](bytes/cursor.wave#L163)
 
 ```wave
 pub fun bytes_writer_remaining(writer: ByteWriter) -> i64
 ```
 
-[Declaration](bytes/cursor.wave#L91)
+[Declaration](bytes/cursor.wave#L173)
 
 ```wave
 pub fun bytes_reader_seek(reader: ptr<ByteReader>, position: i64) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L100)
+[Declaration](bytes/cursor.wave#L182)
 
 ```wave
 pub fun bytes_writer_seek(writer: ptr<ByteWriter>, position: i64) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L109)
+[Declaration](bytes/cursor.wave#L191)
 
 ```wave
 pub fun bytes_reader_skip(reader: ptr<ByteReader>, count: i64) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L120)
+[Declaration](bytes/cursor.wave#L202)
 
 ```wave
 pub fun bytes_writer_skip(writer: ptr<ByteWriter>, count: i64) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L131)
+[Declaration](bytes/cursor.wave#L213)
 
 ```wave
 pub fun bytes_reader_peek_u8(reader: ptr<ByteReader>, out_value: ptr<u8>) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L138)
+[Declaration](bytes/cursor.wave#L223)
 
 ```wave
 pub fun bytes_reader_peek_be_u16(reader: ptr<ByteReader>, out_value: ptr<u16>) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L146)
+[Declaration](bytes/cursor.wave#L234)
 
 ```wave
 pub fun bytes_reader_peek_le_u16(reader: ptr<ByteReader>, out_value: ptr<u16>) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L154)
+[Declaration](bytes/cursor.wave#L245)
 
 ```wave
 pub fun bytes_reader_peek_be_u32(reader: ptr<ByteReader>, out_value: ptr<u32>) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L162)
+[Declaration](bytes/cursor.wave#L256)
 
 ```wave
 pub fun bytes_reader_peek_le_u32(reader: ptr<ByteReader>, out_value: ptr<u32>) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L170)
+[Declaration](bytes/cursor.wave#L267)
 
 ```wave
 pub fun bytes_reader_peek_be_u64(reader: ptr<ByteReader>, out_value: ptr<u64>) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L178)
+[Declaration](bytes/cursor.wave#L278)
 
 ```wave
 pub fun bytes_reader_peek_le_u64(reader: ptr<ByteReader>, out_value: ptr<u64>) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L186)
+[Declaration](bytes/cursor.wave#L289)
 
 ```wave
 pub fun bytes_reader_read_u8(reader: ptr<ByteReader>, out_value: ptr<u8>) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L195)
+[Declaration](bytes/cursor.wave#L301)
 
 ```wave
 pub fun bytes_reader_read_be_u16(reader: ptr<ByteReader>, out_value: ptr<u16>) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L204)
+[Declaration](bytes/cursor.wave#L313)
 
 ```wave
 pub fun bytes_reader_read_le_u16(reader: ptr<ByteReader>, out_value: ptr<u16>) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L213)
+[Declaration](bytes/cursor.wave#L325)
 
 ```wave
 pub fun bytes_reader_read_be_u32(reader: ptr<ByteReader>, out_value: ptr<u32>) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L222)
+[Declaration](bytes/cursor.wave#L337)
 
 ```wave
 pub fun bytes_reader_read_le_u32(reader: ptr<ByteReader>, out_value: ptr<u32>) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L231)
+[Declaration](bytes/cursor.wave#L349)
 
 ```wave
 pub fun bytes_reader_read_be_u64(reader: ptr<ByteReader>, out_value: ptr<u64>) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L240)
+[Declaration](bytes/cursor.wave#L361)
 
 ```wave
 pub fun bytes_reader_read_le_u64(reader: ptr<ByteReader>, out_value: ptr<u64>) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L249)
+[Declaration](bytes/cursor.wave#L373)
 
 ```wave
 pub fun bytes_reader_read_be_i16(reader: ptr<ByteReader>, out_value: ptr<i16>) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L258)
+[Declaration](bytes/cursor.wave#L385)
 
 ```wave
 pub fun bytes_reader_read_le_i16(reader: ptr<ByteReader>, out_value: ptr<i16>) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L267)
+[Declaration](bytes/cursor.wave#L397)
 
 ```wave
 pub fun bytes_reader_read_be_i32(reader: ptr<ByteReader>, out_value: ptr<i32>) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L276)
+[Declaration](bytes/cursor.wave#L409)
 
 ```wave
 pub fun bytes_reader_read_le_i32(reader: ptr<ByteReader>, out_value: ptr<i32>) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L285)
+[Declaration](bytes/cursor.wave#L421)
 
 ```wave
 pub fun bytes_reader_read_be_i64(reader: ptr<ByteReader>, out_value: ptr<i64>) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L294)
+[Declaration](bytes/cursor.wave#L433)
 
 ```wave
 pub fun bytes_reader_read_le_i64(reader: ptr<ByteReader>, out_value: ptr<i64>) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L303)
+[Declaration](bytes/cursor.wave#L445)
 
 ```wave
 pub fun bytes_reader_read_exact(reader: ptr<ByteReader>, dst: BytesMut) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L312)
+[Declaration](bytes/cursor.wave#L457)
 
 ```wave
 pub fun bytes_writer_write_u8(writer: ptr<ByteWriter>, value: u8) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L321)
+[Declaration](bytes/cursor.wave#L466)
 
 ```wave
 pub fun bytes_writer_write_be_u16(writer: ptr<ByteWriter>, value: u16) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L330)
+[Declaration](bytes/cursor.wave#L475)
 
 ```wave
 pub fun bytes_writer_write_le_u16(writer: ptr<ByteWriter>, value: u16) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L339)
+[Declaration](bytes/cursor.wave#L484)
 
 ```wave
 pub fun bytes_writer_write_be_u32(writer: ptr<ByteWriter>, value: u32) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L348)
+[Declaration](bytes/cursor.wave#L493)
 
 ```wave
 pub fun bytes_writer_write_le_u32(writer: ptr<ByteWriter>, value: u32) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L357)
+[Declaration](bytes/cursor.wave#L502)
 
 ```wave
 pub fun bytes_writer_write_be_u64(writer: ptr<ByteWriter>, value: u64) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L366)
+[Declaration](bytes/cursor.wave#L511)
 
 ```wave
 pub fun bytes_writer_write_le_u64(writer: ptr<ByteWriter>, value: u64) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L375)
+[Declaration](bytes/cursor.wave#L520)
 
 ```wave
 pub fun bytes_writer_write_be_i16(writer: ptr<ByteWriter>, value: i16) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L379)
+[Declaration](bytes/cursor.wave#L524)
 
 ```wave
 pub fun bytes_writer_write_le_i16(writer: ptr<ByteWriter>, value: i16) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L383)
+[Declaration](bytes/cursor.wave#L528)
 
 ```wave
 pub fun bytes_writer_write_be_i32(writer: ptr<ByteWriter>, value: i32) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L387)
+[Declaration](bytes/cursor.wave#L532)
 
 ```wave
 pub fun bytes_writer_write_le_i32(writer: ptr<ByteWriter>, value: i32) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L391)
+[Declaration](bytes/cursor.wave#L536)
 
 ```wave
 pub fun bytes_writer_write_be_i64(writer: ptr<ByteWriter>, value: i64) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L395)
+[Declaration](bytes/cursor.wave#L540)
 
 ```wave
 pub fun bytes_writer_write_le_i64(writer: ptr<ByteWriter>, value: i64) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L399)
+[Declaration](bytes/cursor.wave#L544)
 
 ```wave
 pub fun bytes_writer_write_exact(writer: ptr<ByteWriter>, src: Bytes) -> i32
 ```
 
-[Declaration](bytes/cursor.wave#L409)
+[Declaration](bytes/cursor.wave#L554)
 
 ```wave
 pub fun bytes_reader_read_view(reader: ptr<ByteReader>, count: i64, output: ptr<Bytes>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L566)
+
+```wave
+pub fun bytes_reader_peek_be_u8(reader: ptr<ByteReader>, out_value: ptr<u8>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L578)
+
+```wave
+pub fun bytes_reader_read_be_u8(reader: ptr<ByteReader>, out_value: ptr<u8>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L591)
+
+```wave
+pub fun bytes_writer_write_be_u8(writer: ptr<ByteWriter>, value: u8) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L604)
+
+```wave
+pub fun bytes_reader_peek_be_i8(reader: ptr<ByteReader>, out_value: ptr<i8>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L616)
+
+```wave
+pub fun bytes_reader_read_be_i8(reader: ptr<ByteReader>, out_value: ptr<i8>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L629)
+
+```wave
+pub fun bytes_writer_write_be_i8(writer: ptr<ByteWriter>, value: i8) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L642)
+
+```wave
+pub fun bytes_reader_peek_le_u8(reader: ptr<ByteReader>, out_value: ptr<u8>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L654)
+
+```wave
+pub fun bytes_reader_read_le_u8(reader: ptr<ByteReader>, out_value: ptr<u8>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L667)
+
+```wave
+pub fun bytes_writer_write_le_u8(writer: ptr<ByteWriter>, value: u8) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L680)
+
+```wave
+pub fun bytes_reader_peek_le_i8(reader: ptr<ByteReader>, out_value: ptr<i8>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L692)
+
+```wave
+pub fun bytes_reader_read_le_i8(reader: ptr<ByteReader>, out_value: ptr<i8>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L705)
+
+```wave
+pub fun bytes_writer_write_le_i8(writer: ptr<ByteWriter>, value: i8) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L718)
+
+```wave
+pub fun bytes_reader_peek_be_u128(reader: ptr<ByteReader>, out_value: ptr<u128>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L730)
+
+```wave
+pub fun bytes_reader_read_be_u128(reader: ptr<ByteReader>, out_value: ptr<u128>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L743)
+
+```wave
+pub fun bytes_writer_write_be_u128(writer: ptr<ByteWriter>, value: u128) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L756)
+
+```wave
+pub fun bytes_reader_peek_be_i128(reader: ptr<ByteReader>, out_value: ptr<i128>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L768)
+
+```wave
+pub fun bytes_reader_read_be_i128(reader: ptr<ByteReader>, out_value: ptr<i128>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L781)
+
+```wave
+pub fun bytes_writer_write_be_i128(writer: ptr<ByteWriter>, value: i128) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L794)
+
+```wave
+pub fun bytes_reader_peek_le_u128(reader: ptr<ByteReader>, out_value: ptr<u128>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L806)
+
+```wave
+pub fun bytes_reader_read_le_u128(reader: ptr<ByteReader>, out_value: ptr<u128>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L819)
+
+```wave
+pub fun bytes_writer_write_le_u128(writer: ptr<ByteWriter>, value: u128) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L832)
+
+```wave
+pub fun bytes_reader_peek_le_i128(reader: ptr<ByteReader>, out_value: ptr<i128>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L844)
+
+```wave
+pub fun bytes_reader_read_le_i128(reader: ptr<ByteReader>, out_value: ptr<i128>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L857)
+
+```wave
+pub fun bytes_writer_write_le_i128(writer: ptr<ByteWriter>, value: i128) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L870)
+
+```wave
+pub fun bytes_reader_peek_be_u256(reader: ptr<ByteReader>, out_value: ptr<u256>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L882)
+
+```wave
+pub fun bytes_reader_read_be_u256(reader: ptr<ByteReader>, out_value: ptr<u256>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L895)
+
+```wave
+pub fun bytes_writer_write_be_u256(writer: ptr<ByteWriter>, value: u256) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L908)
+
+```wave
+pub fun bytes_reader_peek_be_i256(reader: ptr<ByteReader>, out_value: ptr<i256>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L920)
+
+```wave
+pub fun bytes_reader_read_be_i256(reader: ptr<ByteReader>, out_value: ptr<i256>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L933)
+
+```wave
+pub fun bytes_writer_write_be_i256(writer: ptr<ByteWriter>, value: i256) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L946)
+
+```wave
+pub fun bytes_reader_peek_le_u256(reader: ptr<ByteReader>, out_value: ptr<u256>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L958)
+
+```wave
+pub fun bytes_reader_read_le_u256(reader: ptr<ByteReader>, out_value: ptr<u256>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L971)
+
+```wave
+pub fun bytes_writer_write_le_u256(writer: ptr<ByteWriter>, value: u256) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L984)
+
+```wave
+pub fun bytes_reader_peek_le_i256(reader: ptr<ByteReader>, out_value: ptr<i256>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L996)
+
+```wave
+pub fun bytes_reader_read_le_i256(reader: ptr<ByteReader>, out_value: ptr<i256>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L1009)
+
+```wave
+pub fun bytes_writer_write_le_i256(writer: ptr<ByteWriter>, value: i256) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L1022)
+
+```wave
+pub fun bytes_reader_peek_be_u512(reader: ptr<ByteReader>, out_value: ptr<u512>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L1034)
+
+```wave
+pub fun bytes_reader_read_be_u512(reader: ptr<ByteReader>, out_value: ptr<u512>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L1047)
+
+```wave
+pub fun bytes_writer_write_be_u512(writer: ptr<ByteWriter>, value: u512) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L1060)
+
+```wave
+pub fun bytes_reader_peek_be_i512(reader: ptr<ByteReader>, out_value: ptr<i512>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L1072)
+
+```wave
+pub fun bytes_reader_read_be_i512(reader: ptr<ByteReader>, out_value: ptr<i512>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L1085)
+
+```wave
+pub fun bytes_writer_write_be_i512(writer: ptr<ByteWriter>, value: i512) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L1098)
+
+```wave
+pub fun bytes_reader_peek_le_u512(reader: ptr<ByteReader>, out_value: ptr<u512>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L1110)
+
+```wave
+pub fun bytes_reader_read_le_u512(reader: ptr<ByteReader>, out_value: ptr<u512>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L1123)
+
+```wave
+pub fun bytes_writer_write_le_u512(writer: ptr<ByteWriter>, value: u512) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L1136)
+
+```wave
+pub fun bytes_reader_peek_le_i512(reader: ptr<ByteReader>, out_value: ptr<i512>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L1148)
+
+```wave
+pub fun bytes_reader_read_le_i512(reader: ptr<ByteReader>, out_value: ptr<i512>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L1161)
+
+```wave
+pub fun bytes_writer_write_le_i512(writer: ptr<ByteWriter>, value: i512) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L1174)
+
+```wave
+pub fun bytes_reader_peek_be_u1024(reader: ptr<ByteReader>, out_value: ptr<u1024>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L1186)
+
+```wave
+pub fun bytes_reader_read_be_u1024(reader: ptr<ByteReader>, out_value: ptr<u1024>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L1199)
+
+```wave
+pub fun bytes_writer_write_be_u1024(writer: ptr<ByteWriter>, value: u1024) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L1212)
+
+```wave
+pub fun bytes_reader_peek_be_i1024(reader: ptr<ByteReader>, out_value: ptr<i1024>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L1224)
+
+```wave
+pub fun bytes_reader_read_be_i1024(reader: ptr<ByteReader>, out_value: ptr<i1024>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L1237)
+
+```wave
+pub fun bytes_writer_write_be_i1024(writer: ptr<ByteWriter>, value: i1024) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L1250)
+
+```wave
+pub fun bytes_reader_peek_le_u1024(reader: ptr<ByteReader>, out_value: ptr<u1024>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L1262)
+
+```wave
+pub fun bytes_reader_read_le_u1024(reader: ptr<ByteReader>, out_value: ptr<u1024>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L1275)
+
+```wave
+pub fun bytes_writer_write_le_u1024(writer: ptr<ByteWriter>, value: u1024) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L1288)
+
+```wave
+pub fun bytes_reader_peek_le_i1024(reader: ptr<ByteReader>, out_value: ptr<i1024>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L1300)
+
+```wave
+pub fun bytes_reader_read_le_i1024(reader: ptr<ByteReader>, out_value: ptr<i1024>) -> i32
+```
+
+[Declaration](bytes/cursor.wave#L1313)
+
+```wave
+pub fun bytes_writer_write_le_i1024(writer: ptr<ByteWriter>, value: i1024) -> i32
 ```
 
 ## `std::bytes::endian`
@@ -833,6 +1193,246 @@ pub fun bytes_to_le_u64(value: u64) -> u64
 pub fun bytes_from_le_u64(value: u64) -> u64
 ```
 
+[Declaration](bytes/endian.wave#L204)
+
+```wave
+pub fun bytes_load_be_u8(src: ptr<u8>) -> u8
+```
+
+[Declaration](bytes/endian.wave#L214)
+
+```wave
+pub fun bytes_store_be_u8(dst: ptr<u8>, value: u8)
+```
+
+[Declaration](bytes/endian.wave#L222)
+
+```wave
+pub fun bytes_load_be_i8(src: ptr<u8>) -> i8
+```
+
+[Declaration](bytes/endian.wave#L226)
+
+```wave
+pub fun bytes_store_be_i8(dst: ptr<u8>, value: i8)
+```
+
+[Declaration](bytes/endian.wave#L231)
+
+```wave
+pub fun bytes_load_le_u8(src: ptr<u8>) -> u8
+```
+
+[Declaration](bytes/endian.wave#L241)
+
+```wave
+pub fun bytes_store_le_u8(dst: ptr<u8>, value: u8)
+```
+
+[Declaration](bytes/endian.wave#L249)
+
+```wave
+pub fun bytes_load_le_i8(src: ptr<u8>) -> i8
+```
+
+[Declaration](bytes/endian.wave#L253)
+
+```wave
+pub fun bytes_store_le_i8(dst: ptr<u8>, value: i8)
+```
+
+[Declaration](bytes/endian.wave#L258)
+
+```wave
+pub fun bytes_load_be_u128(src: ptr<u8>) -> u128
+```
+
+[Declaration](bytes/endian.wave#L268)
+
+```wave
+pub fun bytes_store_be_u128(dst: ptr<u8>, value: u128)
+```
+
+[Declaration](bytes/endian.wave#L276)
+
+```wave
+pub fun bytes_load_be_i128(src: ptr<u8>) -> i128
+```
+
+[Declaration](bytes/endian.wave#L280)
+
+```wave
+pub fun bytes_store_be_i128(dst: ptr<u8>, value: i128)
+```
+
+[Declaration](bytes/endian.wave#L285)
+
+```wave
+pub fun bytes_load_le_u128(src: ptr<u8>) -> u128
+```
+
+[Declaration](bytes/endian.wave#L295)
+
+```wave
+pub fun bytes_store_le_u128(dst: ptr<u8>, value: u128)
+```
+
+[Declaration](bytes/endian.wave#L303)
+
+```wave
+pub fun bytes_load_le_i128(src: ptr<u8>) -> i128
+```
+
+[Declaration](bytes/endian.wave#L307)
+
+```wave
+pub fun bytes_store_le_i128(dst: ptr<u8>, value: i128)
+```
+
+[Declaration](bytes/endian.wave#L312)
+
+```wave
+pub fun bytes_load_be_u256(src: ptr<u8>) -> u256
+```
+
+[Declaration](bytes/endian.wave#L322)
+
+```wave
+pub fun bytes_store_be_u256(dst: ptr<u8>, value: u256)
+```
+
+[Declaration](bytes/endian.wave#L330)
+
+```wave
+pub fun bytes_load_be_i256(src: ptr<u8>) -> i256
+```
+
+[Declaration](bytes/endian.wave#L334)
+
+```wave
+pub fun bytes_store_be_i256(dst: ptr<u8>, value: i256)
+```
+
+[Declaration](bytes/endian.wave#L339)
+
+```wave
+pub fun bytes_load_le_u256(src: ptr<u8>) -> u256
+```
+
+[Declaration](bytes/endian.wave#L349)
+
+```wave
+pub fun bytes_store_le_u256(dst: ptr<u8>, value: u256)
+```
+
+[Declaration](bytes/endian.wave#L357)
+
+```wave
+pub fun bytes_load_le_i256(src: ptr<u8>) -> i256
+```
+
+[Declaration](bytes/endian.wave#L361)
+
+```wave
+pub fun bytes_store_le_i256(dst: ptr<u8>, value: i256)
+```
+
+[Declaration](bytes/endian.wave#L366)
+
+```wave
+pub fun bytes_load_be_u512(src: ptr<u8>) -> u512
+```
+
+[Declaration](bytes/endian.wave#L376)
+
+```wave
+pub fun bytes_store_be_u512(dst: ptr<u8>, value: u512)
+```
+
+[Declaration](bytes/endian.wave#L384)
+
+```wave
+pub fun bytes_load_be_i512(src: ptr<u8>) -> i512
+```
+
+[Declaration](bytes/endian.wave#L388)
+
+```wave
+pub fun bytes_store_be_i512(dst: ptr<u8>, value: i512)
+```
+
+[Declaration](bytes/endian.wave#L393)
+
+```wave
+pub fun bytes_load_le_u512(src: ptr<u8>) -> u512
+```
+
+[Declaration](bytes/endian.wave#L403)
+
+```wave
+pub fun bytes_store_le_u512(dst: ptr<u8>, value: u512)
+```
+
+[Declaration](bytes/endian.wave#L411)
+
+```wave
+pub fun bytes_load_le_i512(src: ptr<u8>) -> i512
+```
+
+[Declaration](bytes/endian.wave#L415)
+
+```wave
+pub fun bytes_store_le_i512(dst: ptr<u8>, value: i512)
+```
+
+[Declaration](bytes/endian.wave#L420)
+
+```wave
+pub fun bytes_load_be_u1024(src: ptr<u8>) -> u1024
+```
+
+[Declaration](bytes/endian.wave#L430)
+
+```wave
+pub fun bytes_store_be_u1024(dst: ptr<u8>, value: u1024)
+```
+
+[Declaration](bytes/endian.wave#L438)
+
+```wave
+pub fun bytes_load_be_i1024(src: ptr<u8>) -> i1024
+```
+
+[Declaration](bytes/endian.wave#L442)
+
+```wave
+pub fun bytes_store_be_i1024(dst: ptr<u8>, value: i1024)
+```
+
+[Declaration](bytes/endian.wave#L447)
+
+```wave
+pub fun bytes_load_le_u1024(src: ptr<u8>) -> u1024
+```
+
+[Declaration](bytes/endian.wave#L457)
+
+```wave
+pub fun bytes_store_le_u1024(dst: ptr<u8>, value: u1024)
+```
+
+[Declaration](bytes/endian.wave#L465)
+
+```wave
+pub fun bytes_load_le_i1024(src: ptr<u8>) -> i1024
+```
+
+[Declaration](bytes/endian.wave#L469)
+
+```wave
+pub fun bytes_store_le_i1024(dst: ptr<u8>, value: i1024)
+```
+
 ## `std::bytes::errors`
 
 [Source](bytes/errors.wave)
@@ -977,112 +1577,232 @@ pub import("std::bytes::errors")::{
 };
 ```
 
-[Declaration](bytes/read.wave#L40)
+[Declaration](bytes/read.wave#L51)
 
 ```wave
 pub fun bytes_read_u8(src: Bytes, offset: i64, out_value: ptr<u8>) -> i32
 ```
 
-[Declaration](bytes/read.wave#L48)
+[Declaration](bytes/read.wave#L59)
 
 ```wave
 pub fun bytes_read_be_u16(src: Bytes, offset: i64, out_value: ptr<u16>) -> i32
 ```
 
-[Declaration](bytes/read.wave#L57)
+[Declaration](bytes/read.wave#L68)
 
 ```wave
 pub fun bytes_read_le_u16(src: Bytes, offset: i64, out_value: ptr<u16>) -> i32
 ```
 
-[Declaration](bytes/read.wave#L66)
+[Declaration](bytes/read.wave#L77)
 
 ```wave
 pub fun bytes_read_be_u32(src: Bytes, offset: i64, out_value: ptr<u32>) -> i32
 ```
 
-[Declaration](bytes/read.wave#L75)
+[Declaration](bytes/read.wave#L86)
 
 ```wave
 pub fun bytes_read_le_u32(src: Bytes, offset: i64, out_value: ptr<u32>) -> i32
 ```
 
-[Declaration](bytes/read.wave#L84)
+[Declaration](bytes/read.wave#L95)
 
 ```wave
 pub fun bytes_read_be_u64(src: Bytes, offset: i64, out_value: ptr<u64>) -> i32
 ```
 
-[Declaration](bytes/read.wave#L93)
+[Declaration](bytes/read.wave#L104)
 
 ```wave
 pub fun bytes_read_le_u64(src: Bytes, offset: i64, out_value: ptr<u64>) -> i32
 ```
 
-[Declaration](bytes/read.wave#L102)
+[Declaration](bytes/read.wave#L113)
 
 ```wave
 pub fun bytes_read_be_i16(src: Bytes, offset: i64, out_value: ptr<i16>) -> i32
 ```
 
-[Declaration](bytes/read.wave#L111)
+[Declaration](bytes/read.wave#L122)
 
 ```wave
 pub fun bytes_read_le_i16(src: Bytes, offset: i64, out_value: ptr<i16>) -> i32
 ```
 
-[Declaration](bytes/read.wave#L120)
+[Declaration](bytes/read.wave#L131)
 
 ```wave
 pub fun bytes_read_be_i32(src: Bytes, offset: i64, out_value: ptr<i32>) -> i32
 ```
 
-[Declaration](bytes/read.wave#L129)
+[Declaration](bytes/read.wave#L140)
 
 ```wave
 pub fun bytes_read_le_i32(src: Bytes, offset: i64, out_value: ptr<i32>) -> i32
 ```
 
-[Declaration](bytes/read.wave#L138)
+[Declaration](bytes/read.wave#L149)
 
 ```wave
 pub fun bytes_read_be_i64(src: Bytes, offset: i64, out_value: ptr<i64>) -> i32
 ```
 
-[Declaration](bytes/read.wave#L147)
+[Declaration](bytes/read.wave#L158)
 
 ```wave
 pub fun bytes_read_le_i64(src: Bytes, offset: i64, out_value: ptr<i64>) -> i32
 ```
 
-[Declaration](bytes/read.wave#L157)
+[Declaration](bytes/read.wave#L168)
 
 ```wave
 pub fun bytes_read_exact(src: Bytes, offset: i64, dst: BytesMut) -> i32
 ```
 
-[Declaration](bytes/read.wave#L172)
+[Declaration](bytes/read.wave#L183)
 
 ```wave
 pub fun bytes_read_be_f32(src: Bytes, offset: i64, out_value: ptr<f32>) -> i32
 ```
 
-[Declaration](bytes/read.wave#L186)
+[Declaration](bytes/read.wave#L197)
 
 ```wave
 pub fun bytes_read_be_f64(src: Bytes, offset: i64, out_value: ptr<f64>) -> i32
 ```
 
-[Declaration](bytes/read.wave#L200)
+[Declaration](bytes/read.wave#L211)
 
 ```wave
 pub fun bytes_read_le_f32(src: Bytes, offset: i64, out_value: ptr<f32>) -> i32
 ```
 
-[Declaration](bytes/read.wave#L214)
+[Declaration](bytes/read.wave#L225)
 
 ```wave
 pub fun bytes_read_le_f64(src: Bytes, offset: i64, out_value: ptr<f64>) -> i32
+```
+
+[Declaration](bytes/read.wave#L238)
+
+```wave
+pub fun bytes_read_be_u8(src: Bytes, offset: i64, out_value: ptr<u8>) -> i32
+```
+
+[Declaration](bytes/read.wave#L251)
+
+```wave
+pub fun bytes_read_be_i8(src: Bytes, offset: i64, out_value: ptr<i8>) -> i32
+```
+
+[Declaration](bytes/read.wave#L264)
+
+```wave
+pub fun bytes_read_le_u8(src: Bytes, offset: i64, out_value: ptr<u8>) -> i32
+```
+
+[Declaration](bytes/read.wave#L277)
+
+```wave
+pub fun bytes_read_le_i8(src: Bytes, offset: i64, out_value: ptr<i8>) -> i32
+```
+
+[Declaration](bytes/read.wave#L290)
+
+```wave
+pub fun bytes_read_be_u128(src: Bytes, offset: i64, out_value: ptr<u128>) -> i32
+```
+
+[Declaration](bytes/read.wave#L303)
+
+```wave
+pub fun bytes_read_be_i128(src: Bytes, offset: i64, out_value: ptr<i128>) -> i32
+```
+
+[Declaration](bytes/read.wave#L316)
+
+```wave
+pub fun bytes_read_le_u128(src: Bytes, offset: i64, out_value: ptr<u128>) -> i32
+```
+
+[Declaration](bytes/read.wave#L329)
+
+```wave
+pub fun bytes_read_le_i128(src: Bytes, offset: i64, out_value: ptr<i128>) -> i32
+```
+
+[Declaration](bytes/read.wave#L342)
+
+```wave
+pub fun bytes_read_be_u256(src: Bytes, offset: i64, out_value: ptr<u256>) -> i32
+```
+
+[Declaration](bytes/read.wave#L355)
+
+```wave
+pub fun bytes_read_be_i256(src: Bytes, offset: i64, out_value: ptr<i256>) -> i32
+```
+
+[Declaration](bytes/read.wave#L368)
+
+```wave
+pub fun bytes_read_le_u256(src: Bytes, offset: i64, out_value: ptr<u256>) -> i32
+```
+
+[Declaration](bytes/read.wave#L381)
+
+```wave
+pub fun bytes_read_le_i256(src: Bytes, offset: i64, out_value: ptr<i256>) -> i32
+```
+
+[Declaration](bytes/read.wave#L394)
+
+```wave
+pub fun bytes_read_be_u512(src: Bytes, offset: i64, out_value: ptr<u512>) -> i32
+```
+
+[Declaration](bytes/read.wave#L407)
+
+```wave
+pub fun bytes_read_be_i512(src: Bytes, offset: i64, out_value: ptr<i512>) -> i32
+```
+
+[Declaration](bytes/read.wave#L420)
+
+```wave
+pub fun bytes_read_le_u512(src: Bytes, offset: i64, out_value: ptr<u512>) -> i32
+```
+
+[Declaration](bytes/read.wave#L433)
+
+```wave
+pub fun bytes_read_le_i512(src: Bytes, offset: i64, out_value: ptr<i512>) -> i32
+```
+
+[Declaration](bytes/read.wave#L446)
+
+```wave
+pub fun bytes_read_be_u1024(src: Bytes, offset: i64, out_value: ptr<u1024>) -> i32
+```
+
+[Declaration](bytes/read.wave#L459)
+
+```wave
+pub fun bytes_read_be_i1024(src: Bytes, offset: i64, out_value: ptr<i1024>) -> i32
+```
+
+[Declaration](bytes/read.wave#L472)
+
+```wave
+pub fun bytes_read_le_u1024(src: Bytes, offset: i64, out_value: ptr<u1024>) -> i32
+```
+
+[Declaration](bytes/read.wave#L485)
+
+```wave
+pub fun bytes_read_le_i1024(src: Bytes, offset: i64, out_value: ptr<i1024>) -> i32
 ```
 
 ## `std::bytes::search`
@@ -1213,112 +1933,232 @@ pub import("std::bytes::errors")::{
 };
 ```
 
-[Declaration](bytes/write.wave#L40)
+[Declaration](bytes/write.wave#L51)
 
 ```wave
 pub fun bytes_write_u8(dst: BytesMut, offset: i64, value: u8) -> i32
 ```
 
-[Declaration](bytes/write.wave#L47)
+[Declaration](bytes/write.wave#L58)
 
 ```wave
 pub fun bytes_write_be_u16(dst: BytesMut, offset: i64, value: u16) -> i32
 ```
 
-[Declaration](bytes/write.wave#L54)
+[Declaration](bytes/write.wave#L65)
 
 ```wave
 pub fun bytes_write_le_u16(dst: BytesMut, offset: i64, value: u16) -> i32
 ```
 
-[Declaration](bytes/write.wave#L61)
+[Declaration](bytes/write.wave#L72)
 
 ```wave
 pub fun bytes_write_be_u32(dst: BytesMut, offset: i64, value: u32) -> i32
 ```
 
-[Declaration](bytes/write.wave#L68)
+[Declaration](bytes/write.wave#L79)
 
 ```wave
 pub fun bytes_write_le_u32(dst: BytesMut, offset: i64, value: u32) -> i32
 ```
 
-[Declaration](bytes/write.wave#L75)
+[Declaration](bytes/write.wave#L86)
 
 ```wave
 pub fun bytes_write_be_u64(dst: BytesMut, offset: i64, value: u64) -> i32
 ```
 
-[Declaration](bytes/write.wave#L82)
+[Declaration](bytes/write.wave#L93)
 
 ```wave
 pub fun bytes_write_le_u64(dst: BytesMut, offset: i64, value: u64) -> i32
 ```
 
-[Declaration](bytes/write.wave#L89)
+[Declaration](bytes/write.wave#L100)
 
 ```wave
 pub fun bytes_write_be_i16(dst: BytesMut, offset: i64, value: i16) -> i32
 ```
 
-[Declaration](bytes/write.wave#L93)
+[Declaration](bytes/write.wave#L104)
 
 ```wave
 pub fun bytes_write_le_i16(dst: BytesMut, offset: i64, value: i16) -> i32
 ```
 
-[Declaration](bytes/write.wave#L97)
+[Declaration](bytes/write.wave#L108)
 
 ```wave
 pub fun bytes_write_be_i32(dst: BytesMut, offset: i64, value: i32) -> i32
 ```
 
-[Declaration](bytes/write.wave#L101)
+[Declaration](bytes/write.wave#L112)
 
 ```wave
 pub fun bytes_write_le_i32(dst: BytesMut, offset: i64, value: i32) -> i32
 ```
 
-[Declaration](bytes/write.wave#L105)
+[Declaration](bytes/write.wave#L116)
 
 ```wave
 pub fun bytes_write_be_i64(dst: BytesMut, offset: i64, value: i64) -> i32
 ```
 
-[Declaration](bytes/write.wave#L109)
+[Declaration](bytes/write.wave#L120)
 
 ```wave
 pub fun bytes_write_le_i64(dst: BytesMut, offset: i64, value: i64) -> i32
 ```
 
-[Declaration](bytes/write.wave#L114)
+[Declaration](bytes/write.wave#L125)
 
 ```wave
 pub fun bytes_write_exact(dst: BytesMut, offset: i64, src: Bytes) -> i32
 ```
 
-[Declaration](bytes/write.wave#L129)
+[Declaration](bytes/write.wave#L140)
 
 ```wave
 pub fun bytes_write_be_f32(dst: BytesMut, offset: i64, value: f32) -> i32
 ```
 
-[Declaration](bytes/write.wave#L134)
+[Declaration](bytes/write.wave#L145)
 
 ```wave
 pub fun bytes_write_be_f64(dst: BytesMut, offset: i64, value: f64) -> i32
 ```
 
-[Declaration](bytes/write.wave#L139)
+[Declaration](bytes/write.wave#L150)
 
 ```wave
 pub fun bytes_write_le_f32(dst: BytesMut, offset: i64, value: f32) -> i32
 ```
 
-[Declaration](bytes/write.wave#L144)
+[Declaration](bytes/write.wave#L155)
 
 ```wave
 pub fun bytes_write_le_f64(dst: BytesMut, offset: i64, value: f64) -> i32
+```
+
+[Declaration](bytes/write.wave#L159)
+
+```wave
+pub fun bytes_write_be_u8(dst: BytesMut, offset: i64, value: u8) -> i32
+```
+
+[Declaration](bytes/write.wave#L168)
+
+```wave
+pub fun bytes_write_be_i8(dst: BytesMut, offset: i64, value: i8) -> i32
+```
+
+[Declaration](bytes/write.wave#L177)
+
+```wave
+pub fun bytes_write_le_u8(dst: BytesMut, offset: i64, value: u8) -> i32
+```
+
+[Declaration](bytes/write.wave#L186)
+
+```wave
+pub fun bytes_write_le_i8(dst: BytesMut, offset: i64, value: i8) -> i32
+```
+
+[Declaration](bytes/write.wave#L195)
+
+```wave
+pub fun bytes_write_be_u128(dst: BytesMut, offset: i64, value: u128) -> i32
+```
+
+[Declaration](bytes/write.wave#L204)
+
+```wave
+pub fun bytes_write_be_i128(dst: BytesMut, offset: i64, value: i128) -> i32
+```
+
+[Declaration](bytes/write.wave#L213)
+
+```wave
+pub fun bytes_write_le_u128(dst: BytesMut, offset: i64, value: u128) -> i32
+```
+
+[Declaration](bytes/write.wave#L222)
+
+```wave
+pub fun bytes_write_le_i128(dst: BytesMut, offset: i64, value: i128) -> i32
+```
+
+[Declaration](bytes/write.wave#L231)
+
+```wave
+pub fun bytes_write_be_u256(dst: BytesMut, offset: i64, value: u256) -> i32
+```
+
+[Declaration](bytes/write.wave#L240)
+
+```wave
+pub fun bytes_write_be_i256(dst: BytesMut, offset: i64, value: i256) -> i32
+```
+
+[Declaration](bytes/write.wave#L249)
+
+```wave
+pub fun bytes_write_le_u256(dst: BytesMut, offset: i64, value: u256) -> i32
+```
+
+[Declaration](bytes/write.wave#L258)
+
+```wave
+pub fun bytes_write_le_i256(dst: BytesMut, offset: i64, value: i256) -> i32
+```
+
+[Declaration](bytes/write.wave#L267)
+
+```wave
+pub fun bytes_write_be_u512(dst: BytesMut, offset: i64, value: u512) -> i32
+```
+
+[Declaration](bytes/write.wave#L276)
+
+```wave
+pub fun bytes_write_be_i512(dst: BytesMut, offset: i64, value: i512) -> i32
+```
+
+[Declaration](bytes/write.wave#L285)
+
+```wave
+pub fun bytes_write_le_u512(dst: BytesMut, offset: i64, value: u512) -> i32
+```
+
+[Declaration](bytes/write.wave#L294)
+
+```wave
+pub fun bytes_write_le_i512(dst: BytesMut, offset: i64, value: i512) -> i32
+```
+
+[Declaration](bytes/write.wave#L303)
+
+```wave
+pub fun bytes_write_be_u1024(dst: BytesMut, offset: i64, value: u1024) -> i32
+```
+
+[Declaration](bytes/write.wave#L312)
+
+```wave
+pub fun bytes_write_be_i1024(dst: BytesMut, offset: i64, value: i1024) -> i32
+```
+
+[Declaration](bytes/write.wave#L321)
+
+```wave
+pub fun bytes_write_le_u1024(dst: BytesMut, offset: i64, value: u1024) -> i32
+```
+
+[Declaration](bytes/write.wave#L330)
+
+```wave
+pub fun bytes_write_le_i1024(dst: BytesMut, offset: i64, value: i1024) -> i32
 ```
 
 ## `std::debug::core`
@@ -1427,7 +2267,7 @@ pub fun env_access(path: str, mode: i32) -> i64
 
 [Source](env/environ.wave)
 
-[Declaration](env/environ.wave#L50)
+[Declaration](env/environ.wave#L52)
 
 ```wave
 pub struct EnvResult<T> {
@@ -1436,55 +2276,55 @@ pub struct EnvResult<T> {
 }
 ```
 
-[Declaration](env/environ.wave#L55)
+[Declaration](env/environ.wave#L57)
 
 ```wave
 pub fun env_result_ok<T>(value: T) -> EnvResult<T>
 ```
 
-[Declaration](env/environ.wave#L62)
+[Declaration](env/environ.wave#L64)
 
 ```wave
 pub fun env_result_err<T>(fallback: T) -> EnvResult<T>
 ```
 
-[Declaration](env/environ.wave#L69)
+[Declaration](env/environ.wave#L71)
 
 ```wave
 pub fun env_unwrap_or<T>(result: EnvResult<T>, default_value: T) -> T
 ```
 
-[Declaration](env/environ.wave#L77)
+[Declaration](env/environ.wave#L131)
 
 ```wave
 pub fun env_get(name: str, dst: ptr<u8>, dst_cap: i64) -> i64
 ```
 
-[Declaration](env/environ.wave#L146)
+[Declaration](env/environ.wave#L208)
 
 ```wave
 pub fun env_exists(name: str) -> bool
 ```
 
-[Declaration](env/environ.wave#L154)
+[Declaration](env/environ.wave#L216)
 
 ```wave
 pub fun env_get_i64(name: str) -> EnvResult<i64>
 ```
 
-[Declaration](env/environ.wave#L170)
+[Declaration](env/environ.wave#L232)
 
 ```wave
 pub fun env_get_i32(name: str) -> EnvResult<i32>
 ```
 
-[Declaration](env/environ.wave#L190)
+[Declaration](env/environ.wave#L252)
 
 ```wave
 pub fun env_get_i32_default(name: str, default_value: i32) -> i32
 ```
 
-[Declaration](env/environ.wave#L194)
+[Declaration](env/environ.wave#L256)
 
 ```wave
 pub fun env_get_i64_default(name: str, default_value: i64) -> i64
@@ -1498,12 +2338,6 @@ pub fun env_get_i64_default(name: str, default_value: i64) -> i64
 
 ```wave
 pub fun _env_key_len(name: str) -> i64
-```
-
-[Declaration](env/parse.wave#L34)
-
-```wave
-pub fun _env_match_key(blob: ptr<u8>, start: i64, name: str, key_len: i64) -> bool
 ```
 
 [Declaration](env/parse.wave#L49)
@@ -1522,6 +2356,47 @@ pub fun _env_copy_value(
 
 ```wave
 pub fun _env_parse_i64(raw: ptr<u8>, out_value: ptr<i64>) -> bool
+```
+
+[Declaration](env/parse.wave#L120)
+
+```wave
+#[target(os="windows")]
+pub fun _env_match_key_sized(blob: ptr<u8>, start: i64, entry_len: i64, name: str, key_len: i64) -> i32
+```
+
+[Declaration](env/parse.wave#L125)
+
+```wave
+#[target(os="linux")]
+pub fun _env_match_key_sized(blob: ptr<u8>, start: i64, entry_len: i64, name: str, key_len: i64) -> i32
+```
+
+[Declaration](env/parse.wave#L133)
+
+```wave
+#[target(os="macos")]
+pub fun _env_match_key_sized(blob: ptr<u8>, start: i64, entry_len: i64, name: str, key_len: i64) -> i32
+```
+
+[Declaration](env/parse.wave#L141)
+
+```wave
+#[target(os="freebsd")]
+pub fun _env_match_key_sized(blob: ptr<u8>, start: i64, entry_len: i64, name: str, key_len: i64) -> i32
+```
+
+[Declaration](env/parse.wave#L149)
+
+```wave
+#[target(os="wasi")]
+pub fun _env_match_key_sized(blob: ptr<u8>, start: i64, entry_len: i64, name: str, key_len: i64) -> i32
+```
+
+[Declaration](env/parse.wave#L157)
+
+```wave
+pub fun _env_match_key(blob: ptr<u8>, start: i64, name: str, key_len: i64) -> bool
 ```
 
 ## `std::fs::consts`
@@ -3347,25 +4222,25 @@ pub fun mem_len_cstr_n(s: str, max_len: i64) -> i64
 pub fun mem_copy_cstr(dst: ptr<u8>, s: str) -> i64
 ```
 
-[Declaration](mem/cstr.wave#L67)
+[Declaration](mem/cstr.wave#L70)
 
 ```wave
 pub fun mem_copy_cstr_n(dst: ptr<u8>, dst_cap: i64, s: str) -> i64
 ```
 
-[Declaration](mem/cstr.wave#L90)
+[Declaration](mem/cstr.wave#L107)
 
 ```wave
 pub fun mem_eq_cstr(a: str, b: str) -> bool
 ```
 
-[Declaration](mem/cstr.wave#L105)
+[Declaration](mem/cstr.wave#L122)
 
 ```wave
 pub fun mem_starts_with_cstr(s: str, prefix: str) -> bool
 ```
 
-[Declaration](mem/cstr.wave#L116)
+[Declaration](mem/cstr.wave#L133)
 
 ```wave
 pub fun mem_find_cstr_char(s: str, c: u8) -> i64
@@ -4202,6 +5077,24 @@ pub const NET_NATIVE_TIMEOUT: i64 = -73;
 pub fun net_connect_pending(code: i64) -> bool
 ```
 
+[Declaration](net/error.wave#L258)
+
+```wave
+pub struct NetDatagramResult {
+    count: i64;
+    truncated: bool;
+    original_size_known: bool;
+    original_size: i64;
+    error: NetError;
+}
+```
+
+[Declaration](net/error.wave#L266)
+
+```wave
+pub fun net_datagram_error(native_code: i64) -> NetDatagramResult
+```
+
 ## `std::net::event`
 
 [Source](net/event.wave)
@@ -4424,21 +5317,21 @@ pub fun net_wait_connected(fd: i64, timeout_ms: i32) -> i64
 
 [Source](net/posix_timeout.wave)
 
-[Declaration](net/posix_timeout.wave#L23)
+[Declaration](net/posix_timeout.wave#L24)
 
 ```wave
 #[target(os="linux")]
 pub fun net_io_timeout(fd: i64, buffer: ptr<u8>, size: i64, timeout_ms: i32, writing: bool) -> NetIoResult
 ```
 
-[Declaration](net/posix_timeout.wave#L27)
+[Declaration](net/posix_timeout.wave#L28)
 
 ```wave
 #[target(os="macos")]
 pub fun net_io_timeout(fd: i64, buffer: ptr<u8>, size: i64, timeout_ms: i32, writing: bool) -> NetIoResult
 ```
 
-[Declaration](net/posix_timeout.wave#L31)
+[Declaration](net/posix_timeout.wave#L32)
 
 ```wave
 #[target(os="freebsd")]
@@ -5315,7 +6208,7 @@ pub fun tcp_read_timeout(
 ) -> NetIoResult
 ```
 
-[Declaration](net/tcp.wave#L380)
+[Declaration](net/tcp.wave#L381)
 
 ```wave
 pub fun tcp_write_timeout(
@@ -5323,25 +6216,25 @@ pub fun tcp_write_timeout(
 ) -> NetIoResult
 ```
 
-[Declaration](net/tcp.wave#L390)
+[Declaration](net/tcp.wave#L392)
 
 ```wave
 pub fun tcp_write_result(stream: TcpStream, buf: ptr<u8>, size: i64) -> NetIoResult
 ```
 
-[Declaration](net/tcp.wave#L396)
+[Declaration](net/tcp.wave#L398)
 
 ```wave
 pub fun tcp_write_all_result(stream: TcpStream, buf: ptr<u8>, size: i64) -> NetIoResult
 ```
 
-[Declaration](net/tcp.wave#L400)
+[Declaration](net/tcp.wave#L402)
 
 ```wave
 pub fun tcp_read_exact_result(stream: TcpStream, buf: ptr<u8>, size: i64) -> NetIoResult
 ```
 
-[Declaration](net/tcp.wave#L404)
+[Declaration](net/tcp.wave#L406)
 
 ```wave
 pub fun tcp_write_vectored(
@@ -5349,7 +6242,7 @@ pub fun tcp_write_vectored(
 ) -> NetIoResult
 ```
 
-[Declaration](net/tcp.wave#L410)
+[Declaration](net/tcp.wave#L412)
 
 ```wave
 pub fun tcp_read_vectored(
@@ -5357,133 +6250,133 @@ pub fun tcp_read_vectored(
 ) -> NetIoResult
 ```
 
-[Declaration](net/tcp.wave#L416)
+[Declaration](net/tcp.wave#L418)
 
 ```wave
 pub fun tcp_write_str(stream: TcpStream, text: str) -> NetIoResult
 ```
 
-[Declaration](net/tcp.wave#L421)
+[Declaration](net/tcp.wave#L423)
 
 ```wave
 pub fun tcp_shutdown_read(stream: TcpStream) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L427)
+[Declaration](net/tcp.wave#L429)
 
 ```wave
 pub fun tcp_shutdown_write(stream: TcpStream) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L433)
+[Declaration](net/tcp.wave#L435)
 
 ```wave
 pub fun tcp_shutdown_both(stream: TcpStream) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L439)
+[Declaration](net/tcp.wave#L441)
 
 ```wave
 pub fun tcp_stream_set_nonblock(stream: TcpStream, enabled: bool) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L445)
+[Declaration](net/tcp.wave#L447)
 
 ```wave
 pub fun tcp_listener_set_nonblock(listener: TcpListener, enabled: bool) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L451)
+[Declaration](net/tcp.wave#L453)
 
 ```wave
 pub fun tcp_stream_is_nonblock(stream: TcpStream) -> NetResult<bool>
 ```
 
-[Declaration](net/tcp.wave#L459)
+[Declaration](net/tcp.wave#L461)
 
 ```wave
 pub fun tcp_listener_is_nonblock(listener: TcpListener) -> NetResult<bool>
 ```
 
-[Declaration](net/tcp.wave#L486)
+[Declaration](net/tcp.wave#L488)
 
 ```wave
 pub fun tcp_set_nodelay(stream: TcpStream, enabled: bool) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L490)
+[Declaration](net/tcp.wave#L492)
 
 ```wave
 pub fun tcp_nodelay(stream: TcpStream) -> NetResult<bool>
 ```
 
-[Declaration](net/tcp.wave#L494)
+[Declaration](net/tcp.wave#L496)
 
 ```wave
 pub fun tcp_set_keepalive(stream: TcpStream, enabled: bool) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L498)
+[Declaration](net/tcp.wave#L500)
 
 ```wave
 pub fun tcp_keepalive(stream: TcpStream) -> NetResult<bool>
 ```
 
-[Declaration](net/tcp.wave#L502)
+[Declaration](net/tcp.wave#L504)
 
 ```wave
 pub fun tcp_set_recv_buffer(stream: TcpStream, size: i32) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L506)
+[Declaration](net/tcp.wave#L508)
 
 ```wave
 pub fun tcp_recv_buffer(stream: TcpStream) -> NetResult<i64>
 ```
 
-[Declaration](net/tcp.wave#L510)
+[Declaration](net/tcp.wave#L512)
 
 ```wave
 pub fun tcp_set_send_buffer(stream: TcpStream, size: i32) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L514)
+[Declaration](net/tcp.wave#L516)
 
 ```wave
 pub fun tcp_send_buffer(stream: TcpStream) -> NetResult<i64>
 ```
 
-[Declaration](net/tcp.wave#L519)
+[Declaration](net/tcp.wave#L521)
 
 ```wave
 pub fun tcp_from_fd(fd: i64) -> NetResult<TcpStream>
 ```
 
-[Declaration](net/tcp.wave#L524)
+[Declaration](net/tcp.wave#L526)
 
 ```wave
 pub fun tcp_listener_from_fd(fd: i64) -> NetResult<TcpListener>
 ```
 
-[Declaration](net/tcp.wave#L529)
+[Declaration](net/tcp.wave#L531)
 
 ```wave
 pub fun tcp_stream_valid(stream: TcpStream) -> bool
 ```
 
-[Declaration](net/tcp.wave#L530)
+[Declaration](net/tcp.wave#L532)
 
 ```wave
 pub fun tcp_listener_valid(listener: TcpListener) -> bool
 ```
 
-[Declaration](net/tcp.wave#L532)
+[Declaration](net/tcp.wave#L534)
 
 ```wave
 pub fun tcp_close(stream: TcpStream) -> NetError
 ```
 
-[Declaration](net/tcp.wave#L538)
+[Declaration](net/tcp.wave#L540)
 
 ```wave
 pub fun tcp_close_listener(listener: TcpListener) -> NetError
@@ -5854,6 +6747,18 @@ pub fun udp_socket_valid(sock: UdpSocket) -> bool
 pub fun udp_close(sock: UdpSocket) -> NetError
 ```
 
+[Declaration](net/udp.wave#L483)
+
+```wave
+pub fun udp_recv_datagram(sock: UdpSocket, buf: ptr<u8>, size: i64) -> NetDatagramResult
+```
+
+[Declaration](net/udp.wave#L488)
+
+```wave
+pub fun udp_recv_vectored_datagram(sock: UdpSocket, slices: ptr<NetIoSlice>, count: i32) -> NetDatagramResult
+```
+
 ## `std::net::unix`
 
 [Source](net/unix.wave)
@@ -6055,6 +6960,12 @@ pub fun net_recv_vectored(
 ) -> NetIoResult
 ```
 
+[Declaration](net/vectored.wave#L74)
+
+```wave
+pub fun net_recv_vectored_datagram(fd: i64, slices: ptr<NetIoSlice>, count: i32) -> NetDatagramResult
+```
+
 ## `std::net::windows_timeout`
 
 [Source](net/windows_timeout.wave)
@@ -6113,19 +7024,19 @@ pub const PATH_ERR_NO_SPACE: i32 = -1;
 
 [Source](path/copy.wave)
 
-[Declaration](path/copy.wave#L32)
+[Declaration](path/copy.wave#L33)
 
 ```wave
 pub fun path_join2(dst: ptr<u8>, dst_cap: i32, left: str, right: str) -> i32
 ```
 
-[Declaration](path/copy.wave#L77)
+[Declaration](path/copy.wave#L98)
 
 ```wave
 pub fun path_basename_copy(dst: ptr<u8>, dst_cap: i32, path: str) -> i32
 ```
 
-[Declaration](path/copy.wave#L98)
+[Declaration](path/copy.wave#L119)
 
 ```wave
 pub fun path_dirname_copy(dst: ptr<u8>, dst_cap: i32, path: str) -> i32
@@ -6667,7 +7578,7 @@ pub import("std::sys::windows::env")::{env_read};
 
 ```wave
 #[target(os="freebsd")]
-pub import("std::sys::freebsd::env")::{env_read};
+pub import("std::sys::freebsd::env")::{env_read, env_required_capacity};
 ```
 
 [Declaration](sys/env.wave#L40)
@@ -6886,7 +7797,7 @@ pub import("std::sys::windows::event")::{
 
 ```wave
 pub import("std::sys::freebsd::common::env")::{
-    ERR_NOT_IMPLEMENTED, env_read
+    ERR_NOT_IMPLEMENTED, env_read, env_required_capacity
 };
 ```
 
@@ -7046,7 +7957,7 @@ pub import("std::sys::freebsd::common::tty")::{
 
 ```wave
 pub import("std::sys::freebsd::common::env")::{
-    ERR_NOT_IMPLEMENTED, env_read
+    ERR_NOT_IMPLEMENTED, env_read, env_required_capacity
 };
 ```
 
@@ -7192,7 +8103,13 @@ pub import("std::sys::freebsd::common::tty")::{
 pub const ERR_NOT_IMPLEMENTED: i64 = -78;
 ```
 
-[Declaration](sys/freebsd/common/env.wave#L24)
+[Declaration](sys/freebsd/common/env.wave#L26)
+
+```wave
+pub fun env_required_capacity() -> i64
+```
+
+[Declaration](sys/freebsd/common/env.wave#L43)
 
 ```wave
 pub fun env_read(buf: ptr<u8>, cap: i64) -> i64
@@ -8145,7 +9062,7 @@ pub fun tty_restore(fd: i32, st: ptr<TtyRawState>)
 
 ```wave
 #[target(arch="x86_64")]
-pub import("std::sys::freebsd::amd64::env")::{env_read};
+pub import("std::sys::freebsd::amd64::env")::{env_read, env_required_capacity};
 ```
 
 [Declaration](sys/freebsd/env.wave#L11)
@@ -8153,7 +9070,7 @@ pub import("std::sys::freebsd::amd64::env")::{env_read};
 ```wave
 #[target(arch="aarch64")]
 pub import("std::sys::freebsd::arm64::env")::{
-    env_read
+    env_read, env_required_capacity
 };
 ```
 
@@ -8162,7 +9079,7 @@ pub import("std::sys::freebsd::arm64::env")::{
 ```wave
 #[target(arch="riscv64")]
 pub import("std::sys::freebsd::riscv64::env")::{
-    env_read
+    env_read, env_required_capacity
 };
 ```
 
@@ -8541,7 +9458,7 @@ pub fun resolver_next(result: ptr<NativeAddrInfo>) -> ptr<NativeAddrInfo>
 
 ```wave
 pub import("std::sys::freebsd::common::env")::{
-    ERR_NOT_IMPLEMENTED, env_read
+    ERR_NOT_IMPLEMENTED, env_read, env_required_capacity
 };
 ```
 
@@ -8942,6 +9859,12 @@ pub fun vector_send(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32
 
 ```wave
 pub fun vector_recv(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32) -> i64
+```
+
+[Declaration](sys/freebsd/vector_io.wave#L35)
+
+```wave
+pub fun vector_recv_datagram(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32, capacity: i64, truncated: ptr<bool>, original_size: ptr<i64>) -> i64
 ```
 
 ## `std::sys::fs`
@@ -13014,6 +13937,12 @@ pub fun vector_send(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32
 pub fun vector_recv(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32) -> i64
 ```
 
+[Declaration](sys/linux/vector_io.wave#L45)
+
+```wave
+pub fun vector_recv_datagram(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32, capacity: i64, truncated: ptr<bool>, original_size: ptr<i64>) -> i64
+```
+
 ## `std::sys::local_addr`
 
 [Source](sys/local_addr.wave)
@@ -15662,6 +16591,12 @@ pub fun vector_send(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32
 pub fun vector_recv(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32) -> i64
 ```
 
+[Declaration](sys/macos/vector_io.wave#L42)
+
+```wave
+pub fun vector_recv_datagram(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32, capacity: i64, truncated: ptr<bool>, original_size: ptr<i64>) -> i64
+```
+
 ## `std::sys::memory`
 
 [Source](sys/memory.wave)
@@ -16346,28 +17281,28 @@ pub import("std::sys::freebsd::tty")::{
 
 ```wave
 #[target(os="linux")]
-pub import("std::sys::linux::vector_io")::{NativeIoSlice, native_io_slice, vector_send, vector_recv};
+pub import("std::sys::linux::vector_io")::{NativeIoSlice, native_io_slice, vector_send, vector_recv, vector_recv_datagram};
 ```
 
 [Declaration](sys/vector_io.wave#L4)
 
 ```wave
 #[target(os="macos")]
-pub import("std::sys::macos::vector_io")::{NativeIoSlice, native_io_slice, vector_send, vector_recv};
+pub import("std::sys::macos::vector_io")::{NativeIoSlice, native_io_slice, vector_send, vector_recv, vector_recv_datagram};
 ```
 
 [Declaration](sys/vector_io.wave#L6)
 
 ```wave
 #[target(os="freebsd")]
-pub import("std::sys::freebsd::vector_io")::{NativeIoSlice, native_io_slice, vector_send, vector_recv};
+pub import("std::sys::freebsd::vector_io")::{NativeIoSlice, native_io_slice, vector_send, vector_recv, vector_recv_datagram};
 ```
 
 [Declaration](sys/vector_io.wave#L8)
 
 ```wave
 #[target(os="windows")]
-pub import("std::sys::windows::vector_io")::{NativeIoSlice, native_io_slice, vector_send, vector_recv};
+pub import("std::sys::windows::vector_io")::{NativeIoSlice, native_io_slice, vector_send, vector_recv, vector_recv_datagram};
 ```
 
 ## `std::sys::wasm::env`
@@ -16944,6 +17879,12 @@ pub fun completion_port_release_executor()
 
 ```wave
 pub fun env_read(buf: ptr<u8>, cap: i64) -> i64
+```
+
+[Declaration](sys/windows/env.wave#L56)
+
+```wave
+pub fun env_key_matches(left: ptr<u8>, left_len: i64, right: ptr<u8>, right_len: i64) -> i32
 ```
 
 ## `std::sys::windows::event`
@@ -18304,6 +19245,12 @@ pub fun vector_send(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32
 
 ```wave
 pub fun vector_recv(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32) -> i64
+```
+
+[Declaration](sys/windows/vector_io.wave#L42)
+
+```wave
+pub fun vector_recv_datagram(fd: i64, vectors: ptr<NativeIoSlice>, count: i32, flags: i32, capacity: i64, truncated: ptr<bool>, original_size: ptr<i64>) -> i64
 ```
 
 ## `std::task::net`

@@ -367,6 +367,7 @@ impl Harness {
     }
 
     fn sockets(&self) -> Result<()> {
+        self.source(UDP_DATAGRAM_COMPLETENESS, &[])?;
         self.source(ADDRESS_FAMILY_FAILURE_PRESERVES_ADDRESS_AND_NATIVE_ERRORS, &[])?;
         let bsd = cfg!(any(target_os = "macos", target_os = "freebsd"));
         let timeout = if cfg!(windows) {
@@ -774,3 +775,78 @@ pub fn process_child(arguments: &[OsString]) -> Result<i32> {
     }
     Err(error("unknown process fixture mode"))
 }
+
+pub const UDP_DATAGRAM_COMPLETENESS: &str = r###"
+import("std::net::udp")::{UdpSocket, udp_bind_loopback, udp_local_addr_v4, udp_send_to, udp_recv_datagram, udp_recv_vectored_datagram, udp_close};
+import("std::net::vectored")::{NetIoSlice};
+import("std::net::error")::{NetDatagramResult, NetResult, NetIoResult};
+import("std::net::address")::{SocketAddrV4};
+
+fun main() -> i32 {
+    var bound: NetResult<UdpSocket> = udp_bind_loopback(0);
+    var sender: NetResult<UdpSocket> = udp_bind_loopback(0);
+    if (!bound.ok || !sender.ok) { return 1; }
+    var local: NetResult<SocketAddrV4> = udp_local_addr_v4(bound.value);
+    if (!local.ok) { return 2; }
+    var data: array<u8, 8> = [1, 2, 3, 4, 5, 6, 7, 99];
+    var lengths: array<i64, 4> = [0, 1, 4, 7];
+    var mode: i32 = 0;
+    while (mode < 2) {
+        var index: i32 = 0;
+        while (index < 4) {
+            var length: i64 = lengths[index];
+            var sent: NetIoResult = udp_send_to(sender.value, local.value, &data[0], length);
+            if (sent.error.native_code != 0 || sent.count != length) { return 3; }
+            var buffer: array<u8, 5> = [91, 91, 91, 91, 92];
+            // Argument rejection must leave the queued datagram untouched.
+            var rejected: NetDatagramResult = udp_recv_datagram(bound.value, null, 1);
+            if (rejected.error.native_code == 0 || buffer[0] != 91) { return 4; }
+            var result: NetDatagramResult;
+            if (mode == 0) {
+                result = udp_recv_datagram(bound.value, &buffer[0], 4);
+            } else {
+                var slices: array<NetIoSlice, 2>;
+                slices[0] = NetIoSlice { data: &buffer[0], length: 2 };
+                slices[1] = NetIoSlice { data: &buffer[2], length: 2 };
+                result = udp_recv_vectored_datagram(bound.value, &slices[0], 2);
+            }
+            var expected: i64 = length;
+            if (expected > 4) { expected = 4; }
+            if (result.error.native_code != 0 || result.count != expected || result.truncated != (length > 4)
+                || (result.original_size_known && result.original_size != length) || buffer[4] != 92) { return 5; }
+            var byte_index: i64 = 0;
+            while (byte_index < expected) {
+                if (buffer[byte_index] != data[byte_index]) { return 6; }
+                byte_index += 1;
+            }
+            if (expected < 4 && buffer[expected] != 91) { return 7; }
+            sent = udp_send_to(sender.value, local.value, &data[7], 1);
+            if (sent.error.native_code != 0) { return 8; }
+            result = udp_recv_datagram(bound.value, &buffer[0], 4);
+            if (result.error.native_code != 0 || result.count != 1 || result.truncated || buffer[0] != 99) { return 9; }
+            index += 1;
+        }
+        mode += 1;
+    }
+    var sent: NetIoResult = udp_send_to(sender.value, local.value, &data[0], 7);
+    if (sent.error.native_code != 0) { return 10; }
+    var zero: NetDatagramResult = udp_recv_vectored_datagram(bound.value, null, 0);
+    if (zero.error.native_code != 0 || zero.count != 0 || !zero.truncated) { return 11; }
+    sent = udp_send_to(sender.value, local.value, &data[0], 0);
+    if (sent.error.native_code != 0) { return 12; }
+    zero = udp_recv_datagram(bound.value, null, 0);
+    if (zero.error.native_code != 0 || zero.count != 0 || zero.truncated) { return 13; }
+    sent = udp_send_to(sender.value, local.value, &data[0], 1);
+    if (sent.error.native_code != 0) { return 14; }
+    zero = udp_recv_datagram(bound.value, null, 0);
+    if (zero.error.native_code != 0 || zero.count != 0 || !zero.truncated
+        || !zero.original_size_known || zero.original_size != 1) { return 15; }
+    sent = udp_send_to(sender.value, local.value, &data[7], 1);
+    if (sent.error.native_code != 0) { return 16; }
+    zero = udp_recv_datagram(bound.value, &data[0], 1);
+    if (zero.error.native_code != 0 || zero.count != 1 || zero.truncated || data[0] != 99) { return 17; }
+    udp_close(sender.value);
+    udp_close(bound.value);
+    return 0;
+}
+"###;

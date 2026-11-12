@@ -3,6 +3,13 @@
 use super::module;
 use whale_ir::*;
 
+// Aliases may move physical source coordinates while preserving program IR.
+fn semantic_text(module: &Module) -> String {
+    let mut module = module.clone();
+    module.sources = SourceMetadata::default();
+    print_module(&module)
+}
+
 fn options() -> InterpreterOptions {
     InterpreterOptions {
         max_steps: 2000,
@@ -114,7 +121,7 @@ fun probe(n: i32) -> i32 {
 }
 "#,
     );
-    assert_eq!(print_module(&aliases), print_module(&canonical));
+    assert_eq!(semantic_text(&aliases), semantic_text(&canonical));
     for (input, expected) in [(-1, 255), (0, 0), (256, 1), (257, 2)] {
         assert_eq!(run(&aliases, &[ConstValue::I(input)]), Some(ConstValue::I(expected)));
     }
@@ -131,7 +138,7 @@ fn every_supported_value_scalar_alias_retains_its_canonical_signature() {
              fun probe(n: Chained) -> Scalar {{ return n; }}"
         ));
         let canonical = module(&format!("fun probe(n: {ty}) -> {ty} {{ return n; }}"));
-        assert_eq!(print_module(&aliases), print_module(&canonical), "{ty}");
+        assert_eq!(semantic_text(&aliases), semantic_text(&canonical), "{ty}");
     }
 }
 

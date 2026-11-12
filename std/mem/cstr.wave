@@ -64,27 +64,44 @@ pub fun mem_copy_cstr(dst: ptr<u8>, s: str) -> i64 {
     return i;
 }
 
+// Partial overlap of the bounded read/write regions is INVALID before writes.
+// Exact alias is allowed. Success writes NUL; truncation writes the bounded
+// prefix plus NUL and returns NO_SPACE, including when dst is the source.
 pub fun mem_copy_cstr_n(dst: ptr<u8>, dst_cap: i64, s: str) -> i64 {
     if (dst == null || dst_cap <= 0) {
         return MEM_ERR_INVALID;
     }
 
-    var i: i64 = 0;
+    // Determine the bounded read/write ranges before changing either region.
+    var count: i64 = 0;
     var max_copy: i64 = dst_cap - 1;
-
-    while (i < max_copy && s[i] != 0) {
+    while (count < max_copy && s[count] != 0) {
+        count += 1;
+    }
+    var truncated: bool = s[count] != 0;
+    var source: u64 = s as u64;
+    var destination: u64 = dst as u64;
+    var width: u64 = (count as u64) + 1;
+    var maximum: u64 = (-1 as usz) as u64;
+    if (width - 1 > maximum - source || width - 1 > maximum - destination) {
+        return MEM_ERR_INVALID;
+    }
+    if (source != destination) {
+        if ((source < destination && destination - source < width)
+            || (destination < source && source - destination < width)) {
+                return MEM_ERR_INVALID;
+            }
+    }
+    var i: i64 = 0;
+    while (i < count) {
         deref dst[i] = s[i];
         i += 1;
     }
-
-    // Read the boundary before terminating: dst may be exactly s.
-    var truncated: bool = s[i] != 0;
-    deref dst[i] = 0;
+    deref dst[count] = 0;
     if (truncated) {
         return MEM_ERR_NO_SPACE;
     }
-
-    return i;
+    return count;
 }
 
 pub fun mem_eq_cstr(a: str, b: str) -> bool {

@@ -21,7 +21,7 @@ pub fun path_is_sep(c: u8) -> bool {
         return true;
     }
 
-    if (c == 92) {
+    if (PATH_WINDOWS && c == 92) {
         return true;
     }
 

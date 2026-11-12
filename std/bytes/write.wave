@@ -12,6 +12,17 @@ pub import("std::bytes::errors")::{
     BYTES_ERROR_OVERFLOW,
 };
 import("std::bytes::endian")::{
+    bytes_store_be_u8,
+    bytes_store_le_u8,
+    bytes_store_be_u128,
+    bytes_store_le_u128,
+    bytes_store_be_u256,
+    bytes_store_le_u256,
+    bytes_store_be_u512,
+    bytes_store_le_u512,
+    bytes_store_be_u1024,
+    bytes_store_le_u1024,
+
     bytes_store_be_u16,
     bytes_store_le_u16,
     bytes_store_be_u32,
@@ -143,4 +154,184 @@ pub fun bytes_write_le_f32(dst: BytesMut, offset: i64, value: f32) -> i32 {
 // Bit-preserving and byte-oriented; an invalid range performs no writes.
 pub fun bytes_write_le_f64(dst: BytesMut, offset: i64, value: f64) -> i32 {
     return bytes_write_le_u64(dst, offset, float_to_bits_f64(value));
+}
+
+pub fun bytes_write_be_u8(dst: BytesMut, offset: i64, value: u8) -> i32 {
+    var status: i32 = _bytes_check_write(dst, offset, 1);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    bytes_store_be_u8(dst.data + offset, value as u8);
+    return BYTES_OK;
+}
+
+pub fun bytes_write_be_i8(dst: BytesMut, offset: i64, value: i8) -> i32 {
+    var status: i32 = _bytes_check_write(dst, offset, 1);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    bytes_store_be_u8(dst.data + offset, value as u8);
+    return BYTES_OK;
+}
+
+pub fun bytes_write_le_u8(dst: BytesMut, offset: i64, value: u8) -> i32 {
+    var status: i32 = _bytes_check_write(dst, offset, 1);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    bytes_store_le_u8(dst.data + offset, value as u8);
+    return BYTES_OK;
+}
+
+pub fun bytes_write_le_i8(dst: BytesMut, offset: i64, value: i8) -> i32 {
+    var status: i32 = _bytes_check_write(dst, offset, 1);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    bytes_store_le_u8(dst.data + offset, value as u8);
+    return BYTES_OK;
+}
+
+pub fun bytes_write_be_u128(dst: BytesMut, offset: i64, value: u128) -> i32 {
+    var status: i32 = _bytes_check_write(dst, offset, 16);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    bytes_store_be_u128(dst.data + offset, value as u128);
+    return BYTES_OK;
+}
+
+pub fun bytes_write_be_i128(dst: BytesMut, offset: i64, value: i128) -> i32 {
+    var status: i32 = _bytes_check_write(dst, offset, 16);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    bytes_store_be_u128(dst.data + offset, value as u128);
+    return BYTES_OK;
+}
+
+pub fun bytes_write_le_u128(dst: BytesMut, offset: i64, value: u128) -> i32 {
+    var status: i32 = _bytes_check_write(dst, offset, 16);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    bytes_store_le_u128(dst.data + offset, value as u128);
+    return BYTES_OK;
+}
+
+pub fun bytes_write_le_i128(dst: BytesMut, offset: i64, value: i128) -> i32 {
+    var status: i32 = _bytes_check_write(dst, offset, 16);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    bytes_store_le_u128(dst.data + offset, value as u128);
+    return BYTES_OK;
+}
+
+pub fun bytes_write_be_u256(dst: BytesMut, offset: i64, value: u256) -> i32 {
+    var status: i32 = _bytes_check_write(dst, offset, 32);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    bytes_store_be_u256(dst.data + offset, value as u256);
+    return BYTES_OK;
+}
+
+pub fun bytes_write_be_i256(dst: BytesMut, offset: i64, value: i256) -> i32 {
+    var status: i32 = _bytes_check_write(dst, offset, 32);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    bytes_store_be_u256(dst.data + offset, value as u256);
+    return BYTES_OK;
+}
+
+pub fun bytes_write_le_u256(dst: BytesMut, offset: i64, value: u256) -> i32 {
+    var status: i32 = _bytes_check_write(dst, offset, 32);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    bytes_store_le_u256(dst.data + offset, value as u256);
+    return BYTES_OK;
+}
+
+pub fun bytes_write_le_i256(dst: BytesMut, offset: i64, value: i256) -> i32 {
+    var status: i32 = _bytes_check_write(dst, offset, 32);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    bytes_store_le_u256(dst.data + offset, value as u256);
+    return BYTES_OK;
+}
+
+pub fun bytes_write_be_u512(dst: BytesMut, offset: i64, value: u512) -> i32 {
+    var status: i32 = _bytes_check_write(dst, offset, 64);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    bytes_store_be_u512(dst.data + offset, value as u512);
+    return BYTES_OK;
+}
+
+pub fun bytes_write_be_i512(dst: BytesMut, offset: i64, value: i512) -> i32 {
+    var status: i32 = _bytes_check_write(dst, offset, 64);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    bytes_store_be_u512(dst.data + offset, value as u512);
+    return BYTES_OK;
+}
+
+pub fun bytes_write_le_u512(dst: BytesMut, offset: i64, value: u512) -> i32 {
+    var status: i32 = _bytes_check_write(dst, offset, 64);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    bytes_store_le_u512(dst.data + offset, value as u512);
+    return BYTES_OK;
+}
+
+pub fun bytes_write_le_i512(dst: BytesMut, offset: i64, value: i512) -> i32 {
+    var status: i32 = _bytes_check_write(dst, offset, 64);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    bytes_store_le_u512(dst.data + offset, value as u512);
+    return BYTES_OK;
+}
+
+pub fun bytes_write_be_u1024(dst: BytesMut, offset: i64, value: u1024) -> i32 {
+    var status: i32 = _bytes_check_write(dst, offset, 128);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    bytes_store_be_u1024(dst.data + offset, value as u1024);
+    return BYTES_OK;
+}
+
+pub fun bytes_write_be_i1024(dst: BytesMut, offset: i64, value: i1024) -> i32 {
+    var status: i32 = _bytes_check_write(dst, offset, 128);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    bytes_store_be_u1024(dst.data + offset, value as u1024);
+    return BYTES_OK;
+}
+
+pub fun bytes_write_le_u1024(dst: BytesMut, offset: i64, value: u1024) -> i32 {
+    var status: i32 = _bytes_check_write(dst, offset, 128);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    bytes_store_le_u1024(dst.data + offset, value as u1024);
+    return BYTES_OK;
+}
+
+pub fun bytes_write_le_i1024(dst: BytesMut, offset: i64, value: i1024) -> i32 {
+    var status: i32 = _bytes_check_write(dst, offset, 128);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    bytes_store_le_u1024(dst.data + offset, value as u1024);
+    return BYTES_OK;
 }

@@ -21,3 +21,38 @@ int WideCharToMultiByte(uint32_t cp, uint32_t flags, const uint16_t *src, int un
     if (scenario == 3) return 0;
     memcpy(dst, bytes, sizeof bytes); return sizeof bytes;
 }
+
+
+// ABI fixture only: native Unicode folding is tested against the Windows API.
+int MultiByteToWideChar(uint32_t cp, uint32_t flags, const unsigned char *src, int bytes,
+                        uint16_t *dst, int cap) {
+    if (cp != 65001 || flags != 8 || !src || bytes <= 0) { failed++; return 0; }
+    if (scenario == 6) { return 0; }
+    int units = 0;
+    for (int i = 0; i < bytes; i++) {
+        uint32_t c = src[i];
+        if (c >= 128) {
+            if ((c & 224) != 192 || i + 1 >= bytes || (src[i + 1] & 192) != 128) { return 0; }
+            c = ((c & 31) << 6) | (src[++i] & 63);
+        }
+        if (dst) {
+            if (units >= cap) { failed++; return 0; }
+            dst[units] = c;
+        } else if (cap) { failed++; return 0; }
+        units++;
+    }
+    return units;
+}
+
+int CompareStringOrdinal(const uint16_t *a, int na, const uint16_t *b, int nb, int ignore_case) {
+    if (!a || !b || na <= 0 || nb <= 0 || ignore_case != 1) { failed++; return 0; }
+    if (scenario == 7) { return 0; }
+    if (na != nb) { return 1; }
+    for (int i = 0; i < na; i++) {
+        uint16_t left = a[i], right = b[i];
+        if (left >= 'a' && left <= 'z') { left -= 32; }
+        if (right >= 'a' && right <= 'z') { right -= 32; }
+        if (left != right) { return 1; }
+    }
+    return 2;
+}

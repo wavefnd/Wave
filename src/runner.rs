@@ -633,8 +633,15 @@ pub(crate) fn emit_whale_ir_text(
     dep: &DepFlags,
     target: &LlvmFlags,
 ) -> String {
-    let (source, program) = frontend_prepare_wave_hir(file_path, debug, dep, Some(target));
-    match whale::emit_ir(&program) {
+    let (source, mut program) = frontend_prepare_wave_hir(file_path, debug, dep, Some(target));
+    let layout = llvm::codegen::ir::prepare_scalar_layout_hir(
+        &mut program,
+        target.target.as_deref().unwrap_or("x86_64-unknown-linux-gnu"),
+    );
+    let result = layout
+        .map_err(|error| whale::LowerError { message: error.message, span: error.span })
+        .and_then(|()| whale::emit_ir(&program));
+    match result {
         Ok(text) => text,
         Err(diagnostic) => {
             let diagnostic_source = diagnostic

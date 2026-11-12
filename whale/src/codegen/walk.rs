@@ -25,6 +25,12 @@ impl Lowerer<'_> {
         let mut pending = vec![(root, Action::Enter)];
         let mut values = Vec::new();
         while let Some((expr, action)) = pending.pop() {
+            self.origin = self
+                .program
+                .expression_id(expr)
+                .and_then(|id| self.program.expression_span(id))
+                .cloned()
+                .or_else(|| expr.span().cloned());
             let result = self.step(expr, action, &mut pending, &mut values);
             result.map_err(|mut e| {
                 if e.span.is_none() {
@@ -63,7 +69,7 @@ impl Lowerer<'_> {
                         values.push(self.literal(literal, &fact.evaluation_type)?)
                     },
                     Expression::Variable(name) => {
-                        let value = if let Some(slot) = self.local_slot(name) {
+                        let value = if let Some(slot) = self.storage_slot(name) {
                             let value = self.value(slot.ty.clone());
                             self.emit(Instruction::Load {
                                 dst: value.id,
@@ -86,7 +92,7 @@ impl Lowerer<'_> {
                             return Err(unsupported("non-local increment/decrement"));
                         };
                         let slot = self
-                            .local_slot(name)
+                            .storage_slot(name)
                             .ok_or_else(|| unsupported("non-local increment/decrement"))?;
                         let old = self.value(slot.ty.clone());
                         self.emit(Instruction::Load {
@@ -150,7 +156,15 @@ impl Lowerer<'_> {
                         pending.push((value, Action::Enter));
                         pending.push((target, Action::Enter));
                     },
-                    Expression::FunctionCall { args, .. } => {
+                    Expression::FunctionCall { name, args, .. } => {
+                        if parser::layout_intrinsics::is_intrinsic(name) {
+                            let value = self
+                                .program
+                                .layout_value_of(expr)
+                                .ok_or_else(|| ice("missing selected-target HIR layout fact"))?;
+                            values.push(self.constant(Type::U64, ConstValue::U(u128::from(value))));
+                            return Ok(());
+                        }
                         pending.push((expr, Action::Call));
                         for arg in args.iter().rev() {
                             pending.push((arg, Action::Enter));

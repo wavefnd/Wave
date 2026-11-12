@@ -1,6 +1,7 @@
 // wave-test: runtime=portable
 // #592: trailing separators preserve the last component; roots stay empty.
 import("std::path::analyze")::{path_basename_start, path_basename_len, path_dirname_len, path_ext_start};
+import("std::path::core")::{path_is_sep};
 import("std::path::copy")::{path_basename_copy};
 import("std::string::cmp")::{eq};
 fun check(path: str, expected: str, start: i32, length: i32) -> bool {
@@ -11,9 +12,15 @@ fun check(path: str, expected: str, start: i32, length: i32) -> bool {
 }
 fun main() -> i32 {
     if (!check("dir/", "dir", 0, 3) || !check("/usr/bin/", "bin", 5, 3)) { return 1; }
-    if (!check("/usr/bin///", "bin", 5, 3) || !check("dir\\\\", "dir", 0, 3)) { return 2; }
-    if (!check("\\usr\\bin\\", "bin", 5, 3) || !check("dir", "dir", 0, 3)) { return 3; }
-    if (!check("/", "", 1, 0) || !check("///", "", 3, 0) || !check("\\", "", 1, 0)) { return 4; }
+    if (!check("/usr/bin///", "bin", 5, 3) || !check("dir", "dir", 0, 3)) { return 2; }
+    if (path_is_sep(92)) {
+        if (!check("dir\\", "dir", 0, 3) || !check("\\usr\\bin\\", "bin", 5, 3)) { return 3; }
+        if (!check("\\", "", 1, 0)) { return 4; }
+    } else {
+        if (!check("dir\\", "dir\\", 0, 4) || !check("\\usr\\bin\\", "\\usr\\bin\\", 0, 9)) { return 3; }
+        if (!check("\\", "\\", 0, 1)) { return 4; }
+    }
+    if (!check("/", "", 1, 0) || !check("///", "", 3, 0)) { return 4; }
     if (!check("", "", 0, 0) || !check("a/b", "b", 2, 1)) { return 5; }
     if (path_dirname_len("/usr/bin///") != 8 || path_dirname_len("dir/") != 3) { return 6; }
     if (path_ext_start("dir/file.txt///") != 8) { return 7; }

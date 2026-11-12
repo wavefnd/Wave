@@ -12,6 +12,17 @@ pub import("std::bytes::errors")::{
     BYTES_ERROR_OVERFLOW,
 };
 import("std::bytes::endian")::{
+    bytes_load_be_u8,
+    bytes_load_le_u8,
+    bytes_load_be_u128,
+    bytes_load_le_u128,
+    bytes_load_be_u256,
+    bytes_load_le_u256,
+    bytes_load_be_u512,
+    bytes_load_le_u512,
+    bytes_load_be_u1024,
+    bytes_load_le_u1024,
+
     bytes_load_be_u16,
     bytes_load_le_u16,
     bytes_load_be_u32,
@@ -221,5 +232,265 @@ pub fun bytes_read_le_f64(src: Bytes, offset: i64, out_value: ptr<f64>) -> i32 {
         return status;
     }
     deref out_value = float_from_bits_f64(bits);
+    return BYTES_OK;
+}
+
+pub fun bytes_read_be_u8(src: Bytes, offset: i64, out_value: ptr<u8>) -> i32 {
+    if (out_value == null) {
+        return BYTES_ERROR_INVALID;
+    }
+    var status: i32 = _bytes_check_read(src, offset, 1);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    var value: u8 = bytes_load_be_u8(src.data + offset) as u8;
+    deref out_value = value;
+    return BYTES_OK;
+}
+
+pub fun bytes_read_be_i8(src: Bytes, offset: i64, out_value: ptr<i8>) -> i32 {
+    if (out_value == null) {
+        return BYTES_ERROR_INVALID;
+    }
+    var status: i32 = _bytes_check_read(src, offset, 1);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    var value: i8 = bytes_load_be_u8(src.data + offset) as i8;
+    deref out_value = value;
+    return BYTES_OK;
+}
+
+pub fun bytes_read_le_u8(src: Bytes, offset: i64, out_value: ptr<u8>) -> i32 {
+    if (out_value == null) {
+        return BYTES_ERROR_INVALID;
+    }
+    var status: i32 = _bytes_check_read(src, offset, 1);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    var value: u8 = bytes_load_le_u8(src.data + offset) as u8;
+    deref out_value = value;
+    return BYTES_OK;
+}
+
+pub fun bytes_read_le_i8(src: Bytes, offset: i64, out_value: ptr<i8>) -> i32 {
+    if (out_value == null) {
+        return BYTES_ERROR_INVALID;
+    }
+    var status: i32 = _bytes_check_read(src, offset, 1);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    var value: i8 = bytes_load_le_u8(src.data + offset) as i8;
+    deref out_value = value;
+    return BYTES_OK;
+}
+
+pub fun bytes_read_be_u128(src: Bytes, offset: i64, out_value: ptr<u128>) -> i32 {
+    if (out_value == null) {
+        return BYTES_ERROR_INVALID;
+    }
+    var status: i32 = _bytes_check_read(src, offset, 16);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    var value: u128 = bytes_load_be_u128(src.data + offset) as u128;
+    deref out_value = value;
+    return BYTES_OK;
+}
+
+pub fun bytes_read_be_i128(src: Bytes, offset: i64, out_value: ptr<i128>) -> i32 {
+    if (out_value == null) {
+        return BYTES_ERROR_INVALID;
+    }
+    var status: i32 = _bytes_check_read(src, offset, 16);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    var value: i128 = bytes_load_be_u128(src.data + offset) as i128;
+    deref out_value = value;
+    return BYTES_OK;
+}
+
+pub fun bytes_read_le_u128(src: Bytes, offset: i64, out_value: ptr<u128>) -> i32 {
+    if (out_value == null) {
+        return BYTES_ERROR_INVALID;
+    }
+    var status: i32 = _bytes_check_read(src, offset, 16);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    var value: u128 = bytes_load_le_u128(src.data + offset) as u128;
+    deref out_value = value;
+    return BYTES_OK;
+}
+
+pub fun bytes_read_le_i128(src: Bytes, offset: i64, out_value: ptr<i128>) -> i32 {
+    if (out_value == null) {
+        return BYTES_ERROR_INVALID;
+    }
+    var status: i32 = _bytes_check_read(src, offset, 16);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    var value: i128 = bytes_load_le_u128(src.data + offset) as i128;
+    deref out_value = value;
+    return BYTES_OK;
+}
+
+pub fun bytes_read_be_u256(src: Bytes, offset: i64, out_value: ptr<u256>) -> i32 {
+    if (out_value == null) {
+        return BYTES_ERROR_INVALID;
+    }
+    var status: i32 = _bytes_check_read(src, offset, 32);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    var value: u256 = bytes_load_be_u256(src.data + offset) as u256;
+    deref out_value = value;
+    return BYTES_OK;
+}
+
+pub fun bytes_read_be_i256(src: Bytes, offset: i64, out_value: ptr<i256>) -> i32 {
+    if (out_value == null) {
+        return BYTES_ERROR_INVALID;
+    }
+    var status: i32 = _bytes_check_read(src, offset, 32);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    var value: i256 = bytes_load_be_u256(src.data + offset) as i256;
+    deref out_value = value;
+    return BYTES_OK;
+}
+
+pub fun bytes_read_le_u256(src: Bytes, offset: i64, out_value: ptr<u256>) -> i32 {
+    if (out_value == null) {
+        return BYTES_ERROR_INVALID;
+    }
+    var status: i32 = _bytes_check_read(src, offset, 32);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    var value: u256 = bytes_load_le_u256(src.data + offset) as u256;
+    deref out_value = value;
+    return BYTES_OK;
+}
+
+pub fun bytes_read_le_i256(src: Bytes, offset: i64, out_value: ptr<i256>) -> i32 {
+    if (out_value == null) {
+        return BYTES_ERROR_INVALID;
+    }
+    var status: i32 = _bytes_check_read(src, offset, 32);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    var value: i256 = bytes_load_le_u256(src.data + offset) as i256;
+    deref out_value = value;
+    return BYTES_OK;
+}
+
+pub fun bytes_read_be_u512(src: Bytes, offset: i64, out_value: ptr<u512>) -> i32 {
+    if (out_value == null) {
+        return BYTES_ERROR_INVALID;
+    }
+    var status: i32 = _bytes_check_read(src, offset, 64);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    var value: u512 = bytes_load_be_u512(src.data + offset) as u512;
+    deref out_value = value;
+    return BYTES_OK;
+}
+
+pub fun bytes_read_be_i512(src: Bytes, offset: i64, out_value: ptr<i512>) -> i32 {
+    if (out_value == null) {
+        return BYTES_ERROR_INVALID;
+    }
+    var status: i32 = _bytes_check_read(src, offset, 64);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    var value: i512 = bytes_load_be_u512(src.data + offset) as i512;
+    deref out_value = value;
+    return BYTES_OK;
+}
+
+pub fun bytes_read_le_u512(src: Bytes, offset: i64, out_value: ptr<u512>) -> i32 {
+    if (out_value == null) {
+        return BYTES_ERROR_INVALID;
+    }
+    var status: i32 = _bytes_check_read(src, offset, 64);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    var value: u512 = bytes_load_le_u512(src.data + offset) as u512;
+    deref out_value = value;
+    return BYTES_OK;
+}
+
+pub fun bytes_read_le_i512(src: Bytes, offset: i64, out_value: ptr<i512>) -> i32 {
+    if (out_value == null) {
+        return BYTES_ERROR_INVALID;
+    }
+    var status: i32 = _bytes_check_read(src, offset, 64);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    var value: i512 = bytes_load_le_u512(src.data + offset) as i512;
+    deref out_value = value;
+    return BYTES_OK;
+}
+
+pub fun bytes_read_be_u1024(src: Bytes, offset: i64, out_value: ptr<u1024>) -> i32 {
+    if (out_value == null) {
+        return BYTES_ERROR_INVALID;
+    }
+    var status: i32 = _bytes_check_read(src, offset, 128);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    var value: u1024 = bytes_load_be_u1024(src.data + offset) as u1024;
+    deref out_value = value;
+    return BYTES_OK;
+}
+
+pub fun bytes_read_be_i1024(src: Bytes, offset: i64, out_value: ptr<i1024>) -> i32 {
+    if (out_value == null) {
+        return BYTES_ERROR_INVALID;
+    }
+    var status: i32 = _bytes_check_read(src, offset, 128);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    var value: i1024 = bytes_load_be_u1024(src.data + offset) as i1024;
+    deref out_value = value;
+    return BYTES_OK;
+}
+
+pub fun bytes_read_le_u1024(src: Bytes, offset: i64, out_value: ptr<u1024>) -> i32 {
+    if (out_value == null) {
+        return BYTES_ERROR_INVALID;
+    }
+    var status: i32 = _bytes_check_read(src, offset, 128);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    var value: u1024 = bytes_load_le_u1024(src.data + offset) as u1024;
+    deref out_value = value;
+    return BYTES_OK;
+}
+
+pub fun bytes_read_le_i1024(src: Bytes, offset: i64, out_value: ptr<i1024>) -> i32 {
+    if (out_value == null) {
+        return BYTES_ERROR_INVALID;
+    }
+    var status: i32 = _bytes_check_read(src, offset, 128);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    var value: i1024 = bytes_load_le_u1024(src.data + offset) as i1024;
+    deref out_value = value;
     return BYTES_OK;
 }

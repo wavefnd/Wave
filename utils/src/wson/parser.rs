@@ -2,7 +2,16 @@
 //! Integrated WSON/JSON parser. Byte cursor handling retains input locations.
 use super::*;
 pub(super) fn parse(input: &str, format: Format) -> Result<Value, Error> {
+    parse_with_node_limit(input, format, usize::MAX)
+}
+
+pub(super) fn parse_with_node_limit(
+    input: &str,
+    format: Format,
+    max_nodes: usize,
+) -> Result<Value, Error> {
     let mut parser = Parser::new(input.as_bytes(), format);
+    parser.remaining_nodes = max_nodes;
     let result = parser.parse_value().and_then(|value| {
         parser.skip_ws();
         if !parser.eof() {
@@ -18,11 +27,12 @@ struct Parser<'a> {
     i: usize,
     depth: usize,
     format: Format,
+    remaining_nodes: usize,
 }
 
 impl<'a> Parser<'a> {
     fn new(s: &'a [u8], format: Format) -> Self {
-        Self { s, i: 0, depth: 0, format }
+        Self { s, i: 0, depth: 0, format, remaining_nodes: usize::MAX }
     }
 
     fn eof(&self) -> bool {
@@ -78,6 +88,10 @@ impl<'a> Parser<'a> {
 
     fn parse_value(&mut self) -> Result<Value, String> {
         self.skip_ws();
+        if self.remaining_nodes == 0 {
+            return Err("value node budget exceeded".into());
+        }
+        self.remaining_nodes -= 1;
         let c = self.peek().ok_or("unexpected eof")?;
         if self.format == Format::Wson && !matches!(c, b'\"' | b'[' | b'{') {
             return self.parse_wson_literal();

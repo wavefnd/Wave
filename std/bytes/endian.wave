@@ -199,3 +199,273 @@ pub fun bytes_to_le_u64(value: u64) -> u64 {
 }
 
 pub fun bytes_from_le_u64(value: u64) -> u64 { return bytes_to_le_u64(value); }
+
+// Byte-wise accesses preserve alignment independence at 8 bits.
+pub fun bytes_load_be_u8(src: ptr<u8>) -> u8 {
+    var value: u8 = 0;
+    var i: i64 = 0;
+    while (i < 1) {
+        value = value | (src[1 - 1 - i] as u8) << (i * 8);
+        i += 1;
+    }
+    return value;
+}
+
+pub fun bytes_store_be_u8(dst: ptr<u8>, value: u8) {
+    var i: i64 = 0;
+    while (i < 1) {
+        deref dst[1 - 1 - i] = (value >> (i * 8)) as u8;
+        i += 1;
+    }
+}
+
+pub fun bytes_load_be_i8(src: ptr<u8>) -> i8 {
+    return bytes_load_be_u8(src) as i8;
+}
+
+pub fun bytes_store_be_i8(dst: ptr<u8>, value: i8) {
+    bytes_store_be_u8(dst, value as u8);
+}
+
+// Byte-wise accesses preserve alignment independence at 8 bits.
+pub fun bytes_load_le_u8(src: ptr<u8>) -> u8 {
+    var value: u8 = 0;
+    var i: i64 = 0;
+    while (i < 1) {
+        value = value | (src[i] as u8) << (i * 8);
+        i += 1;
+    }
+    return value;
+}
+
+pub fun bytes_store_le_u8(dst: ptr<u8>, value: u8) {
+    var i: i64 = 0;
+    while (i < 1) {
+        deref dst[i] = (value >> (i * 8)) as u8;
+        i += 1;
+    }
+}
+
+pub fun bytes_load_le_i8(src: ptr<u8>) -> i8 {
+    return bytes_load_le_u8(src) as i8;
+}
+
+pub fun bytes_store_le_i8(dst: ptr<u8>, value: i8) {
+    bytes_store_le_u8(dst, value as u8);
+}
+
+// Byte-wise accesses preserve alignment independence at 128 bits.
+pub fun bytes_load_be_u128(src: ptr<u8>) -> u128 {
+    var value: u128 = 0;
+    var i: i64 = 0;
+    while (i < 16) {
+        value = value | (src[16 - 1 - i] as u128) << (i * 8);
+        i += 1;
+    }
+    return value;
+}
+
+pub fun bytes_store_be_u128(dst: ptr<u8>, value: u128) {
+    var i: i64 = 0;
+    while (i < 16) {
+        deref dst[16 - 1 - i] = (value >> (i * 8)) as u8;
+        i += 1;
+    }
+}
+
+pub fun bytes_load_be_i128(src: ptr<u8>) -> i128 {
+    return bytes_load_be_u128(src) as i128;
+}
+
+pub fun bytes_store_be_i128(dst: ptr<u8>, value: i128) {
+    bytes_store_be_u128(dst, value as u128);
+}
+
+// Byte-wise accesses preserve alignment independence at 128 bits.
+pub fun bytes_load_le_u128(src: ptr<u8>) -> u128 {
+    var value: u128 = 0;
+    var i: i64 = 0;
+    while (i < 16) {
+        value = value | (src[i] as u128) << (i * 8);
+        i += 1;
+    }
+    return value;
+}
+
+pub fun bytes_store_le_u128(dst: ptr<u8>, value: u128) {
+    var i: i64 = 0;
+    while (i < 16) {
+        deref dst[i] = (value >> (i * 8)) as u8;
+        i += 1;
+    }
+}
+
+pub fun bytes_load_le_i128(src: ptr<u8>) -> i128 {
+    return bytes_load_le_u128(src) as i128;
+}
+
+pub fun bytes_store_le_i128(dst: ptr<u8>, value: i128) {
+    bytes_store_le_u128(dst, value as u128);
+}
+
+// Byte-wise accesses preserve alignment independence at 256 bits.
+pub fun bytes_load_be_u256(src: ptr<u8>) -> u256 {
+    var value: u256 = 0;
+    var i: i64 = 0;
+    while (i < 32) {
+        value = value | (src[32 - 1 - i] as u256) << (i * 8);
+        i += 1;
+    }
+    return value;
+}
+
+pub fun bytes_store_be_u256(dst: ptr<u8>, value: u256) {
+    var i: i64 = 0;
+    while (i < 32) {
+        deref dst[32 - 1 - i] = (value >> (i * 8)) as u8;
+        i += 1;
+    }
+}
+
+pub fun bytes_load_be_i256(src: ptr<u8>) -> i256 {
+    return bytes_load_be_u256(src) as i256;
+}
+
+pub fun bytes_store_be_i256(dst: ptr<u8>, value: i256) {
+    bytes_store_be_u256(dst, value as u256);
+}
+
+// Byte-wise accesses preserve alignment independence at 256 bits.
+pub fun bytes_load_le_u256(src: ptr<u8>) -> u256 {
+    var value: u256 = 0;
+    var i: i64 = 0;
+    while (i < 32) {
+        value = value | (src[i] as u256) << (i * 8);
+        i += 1;
+    }
+    return value;
+}
+
+pub fun bytes_store_le_u256(dst: ptr<u8>, value: u256) {
+    var i: i64 = 0;
+    while (i < 32) {
+        deref dst[i] = (value >> (i * 8)) as u8;
+        i += 1;
+    }
+}
+
+pub fun bytes_load_le_i256(src: ptr<u8>) -> i256 {
+    return bytes_load_le_u256(src) as i256;
+}
+
+pub fun bytes_store_le_i256(dst: ptr<u8>, value: i256) {
+    bytes_store_le_u256(dst, value as u256);
+}
+
+// Byte-wise accesses preserve alignment independence at 512 bits.
+pub fun bytes_load_be_u512(src: ptr<u8>) -> u512 {
+    var value: u512 = 0;
+    var i: i64 = 0;
+    while (i < 64) {
+        value = value | (src[64 - 1 - i] as u512) << (i * 8);
+        i += 1;
+    }
+    return value;
+}
+
+pub fun bytes_store_be_u512(dst: ptr<u8>, value: u512) {
+    var i: i64 = 0;
+    while (i < 64) {
+        deref dst[64 - 1 - i] = (value >> (i * 8)) as u8;
+        i += 1;
+    }
+}
+
+pub fun bytes_load_be_i512(src: ptr<u8>) -> i512 {
+    return bytes_load_be_u512(src) as i512;
+}
+
+pub fun bytes_store_be_i512(dst: ptr<u8>, value: i512) {
+    bytes_store_be_u512(dst, value as u512);
+}
+
+// Byte-wise accesses preserve alignment independence at 512 bits.
+pub fun bytes_load_le_u512(src: ptr<u8>) -> u512 {
+    var value: u512 = 0;
+    var i: i64 = 0;
+    while (i < 64) {
+        value = value | (src[i] as u512) << (i * 8);
+        i += 1;
+    }
+    return value;
+}
+
+pub fun bytes_store_le_u512(dst: ptr<u8>, value: u512) {
+    var i: i64 = 0;
+    while (i < 64) {
+        deref dst[i] = (value >> (i * 8)) as u8;
+        i += 1;
+    }
+}
+
+pub fun bytes_load_le_i512(src: ptr<u8>) -> i512 {
+    return bytes_load_le_u512(src) as i512;
+}
+
+pub fun bytes_store_le_i512(dst: ptr<u8>, value: i512) {
+    bytes_store_le_u512(dst, value as u512);
+}
+
+// Byte-wise accesses preserve alignment independence at 1024 bits.
+pub fun bytes_load_be_u1024(src: ptr<u8>) -> u1024 {
+    var value: u1024 = 0;
+    var i: i64 = 0;
+    while (i < 128) {
+        value = value | (src[128 - 1 - i] as u1024) << (i * 8);
+        i += 1;
+    }
+    return value;
+}
+
+pub fun bytes_store_be_u1024(dst: ptr<u8>, value: u1024) {
+    var i: i64 = 0;
+    while (i < 128) {
+        deref dst[128 - 1 - i] = (value >> (i * 8)) as u8;
+        i += 1;
+    }
+}
+
+pub fun bytes_load_be_i1024(src: ptr<u8>) -> i1024 {
+    return bytes_load_be_u1024(src) as i1024;
+}
+
+pub fun bytes_store_be_i1024(dst: ptr<u8>, value: i1024) {
+    bytes_store_be_u1024(dst, value as u1024);
+}
+
+// Byte-wise accesses preserve alignment independence at 1024 bits.
+pub fun bytes_load_le_u1024(src: ptr<u8>) -> u1024 {
+    var value: u1024 = 0;
+    var i: i64 = 0;
+    while (i < 128) {
+        value = value | (src[i] as u1024) << (i * 8);
+        i += 1;
+    }
+    return value;
+}
+
+pub fun bytes_store_le_u1024(dst: ptr<u8>, value: u1024) {
+    var i: i64 = 0;
+    while (i < 128) {
+        deref dst[i] = (value >> (i * 8)) as u8;
+        i += 1;
+    }
+}
+
+pub fun bytes_load_le_i1024(src: ptr<u8>) -> i1024 {
+    return bytes_load_le_u1024(src) as i1024;
+}
+
+pub fun bytes_store_le_i1024(dst: ptr<u8>, value: i1024) {
+    bytes_store_le_u1024(dst, value as u1024);
+}

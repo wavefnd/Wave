@@ -5,6 +5,7 @@
 
 pub import("std::bytes::types")::{Bytes, BytesMut, ByteReader, ByteWriter};
 import("std::bytes::types")::{bytes_subview};
+import("std::mem::layout")::{size_of};
 pub import("std::bytes::errors")::{
     BYTES_OK,
     BYTES_ERROR_INVALID,
@@ -13,6 +14,27 @@ pub import("std::bytes::errors")::{
     BYTES_ERROR_OVERFLOW,
 };
 import("std::bytes::read")::{
+    bytes_read_be_u8,
+    bytes_read_be_i8,
+    bytes_read_le_u8,
+    bytes_read_le_i8,
+    bytes_read_be_u128,
+    bytes_read_be_i128,
+    bytes_read_le_u128,
+    bytes_read_le_i128,
+    bytes_read_be_u256,
+    bytes_read_be_i256,
+    bytes_read_le_u256,
+    bytes_read_le_i256,
+    bytes_read_be_u512,
+    bytes_read_be_i512,
+    bytes_read_le_u512,
+    bytes_read_le_i512,
+    bytes_read_be_u1024,
+    bytes_read_be_i1024,
+    bytes_read_le_u1024,
+    bytes_read_le_i1024,
+
     bytes_read_u8,
     bytes_read_be_u16,
     bytes_read_le_u16,
@@ -23,6 +45,27 @@ import("std::bytes::read")::{
     bytes_read_exact,
 };
 import("std::bytes::write")::{
+    bytes_write_be_u8,
+    bytes_write_be_i8,
+    bytes_write_le_u8,
+    bytes_write_le_i8,
+    bytes_write_be_u128,
+    bytes_write_be_i128,
+    bytes_write_le_u128,
+    bytes_write_le_i128,
+    bytes_write_be_u256,
+    bytes_write_be_i256,
+    bytes_write_le_u256,
+    bytes_write_le_i256,
+    bytes_write_be_u512,
+    bytes_write_be_i512,
+    bytes_write_le_u512,
+    bytes_write_le_i512,
+    bytes_write_be_u1024,
+    bytes_write_be_i1024,
+    bytes_write_le_u1024,
+    bytes_write_le_i1024,
+
     bytes_write_u8,
     bytes_write_be_u16,
     bytes_write_le_u16,
@@ -55,6 +98,45 @@ fun _bytes_reader_is_valid(reader: ptr<ByteReader>) -> bool {
     if (deref reader.position > deref reader.len) { return false; }
     if (deref reader.len > 0 && deref reader.data == null) { return false; }
     return true;
+}
+
+// Reject output aliases before either output or cursor state can change.
+// Difference comparisons avoid overflowing interval-end arithmetic.
+fun _bytes_cursor_ranges_overlap(a: u64, a_len: u64, b: u64, b_len: u64) -> bool {
+    if (a_len == 0 || b_len == 0) {
+        return false;
+    }
+    if (a <= b) {
+        return b - a < a_len;
+    }
+    return a - b < b_len;
+}
+
+fun _bytes_reader_output_valid(reader: ptr<ByteReader>, output: ptr<u8>, length: i64) -> bool {
+    if (!_bytes_reader_is_valid(reader) || length < 0) {
+        return false;
+    }
+    if (length == 0) {
+        return true;
+    }
+    if (output == null) {
+        return false;
+    }
+    var address: u64 = output as u64;
+    var width: u64 = length as u64;
+    var maximum: u64 = (-1 as usz) as u64;
+    var data: u64 = reader.data as u64;
+    var data_len: u64 = reader.len as u64;
+    if (width - 1 > maximum - address) {
+        return false;
+    }
+    if (data_len > 0 && data_len - 1 > maximum - data) {
+        return false;
+    }
+    if (_bytes_cursor_ranges_overlap(address, width, reader as u64, size_of<ByteReader>())) {
+        return false;
+    }
+    return !_bytes_cursor_ranges_overlap(address, width, data, data_len);
 }
 
 fun _bytes_writer_is_valid(writer: ptr<ByteWriter>) -> bool {
@@ -129,6 +211,9 @@ pub fun bytes_writer_skip(writer: ptr<ByteWriter>, count: i64) -> i32 {
 }
 
 pub fun bytes_reader_peek_u8(reader: ptr<ByteReader>, out_value: ptr<u8>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 1)) {
+        return BYTES_ERROR_INVALID;
+    }
     if (!_bytes_reader_is_valid(reader)) { return BYTES_ERROR_INVALID; }
     var src: Bytes = Bytes { data: deref reader.data, len: deref reader.len };
     return bytes_read_u8(src, deref reader.position, out_value);
@@ -136,6 +221,9 @@ pub fun bytes_reader_peek_u8(reader: ptr<ByteReader>, out_value: ptr<u8>) -> i32
 
 // Multi-byte peeks use checked offset reads without changing the reader.
 pub fun bytes_reader_peek_be_u16(reader: ptr<ByteReader>, out_value: ptr<u16>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 2)) {
+        return BYTES_ERROR_INVALID;
+    }
     if (!_bytes_reader_is_valid(reader)) {
         return BYTES_ERROR_INVALID;
     }
@@ -144,6 +232,9 @@ pub fun bytes_reader_peek_be_u16(reader: ptr<ByteReader>, out_value: ptr<u16>) -
 }
 
 pub fun bytes_reader_peek_le_u16(reader: ptr<ByteReader>, out_value: ptr<u16>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 2)) {
+        return BYTES_ERROR_INVALID;
+    }
     if (!_bytes_reader_is_valid(reader)) {
         return BYTES_ERROR_INVALID;
     }
@@ -152,6 +243,9 @@ pub fun bytes_reader_peek_le_u16(reader: ptr<ByteReader>, out_value: ptr<u16>) -
 }
 
 pub fun bytes_reader_peek_be_u32(reader: ptr<ByteReader>, out_value: ptr<u32>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 4)) {
+        return BYTES_ERROR_INVALID;
+    }
     if (!_bytes_reader_is_valid(reader)) {
         return BYTES_ERROR_INVALID;
     }
@@ -160,6 +254,9 @@ pub fun bytes_reader_peek_be_u32(reader: ptr<ByteReader>, out_value: ptr<u32>) -
 }
 
 pub fun bytes_reader_peek_le_u32(reader: ptr<ByteReader>, out_value: ptr<u32>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 4)) {
+        return BYTES_ERROR_INVALID;
+    }
     if (!_bytes_reader_is_valid(reader)) {
         return BYTES_ERROR_INVALID;
     }
@@ -168,6 +265,9 @@ pub fun bytes_reader_peek_le_u32(reader: ptr<ByteReader>, out_value: ptr<u32>) -
 }
 
 pub fun bytes_reader_peek_be_u64(reader: ptr<ByteReader>, out_value: ptr<u64>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 8)) {
+        return BYTES_ERROR_INVALID;
+    }
     if (!_bytes_reader_is_valid(reader)) {
         return BYTES_ERROR_INVALID;
     }
@@ -176,6 +276,9 @@ pub fun bytes_reader_peek_be_u64(reader: ptr<ByteReader>, out_value: ptr<u64>) -
 }
 
 pub fun bytes_reader_peek_le_u64(reader: ptr<ByteReader>, out_value: ptr<u64>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 8)) {
+        return BYTES_ERROR_INVALID;
+    }
     if (!_bytes_reader_is_valid(reader)) {
         return BYTES_ERROR_INVALID;
     }
@@ -184,6 +287,9 @@ pub fun bytes_reader_peek_le_u64(reader: ptr<ByteReader>, out_value: ptr<u64>) -
 }
 
 pub fun bytes_reader_read_u8(reader: ptr<ByteReader>, out_value: ptr<u8>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 1)) {
+        return BYTES_ERROR_INVALID;
+    }
     if (!_bytes_reader_is_valid(reader)) { return BYTES_ERROR_INVALID; }
     var src: Bytes = Bytes { data: deref reader.data, len: deref reader.len };
     var status: i32 = bytes_read_u8(src, deref reader.position, out_value);
@@ -193,6 +299,9 @@ pub fun bytes_reader_read_u8(reader: ptr<ByteReader>, out_value: ptr<u8>) -> i32
 }
 
 pub fun bytes_reader_read_be_u16(reader: ptr<ByteReader>, out_value: ptr<u16>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 2)) {
+        return BYTES_ERROR_INVALID;
+    }
     if (!_bytes_reader_is_valid(reader)) { return BYTES_ERROR_INVALID; }
     var src: Bytes = Bytes { data: deref reader.data, len: deref reader.len };
     var status: i32 = bytes_read_be_u16(src, deref reader.position, out_value);
@@ -202,6 +311,9 @@ pub fun bytes_reader_read_be_u16(reader: ptr<ByteReader>, out_value: ptr<u16>) -
 }
 
 pub fun bytes_reader_read_le_u16(reader: ptr<ByteReader>, out_value: ptr<u16>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 2)) {
+        return BYTES_ERROR_INVALID;
+    }
     if (!_bytes_reader_is_valid(reader)) { return BYTES_ERROR_INVALID; }
     var src: Bytes = Bytes { data: deref reader.data, len: deref reader.len };
     var status: i32 = bytes_read_le_u16(src, deref reader.position, out_value);
@@ -211,6 +323,9 @@ pub fun bytes_reader_read_le_u16(reader: ptr<ByteReader>, out_value: ptr<u16>) -
 }
 
 pub fun bytes_reader_read_be_u32(reader: ptr<ByteReader>, out_value: ptr<u32>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 4)) {
+        return BYTES_ERROR_INVALID;
+    }
     if (!_bytes_reader_is_valid(reader)) { return BYTES_ERROR_INVALID; }
     var src: Bytes = Bytes { data: deref reader.data, len: deref reader.len };
     var status: i32 = bytes_read_be_u32(src, deref reader.position, out_value);
@@ -220,6 +335,9 @@ pub fun bytes_reader_read_be_u32(reader: ptr<ByteReader>, out_value: ptr<u32>) -
 }
 
 pub fun bytes_reader_read_le_u32(reader: ptr<ByteReader>, out_value: ptr<u32>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 4)) {
+        return BYTES_ERROR_INVALID;
+    }
     if (!_bytes_reader_is_valid(reader)) { return BYTES_ERROR_INVALID; }
     var src: Bytes = Bytes { data: deref reader.data, len: deref reader.len };
     var status: i32 = bytes_read_le_u32(src, deref reader.position, out_value);
@@ -229,6 +347,9 @@ pub fun bytes_reader_read_le_u32(reader: ptr<ByteReader>, out_value: ptr<u32>) -
 }
 
 pub fun bytes_reader_read_be_u64(reader: ptr<ByteReader>, out_value: ptr<u64>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 8)) {
+        return BYTES_ERROR_INVALID;
+    }
     if (!_bytes_reader_is_valid(reader)) { return BYTES_ERROR_INVALID; }
     var src: Bytes = Bytes { data: deref reader.data, len: deref reader.len };
     var status: i32 = bytes_read_be_u64(src, deref reader.position, out_value);
@@ -238,6 +359,9 @@ pub fun bytes_reader_read_be_u64(reader: ptr<ByteReader>, out_value: ptr<u64>) -
 }
 
 pub fun bytes_reader_read_le_u64(reader: ptr<ByteReader>, out_value: ptr<u64>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 8)) {
+        return BYTES_ERROR_INVALID;
+    }
     if (!_bytes_reader_is_valid(reader)) { return BYTES_ERROR_INVALID; }
     var src: Bytes = Bytes { data: deref reader.data, len: deref reader.len };
     var status: i32 = bytes_read_le_u64(src, deref reader.position, out_value);
@@ -247,6 +371,9 @@ pub fun bytes_reader_read_le_u64(reader: ptr<ByteReader>, out_value: ptr<u64>) -
 }
 
 pub fun bytes_reader_read_be_i16(reader: ptr<ByteReader>, out_value: ptr<i16>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 2)) {
+        return BYTES_ERROR_INVALID;
+    }
     if (out_value == null) { return BYTES_ERROR_INVALID; }
     var value: u16 = 0;
     var status: i32 = bytes_reader_read_be_u16(reader, &value);
@@ -256,6 +383,9 @@ pub fun bytes_reader_read_be_i16(reader: ptr<ByteReader>, out_value: ptr<i16>) -
 }
 
 pub fun bytes_reader_read_le_i16(reader: ptr<ByteReader>, out_value: ptr<i16>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 2)) {
+        return BYTES_ERROR_INVALID;
+    }
     if (out_value == null) { return BYTES_ERROR_INVALID; }
     var value: u16 = 0;
     var status: i32 = bytes_reader_read_le_u16(reader, &value);
@@ -265,6 +395,9 @@ pub fun bytes_reader_read_le_i16(reader: ptr<ByteReader>, out_value: ptr<i16>) -
 }
 
 pub fun bytes_reader_read_be_i32(reader: ptr<ByteReader>, out_value: ptr<i32>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 4)) {
+        return BYTES_ERROR_INVALID;
+    }
     if (out_value == null) { return BYTES_ERROR_INVALID; }
     var value: u32 = 0;
     var status: i32 = bytes_reader_read_be_u32(reader, &value);
@@ -274,6 +407,9 @@ pub fun bytes_reader_read_be_i32(reader: ptr<ByteReader>, out_value: ptr<i32>) -
 }
 
 pub fun bytes_reader_read_le_i32(reader: ptr<ByteReader>, out_value: ptr<i32>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 4)) {
+        return BYTES_ERROR_INVALID;
+    }
     if (out_value == null) { return BYTES_ERROR_INVALID; }
     var value: u32 = 0;
     var status: i32 = bytes_reader_read_le_u32(reader, &value);
@@ -283,6 +419,9 @@ pub fun bytes_reader_read_le_i32(reader: ptr<ByteReader>, out_value: ptr<i32>) -
 }
 
 pub fun bytes_reader_read_be_i64(reader: ptr<ByteReader>, out_value: ptr<i64>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 8)) {
+        return BYTES_ERROR_INVALID;
+    }
     if (out_value == null) { return BYTES_ERROR_INVALID; }
     var value: u64 = 0;
     var status: i32 = bytes_reader_read_be_u64(reader, &value);
@@ -292,6 +431,9 @@ pub fun bytes_reader_read_be_i64(reader: ptr<ByteReader>, out_value: ptr<i64>) -
 }
 
 pub fun bytes_reader_read_le_i64(reader: ptr<ByteReader>, out_value: ptr<i64>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 8)) {
+        return BYTES_ERROR_INVALID;
+    }
     if (out_value == null) { return BYTES_ERROR_INVALID; }
     var value: u64 = 0;
     var status: i32 = bytes_reader_read_le_u64(reader, &value);
@@ -301,6 +443,9 @@ pub fun bytes_reader_read_le_i64(reader: ptr<ByteReader>, out_value: ptr<i64>) -
 }
 
 pub fun bytes_reader_read_exact(reader: ptr<ByteReader>, dst: BytesMut) -> i32 {
+    if (!_bytes_reader_output_valid(reader, dst.data, dst.len)) {
+        return BYTES_ERROR_INVALID;
+    }
     if (!_bytes_reader_is_valid(reader)) { return BYTES_ERROR_INVALID; }
     var src: Bytes = Bytes { data: deref reader.data, len: deref reader.len };
     var status: i32 = bytes_read_exact(src, deref reader.position, dst);
@@ -407,10 +552,773 @@ pub fun bytes_writer_write_exact(writer: ptr<ByteWriter>, src: Bytes) -> i32 {
 
 // The returned range borrows the reader storage. Commit the cursor only on success.
 pub fun bytes_reader_read_view(reader: ptr<ByteReader>, count: i64, output: ptr<Bytes>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, output as ptr<u8>, size_of<Bytes>() as i64)) {
+        return BYTES_ERROR_INVALID;
+    }
     if (!_bytes_reader_is_valid(reader)) { return BYTES_ERROR_INVALID; }
     var src: Bytes = Bytes { data: reader.data, len: reader.len };
     var status: i32 = bytes_subview(src, reader.position, count, output);
     if (status != BYTES_OK) { return status; }
     reader.position += count;
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_peek_be_u8(reader: ptr<ByteReader>, out_value: ptr<u8>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 1)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_be_u8(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_read_be_u8(reader: ptr<ByteReader>, out_value: ptr<u8>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 1)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_be_u8(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    reader.position += 1;
+    return BYTES_OK;
+}
+
+pub fun bytes_writer_write_be_u8(writer: ptr<ByteWriter>, value: u8) -> i32 {
+    if (!_bytes_writer_is_valid(writer)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var dst: BytesMut = BytesMut { data: writer.data, len: writer.len };
+    var status: i32 = bytes_write_be_u8(dst, writer.position, value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    writer.position += 1;
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_peek_be_i8(reader: ptr<ByteReader>, out_value: ptr<i8>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 1)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_be_i8(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_read_be_i8(reader: ptr<ByteReader>, out_value: ptr<i8>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 1)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_be_i8(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    reader.position += 1;
+    return BYTES_OK;
+}
+
+pub fun bytes_writer_write_be_i8(writer: ptr<ByteWriter>, value: i8) -> i32 {
+    if (!_bytes_writer_is_valid(writer)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var dst: BytesMut = BytesMut { data: writer.data, len: writer.len };
+    var status: i32 = bytes_write_be_i8(dst, writer.position, value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    writer.position += 1;
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_peek_le_u8(reader: ptr<ByteReader>, out_value: ptr<u8>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 1)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_le_u8(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_read_le_u8(reader: ptr<ByteReader>, out_value: ptr<u8>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 1)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_le_u8(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    reader.position += 1;
+    return BYTES_OK;
+}
+
+pub fun bytes_writer_write_le_u8(writer: ptr<ByteWriter>, value: u8) -> i32 {
+    if (!_bytes_writer_is_valid(writer)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var dst: BytesMut = BytesMut { data: writer.data, len: writer.len };
+    var status: i32 = bytes_write_le_u8(dst, writer.position, value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    writer.position += 1;
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_peek_le_i8(reader: ptr<ByteReader>, out_value: ptr<i8>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 1)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_le_i8(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_read_le_i8(reader: ptr<ByteReader>, out_value: ptr<i8>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 1)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_le_i8(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    reader.position += 1;
+    return BYTES_OK;
+}
+
+pub fun bytes_writer_write_le_i8(writer: ptr<ByteWriter>, value: i8) -> i32 {
+    if (!_bytes_writer_is_valid(writer)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var dst: BytesMut = BytesMut { data: writer.data, len: writer.len };
+    var status: i32 = bytes_write_le_i8(dst, writer.position, value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    writer.position += 1;
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_peek_be_u128(reader: ptr<ByteReader>, out_value: ptr<u128>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 16)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_be_u128(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_read_be_u128(reader: ptr<ByteReader>, out_value: ptr<u128>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 16)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_be_u128(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    reader.position += 16;
+    return BYTES_OK;
+}
+
+pub fun bytes_writer_write_be_u128(writer: ptr<ByteWriter>, value: u128) -> i32 {
+    if (!_bytes_writer_is_valid(writer)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var dst: BytesMut = BytesMut { data: writer.data, len: writer.len };
+    var status: i32 = bytes_write_be_u128(dst, writer.position, value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    writer.position += 16;
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_peek_be_i128(reader: ptr<ByteReader>, out_value: ptr<i128>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 16)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_be_i128(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_read_be_i128(reader: ptr<ByteReader>, out_value: ptr<i128>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 16)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_be_i128(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    reader.position += 16;
+    return BYTES_OK;
+}
+
+pub fun bytes_writer_write_be_i128(writer: ptr<ByteWriter>, value: i128) -> i32 {
+    if (!_bytes_writer_is_valid(writer)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var dst: BytesMut = BytesMut { data: writer.data, len: writer.len };
+    var status: i32 = bytes_write_be_i128(dst, writer.position, value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    writer.position += 16;
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_peek_le_u128(reader: ptr<ByteReader>, out_value: ptr<u128>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 16)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_le_u128(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_read_le_u128(reader: ptr<ByteReader>, out_value: ptr<u128>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 16)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_le_u128(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    reader.position += 16;
+    return BYTES_OK;
+}
+
+pub fun bytes_writer_write_le_u128(writer: ptr<ByteWriter>, value: u128) -> i32 {
+    if (!_bytes_writer_is_valid(writer)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var dst: BytesMut = BytesMut { data: writer.data, len: writer.len };
+    var status: i32 = bytes_write_le_u128(dst, writer.position, value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    writer.position += 16;
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_peek_le_i128(reader: ptr<ByteReader>, out_value: ptr<i128>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 16)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_le_i128(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_read_le_i128(reader: ptr<ByteReader>, out_value: ptr<i128>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 16)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_le_i128(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    reader.position += 16;
+    return BYTES_OK;
+}
+
+pub fun bytes_writer_write_le_i128(writer: ptr<ByteWriter>, value: i128) -> i32 {
+    if (!_bytes_writer_is_valid(writer)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var dst: BytesMut = BytesMut { data: writer.data, len: writer.len };
+    var status: i32 = bytes_write_le_i128(dst, writer.position, value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    writer.position += 16;
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_peek_be_u256(reader: ptr<ByteReader>, out_value: ptr<u256>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 32)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_be_u256(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_read_be_u256(reader: ptr<ByteReader>, out_value: ptr<u256>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 32)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_be_u256(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    reader.position += 32;
+    return BYTES_OK;
+}
+
+pub fun bytes_writer_write_be_u256(writer: ptr<ByteWriter>, value: u256) -> i32 {
+    if (!_bytes_writer_is_valid(writer)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var dst: BytesMut = BytesMut { data: writer.data, len: writer.len };
+    var status: i32 = bytes_write_be_u256(dst, writer.position, value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    writer.position += 32;
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_peek_be_i256(reader: ptr<ByteReader>, out_value: ptr<i256>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 32)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_be_i256(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_read_be_i256(reader: ptr<ByteReader>, out_value: ptr<i256>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 32)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_be_i256(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    reader.position += 32;
+    return BYTES_OK;
+}
+
+pub fun bytes_writer_write_be_i256(writer: ptr<ByteWriter>, value: i256) -> i32 {
+    if (!_bytes_writer_is_valid(writer)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var dst: BytesMut = BytesMut { data: writer.data, len: writer.len };
+    var status: i32 = bytes_write_be_i256(dst, writer.position, value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    writer.position += 32;
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_peek_le_u256(reader: ptr<ByteReader>, out_value: ptr<u256>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 32)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_le_u256(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_read_le_u256(reader: ptr<ByteReader>, out_value: ptr<u256>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 32)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_le_u256(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    reader.position += 32;
+    return BYTES_OK;
+}
+
+pub fun bytes_writer_write_le_u256(writer: ptr<ByteWriter>, value: u256) -> i32 {
+    if (!_bytes_writer_is_valid(writer)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var dst: BytesMut = BytesMut { data: writer.data, len: writer.len };
+    var status: i32 = bytes_write_le_u256(dst, writer.position, value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    writer.position += 32;
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_peek_le_i256(reader: ptr<ByteReader>, out_value: ptr<i256>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 32)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_le_i256(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_read_le_i256(reader: ptr<ByteReader>, out_value: ptr<i256>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 32)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_le_i256(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    reader.position += 32;
+    return BYTES_OK;
+}
+
+pub fun bytes_writer_write_le_i256(writer: ptr<ByteWriter>, value: i256) -> i32 {
+    if (!_bytes_writer_is_valid(writer)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var dst: BytesMut = BytesMut { data: writer.data, len: writer.len };
+    var status: i32 = bytes_write_le_i256(dst, writer.position, value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    writer.position += 32;
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_peek_be_u512(reader: ptr<ByteReader>, out_value: ptr<u512>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 64)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_be_u512(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_read_be_u512(reader: ptr<ByteReader>, out_value: ptr<u512>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 64)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_be_u512(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    reader.position += 64;
+    return BYTES_OK;
+}
+
+pub fun bytes_writer_write_be_u512(writer: ptr<ByteWriter>, value: u512) -> i32 {
+    if (!_bytes_writer_is_valid(writer)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var dst: BytesMut = BytesMut { data: writer.data, len: writer.len };
+    var status: i32 = bytes_write_be_u512(dst, writer.position, value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    writer.position += 64;
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_peek_be_i512(reader: ptr<ByteReader>, out_value: ptr<i512>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 64)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_be_i512(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_read_be_i512(reader: ptr<ByteReader>, out_value: ptr<i512>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 64)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_be_i512(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    reader.position += 64;
+    return BYTES_OK;
+}
+
+pub fun bytes_writer_write_be_i512(writer: ptr<ByteWriter>, value: i512) -> i32 {
+    if (!_bytes_writer_is_valid(writer)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var dst: BytesMut = BytesMut { data: writer.data, len: writer.len };
+    var status: i32 = bytes_write_be_i512(dst, writer.position, value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    writer.position += 64;
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_peek_le_u512(reader: ptr<ByteReader>, out_value: ptr<u512>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 64)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_le_u512(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_read_le_u512(reader: ptr<ByteReader>, out_value: ptr<u512>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 64)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_le_u512(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    reader.position += 64;
+    return BYTES_OK;
+}
+
+pub fun bytes_writer_write_le_u512(writer: ptr<ByteWriter>, value: u512) -> i32 {
+    if (!_bytes_writer_is_valid(writer)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var dst: BytesMut = BytesMut { data: writer.data, len: writer.len };
+    var status: i32 = bytes_write_le_u512(dst, writer.position, value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    writer.position += 64;
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_peek_le_i512(reader: ptr<ByteReader>, out_value: ptr<i512>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 64)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_le_i512(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_read_le_i512(reader: ptr<ByteReader>, out_value: ptr<i512>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 64)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_le_i512(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    reader.position += 64;
+    return BYTES_OK;
+}
+
+pub fun bytes_writer_write_le_i512(writer: ptr<ByteWriter>, value: i512) -> i32 {
+    if (!_bytes_writer_is_valid(writer)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var dst: BytesMut = BytesMut { data: writer.data, len: writer.len };
+    var status: i32 = bytes_write_le_i512(dst, writer.position, value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    writer.position += 64;
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_peek_be_u1024(reader: ptr<ByteReader>, out_value: ptr<u1024>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 128)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_be_u1024(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_read_be_u1024(reader: ptr<ByteReader>, out_value: ptr<u1024>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 128)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_be_u1024(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    reader.position += 128;
+    return BYTES_OK;
+}
+
+pub fun bytes_writer_write_be_u1024(writer: ptr<ByteWriter>, value: u1024) -> i32 {
+    if (!_bytes_writer_is_valid(writer)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var dst: BytesMut = BytesMut { data: writer.data, len: writer.len };
+    var status: i32 = bytes_write_be_u1024(dst, writer.position, value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    writer.position += 128;
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_peek_be_i1024(reader: ptr<ByteReader>, out_value: ptr<i1024>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 128)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_be_i1024(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_read_be_i1024(reader: ptr<ByteReader>, out_value: ptr<i1024>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 128)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_be_i1024(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    reader.position += 128;
+    return BYTES_OK;
+}
+
+pub fun bytes_writer_write_be_i1024(writer: ptr<ByteWriter>, value: i1024) -> i32 {
+    if (!_bytes_writer_is_valid(writer)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var dst: BytesMut = BytesMut { data: writer.data, len: writer.len };
+    var status: i32 = bytes_write_be_i1024(dst, writer.position, value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    writer.position += 128;
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_peek_le_u1024(reader: ptr<ByteReader>, out_value: ptr<u1024>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 128)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_le_u1024(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_read_le_u1024(reader: ptr<ByteReader>, out_value: ptr<u1024>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 128)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_le_u1024(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    reader.position += 128;
+    return BYTES_OK;
+}
+
+pub fun bytes_writer_write_le_u1024(writer: ptr<ByteWriter>, value: u1024) -> i32 {
+    if (!_bytes_writer_is_valid(writer)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var dst: BytesMut = BytesMut { data: writer.data, len: writer.len };
+    var status: i32 = bytes_write_le_u1024(dst, writer.position, value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    writer.position += 128;
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_peek_le_i1024(reader: ptr<ByteReader>, out_value: ptr<i1024>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 128)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_le_i1024(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    return BYTES_OK;
+}
+
+pub fun bytes_reader_read_le_i1024(reader: ptr<ByteReader>, out_value: ptr<i1024>) -> i32 {
+    if (!_bytes_reader_output_valid(reader, out_value as ptr<u8>, 128)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var src: Bytes = Bytes { data: reader.data, len: reader.len };
+    var status: i32 = bytes_read_le_i1024(src, reader.position, out_value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    reader.position += 128;
+    return BYTES_OK;
+}
+
+pub fun bytes_writer_write_le_i1024(writer: ptr<ByteWriter>, value: i1024) -> i32 {
+    if (!_bytes_writer_is_valid(writer)) {
+        return BYTES_ERROR_INVALID;
+    }
+    var dst: BytesMut = BytesMut { data: writer.data, len: writer.len };
+    var status: i32 = bytes_write_le_i1024(dst, writer.position, value);
+    if (status != BYTES_OK) {
+        return status;
+    }
+    writer.position += 128;
     return BYTES_OK;
 }

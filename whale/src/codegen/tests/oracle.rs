@@ -498,6 +498,8 @@ fn unsupported_callees_are_rejected_before_runtime_effects() {
     // The Wave adapter still rejects external definitions. Turn a generated
     // callee into a verifier-valid declaration to test the oracle boundary.
     ir.functions.retain(|f| f.id != helper);
+    ir.sources.mappings.retain(|mapping| !matches!(mapping.target,
+        SourceTarget::Instruction { function, .. } | SourceTarget::Terminator { function, .. } if function == helper));
     let declaration = ir.declarations.iter_mut().find(|d| d.id == helper).unwrap();
     declaration.linkage = Linkage::External;
     declaration.link_name = Some("external_helper".into());
@@ -509,4 +511,99 @@ fn unsupported_callees_are_rejected_before_runtime_effects() {
         run(&ir, &[ConstValue::I(0)]),
         Err(InterpreterError::UnsupportedInstruction { operation: "call", .. })
     ));
+}
+
+#[test]
+fn mutable_scalar_globals_are_shared_within_an_execution_and_reset_between_runs() {
+    let ir = module("static state: i32 = 7; fun probe() -> i32 { increment(); increment(); return state; } fun increment() { state += 2; }");
+    assert_eq!(ir.global_storage.len(), 1);
+    for _ in 0..2 {
+        assert_eq!(run(&ir, &[]).unwrap().value, Some(ConstValue::I(11)));
+    }
+    let shadow = module("static state: i32 = 7; fun probe() -> i32 { shadow(); return state; } fun shadow() { var state: i32 = 99; state += 1; }");
+    assert_eq!(run(&shadow, &[]).unwrap().value, Some(ConstValue::I(7)));
+}
+
+#[test]
+fn guard_traps_keep_original_source_locations_after_text_round_trip() {
+    let ir = module("fun probe(divisor: i32) -> i32 {\n    return 10 / divisor;\n}\n");
+    assert!(!ir.sources.mappings.is_empty());
+    let error = interpret_with_options(&ir, ir.functions[0].id, &[ConstValue::I(0)], options())
+        .unwrap_err();
+    assert!(matches!(error.root_cause(), InterpreterError::Trap(_)));
+    let original = error.diagnostic().unwrap().original.as_ref().unwrap();
+    let (file, span) = original.source.as_ref().unwrap();
+    assert_eq!(file, "numeric.wave");
+    assert_eq!(span.line, 2);
+    assert_eq!(span.end_line, 2);
+    assert!(span.column < span.end_column);
+    let mut without_sources = ir.clone();
+    without_sources.sources = SourceMetadata::default();
+    let error = interpret_with_options(
+        &without_sources,
+        without_sources.functions[0].id,
+        &[ConstValue::I(0)],
+        options(),
+    )
+    .unwrap_err();
+    assert!(matches!(error.root_cause(), InterpreterError::Trap(_)));
+    assert!(error.diagnostic().is_none());
+}
+
+#[test]
+fn scalar_globals_keep_frontend_bits_and_share_the_execution_memory_budget() {
+    for bits in [8, 16, 32, 64, 128] {
+        for signed in [false, true] {
+            let ty = format!("{}{bits}", if signed { "i" } else { "u" });
+            let literal = if signed { "-1".to_owned() } else { mask(bits).to_string() };
+            let ir = module(&format!(
+                "static state: {ty} = {literal}; fun probe() -> {ty} {{ return state; }}"
+            ));
+            assert_eq!(run(&ir, &[]).unwrap().value, Some(integer(mask(bits), bits, signed)));
+        }
+    }
+    let ir = module("static flag: bool = true; fun probe() -> bool { flag = !flag; return flag; }");
+    assert_eq!(run(&ir, &[]).unwrap().value, Some(ConstValue::Bool(false)));
+    for (ty, expected) in
+        [("f32", FloatBits::F32((-0.0f32).to_bits())), ("f64", FloatBits::F64((-0.0f64).to_bits()))]
+    {
+        let ir =
+            module(&format!("static state: {ty} = -0.0; fun probe() -> {ty} {{ return state; }}"));
+        assert_eq!(run(&ir, &[]).unwrap().value, Some(ConstValue::F(expected)));
+    }
+    let ir = module("static state: u128 = 9; fun probe() -> u128 { return state; }");
+    let limited = InterpreterOptions {
+        memory_limits: MemoryLimits { max_bytes: 15, ..options().memory_limits },
+        ..options()
+    };
+    let error = interpret_with_options(&ir, ir.functions[0].id, &[], limited).unwrap_err();
+    assert!(
+        matches!(
+            error.root_cause(),
+            InterpreterError::GlobalMemoryLimit {
+                global: GlobalId(0),
+                resource: MemoryResource::Bytes,
+                limit: 15
+            }
+        ),
+        "{error:?}"
+    );
+    assert_eq!(run(&ir, &[]).unwrap().value, Some(ConstValue::U(9)));
+}
+
+#[test]
+fn generated_shift_cast_and_initialization_guards_keep_the_faulting_line() {
+    for source in [
+        "fun probe() -> i32 {\n var n: i32 = 32;\n return 1 << n;\n}",
+        "fun probe() -> i32 {\n var n: f64 = 2147483648.0;\n return n as i32;\n}",
+        "fun probe() -> i32 {\n var n: i32;\n return n;\n}",
+    ] {
+        let ir = module(source);
+        let error = interpret_with_options(&ir, ir.functions[0].id, &[], options()).unwrap_err();
+        assert!(matches!(error.root_cause(), InterpreterError::Trap(_)), "{error:?}");
+        let original = error.diagnostic().unwrap().original.as_ref().unwrap();
+        let (file, span) = original.source.as_ref().unwrap();
+        assert_eq!(file, "numeric.wave");
+        assert_eq!(span.line, 3, "{source}");
+    }
 }

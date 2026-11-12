@@ -18,7 +18,7 @@ fun main() -> i32 {
     var failed: i32 = 0;
     var path: str = "/tmp/wave/main.wave";
 
-    if (!path_is_sep(47) || !path_is_sep(92) || path_is_sep(45)) { failed += 1; }
+    if (!path_is_sep(47) || path_is_sep(92) != path_is_abs("C:/") || path_is_sep(45)) { failed += 1; }
     if ((path_is_abs(path) as i32) != (path_is_abs("/") as i32) || path_is_abs("relative/file")) { failed += 1; }
     if (path_len(path) != 19 || path_basename_start(path) != 10) { failed += 1; }
     if (path_basename_len(path) != 9 || path_dirname_len(path) != 9) { failed += 1; }

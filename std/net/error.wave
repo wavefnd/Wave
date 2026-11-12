@@ -249,3 +249,20 @@ pub const NET_NATIVE_TIMEOUT: i64 = -73;
 pub fun net_connect_pending(code: i64) -> bool {
     return false;
 }
+
+// Message completeness is independent of byte count and never means TCP EOF.
+// One received datagram. count is bytes stored, including zero for an empty
+// message. A truncated message is consumed; no following read continues it.
+// original_size is valid only when original_size_known is true. Providers that
+// cannot report the full length return false and zero, never an invented size.
+pub struct NetDatagramResult {
+    count: i64;
+    truncated: bool;
+    original_size_known: bool;
+    original_size: i64;
+    error: NetError;
+}
+
+pub fun net_datagram_error(native_code: i64) -> NetDatagramResult {
+    return NetDatagramResult { count: 0, truncated: false, original_size_known: false, original_size: 0, error: net_error_from_native(native_code) };
+}

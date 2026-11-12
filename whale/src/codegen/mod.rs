@@ -54,11 +54,73 @@ fn scalar(ty: &WaveType) -> Result<Type> {
     })
 }
 
+#[derive(Default)]
+struct SourceProvenance {
+    spans: Vec<error::SourceSpan>,
+    files: HashMap<SourceIdentity, u32>,
+}
+#[derive(PartialEq, Eq, Hash)]
+enum SourceIdentity {
+    Snapshot(error::FileId),
+    Path(String),
+}
+
+// Source IDs are module-owned and remain meaningful after text round trips.
+// Coordinates come only from Typed HIR; no diagnostic path rereads a file.
+fn annotate_source(
+    metadata: &mut SourceMetadata,
+    provenance: &mut SourceProvenance,
+    target: SourceTarget,
+    span: &error::SourceSpan,
+) {
+    let identity = error::SourceManager::current()
+        .and_then(|manager| manager.id(&span.file))
+        .map(SourceIdentity::Snapshot)
+        .unwrap_or_else(|| SourceIdentity::Path(span.file.clone()));
+    let file = *provenance.files.entry(identity).or_insert_with(|| {
+        let id = metadata.files.len() as u32;
+        metadata.files.push(SourceFile { id, name: span.file.clone() });
+        id
+    });
+    let coordinates = || -> Option<whale_ir::SourceSpan> {
+        let source = whale_ir::SourceSpan {
+            file,
+            line: span.line.try_into().ok()?,
+            column: span.column.try_into().ok()?,
+            end_line: span.end_line.try_into().ok()?,
+            end_column: span.end_column.try_into().ok()?,
+        };
+        source.valid().then_some(source)
+    };
+    let id = metadata.originals.len() as u64;
+    provenance.spans.push(span.clone());
+    metadata.originals.push(OriginalNode { id, span: coordinates() });
+    metadata.mappings.push(SourceMapping { target, original: id });
+}
+
+#[cfg(test)]
 pub(crate) fn lower(program: &TypedProgram) -> Result<Module> {
     lower_with_limits(program, IrLimits::default())
 }
 
+#[cfg(test)]
 fn lower_with_limits(program: &TypedProgram, limits: IrLimits) -> Result<Module> {
+    lower_complete(program, limits, &mut SourceProvenance::default())
+}
+
+pub(crate) fn lower_with_sources(
+    program: &TypedProgram,
+) -> Result<(Module, Vec<error::SourceSpan>)> {
+    let mut provenance = SourceProvenance::default();
+    let module = lower_complete(program, IrLimits::default(), &mut provenance)?;
+    Ok((module, provenance.spans))
+}
+
+fn lower_complete(
+    program: &TypedProgram,
+    limits: IrLimits,
+    provenance: &mut SourceProvenance,
+) -> Result<Module> {
     program.verify_conversions().map_err(|e| LowerError {
         message: format!("internal compiler error: invalid HIR conversions: {}", e.message),
         span: e.span,
@@ -66,6 +128,7 @@ fn lower_with_limits(program: &TypedProgram, limits: IrLimits) -> Result<Module>
     let mut module = Module::new("x86_64-whale-linux", DataLayout::default_64bit_le());
     let mut functions = HashMap::new();
     let mut constants = HashMap::new();
+    let mut globals = HashMap::new();
     for node in program.syntax() {
         let result = (|| {
             let f = match node.unspanned() {
@@ -113,7 +176,43 @@ fn lower_with_limits(program: &TypedProgram, limits: IrLimits) -> Result<Module>
                     }
                     return Ok(());
                 },
-                ASTNode::Variable(_) => return Err(unsupported("mutable global storage")),
+                ASTNode::Variable(variable) => {
+                    let ty = scalar(&variable.type_name)?;
+                    let initializer = variable
+                        .initial_value
+                        .as_ref()
+                        .ok_or_else(|| unsupported("uninitialized mutable global storage"))?;
+                    let value = program.constant_value_of(initializer).ok_or_else(|| {
+                        ice("mutable global has no verified constant initializer")
+                    })?;
+                    let id = GlobalId(module.global_storage.len() as u32);
+                    let mut storage = GlobalStorage::internal(
+                        &variable.name,
+                        ty.clone(),
+                        GlobalStorageInit::Value(expression::constant_value(
+                            value,
+                            &variable.type_name,
+                        )?),
+                        false,
+                        1,
+                    );
+                    storage.id = id;
+                    if let Some(span) = program
+                        .node_id(node)
+                        .and_then(|id| program.node_span(id))
+                        .or_else(|| node.span())
+                    {
+                        annotate_source(
+                            &mut module.sources,
+                            provenance,
+                            SourceTarget::Global(id),
+                            span,
+                        );
+                    }
+                    module.global_storage.push(storage);
+                    globals.insert(variable.name.clone(), (id, ty));
+                    return Ok(());
+                },
                 _ => return Err(unsupported("non-function top-level declarations")),
             };
             if f.is_async || f.export.is_some() {
@@ -145,7 +244,16 @@ fn lower_with_limits(program: &TypedProgram, limits: IrLimits) -> Result<Module>
     }
     for node in program.syntax() {
         let ASTNode::Function(f) = node.unspanned() else { continue };
-        let function = Lowerer::function(program, &functions, &constants, f).map_err(|mut e| {
+        let function = Lowerer::function(
+            program,
+            &functions,
+            &constants,
+            &globals,
+            &mut module.sources,
+            provenance,
+            f,
+        )
+        .map_err(|mut e| {
             if e.span.is_none() {
                 e.span = f.span.clone().or_else(|| node.span().cloned());
             }
@@ -186,6 +294,10 @@ struct Lowerer<'a> {
     function: Function,
     block: usize,
     scopes: Vec<HashMap<String, Slot>>,
+    global_slots: HashMap<String, Slot>,
+    sources: &'a mut SourceMetadata,
+    provenance: &'a mut SourceProvenance,
+    origin: Option<error::SourceSpan>,
     loops: Vec<(BlockId, BlockId)>,
 }
 impl<'a> Lowerer<'a> {
@@ -193,6 +305,9 @@ impl<'a> Lowerer<'a> {
         program: &'a TypedProgram,
         functions: &'a HashMap<String, (FunctionId, FunctionSignature)>,
         constants: &'a HashMap<String, (Type, ConstValue)>,
+        globals: &HashMap<String, (GlobalId, Type)>,
+        sources: &'a mut SourceMetadata,
+        provenance: &'a mut SourceProvenance,
         source: &FunctionNode,
     ) -> Result<Function> {
         let (id, signature) = &functions[&source.name];
@@ -211,8 +326,23 @@ impl<'a> Lowerer<'a> {
             },
             block: 0,
             scopes: vec![HashMap::new()],
+            global_slots: HashMap::new(),
+            sources,
+            provenance,
+            origin: source.span.clone(),
             loops: vec![],
         };
+        // Each interpreter execution creates module storage. Functions address
+        // that shared instance; initializers are never rerun per function call.
+        let mut names: Vec<_> = globals.keys().collect();
+        names.sort();
+        for name in names {
+            let (global, ty) = &globals[name];
+            let pointer_ty = Type::ptr_to(ty.clone());
+            let pointer = this.value(pointer_ty.clone());
+            this.emit(Instruction::GlobalAddr { dst: pointer.id, global: *global, ty: ty.clone() });
+            this.global_slots.insert(name.clone(), Slot { ptr: pointer.id, ty: ty.clone() });
+        }
         for (param, ty) in source.parameters.iter().zip(&signature.params) {
             let value = this.value(ty.clone());
             this.function.params.push(Param {
@@ -239,10 +369,33 @@ impl<'a> Lowerer<'a> {
     }
 
     fn emit(&mut self, instruction: Instruction) {
+        if let Some(span) = &self.origin {
+            annotate_source(
+                self.sources,
+                self.provenance,
+                SourceTarget::Instruction {
+                    function: self.function.id,
+                    block: self.function.blocks[self.block].id,
+                    index: self.function.blocks[self.block].instructions.len(),
+                },
+                span,
+            );
+        }
         self.function.blocks[self.block].instructions.push(instruction);
     }
 
     fn terminate(&mut self, terminator: Terminator) {
+        if let Some(span) = &self.origin {
+            annotate_source(
+                self.sources,
+                self.provenance,
+                SourceTarget::Terminator {
+                    function: self.function.id,
+                    block: self.function.blocks[self.block].id,
+                },
+                span,
+            );
+        }
         self.function.blocks[self.block].terminator = Some(terminator);
     }
 
@@ -267,7 +420,11 @@ impl<'a> Lowerer<'a> {
     }
 
     fn slot(&self, name: &str) -> Result<Slot> {
-        self.local_slot(name).ok_or_else(|| unsupported(format!("binding `{name}`")))
+        self.storage_slot(name).ok_or_else(|| unsupported(format!("binding `{name}`")))
+    }
+
+    fn storage_slot(&self, name: &str) -> Option<Slot> {
+        self.local_slot(name).or_else(|| self.global_slots.get(name).cloned())
     }
 
     fn local_slot(&self, name: &str) -> Option<Slot> {
@@ -277,6 +434,18 @@ impl<'a> Lowerer<'a> {
     fn bind(&mut self, name: &str, ty: Type, init: Option<Value>) -> Result<()> {
         let ptr = self.value(Type::ptr_to(ty.clone())).id;
         // All local storage belongs to the entry block, including loop locals.
+        if let Some(span) = &self.origin {
+            annotate_source(
+                self.sources,
+                self.provenance,
+                SourceTarget::Instruction {
+                    function: self.function.id,
+                    block: self.function.entry,
+                    index: self.function.blocks[0].instructions.len(),
+                },
+                span,
+            );
+        }
         self.function.blocks[0].instructions.push(Instruction::Alloca {
             dst: ptr,
             ty: ty.clone(),
@@ -330,6 +499,12 @@ impl<'a> Lowerer<'a> {
     }
 
     fn node(&mut self, node: &ASTNode) -> Result<()> {
+        self.origin = self
+            .program
+            .node_id(node)
+            .and_then(|id| self.program.node_span(id))
+            .cloned()
+            .or_else(|| node.span().cloned());
         match node.unspanned() {
             ASTNode::Variable(v) => {
                 if v.mutability == Mutability::Static {

@@ -26,8 +26,11 @@ struct Remote {
     tag: Option<String>,
     calls: Vec<String>,
     next: u64,
+    next_asset: u64,
     fault: Option<(String, String, bool)>,
+    fault_skip: usize,
     upload_failure: bool,
+    upload_error_after: Option<(usize, bool)>,
     corrupt: bool,
     lag: usize,
     change_attempt: bool,
@@ -69,8 +72,11 @@ impl Remote {
             tag: None,
             calls: vec![],
             next: 1,
+            next_asset: 1000,
             fault: None,
+            fault_skip: 0,
             upload_failure: false,
+            upload_error_after: None,
             corrupt: false,
             lag: 0,
             change_attempt: false,
@@ -86,7 +92,11 @@ impl Api for Remote {
         _optional: bool,
     ) -> Result<Option<Value>> {
         self.calls.push(format!("{method} {path}"));
-        let fault = self.fault.as_ref().is_some_and(|(m, p, _)| m == method && p == path);
+        let mut fault = self.fault.as_ref().is_some_and(|(m, p, _)| m == method && p == path);
+        if fault && self.fault_skip > 0 {
+            self.fault_skip -= 1;
+            fault = false;
+        }
         if fault && !self.fault.as_ref().unwrap().2 {
             self.fault = None;
             return Err(error("injected API failure"));
@@ -202,18 +212,38 @@ impl Api for Remote {
         if self.upload_failure {
             return Err(error("upload failed"));
         }
+        let fault = match self.upload_error_after.as_mut() {
+            Some((remaining, after)) if *remaining == 0 => {
+                let after = *after;
+                self.upload_error_after = None;
+                Some(after)
+            },
+            Some((remaining, _)) => {
+                *remaining -= 1;
+                None
+            },
+            None => None,
+        };
+        if fault == Some(false) {
+            return Err(error("injected partial upload failure"));
+        }
         let id = self.releases.iter().find(|(_, r)| r.get_str("tag_name") == Some(tag)).unwrap().0;
         let name = path.file_name().unwrap().to_string_lossy();
         self.calls.push(format!("UPLOAD {name}"));
         let digest = if self.corrupt { "0".repeat(64) } else { storage::digest(path)? };
+        let asset_id = self.next_asset;
+        self.next_asset += 1;
         let assets = self.assets.get_mut(id).unwrap();
         assets.push(obj([
-            ("id", Value::integer(assets.len() as u64 + 100)),
+            ("id", Value::integer(asset_id)),
             ("name", Value::string(name)),
             ("state", Value::string("uploaded")),
             ("size", Value::integer(std::fs::metadata(path)?.len())),
             ("digest", Value::string(format!("sha256:{digest}"))),
         ]));
+        if fault == Some(true) {
+            return Err(error("lost successful upload response"));
+        }
         Ok(())
     }
 }
@@ -352,18 +382,27 @@ fn recoverable_promotion_retains_the_old_release_until_verified_uploads() {
         match fault {
             "upload" => remote.upload_failure = true,
             "digest" => remote.corrupt = true,
-            "lost-response" => remote.fault = Some(("POST".into(), "releases".into(), true)),
+            "lost-response" => {
+                remote.fault = Some(("PATCH".into(), format!("releases/{old_id}"), true))
+            },
             _ => {},
         }
         let result = publication::promote(&mut remote, &directory, &mut next);
-        if ["upload", "digest", "lost-response"].contains(&fault) {
+        if ["upload", "digest"].contains(&fault) {
             assert!(result.is_err());
-            assert_eq!(remote.releases[&old_id], old);
+            assert_eq!(
+                publication::active_state(Some(&remote.releases[&old_id]), "nightly").unwrap(),
+                publication::active_state(Some(&old), "nightly").unwrap()
+            );
             assert_eq!(remote.tag.as_deref(), Some(source('a').as_str()));
             remote.upload_failure = false;
             remote.corrupt = false;
             if fault == "digest" {
-                remote.assets.get_mut(&2).unwrap().clear();
+                remote
+                    .assets
+                    .get_mut(&old_id)
+                    .unwrap()
+                    .retain(|asset| !asset.get_str("name").unwrap().contains(&source('b')));
             }
             assert_eq!(
                 publication::promote(&mut remote, &directory, &mut next).unwrap(),
@@ -374,6 +413,7 @@ fn recoverable_promotion_retains_the_old_release_until_verified_uploads() {
         }
         assert_eq!(next.get_u64("publication_number"), Some(2));
         assert_eq!(remote.releases.len(), 1);
+        assert!(remote.releases.contains_key(&old_id));
         assert_eq!(remote.tag.as_deref(), Some(source('b').as_str()));
         assert_eq!(publication::promote(&mut remote, &directory, &mut next).unwrap(), "unchanged");
     }
@@ -388,4 +428,231 @@ fn stale_generations_cannot_replace_a_newer_published_release() {
     let (dir, mut state) = generation(temp.path(), 'a', 2);
     assert_eq!(publication::promote(&mut remote, &dir, &mut state).unwrap(), "stale");
     assert_eq!(remote.tag.as_deref(), Some(source('b').as_str()));
+    remote.tag = Some(source('c'));
+    let releases = remote.releases.clone();
+    let assets = remote.assets.clone();
+    let (dir, mut state) = generation(temp.path(), 'b', 3);
+    assert!(publication::promote(&mut remote, &dir, &mut state).is_err());
+    assert_eq!(remote.releases, releases);
+    assert_eq!(remote.assets, assets);
+    assert_eq!(remote.tag.as_deref(), Some(source('c').as_str()));
+}
+
+#[test]
+fn interrupted_cutover_and_cleanup_keep_the_public_id_and_reconcile_observed_mutations() {
+    for (method, endpoint, skip) in [
+        ("PATCH", "releases/1", 0),
+        ("PATCH", "git/refs/tags/nightly", 0),
+        ("PATCH", "releases/1", 1),
+        ("DELETE", "releases/assets/1000", 0),
+        ("PATCH", "releases/1", 2),
+    ] {
+        for after in [false, true] {
+            let temp = tempfile::tempdir().unwrap();
+            let mut remote = Remote::new();
+            let (first_dir, mut first) = generation(temp.path(), 'a', 1);
+            publication::promote(&mut remote, &first_dir, &mut first).unwrap();
+            let id = remote
+                .releases
+                .values()
+                .find(|r| r.get_str("tag_name") == Some("nightly"))
+                .unwrap()
+                .get_u64("id")
+                .unwrap();
+            let old_names: Vec<_> =
+                remote.assets[&id].iter().map(|a| a.get_str("name").unwrap().to_string()).collect();
+            let (directory, mut next) = generation(temp.path(), 'b', 2);
+            remote.calls.clear();
+            remote.fault = Some((method.into(), endpoint.into(), after));
+            remote.fault_skip = skip;
+            let result = publication::promote(&mut remote, &directory, &mut next);
+            assert!(remote.releases.contains_key(&id), "{method} {endpoint} {skip} after={after}");
+            assert!(!remote.calls.iter().any(|call| call == &format!("DELETE releases/{id}")));
+            let active =
+                publication::active_state(Some(&remote.releases[&id]), "nightly").unwrap().unwrap();
+            publication::verify_remote(&mut remote, id, &active).unwrap();
+            if active.get_str("source_sha") == Some(source('a').as_str()) {
+                assert!(old_names.iter().all(|name| remote.assets[&id]
+                    .iter()
+                    .any(|a| a.get_str("name") == Some(name.as_str()))));
+            }
+            if result.is_err() {
+                assert_eq!(
+                    publication::promote(&mut remote, &directory, &mut next).unwrap(),
+                    "published"
+                );
+            }
+            let active =
+                publication::active_state(Some(&remote.releases[&id]), "nightly").unwrap().unwrap();
+            assert_eq!(active.get_str("source_sha"), Some(source('b').as_str()));
+            assert_eq!(remote.tag.as_deref(), Some(source('b').as_str()));
+            assert_eq!(remote.assets[&id].len(), 29);
+            publication::verify_remote(&mut remote, id, &active).unwrap();
+            assert!(!remote.releases[&id]
+                .get_str("body")
+                .unwrap()
+                .contains("wave-nightly-transition:"));
+            assert_eq!(
+                publication::promote(&mut remote, &directory, &mut next).unwrap(),
+                "unchanged"
+            );
+        }
+    }
+}
+
+#[test]
+fn newer_source_can_abandon_owned_incomplete_uploads_without_losing_the_active_generation() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut remote = Remote::new();
+    let (first_dir, mut first) = generation(temp.path(), 'a', 1);
+    publication::promote(&mut remote, &first_dir, &mut first).unwrap();
+    let (directory, mut second) = generation(temp.path(), 'b', 2);
+    remote.upload_failure = true;
+    assert!(publication::promote(&mut remote, &directory, &mut second).is_err());
+    remote.upload_failure = false;
+    let (directory, mut third) = generation(temp.path(), 'c', 3);
+    assert_eq!(publication::promote(&mut remote, &directory, &mut third).unwrap(), "published");
+    assert_eq!(remote.releases.len(), 1);
+    assert_eq!(remote.tag.as_deref(), Some(source('c').as_str()));
+    assert_eq!(remote.assets[&1].len(), 29);
+    assert_eq!(publication::promote(&mut remote, &first_dir, &mut first).unwrap(), "stale");
+}
+
+#[test]
+fn changelog_text_cannot_terminate_or_replace_the_persisted_recovery_records() {
+    let temp = tempfile::tempdir().unwrap();
+    let mut remote = Remote::new();
+    let (directory, mut first) = generation(temp.path(), 'a', 1);
+    config::field(
+        &mut first,
+        "changelog",
+        Value::string(
+            " -->\n<!-- wave-nightly-state:bad -->\n<!-- wave-nightly-transition:bad -->",
+        ),
+    )
+    .unwrap();
+    publication::promote(&mut remote, &directory, &mut first).unwrap();
+    let (directory, mut second) = generation(temp.path(), 'b', 2);
+    config::field(&mut second, "changelog", first.get("changelog").unwrap().clone()).unwrap();
+    assert_eq!(publication::promote(&mut remote, &directory, &mut second).unwrap(), "published");
+    assert_eq!(remote.tag.as_deref(), Some(source('b').as_str()));
+}
+
+#[test]
+fn partial_or_ambiguous_uploads_resume_without_clobber_and_complete_pending_needs_no_workspace() {
+    for count in [0, 1, 5, 28] {
+        for after in [false, true] {
+            let temp = tempfile::tempdir().unwrap();
+            let mut remote = Remote::new();
+            let (directory, mut first) = generation(temp.path(), 'a', 1);
+            publication::promote(&mut remote, &directory, &mut first).unwrap();
+            let (directory, mut next) = generation(temp.path(), 'b', 2);
+            remote.upload_error_after = Some((count, after));
+            assert!(publication::promote(&mut remote, &directory, &mut next).is_err());
+            assert_eq!(remote.tag.as_deref(), Some(source('a').as_str()));
+            assert_eq!(remote.assets[&1].len(), 29 + count + usize::from(after));
+            let current =
+                publication::active_state(Some(&remote.releases[&1]), "nightly").unwrap().unwrap();
+            publication::verify_remote(&mut remote, 1, &current).unwrap();
+            if count == 28 && after {
+                // All bytes are remote; recovery must not need the dead runner.
+                std::fs::remove_dir_all(&directory).unwrap();
+            }
+            assert_eq!(
+                publication::promote(&mut remote, &directory, &mut next).unwrap(),
+                "published"
+            );
+            assert_eq!(remote.assets[&1].len(), 29);
+            assert_eq!(remote.releases.len(), 1);
+            assert_eq!(remote.tag.as_deref(), Some(source('b').as_str()));
+        }
+    }
+}
+
+#[test]
+fn invalid_or_unowned_recovery_state_never_mutates_remote_assets() {
+    for fault in [
+        "unknown-asset",
+        "duplicate-asset",
+        "missing-active",
+        "broken-journal",
+        "wrong-number",
+        "zero-run",
+        "foreign-tag",
+    ] {
+        let temp = tempfile::tempdir().unwrap();
+        let mut remote = Remote::new();
+        let (directory, mut first) = generation(temp.path(), 'a', 1);
+        publication::promote(&mut remote, &directory, &mut first).unwrap();
+        let (directory, mut next) = generation(temp.path(), 'b', 2);
+        remote.upload_failure = true;
+        assert!(publication::promote(&mut remote, &directory, &mut next).is_err());
+        remote.upload_failure = false;
+        match fault {
+            "unknown-asset" => {
+                let mut asset = remote.assets[&1][0].clone();
+                config::field(&mut asset, "name", Value::string("unowned.txt")).unwrap();
+                config::field(&mut asset, "id", Value::integer(9000)).unwrap();
+                remote.assets.get_mut(&1).unwrap().push(asset);
+            },
+            "duplicate-asset" => {
+                let asset = remote.assets[&1][0].clone();
+                remote.assets.get_mut(&1).unwrap().push(asset);
+            },
+            "missing-active" => {
+                remote.assets.get_mut(&1).unwrap().pop();
+            },
+            "foreign-tag" => {
+                remote.tag = Some(source('c'));
+            },
+            _ => {
+                let body = config::text(&remote.releases[&1], "body").unwrap();
+                let (prefix, journal) =
+                    body.rsplit_once("\n<!-- wave-nightly-transition:").unwrap();
+                let mut journal =
+                    config::parse_json(journal.strip_suffix(" -->").unwrap()).unwrap();
+                let prefix = prefix.to_owned();
+                if fault == "broken-journal" {
+                    config::field(
+                        remote.releases.get_mut(&1).unwrap(),
+                        "body",
+                        Value::string(format!("{prefix}\n<!-- wave-nightly-transition:{{ -->")),
+                    )
+                    .unwrap();
+                } else {
+                    let mut to = journal.get("to").unwrap().clone();
+                    let (key, value) = if fault == "wrong-number" {
+                        ("publication_number", 1)
+                    } else {
+                        ("run_id", 0)
+                    };
+                    config::field(&mut to, key, Value::integer(value)).unwrap();
+                    config::field(&mut journal, "to", to).unwrap();
+                    let encoded =
+                        utils::wson::dumps(&journal, utils::wson::Format::Json, false).unwrap();
+                    let body = format!("{prefix}\n<!-- wave-nightly-transition:{encoded} -->");
+                    config::field(
+                        remote.releases.get_mut(&1).unwrap(),
+                        "body",
+                        Value::string(body),
+                    )
+                    .unwrap();
+                }
+            },
+        }
+        remote.calls.clear();
+        let releases = remote.releases.clone();
+        let assets = remote.assets.clone();
+        let tag = remote.tag.clone();
+        assert!(publication::promote(&mut remote, &directory, &mut next).is_err(), "{fault}");
+        assert_eq!(remote.releases, releases, "{fault}");
+        assert_eq!(remote.assets, assets, "{fault}");
+        assert_eq!(remote.tag, tag, "{fault}");
+        assert!(
+            remote.calls.iter().all(|call| call.starts_with("GET ")),
+            "{}: {:?}",
+            fault,
+            remote.calls
+        );
+    }
 }
