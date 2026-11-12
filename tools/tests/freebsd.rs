@@ -43,6 +43,19 @@ impl Write for Stream {
 }
 
 #[test]
+fn console_rejects_timeouts_that_cannot_form_a_deadline() {
+    let directory = tempfile::tempdir().unwrap();
+    let stream = Stream { fragments: VecDeque::new(), writes: vec![], echo: false, fail: false };
+
+    assert!(Console::new(
+        stream,
+        File::create(directory.path().join("log")).unwrap(),
+        Duration::MAX,
+    )
+    .is_err());
+}
+
+#[test]
 fn console_requires_the_entire_newline_terminated_guest_key_and_retains_following_output() {
     let directory = tempfile::tempdir().unwrap();
     let stream = Stream {
@@ -60,7 +73,8 @@ fn console_requires_the_entire_newline_terminated_guest_key_and_retains_followin
         stream,
         File::create(directory.path().join("log")).unwrap(),
         Duration::from_secs(1),
-    );
+    )
+    .unwrap();
     let result = console
         .expect(r"(?:^|\r?\n)(ssh-ed25519 [A-Za-z0-9+/=]+)(?:[ \t]+[^\r\n]*)?\r?\n", None)
         .unwrap();
@@ -76,7 +90,8 @@ fn loader_waits_for_each_echo_and_handles_read_errors_and_eof() {
         stream,
         File::create(directory.path().join("echo")).unwrap(),
         Duration::from_secs(1),
-    );
+    )
+    .unwrap();
     console.loader("set console=comconsole").unwrap();
     assert_eq!(console.expect("\r", None).unwrap()[0], "\r");
     for failure in [true, false] {
@@ -86,7 +101,8 @@ fn loader_waits_for_each_echo_and_handles_read_errors_and_eof() {
             stream,
             File::create(directory.path().join("failure")).unwrap(),
             Duration::from_secs(1),
-        );
+        )
+        .unwrap();
         let error = console.expect("never", None).unwrap_err().to_string();
         assert!(error.contains(if failure { "serial read failed" } else { "console closed" }));
     }
