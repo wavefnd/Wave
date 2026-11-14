@@ -10,13 +10,43 @@ use utils::wson::Value;
 pub fn which(name: &str) -> Option<PathBuf> {
     let raw = Path::new(name);
     if raw.is_absolute() || raw.components().count() > 1 {
-        return raw.is_file().then(|| raw.into());
+        // For direct paths, ensure it's a file and meets executable requirements.
+        if raw.is_file() {
+            #[cfg(unix)]
+            {
+                use std::os::unix::fs::MetadataExt;
+                if let Ok(metadata) = std::fs::metadata(raw) {
+                    if metadata.mode() & 0o111 != 0 {
+                        return Some(raw.into());
+                    }
+                }
+                return None;
+            }
+            #[cfg(not(unix))]
+            {
+                return Some(raw.into());
+            }
+        }
+        return None;
     }
     for directory in std::env::split_paths(&std::env::var_os("PATH").unwrap_or_default()) {
         for suffix in if cfg!(windows) { vec!["", ".exe", ".cmd", ".bat"] } else { vec![""] } {
             let path = directory.join(format!("{name}{suffix}"));
             if path.is_file() {
-                return Some(path);
+                #[cfg(unix)]
+                {
+                    use std::os::unix::fs::MetadataExt;
+                    if let Ok(metadata) = std::fs::metadata(&path) {
+                        // Checks if any execute bit is set (owner, group, or others)
+                        if metadata.mode() & 0o111 != 0 {
+                            return Some(path);
+                        }
+                    }
+                }
+                #[cfg(not(unix))]
+                {
+                    return Some(path);
+                }
             }
         }
     }
@@ -1563,5 +1593,54 @@ mod tests {
         fs::remove_file(stage.join("alias")).unwrap();
         std::os::unix::fs::symlink("../outside", stage.join("alias")).unwrap();
         assert!(archive_at_epoch(&stage, &output, "wave", 1).is_err());
+    }
+
+    #[test]
+    fn which_skips_non_executable_files_and_preserves_executable_matches() {
+        let temp = tempfile::tempdir().unwrap();
+        let first = temp.path().join("first");
+        let second = temp.path().join("second");
+        fs::create_dir_all(&first).unwrap();
+        fs::create_dir_all(&second).unwrap();
+
+        let tool_name = if cfg!(windows) { "audit-tool.exe" } else { "audit-tool" };
+        let non_exec = first.join(tool_name);
+        let exec = second.join(tool_name);
+
+        fs::write(&non_exec, b"dummy content").unwrap();
+        fs::write(&exec, b"#!/bin/sh\necho ok").unwrap();
+
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&non_exec, fs::Permissions::from_mode(0o644)).unwrap();
+            fs::set_permissions(&exec, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+
+        let path_os = std::env::join_paths([&first, &second]).unwrap();
+        let old_path = std::env::var_os("PATH");
+        std::env::set_var("PATH", &path_os);
+
+        // Search PATH: should skip `first` (0644) and hit `second` (0755)
+        let found = which("audit-tool");
+
+        // Restore PATH early so we don't pollute other test runs
+        if let Some(old) = old_path {
+            std::env::set_var("PATH", old);
+        } else {
+            std::env::remove_var("PATH");
+        }
+
+        #[cfg(unix)]
+        {
+            assert_eq!(found, Some(exec.clone()));
+            assert_eq!(which(non_exec.to_str().unwrap()), None);
+            assert_eq!(which(exec.to_str().unwrap()), Some(exec));
+        }
+
+        #[cfg(not(unix))]
+        {
+            assert!(found.is_some());
+        }
     }
 }
