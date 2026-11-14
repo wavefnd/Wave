@@ -31,21 +31,29 @@ pub struct Console<S> {
     echo_output: bool,
 }
 
+/// Checked deadline construction: a timeout that cannot be represented as an
+/// instant is an ordinary input error instead of a panicking `Instant` add.
+fn checked_deadline(timeout: Duration) -> Result<Instant> {
+    Instant::now().checked_add(timeout).ok_or_else(|| error("timeout is too large for a deadline"))
+}
+
 impl<S: Read + Write> Console<S> {
-    pub fn new(stream: S, log: File, timeout: Duration) -> Self {
-        Self {
+    pub fn new(stream: S, log: File, timeout: Duration) -> Result<Self> {
+        Ok(Self {
             stream,
             log,
             buffer: String::new(),
-            boot_deadline: Instant::now() + timeout,
+            boot_deadline: checked_deadline(timeout)?,
             echo_output: false,
-        }
+        })
     }
 
     pub fn expect(&mut self, pattern: &str, timeout: Option<Duration>) -> Result<Vec<String>> {
         let expression = regex_lite::Regex::new(pattern)?;
-        let deadline =
-            timeout.map(|timeout| Instant::now() + timeout).unwrap_or(self.boot_deadline);
+        let deadline = match timeout {
+            Some(timeout) => checked_deadline(timeout)?,
+            None => self.boot_deadline,
+        };
         loop {
             if let Some(captures) = expression.captures(&self.buffer) {
                 let end = captures.get(0).unwrap().end();
@@ -206,7 +214,7 @@ impl Vm {
         stream.set_write_timeout(Some(Duration::from_secs(10)))?;
         let log = File::create(work.join("guest.log"))?;
         Ok(Self {
-            console: Console::new(stream, log, boot.saturating_sub(started.elapsed())),
+            console: Console::new(stream, log, boot.saturating_sub(started.elapsed()))?,
             owner,
         })
     }
@@ -318,11 +326,11 @@ fn provider_cases(args: &mut Args) -> Result<i32> {
     let output = args.path("--out-dir")?.unwrap_or_else(|| crate::root().join(".tmp/freebsd-sys"));
     let report = args.path("--report-json")?.unwrap_or_else(|| output.join("report.json"));
     let seconds = |value: Option<String>, fallback: u64| -> Result<Duration> {
-        let seconds = value.map(|v| v.parse()).transpose()?.unwrap_or(fallback);
-        if seconds == 0 {
+        let seconds = crate::cli::timeout(value, fallback)?;
+        if seconds.is_zero() {
             return Err(error("timeouts must be positive"));
         }
-        Ok(Duration::from_secs(seconds))
+        Ok(seconds)
     };
     let command_timeout = seconds(args.text("--command-timeout")?, 120)?;
     let boot_timeout = seconds(args.text("--boot-timeout")?, 240)?;
@@ -564,7 +572,10 @@ fn provider_cases(args: &mut Args) -> Result<i32> {
             command,
             &work,
             boot_timeout,
-            boot_timeout + case_timeout * (cases.len() as u32) + Duration::from_secs(90),
+            boot_timeout
+                .checked_add(case_timeout.saturating_mul(cases.len() as u32))
+                .and_then(|timeout| timeout.checked_add(Duration::from_secs(90)))
+                .ok_or_else(|| error("combined boot and case timeouts exceed the maximum"))?,
         )?;
         vm.console.boot(&arch)?;
         vm.console.send("mount -uw /\nmount -t cd9660 /dev/vtbd1 /mnt\nsh /mnt/run.sh\n")?;
@@ -1213,7 +1224,8 @@ mod tests {
             })
         });
         let mut vm = Vm {
-            console: Console::new(stream, File::create(&log).unwrap(), Duration::from_secs(1)),
+            console: Console::new(stream, File::create(&log).unwrap(), Duration::from_secs(1))
+                .unwrap(),
             owner: GuestOwner { stop: Arc::new(AtomicBool::new(false)), task: Some(task) },
         };
         vm.shutdown(Duration::from_secs(1)).unwrap();

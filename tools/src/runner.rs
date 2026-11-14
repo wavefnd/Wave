@@ -863,7 +863,7 @@ pub fn main(arguments: &[OsString], corpus: bool) -> Result<i32> {
     if !(1..=256).contains(&shards) || shard >= shards {
         return Err(error("invalid case shard"));
     }
-    let timeout = args.text("--timeout")?.unwrap_or_else(|| "30".into()).parse::<u64>()?;
+    let timeout = crate::cli::timeout(args.text("--timeout")?, 30)?;
     let compile_only = args.flag("--compile-only");
     let runtime_only = args.flag("--runtime-only");
     if compile_only && runtime_only {
@@ -1051,8 +1051,8 @@ pub fn main(arguments: &[OsString], corpus: bool) -> Result<i32> {
     let options = Options {
         compiler,
         target,
-        timeout: Duration::from_secs(timeout),
-        build_timeout: Duration::from_secs(timeout.max(30)),
+        timeout,
+        build_timeout: timeout.max(Duration::from_secs(30)),
         qemu,
         sysroot,
         optimization,

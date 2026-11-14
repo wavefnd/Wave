@@ -60,7 +60,8 @@ fn console_requires_the_entire_newline_terminated_guest_key_and_retains_followin
         stream,
         File::create(directory.path().join("log")).unwrap(),
         Duration::from_secs(1),
-    );
+    )
+    .unwrap();
     let result = console
         .expect(r"(?:^|\r?\n)(ssh-ed25519 [A-Za-z0-9+/=]+)(?:[ \t]+[^\r\n]*)?\r?\n", None)
         .unwrap();
@@ -76,7 +77,8 @@ fn loader_waits_for_each_echo_and_handles_read_errors_and_eof() {
         stream,
         File::create(directory.path().join("echo")).unwrap(),
         Duration::from_secs(1),
-    );
+    )
+    .unwrap();
     console.loader("set console=comconsole").unwrap();
     assert_eq!(console.expect("\r", None).unwrap()[0], "\r");
     for failure in [true, false] {
@@ -86,7 +88,8 @@ fn loader_waits_for_each_echo_and_handles_read_errors_and_eof() {
             stream,
             File::create(directory.path().join("failure")).unwrap(),
             Duration::from_secs(1),
-        );
+        )
+        .unwrap();
         let error = console.expect("never", None).unwrap_err().to_string();
         assert!(error.contains(if failure { "serial read failed" } else { "console closed" }));
     }
@@ -219,4 +222,47 @@ fn vm_validation_rejects_stale_sources_and_changed_archives_before_starting_qemu
         assert!(!work.join("inputs.iso").exists());
         assert!(!work.join("guest.qcow2").exists());
     }
+}
+
+#[test]
+fn console_rejects_out_of_range_timeouts_without_panicking() {
+    let directory = tempfile::tempdir().unwrap();
+    let stream = Stream { fragments: VecDeque::new(), writes: vec![], echo: false, fail: false };
+    let error = Console::new(
+        stream,
+        File::create(directory.path().join("huge")).unwrap(),
+        Duration::from_secs(u64::MAX),
+    )
+    .err()
+    .unwrap()
+    .to_string();
+    assert!(error.contains("too large for a deadline"), "{error}");
+    let mut console = Console::new(
+        Stream { fragments: VecDeque::new(), writes: vec![], echo: false, fail: false },
+        File::create(directory.path().join("small")).unwrap(),
+        Duration::from_secs(1),
+    )
+    .unwrap();
+    let error =
+        console.expect("never", Some(Duration::from_secs(u64::MAX))).unwrap_err().to_string();
+    assert!(error.contains("too large for a deadline"), "{error}");
+}
+
+#[test]
+fn console_keeps_zero_and_boundary_timeouts_defined() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut zero = Console::new(
+        Stream { fragments: VecDeque::new(), writes: vec![], echo: false, fail: false },
+        File::create(directory.path().join("zero")).unwrap(),
+        Duration::ZERO,
+    )
+    .unwrap();
+    let error = zero.expect("now", None).unwrap_err().to_string();
+    assert!(error.contains("before deadline"), "{error}");
+    let _boundary = Console::new(
+        Stream { fragments: VecDeque::new(), writes: vec![], echo: false, fail: false },
+        File::create(directory.path().join("boundary")).unwrap(),
+        Duration::from_secs(wave_tools::cli::MAX_TIMEOUT_SECONDS),
+    )
+    .unwrap();
 }
