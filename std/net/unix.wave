@@ -124,6 +124,11 @@ pub fun unix_listen_abstract(name: str, backlog: i32) -> NetResult<UnixListener>
 }
 
 pub fun unix_accept(listener: UnixListener) -> NetResult<UnixStream> {
+    // Reject unrepresentable POSIX descriptors before native accept so a
+    // value like live_fd ± 2^32 cannot alias the real listener (#1082).
+    if (!net_fd_valid(listener.fd)) {
+        return _unix_stream_error(-22);
+    }
     var fd: i64 = accept(listener.fd, null, null);
     if (fd < 0) { return _unix_stream_error(fd); }
     return net_result_ok<UnixStream>(UnixStream { fd: fd });
