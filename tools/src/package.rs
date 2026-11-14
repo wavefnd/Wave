@@ -4,7 +4,6 @@ use crate::{binary, cases, cli::Args, config, error, process::Spec, storage, Res
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use std::ffi::{OsStr, OsString};
 use std::fs;
-use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 use utils::wson::Value;
 
@@ -15,6 +14,7 @@ pub fn which(name: &str) -> Option<PathBuf> {
         if raw.is_file() {
             #[cfg(unix)]
             {
+                use std::os::unix::fs::MetadataExt;
                 if let Ok(metadata) = std::fs::metadata(raw) {
                     if metadata.mode() & 0o111 != 0 {
                         return Some(raw.into());
@@ -35,6 +35,7 @@ pub fn which(name: &str) -> Option<PathBuf> {
             if path.is_file() {
                 #[cfg(unix)]
                 {
+                    use std::os::unix::fs::MetadataExt;
                     if let Ok(metadata) = std::fs::metadata(&path) {
                         // Checks if any execute bit is set (owner, group, or others)
                         if metadata.mode() & 0o111 != 0 {
