@@ -134,8 +134,10 @@ impl Clone for ASTNode {
                     visibility: n.visibility,
                 }),
                 ASTNode::ProtoImpl(n) => ASTNode::ProtoImpl(ProtoImplNode {
+                    name: n.name.clone(),
                     target: n.target.clone(),
                     methods: n.methods.iter().map(|n| function(n, &mut nodes)).collect(),
+                    visibility: n.visibility,
                 }),
                 ASTNode::Statement(n) => ASTNode::Statement(statement(n, &mut nodes)),
                 ASTNode::ExternFunction(n) => ASTNode::ExternFunction(n.clone()),
