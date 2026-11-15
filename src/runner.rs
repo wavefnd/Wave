@@ -551,6 +551,8 @@ fn build_backend_options(llvm: &LlvmFlags) -> BackendOptions {
         code_model: llvm.code_model.clone(),
         relocation_model: llvm.relocation_model.clone(),
         sysroot: llvm.sysroot.clone(),
+        macos_deployment_target: llvm.macos_deployment_target.clone(),
+        macos_sdk_version: llvm.macos_sdk_version.clone(),
         linker: llvm.linker.clone(),
         link_args: llvm.link_args.clone(),
         no_default_libs: llvm.no_default_libs,
