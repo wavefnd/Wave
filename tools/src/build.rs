@@ -119,18 +119,70 @@ pub fn compiler(arguments: &[OsString]) -> Result<i32> {
     let result = spec.checked()?;
     let receipt = cargo_receipt(&result.strict_stdout()?, &binary)?;
     binary::inspect(&binary, Some(&target))?;
-    if let Some(parent) = output.parent() {
-        fs::create_dir_all(parent)?;
-    }
-    let pending = tempfile::NamedTempFile::new_in(output.parent().unwrap_or(Path::new(".")))?;
-    fs::copy(binary, pending.path())?;
-    pending.persist(&output).map_err(|e| e.error)?;
-    storage::atomic_write(
-        &output.with_extension("build.json"),
-        config::json(&receipt)?.as_bytes(),
-    )?;
+    activate_compiler_output(&binary, &output, &receipt)?;
 
     Ok(0)
+}
+
+/// Stage and activate the compiler and Cargo receipt as a recoverable pair.
+/// The prior pair is restored by the shared replacement transaction if either
+/// activation fails, and its backups are retained if restoration itself fails.
+fn activate_compiler_output(binary: &Path, output: &Path, receipt: &Value) -> Result<()> {
+    activate_compiler_output_with(binary, output, receipt, fs::rename)
+}
+
+fn activate_compiler_output_with<F>(
+    binary: &Path,
+    output: &Path,
+    receipt: &Value,
+    rename: F,
+) -> Result<()>
+where
+    F: FnMut(&Path, &Path) -> std::io::Result<()>,
+{
+    let receipt_path = output.with_extension("build.json");
+    let parent = output.parent().filter(|p| !p.as_os_str().is_empty()).unwrap_or(Path::new("."));
+    fs::create_dir_all(parent)?;
+
+    // Refuse directories and symlinks before moving the old compiler. A
+    // conflicting build.json directory must not be hidden inside recovery
+    // backups or replaced by a file.
+    for destination in [output, receipt_path.as_path()] {
+        match fs::symlink_metadata(destination) {
+            Ok(metadata) if metadata.file_type().is_file() => {},
+            Ok(_) => {
+                return Err(error(format!(
+                    "build output destination is not a regular file: {}",
+                    destination.display()
+                )));
+            },
+            Err(err) if err.kind() == std::io::ErrorKind::NotFound => {},
+            Err(err) => return Err(err.into()),
+        }
+    }
+
+    // Serialization and all staging I/O must succeed before activation.
+    let receipt_data = config::json(receipt)?;
+    let binary_stage = tempfile::NamedTempFile::new_in(parent)?;
+    fs::copy(binary, binary_stage.path())?;
+    fs::set_permissions(binary_stage.path(), fs::metadata(binary)?.permissions())?;
+    binary_stage.as_file().sync_all()?;
+
+    let receipt_stage = tempfile::NamedTempFile::new_in(parent)?;
+    fs::write(receipt_stage.path(), receipt_data)?;
+    receipt_stage.as_file().sync_all()?;
+
+    // Close staging handles before renaming (notably needed on Windows).
+    // TempPath still cleans up unactivated candidates on every error path.
+    let binary_stage = binary_stage.into_temp_path();
+    let receipt_stage = receipt_stage.into_temp_path();
+    storage::replace_set_with(
+        &[
+            (binary_stage.to_path_buf(), output.to_path_buf()),
+            (receipt_stage.to_path_buf(), receipt_path),
+        ],
+        rename,
+    )
 }
 
 pub fn clean(arguments: &[OsString]) -> Result<i32> {
@@ -370,5 +422,157 @@ mod tests {
         .unwrap();
         assert!(result.status.success());
         assert_eq!(result.stdout, b"native\n");
+    }
+}
+
+#[cfg(test)]
+mod build_output_tests {
+    use super::*;
+
+    fn receipt_for(binary: &Path) -> Value {
+        Value::object([
+            ("schema_version", Value::integer(1)),
+            ("binary_sha256", Value::string(storage::digest(binary).unwrap())),
+        ])
+    }
+
+    #[test]
+    fn receipt_directory_conflict_preserves_prior_compiler() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path();
+        let candidate = root.join("cargo-wavec");
+        let output = root.join("wavec");
+        let receipt_path = output.with_extension("build.json");
+        fs::write(&candidate, b"NEW-BINARY").unwrap();
+        fs::write(&output, b"OLD-BINARY").unwrap();
+        fs::create_dir(&receipt_path).unwrap();
+        fs::write(receipt_path.join("sentinel"), b"KEEP").unwrap();
+        let result = activate_compiler_output(&candidate, &output, &receipt_for(&candidate));
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("not a regular file"));
+        assert_eq!(fs::read(&output).unwrap(), b"OLD-BINARY");
+        assert_eq!(fs::read(receipt_path.join("sentinel")).unwrap(), b"KEEP");
+    }
+
+    #[test]
+    fn successful_activation_installs_matching_binary_and_receipt() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path();
+        let candidate = root.join("cargo-wavec");
+        let output = root.join("wavec");
+        let receipt_path = output.with_extension("build.json");
+        fs::write(&candidate, b"NEW-BINARY").unwrap();
+        fs::write(&output, b"OLD-BINARY").unwrap();
+        fs::write(&receipt_path, b"OLD-RECEIPT").unwrap();
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            fs::set_permissions(&candidate, fs::Permissions::from_mode(0o755)).unwrap();
+        }
+        let receipt = receipt_for(&candidate);
+        activate_compiler_output(&candidate, &output, &receipt).unwrap();
+        assert_eq!(fs::read(&output).unwrap(), b"NEW-BINARY");
+        assert_eq!(fs::read_to_string(&receipt_path).unwrap(), config::json(&receipt).unwrap());
+        assert_eq!(
+            config::parse_json(&fs::read_to_string(&receipt_path).unwrap())
+                .unwrap()
+                .get_str("binary_sha256"),
+            Some(storage::digest(&output).unwrap().as_str()),
+        );
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            assert_eq!(fs::metadata(output).unwrap().permissions().mode() & 0o111, 0o111);
+        }
+    }
+
+    #[test]
+    fn receipt_activation_failure_restores_both_previous_outputs() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path();
+        let candidate = root.join("cargo-wavec");
+        let output = root.join("wavec");
+        let receipt_path = output.with_extension("build.json");
+        fs::write(&candidate, b"NEW-BINARY").unwrap();
+        fs::write(&output, b"OLD-BINARY").unwrap();
+        fs::write(&receipt_path, b"OLD-RECEIPT").unwrap();
+        let mut failed_receipt = false;
+        let result = activate_compiler_output_with(
+            &candidate,
+            &output,
+            &receipt_for(&candidate),
+            |source, destination| {
+                if destination == receipt_path && !failed_receipt {
+                    failed_receipt = true;
+                    return Err(std::io::Error::other("injected receipt activation failure"));
+                }
+                fs::rename(source, destination)
+            },
+        );
+        assert!(result.is_err());
+        assert!(result.unwrap_err().to_string().contains("injected receipt activation failure"));
+        assert_eq!(fs::read(output).unwrap(), b"OLD-BINARY");
+        assert_eq!(fs::read(receipt_path).unwrap(), b"OLD-RECEIPT");
+    }
+
+    #[test]
+    fn failed_restore_reports_retained_recovery_backup() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path();
+        let candidate = root.join("cargo-wavec");
+        let output = root.join("wavec");
+        let receipt_path = output.with_extension("build.json");
+        fs::write(&candidate, b"NEW-BINARY").unwrap();
+        fs::write(&output, b"OLD-BINARY").unwrap();
+        fs::write(&receipt_path, b"OLD-RECEIPT").unwrap();
+        let mut failed_receipt = false;
+        let result = activate_compiler_output_with(
+            &candidate,
+            &output,
+            &receipt_for(&candidate),
+            |source, destination| {
+                if destination == receipt_path && !failed_receipt {
+                    failed_receipt = true;
+                    return Err(std::io::Error::other("injected receipt activation failure"));
+                }
+                if destination == output
+                    && source.file_name() == Some(std::ffi::OsStr::new("0"))
+                {
+                    return Err(std::io::Error::other("injected binary restoration failure"));
+                }
+                fs::rename(source, destination)
+            },
+        );
+        let error = result.unwrap_err().to_string();
+        assert!(error.contains("retained backups"), "{error}");
+        assert!(storage::files(root).unwrap().iter().any(|path| {
+            fs::read(path).unwrap() == b"OLD-BINARY"
+        }));
+        assert_eq!(fs::read(receipt_path).unwrap(), b"OLD-RECEIPT");
+    }
+
+    #[test]
+    fn receipt_failure_restores_absence_of_previous_receipt() {
+        let directory = tempfile::tempdir().unwrap();
+        let root = directory.path();
+        let candidate = root.join("cargo-wavec");
+        let output = root.join("wavec");
+        let receipt_path = output.with_extension("build.json");
+        fs::write(&candidate, b"NEW-BINARY").unwrap();
+        fs::write(&output, b"OLD-BINARY").unwrap();
+        let result = activate_compiler_output_with(
+            &candidate,
+            &output,
+            &receipt_for(&candidate),
+            |source, destination| {
+                if destination == receipt_path {
+                    return Err(std::io::Error::other("injected receipt failure"));
+                }
+                fs::rename(source, destination)
+            },
+        );
+        assert!(result.is_err());
+        assert_eq!(fs::read(output).unwrap(), b"OLD-BINARY");
+        assert!(!receipt_path.exists());
     }
 }
