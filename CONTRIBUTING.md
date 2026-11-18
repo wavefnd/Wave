@@ -330,6 +330,37 @@ All pull request descriptions and comments must be written in English.
 
 Small, focused PRs are preferred. Target the `master` branch.
 
+
+### Pull Request Review Response Policy
+
+Wave Foundation maintains a 72-hour response policy for pull requests
+requiring contributor action.
+
+When a maintainer explicitly requests changes or further action, the
+contributor must respond within 72 hours.
+
+A valid response includes:
+- Pushing commits addressing the requested changes.
+- Providing a substantive progress update.
+- Explaining a blocker and proposing a concrete resolution plan.
+
+A simple acknowledgement without meaningful progress does not reset
+the response deadline.
+
+If no valid response is received within 72 hours, Wave Foundation Bot
+may automatically close the pull request.
+
+This policy does not apply to:
+- Pull requests awaiting maintainer review.
+- Pull requests approved and awaiting maintainer merge.
+- Pull requests where the maintainer has not requested changes.
+- Pull requests granted an extension by a maintainer.
+
+CI failures alone do not trigger automatic closure.
+
+Closed pull requests may be resubmitted after the outstanding issues
+have been addressed.
+
 ---
 
 ## 10. Communication
