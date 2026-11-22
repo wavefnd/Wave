@@ -8,6 +8,8 @@ parser = { path = "../front/parser" }
 hir = { path = "../front/hir" }
 lexer = { path = "../front/lexer" }
 error = { path = "../front/error" }
+utils = { path = "../utils" }
+plist = "=1.7.4"
 # Wave does not use Inkwell's libffi execution engine. LLVM's own dependencies
 # are supplied by llvm-config, including libffi when the selected SDK needs it.
 inkwell = { version = "0.8.0", default-features = false, features = ["llvm21-1", "no-libffi-linking"] }
