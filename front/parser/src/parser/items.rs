@@ -19,7 +19,9 @@
 use crate::ast::{
     ASTNode, ImportNode, ProtoImplNode, StatementNode, StructNode, Visibility, WaveType,
 };
-use crate::parser::functions::{parse_function, parse_generic_param_names};
+use crate::parser::functions::{
+    parse_function, parse_function_with_receiver, parse_generic_param_names,
+};
 use crate::parser::ParseError;
 use lexer::token::TokenType;
 use lexer::Token;
@@ -101,24 +103,62 @@ pub fn parse_import(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, Parse
 
 pub fn parse_proto(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, ParseError> {
     let anchor = tokens.peek().copied();
-    let context = "proto method attachment";
-    let target_struct = crate::expr::identifier(tokens, anchor, context)?;
-    crate::expr::expect_token(tokens, anchor, TokenType::Lbrace, "'{'", context)?;
+    let context = "proto declaration";
+    skip_ws(tokens);
+    let first = crate::expr::identifier(tokens, anchor, "proto name")?;
+    skip_ws(tokens);
+
+    // The colon distinguishes a named contract from the existing inherent
+    // method-attachment syntax, without changing how inherent targets lower.
+    let (name, target) = if tokens.peek().is_some_and(|t| t.token_type == TokenType::Colon) {
+        tokens.next();
+        skip_ws(tokens);
+        let target_anchor = tokens.peek().copied();
+        let target_type = crate::types::parse_type_checked(tokens, "proto target type")?;
+        let WaveType::Struct(target) = target_type else {
+            return Err(ParseError::expected_at(
+                target_anchor,
+                anchor,
+                "named target type",
+                "proto target type",
+            ));
+        };
+        (Some(first), target)
+    } else {
+        (None, first)
+    };
+    skip_ws(tokens);
+    let opener = if name.is_some() { "'{'" } else { "'{' or ':'" };
+    crate::expr::expect_token(tokens, anchor, TokenType::Lbrace, opener, context)?;
     let mut methods = Vec::new();
     loop {
+        skip_ws(tokens);
         match tokens.peek().map(|token| &token.token_type) {
             Some(TokenType::Rbrace) => {
                 tokens.next();
                 break;
             },
             Some(TokenType::Fun | TokenType::Async) => {
-                let ASTNode::Function(mut method) = parse_function(tokens)? else {
+                let parsed = if name.is_some() {
+                    parse_function_with_receiver(tokens, WaveType::Struct(target.clone()))?
+                } else {
+                    parse_function(tokens)?
+                };
+                let ASTNode::Function(mut method) = parsed else {
                     unreachable!("function parser returns a function node");
                 };
                 if method.return_type.is_none() {
                     method.return_type = Some(WaveType::Void);
                 }
                 methods.push(method);
+            },
+            None | Some(TokenType::Eof) if name.is_some() => {
+                return Err(ParseError::expected_at(
+                    tokens.peek().copied(),
+                    anchor,
+                    "'}'",
+                    context,
+                ));
             },
             _ => {
                 return Err(ParseError::expected_at(
@@ -130,7 +170,7 @@ pub fn parse_proto(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, ParseE
             },
         }
     }
-    Ok(ASTNode::ProtoImpl(ProtoImplNode { target: target_struct, methods }))
+    Ok(ASTNode::ProtoImpl(ProtoImplNode { name, target, methods, visibility: Visibility::Private }))
 }
 
 pub fn parse_struct(tokens: &mut Peekable<Iter<Token>>) -> Result<ASTNode, ParseError> {

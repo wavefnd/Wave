@@ -186,6 +186,14 @@ impl ProgramTypes {
                     }
                 },
                 ASTNode::ProtoImpl(implementation) => {
+                    if let Some(name) = &implementation.name {
+                        return Err(failure(
+                            format!(
+                                "named proto contract `{name}` is not supported by semantic lowering yet"
+                            ),
+                            Some(top_level_span_hint(node)),
+                        ));
+                    }
                     for method in &implementation.methods {
                         let signature = function_type(method);
                         insert_unique_method(

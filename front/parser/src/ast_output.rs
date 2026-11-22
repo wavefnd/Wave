@@ -323,7 +323,12 @@ impl Data for ProtoImplNode {
     fn data(&self, cx: &Context) -> Value {
         record(
             "proto_impl",
-            vec![("target", self.target.data(cx)), ("methods", self.methods.data(cx))],
+            vec![
+                ("name", self.name.data(cx)),
+                ("target", self.target.data(cx)),
+                ("methods", self.methods.data(cx)),
+                ("visibility", self.visibility.data(cx)),
+            ],
         )
     }
 }

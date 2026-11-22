@@ -364,6 +364,10 @@ fn parse_syntax_impl(tokens: &[Token]) -> Result<Vec<ASTNode>, ParseError> {
                         iter.next();
                         Some(parse_struct(&mut iter)?)
                     },
+                    Some(TokenType::Proto) => {
+                        iter.next();
+                        Some(parse_proto(&mut iter)?)
+                    },
                     Some(TokenType::Type) => {
                         iter.next();
                         Some(parse_type_alias(&mut iter)?)
@@ -398,6 +402,7 @@ fn parse_syntax_impl(tokens: &[Token]) -> Result<Vec<ASTNode>, ParseError> {
                         "pub import",
                         "pub export(c) fun",
                         "pub struct",
+                        "pub proto",
                         "pub enum",
                         "pub variant",
                         "pub type",
@@ -434,6 +439,17 @@ fn parse_syntax_impl(tokens: &[Token]) -> Result<Vec<ASTNode>, ParseError> {
                         function.visibility = Visibility::Public;
                     },
                     ASTNode::Struct(structure) => structure.visibility = Visibility::Public,
+                    ASTNode::ProtoImpl(implementation) => {
+                        if implementation.name.is_none() {
+                            return Err(ParseError::syntax_at(
+                                Some(&anchor),
+                                "only named proto contracts may be public",
+                            )
+                            .with_context("public declaration")
+                            .with_help("use `proto Target { ... }` for inherent methods"));
+                        }
+                        implementation.visibility = Visibility::Public;
+                    },
                     ASTNode::TypeAlias(alias) => alias.visibility = Visibility::Public,
                     ASTNode::Enum(enumeration) => enumeration.visibility = Visibility::Public,
                     ASTNode::Variant(variant) => variant.visibility = Visibility::Public,
