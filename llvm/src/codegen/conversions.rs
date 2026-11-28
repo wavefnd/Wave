@@ -14,12 +14,12 @@
 use super::types::{wave_type_to_llvm_type, TypeFlavor};
 use hir::conversions::{unsigned, ConversionInfo, ConversionKind};
 use inkwell::{
-    builder::Builder,
+    builder::{Builder, BuilderError},
     context::Context,
     intrinsics::Intrinsic,
     module::Module,
     types::StructType,
-    values::{BasicValue, BasicValueEnum},
+    values::{BasicValue, BasicValueEnum, IntValue},
     FloatPredicate, IntPredicate,
 };
 use parser::ast::{Operator, WaveType};
@@ -160,6 +160,21 @@ pub(crate) fn apply<'ctx>(
     }
 }
 
+pub(crate) fn signed_remainder<'ctx>(
+    builder: &Builder<'ctx>,
+    dividend: IntValue<'ctx>,
+    divisor: IntValue<'ctx>,
+    name: &str,
+) -> Result<IntValue<'ctx>, BuilderError> {
+    // Both 1 and -1 give remainder zero, but LLVM srem overflows for MIN % -1.
+    let ty = divisor.get_type();
+    let negative_one =
+        builder.build_int_compare(IntPredicate::EQ, divisor, ty.const_all_ones(), "rem.neg_one")?;
+    let safe_divisor =
+        builder.build_select(negative_one, ty.const_int(1, false), divisor, "rem.divisor")?;
+    builder.build_int_signed_rem(dividend, safe_divisor.into_int_value(), name)
+}
+
 pub(crate) fn binary<'ctx>(
     context: &'ctx Context,
     module: &Module<'ctx>,
@@ -214,7 +229,7 @@ pub(crate) fn binary<'ctx>(
                 Operator::Remainder if operation_unsigned => {
                     builder.build_int_unsigned_rem(l_casted, r_casted, "modtmp")
                 },
-                Operator::Remainder => builder.build_int_signed_rem(l_casted, r_casted, "modtmp"),
+                Operator::Remainder => signed_remainder(builder, l_casted, r_casted, "modtmp"),
                 Operator::ShiftLeft => builder.build_left_shift(l_casted, r_casted, "shl"),
                 Operator::ShiftRight => {
                     let arithmetic = !operation_unsigned;

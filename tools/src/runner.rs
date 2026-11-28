@@ -83,21 +83,27 @@ fn patterns(text: &str) -> Result<Vec<String>> {
 impl Metadata {
     pub fn parse(source: &str) -> Result<Self> {
         let mut values = BTreeMap::new();
-        for line in source.lines() {
+        // A CR before LF is one terminator. Any CR left within the line
+        // starts a new physical source line, just as it does in wavec.
+        let lines =
+            source.split('\n').flat_map(|line| line.strip_suffix('\r').unwrap_or(line).split('\r'));
+        for (index, line) in lines.enumerate() {
             let line = line.trim();
             if !line.is_empty() && !line.starts_with("//") {
                 break;
             }
             if let Some(body) = line.strip_prefix("// wave-test:") {
                 for item in body.split(',') {
-                    let (key, value) = item
-                        .trim()
-                        .split_once('=')
-                        .ok_or_else(|| error("malformed wave-test metadata"))?;
+                    let (key, value) = item.trim().split_once('=').ok_or_else(|| {
+                        error(format!("malformed wave-test metadata at line {}", index + 1))
+                    })?;
                     let key = key.trim();
                     let value = value.trim();
                     if key.is_empty() || value.is_empty() || values.insert(key, value).is_some() {
-                        return Err(error("empty or duplicate wave-test metadata"));
+                        return Err(error(format!(
+                            "empty or duplicate wave-test metadata at line {}",
+                            index + 1
+                        )));
                     }
                 }
             }
@@ -212,10 +218,11 @@ impl Metadata {
             || metadata.riscv_float_abi.is_some()
             || metadata.loongarch_float_abi.is_some();
         let assembly = !metadata.asm_contains.is_empty() || !metadata.asm_not_contains.is_empty();
-        if object && metadata.emit != "obj"
-            || assembly && metadata.emit != "asm"
-            || (object || assembly) && metadata.expected_exit != 0
+        if metadata.expected_exit != 0 && (metadata.mode != "run" || metadata.runtime == "compile")
         {
+            return Err(error("nonzero expected exit requires runtime execution"));
+        }
+        if object && metadata.emit != "obj" || assembly && metadata.emit != "asm" {
             return Err(error("artifact contract conflicts with emit/exit contract"));
         }
         Ok(metadata)
@@ -509,7 +516,6 @@ fn run_one(source: &Path, metadata: &Metadata, options: &Options, row: &mut Valu
     // source's normal compile-only assembly contract in the complete case suite.
     let hosted = Metadata::default();
     let metadata = if options.hosted_abi { &hosted } else { metadata };
-    let output = tempfile::Builder::new().prefix("wave-case-").tempdir()?;
     let target = metadata
         .target
         .clone()
@@ -522,6 +528,29 @@ fn run_one(source: &Path, metadata: &Metadata, options: &Options, row: &mut Valu
         })
         .transpose()?;
     let mode = options.target.as_ref().map(|t| t.executor.as_str()).unwrap_or("native");
+    let mut args: Vec<OsString> = vec![
+        options.compiler.clone().into_os_string(),
+        if metadata.mode == "check" { "check" } else { "build" }.into(),
+        source.as_os_str().into(),
+        "--std-root".into(),
+        crate::root().join("std").into_os_string(),
+    ];
+    if let Some(target) = &target {
+        args.extend(["--target".into(), target.into()]);
+    }
+    if let Some(sysroot) = &options.sysroot {
+        args.extend(["--sysroot".into(), sysroot.clone().into_os_string()]);
+    }
+    if metadata.mode == "check" {
+        if options.expected_stdout.is_some() {
+            return Err(error("an stdout contract requires actual runtime execution"));
+        }
+        let mut spec = process::Spec::new(args);
+        spec.timeout = options.build_timeout;
+        command(row, "check", &spec, 0)?;
+        return Ok(());
+    }
+    let output = tempfile::Builder::new().prefix("wave-case-").tempdir()?;
     let compile = metadata.runner == "compile"
         || mode == "compile"
         || ["qemu", "wasm"].contains(&mode)
@@ -555,28 +584,15 @@ fn run_one(source: &Path, metadata: &Metadata, options: &Options, row: &mut Valu
     artifact_name.push(".");
     artifact_name.push(suffix);
     let artifact = output.path().join(artifact_name);
-    let mut args: Vec<OsString> = vec![
-        options.compiler.clone().into_os_string(),
-        if metadata.mode == "check" { "check" } else { "build" }.into(),
-        source.as_os_str().into(),
-        "--std-root".into(),
-        crate::root().join("std").into_os_string(),
+    args.extend([
         "--out-dir".into(),
         output.path().as_os_str().into(),
-    ];
-    if metadata.mode != "check" {
-        args.push(options.optimization.clone().into());
-        // Wave accepts -o for a binary or one object, but names assembly,
-        // textual IR and bitcode from the input stem inside --out-dir.
-        if named_output {
-            args.extend(["-o".into(), artifact.clone().into_os_string()]);
-        }
-    }
-    if let Some(target) = &target {
-        args.extend(["--target".into(), target.into()]);
-    }
-    if let Some(sysroot) = &options.sysroot {
-        args.extend(["--sysroot".into(), sysroot.clone().into_os_string()]);
+        options.optimization.clone().into(),
+    ]);
+    // Wave accepts -o for a binary or one object, but names assembly,
+    // textual IR and bitcode from the input stem inside --out-dir.
+    if named_output {
+        args.extend(["-o".into(), artifact.clone().into_os_string()]);
     }
     if compile {
         args.push(format!("--emit={emit}").into());
@@ -588,15 +604,21 @@ fn run_one(source: &Path, metadata: &Metadata, options: &Options, row: &mut Valu
     }
     let mut spec = process::Spec::new(args);
     spec.timeout = options.build_timeout;
-    command(row, if metadata.mode == "check" { "check" } else { "build" }, &spec, 0)?;
-    if metadata.mode == "check" {
-        return Ok(());
-    }
+    command(row, "build", &spec, 0)?;
     if !artifact.is_file() {
         return Err(error("build succeeded without expected output"));
     }
     if compile {
         config::field(row, "phase", Value::string("artifact"))?;
+        if metadata.mode == "run" {
+            config::field(
+                row,
+                "runtime_skip_reason",
+                Value::string(format!(
+                    "{mode} executor cannot run this case with its declared runtime and capabilities"
+                )),
+            )?;
+        }
         let mut metadata = metadata.clone();
         metadata.emit = emit.into();
         return verify_artifact(&artifact, &metadata, target.as_deref());
@@ -767,7 +789,12 @@ pub fn execute(
             Value::object([
                 (
                     "name",
-                    Value::string(p.strip_prefix(crate::root()).unwrap_or(p).to_string_lossy()),
+                    Value::string(
+                        p.strip_prefix(crate::root())
+                            .unwrap_or(p)
+                            .to_string_lossy()
+                            .replace('\\', "/"),
+                    ),
                 ),
                 ("status", Value::string("not_run")),
                 ("commands", Value::Array(vec![])),
@@ -1235,15 +1262,13 @@ pub fn local_network_unavailable() -> Result<Option<String>> {
 }
 
 pub fn runtime_eligible(metadata: &Metadata, target: &cases::Target) -> bool {
-    metadata.mode == "run"
+    target.executor != "compile"
+        && metadata.mode == "run"
         && metadata.runner == "native"
         && metadata.runtime != "compile"
         && (metadata.runtime != "native" || ["native", "qemu"].contains(&target.executor.as_str()))
         && metadata.requires.iter().all(|cap| target.capabilities.contains(cap))
-        && metadata.stdin.is_none()
-        && metadata.stdin_file.is_none()
         && !metadata.udp_input
-        && metadata.expected_exit == 0
 }
 
 pub fn assembly_code(source: &str, target: &str) -> Result<String> {

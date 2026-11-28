@@ -52,6 +52,61 @@ fn available(tool: &str) -> bool {
 }
 
 #[test]
+fn wasi_case_runner_delivers_stdin_and_compares_the_program_exit() {
+    if llvm::codegen::target::target_spec_for_triple("wasm32-wasip1").is_none()
+        || !available("node")
+        || !available("wasm-ld")
+    {
+        return;
+    }
+    let case = Case::new();
+    let source = case.0.join("input.wave");
+    let report_path = case.0.join("report.json");
+    for (stdin, actual) in [("A", 7), ("B", 2)] {
+        fs::write(
+            &source,
+            format!(
+                r#"// wave-test: expected-exit=7, stdin={stdin}
+import("std::sys::fs")::{{read}};
+fun main() -> i32 {{
+    var b: u8 = 0;
+    if (read(0, &b, 1) != 1 || b != 65) {{ return 2; }}
+    return 7;
+}}
+"#
+            ),
+        )
+        .unwrap();
+        let result = wave_tools::build::test_command()
+            .unwrap()
+            .args([
+                "test",
+                "--wavec",
+                env!("CARGO_BIN_EXE_wavec"),
+                "--target-id",
+                "wasm-wasi",
+                "--source",
+            ])
+            .arg(&source)
+            .arg("--report-json")
+            .arg(&report_path)
+            .output()
+            .unwrap();
+        assert_eq!(
+            result.status.success(),
+            actual == 7,
+            "{}",
+            String::from_utf8_lossy(&result.stderr)
+        );
+        let report = wave_tools::config::read_json(&report_path).unwrap();
+        let row = &report.get_arr("tests").unwrap()[0];
+        assert_eq!(row.get_str("phase"), Some("run"));
+        assert_eq!(row.get_u64("actual_exit"), Some(actual));
+        assert_eq!(row.get_u64("expected_exit"), Some(7));
+    }
+}
+
+#[test]
 fn wasi_provider_failures_keep_the_wasi_errno_domain() {
     let target = "wasm32-wasip1";
     if llvm::codegen::target::target_spec_for_triple(target).is_none() {

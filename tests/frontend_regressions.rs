@@ -51,6 +51,55 @@ fn successful(output: &Output) {
 }
 
 #[test]
+fn runner_check_preserves_frontend_results_without_requesting_artifacts() {
+    let dir = directory();
+    let source = dir.join("case.wave");
+    let report = dir.join("report.json");
+    let triple = frontend_target();
+    let manifest = wave_tools::cases::Manifest::load(&wave_tools::root(), false).unwrap();
+    let target = manifest.resolve(&triple).unwrap();
+    for (body, pass) in [("return 0;", true), ("return missing;", false)] {
+        std::fs::write(
+            &source,
+            format!("// wave-test: mode=check\nfun main() -> i32 {{ {body} }}\n"),
+        )
+        .unwrap();
+        let result = wave_tools::build::test_command()
+            .unwrap()
+            .args(["test", "--wavec", env!("CARGO_BIN_EXE_wavec")])
+            .args(["--target-id", &target.id, "--compile-only", "--source"])
+            .arg(&source)
+            .arg("--report-json")
+            .arg(&report)
+            .output()
+            .unwrap();
+        assert_eq!(result.status.success(), pass, "{}", String::from_utf8_lossy(&result.stderr));
+        let report = wave_tools::config::read_json(&report).unwrap();
+        let row = &report.get_arr("tests").unwrap()[0];
+        assert_eq!(row.get_str("phase"), Some("check"));
+        let commands = row.get_arr("commands").unwrap();
+        assert_eq!(commands.len(), 1);
+        let args: Vec<_> = commands[0]
+            .get_arr("command")
+            .unwrap()
+            .iter()
+            .map(|arg| match arg {
+                utils::wson::Value::String(s) => s.as_str(),
+                _ => panic!("expected a string argument"),
+            })
+            .collect();
+        assert!(args.windows(2).any(|pair| pair == ["--target", &triple]));
+        assert!(!args
+            .iter()
+            .any(|arg| matches!(*arg, "-o" | "--out-dir") || arg.starts_with("--emit")));
+        if !pass {
+            assert!(row.get_str("stderr").unwrap().contains("undeclared identifier `missing`"));
+        }
+    }
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
 fn imported_variants_respect_active_and_inactive_target_attributes() {
     let dir = directory();
     let target = frontend_target();

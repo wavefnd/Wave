@@ -1,0 +1,44 @@
+// wave-test: runtime=portable
+// wave-test: mode=run
+// Signed remainder is zero for every dividend when the divisor is -1.
+static calls: i32 = 0;
+
+fun divisor() -> i32 {
+    calls += 1;
+    return -1;
+}
+
+fun index() -> i32 {
+    calls = calls * 10 + 3;
+    return 0;
+}
+
+fun wide(value: i128, by: i128) -> i128 {
+    return value % by;
+}
+
+fun main() -> i32 {
+    var a: i8 = -128;
+    var b: i16 = -32768;
+    var c: i32 = -2147483648;
+    var d: i64 = -9223372036854775808;
+    var e: i128 = -170141183460469231731687303715884105728;
+    a %= -1;
+    b %= -1;
+    d %= -1;
+    if (a != 0 || b != 0 || c % divisor() != 0 || calls != 1 || d != 0) {
+        return 1;
+    }
+    if (wide(e, -1) != 0 || wide(-17, 5) != -2 || wide(17, -5) != 2) {
+        return 2;
+    }
+    if (-2147483648 % -1 != 0) {
+        return 3;
+    }
+    var slots: array<i32, 1> = [c];
+    slots[index()] %= divisor();
+    if (slots[0] != 0 || calls != 14) {
+        return 4;
+    }
+    return 0;
+}

@@ -14,21 +14,37 @@
 use super::{ASTNode, Expression, StatementNode};
 
 pub fn walk_nodes(nodes: &[ASTNode], visit: &mut impl FnMut(&Expression)) {
-    for node in nodes {
-        walk_node(node, visit);
-    }
+    walk_nodes_with_statements(nodes, visit, &mut |_| {});
 }
 
 pub fn walk_node(node: &ASTNode, visit: &mut impl FnMut(&Expression)) {
+    walk_node_with_statements(node, visit, &mut |_| {});
+}
+
+pub(crate) fn walk_nodes_with_statements(
+    nodes: &[ASTNode],
+    visit: &mut impl FnMut(&Expression),
+    statement: &mut impl FnMut(&StatementNode),
+) {
+    for node in nodes {
+        walk_node_with_statements(node, visit, statement);
+    }
+}
+
+fn walk_node_with_statements(
+    node: &ASTNode,
+    visit: &mut impl FnMut(&Expression),
+    statement: &mut impl FnMut(&StatementNode),
+) {
     match node {
-        ASTNode::Located { value, .. } => walk_node(value, visit),
+        ASTNode::Located { value, .. } => walk_node_with_statements(value, visit, statement),
         ASTNode::Function(function) => {
             for parameter in &function.parameters {
                 if let Some(default) = &parameter.initial_value {
                     walk_expression(default, visit);
                 }
             }
-            walk_nodes(&function.body, visit);
+            walk_nodes_with_statements(&function.body, visit, statement);
         },
         ASTNode::Struct(structure) => {
             for method in &structure.methods {
@@ -37,7 +53,7 @@ pub fn walk_node(node: &ASTNode, visit: &mut impl FnMut(&Expression)) {
                         walk_expression(default, visit);
                     }
                 }
-                walk_nodes(&method.body, visit);
+                walk_nodes_with_statements(&method.body, visit, statement);
             }
         },
         ASTNode::ProtoImpl(implementation) => {
@@ -47,10 +63,13 @@ pub fn walk_node(node: &ASTNode, visit: &mut impl FnMut(&Expression)) {
                         walk_expression(default, visit);
                     }
                 }
-                walk_nodes(&method.body, visit);
+                walk_nodes_with_statements(&method.body, visit, statement);
             }
         },
-        ASTNode::Statement(statement) => walk_statement(statement, visit),
+        ASTNode::Statement(node) => {
+            statement(node);
+            walk_statement(node, visit, statement);
+        },
         ASTNode::Variable(variable) => {
             if let Some(initializer) = &variable.initial_value {
                 walk_expression(initializer, visit);
@@ -65,8 +84,12 @@ pub fn walk_node(node: &ASTNode, visit: &mut impl FnMut(&Expression)) {
     }
 }
 
-fn walk_statement(statement: &StatementNode, visit: &mut impl FnMut(&Expression)) {
-    match statement {
+fn walk_statement(
+    node: &StatementNode,
+    visit: &mut impl FnMut(&Expression),
+    statement: &mut impl FnMut(&StatementNode),
+) {
+    match node {
         StatementNode::PrintFormat { args, .. }
         | StatementNode::PrintlnFormat { args, .. }
         | StatementNode::Input { args, .. } => {
@@ -76,31 +99,31 @@ fn walk_statement(statement: &StatementNode, visit: &mut impl FnMut(&Expression)
         },
         StatementNode::If { condition, body, else_if_blocks, else_block } => {
             walk_expression(condition, visit);
-            walk_nodes(body, visit);
+            walk_nodes_with_statements(body, visit, statement);
             if let Some(blocks) = else_if_blocks {
                 for (condition, body) in blocks.iter() {
                     walk_expression(condition, visit);
-                    walk_nodes(body, visit);
+                    walk_nodes_with_statements(body, visit, statement);
                 }
             }
             if let Some(body) = else_block {
-                walk_nodes(body, visit);
+                walk_nodes_with_statements(body, visit, statement);
             }
         },
         StatementNode::For { initialization, condition, increment, body } => {
-            walk_node(initialization, visit);
+            walk_node_with_statements(initialization, visit, statement);
             walk_expression(condition, visit);
             walk_expression(increment, visit);
-            walk_nodes(body, visit);
+            walk_nodes_with_statements(body, visit, statement);
         },
         StatementNode::While { condition, body } => {
             walk_expression(condition, visit);
-            walk_nodes(body, visit);
+            walk_nodes_with_statements(body, visit, statement);
         },
         StatementNode::Match { value, arms } => {
             walk_expression(value, visit);
             for arm in arms {
-                walk_nodes(&arm.body, visit);
+                walk_nodes_with_statements(&arm.body, visit, statement);
             }
         },
         StatementNode::Assign { value, .. } => walk_expression(value, visit),

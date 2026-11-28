@@ -364,6 +364,39 @@ fn generation_has_nine_archives_and_twenty_nine_bound_assets() {
 }
 
 #[test]
+fn release_assets_require_source_for_revision_and_reject_malformed_sidecars() {
+    use wave_tools::checks::release_assets;
+    let dir = tempfile::tempdir().unwrap();
+    let (staged, _) = generation(dir.path(), 'a', 1);
+    let input = staged.parent().unwrap();
+    let version = "0.0.1-alpha-dev";
+    let sha = source('a');
+    assert_eq!(release_assets(input, version, None, None).unwrap(), 9);
+    assert_eq!(release_assets(input, version, Some(&sha), Some(4)).unwrap(), 9);
+    assert!(release_assets(input, version, Some(&sha), Some(5)).is_err());
+    assert!(release_assets(input, version, None, Some(4))
+        .unwrap_err()
+        .to_string()
+        .contains("--source"));
+
+    let sums = input.join("SHA256SUMS");
+    std::fs::write(&sums, "previous manifest").unwrap();
+    let name = format!("wave-v{version}-x86_64-linux-gnu.tar.gz");
+    let sidecar = input.join(format!("{name}.sha256"));
+    let digest = storage::digest(&input.join(&name)).unwrap();
+    for record in [
+        format!("{}한  {name}", "a".repeat(63)),
+        format!("{}  {name}", "g".repeat(64)),
+        "short".to_string(),
+        format!("{digest}  incorrect"),
+    ] {
+        std::fs::write(&sidecar, record).unwrap();
+        assert!(release_assets(input, version, None, None).is_err());
+        assert_eq!(std::fs::read_to_string(&sums).unwrap(), "previous manifest");
+    }
+}
+
+#[test]
 fn recoverable_promotion_retains_the_old_release_until_verified_uploads() {
     for fault in ["upload", "digest", "lost-response", "none"] {
         let temp = tempfile::tempdir().unwrap();

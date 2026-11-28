@@ -230,7 +230,15 @@ impl ProgramTypes {
                         .map_err(|message| failure(message, Some(top_level_span_hint(node))))?;
                     out.globals.insert(
                         variable.name.clone(),
-                        Binding { mutability: variable.mutability, ty: variable.type_name.clone() },
+                        Binding {
+                            literal_address: variable.mutability == Mutability::Const
+                                && matches!(
+                                    variable.initial_value,
+                                    Some(Expression::Literal(Literal::String(_)))
+                                ),
+                            mutability: variable.mutability,
+                            ty: variable.type_name.clone(),
+                        },
                     );
                     if matches!(variable.mutability, Mutability::Const) {
                         if let Some(Expression::Literal(Literal::Int(raw))) =
@@ -265,6 +273,7 @@ impl ProgramTypes {
                         out.globals.insert(
                             variant.name.clone(),
                             Binding {
+                                literal_address: false,
                                 mutability: Mutability::Const,
                                 ty: WaveType::Struct(enumeration.name.clone()),
                             },

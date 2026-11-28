@@ -267,10 +267,10 @@ fn emit_backend_error_and_exit(
         0,
         0,
     )
-    .with_code(if error.kind == llvm::diagnostic::CodegenErrorKind::InvalidAssembly {
-        "E3401"
-    } else {
-        "E9002"
+    .with_code(match error.kind {
+        llvm::diagnostic::CodegenErrorKind::InvalidAssembly => "E3401",
+        llvm::diagnostic::CodegenErrorKind::InvalidLayout => "E3001",
+        _ => "E9002",
     })
     .with_context(format!("compiler phase: {}", error.phase));
     if let Some(span) = error.span {

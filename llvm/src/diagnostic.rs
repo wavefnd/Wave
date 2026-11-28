@@ -31,6 +31,7 @@ impl fmt::Display for CodegenPhase {
 pub enum CodegenErrorKind {
     BackendFailure,
     InvalidAssembly,
+    InvalidLayout,
     MissingTool,
 }
 

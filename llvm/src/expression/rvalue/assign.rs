@@ -18,6 +18,7 @@
 //! compound assignments with side effects.
 
 use super::ExprGenEnv;
+use crate::codegen::conversions::signed_remainder;
 use crate::codegen::types::TypeFlavor;
 use crate::codegen::{generate_address_ir, wave_type_to_llvm_type};
 use crate::statement::variable::{coerce_basic_value, wave_type_is_unsigned, CoercionMode};
@@ -369,11 +370,9 @@ pub(crate) fn gen_assign_operation<'ctx, 'a>(
                 .build_int_unsigned_rem(lhs, rhs, "rem_assign")
                 .unwrap()
                 .as_basic_value_enum(),
-            AssignOperator::RemAssign => env
-                .builder
-                .build_int_signed_rem(lhs, rhs, "rem_assign")
-                .unwrap()
-                .as_basic_value_enum(),
+            AssignOperator::RemAssign => {
+                signed_remainder(env.builder, lhs, rhs, "rem_assign").unwrap().as_basic_value_enum()
+            },
             AssignOperator::Assign => unreachable!(),
         },
 

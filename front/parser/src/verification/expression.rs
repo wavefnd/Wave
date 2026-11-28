@@ -487,7 +487,7 @@ impl Validator<'_> {
         if !is_lvalue_expression(target) {
             return Err("assignment target is not an lvalue".to_string());
         }
-        self.ensure_mutable_write_target(target, "assign")?;
+        self.ensure_writable_storage(target, "assign")?;
         let target_type = self.validate_expr(target)?;
         let target_type = match target_type {
             ExpressionType::Known(ty) => ExpressionType::Known(self.program.canonical_type(&ty)),
@@ -520,7 +520,7 @@ impl Validator<'_> {
         if !is_lvalue_expression(target) {
             return Err("compound assignment target is not an lvalue".to_string());
         }
-        self.ensure_mutable_write_target(target, "modify with compound assignment")?;
+        self.ensure_writable_storage(target, "modify with compound assignment")?;
         let target_type = self.validate_expr(target)?;
         let target_type = match target_type {
             ExpressionType::Known(ty) => ExpressionType::Known(self.program.canonical_type(&ty)),
@@ -576,7 +576,7 @@ impl Validator<'_> {
         if !is_lvalue_expression(target) {
             return Err("++/-- target is not an lvalue".to_string());
         }
-        self.ensure_mutable_write_target(target, "modify with ++/--")?;
+        self.ensure_writable_storage(target, "modify with ++/--")?;
         let ty = self.validate_expr(target)?;
         let supported = match &ty {
             ExpressionType::Known(ty) => matches!(

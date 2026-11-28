@@ -43,7 +43,7 @@ Use a temp variable: `var tmp: array<T,N> = [...]; foo(tmp);`"
 
     let elem_ty = arr_ty.get_element_type();
 
-    let alloca = env.builder.build_alloca(arr_ty, "arr_lit").unwrap();
+    let alloca = env.scratch_slot(arr_ty, "arr_lit");
     let zero = env.context.i32_type().const_zero();
 
     for (i, e) in elements.iter().enumerate() {

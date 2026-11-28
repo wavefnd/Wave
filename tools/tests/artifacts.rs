@@ -189,3 +189,110 @@ fn coff_address_width_and_every_archive_member_follow_the_native_machine() {
     fs::write(&library, b"!<thin>\n").unwrap();
     assert!(binary::inspect(&library, Some("x86_64-pc-windows-msvc")).is_err());
 }
+
+#[test]
+fn forwarded_pe_exports_resolve_names_ordinals_and_cycles() {
+    fn forwards(file: &Path, targets: &[&str]) {
+        pe(file, 0x8664, &[]);
+        let mut data = fs::read(file).unwrap();
+        // Export directory at RVA 0x1100, with an ordinal-only address table.
+        let base = 0x300;
+        let mut word = |at: usize, n: u32| data[at..at + 4].copy_from_slice(&n.to_le_bytes());
+        word(88 + 112, 0x1100);
+        word(88 + 116, 0x200);
+        word(base + 16, 1);
+        word(base + 20, targets.len() as u32);
+        word(base + 28, 0x1140);
+        let mut strings = 0x1180u32;
+        for (i, name) in targets.iter().enumerate() {
+            let entry = base + 0x40 + 4 * i;
+            data[entry..entry + 4].copy_from_slice(&strings.to_le_bytes());
+            let at = base + (strings - 0x1100) as usize;
+            data[at..at + name.len()].copy_from_slice(name.as_bytes());
+            strings += name.len() as u32 + 1;
+        }
+        fs::write(file, data).unwrap();
+    }
+    let directory = tempfile::tempdir().unwrap();
+    let dir = directory.path();
+    let root = dir.join("root.exe");
+    pe(&root, 0x8664, &["a.dll"]);
+    forwards(&dir.join("a.dll"), &["B.value", "kernel32.Sleep"]);
+    forwards(&dir.join("b.dll"), &["c.#12", "api-ms-win-core-file-l1-1-0.GetFileType"]);
+    forwards(&dir.join("c.dll"), &["a.other"]);
+    let closure = || {
+        windows::dependency_closure(
+            std::slice::from_ref(&root),
+            "x86_64-pc-windows-msvc",
+            &[dir.into()],
+            &[],
+        )
+    };
+    let (payload, prerequisites) = closure().unwrap();
+    assert_eq!(payload.keys().map(String::as_str).collect::<Vec<_>>(), ["a.dll", "b.dll", "c.dll"]);
+    assert!(prerequisites.is_empty());
+    fs::remove_file(dir.join("b.dll")).unwrap();
+    assert!(closure().unwrap_err().to_string().contains("B.dll"));
+}
+
+#[cfg(windows)]
+#[test]
+fn a_packaged_forwarded_export_executes_on_native_windows() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let stage = root.join("stage");
+    fs::create_dir(&stage).unwrap();
+    let target = if cfg!(target_arch = "aarch64") {
+        "aarch64-pc-windows-msvc"
+    } else {
+        "x86_64-pc-windows-msvc"
+    };
+    let machine = if cfg!(target_arch = "aarch64") { "/machine:arm64" } else { "/machine:x64" };
+    let run = |program: &str, args: &[&str]| {
+        let result =
+            std::process::Command::new(program).current_dir(root).args(args).output().unwrap();
+        assert!(result.status.success(), "{program}: {}", String::from_utf8_lossy(&result.stderr));
+    };
+    fs::write(root.join("b.c"), "__declspec(dllexport) int value(void) { return 22; }").unwrap();
+    fs::write(root.join("a.def"), "LIBRARY a\nEXPORTS\n value=b.value\n").unwrap();
+    fs::write(root.join("empty.c"), "int placeholder;").unwrap();
+    fs::write(
+        root.join("root.c"),
+        "__declspec(dllimport) int value(void); int mainCRTStartup(void) { return value() != 22; }",
+    )
+    .unwrap();
+    for (source, object) in [("b.c", "b.obj"), ("empty.c", "empty.obj"), ("root.c", "root.obj")] {
+        run("clang", &["-target", target, "-c", source, "-o", object]);
+    }
+    run("lld-link", &[machine, "/dll", "/noentry", "/nodefaultlib", "/out:b.dll", "b.obj"]);
+    run(
+        "lld-link",
+        &[machine, "/dll", "/noentry", "/nodefaultlib", "/def:a.def", "/out:a.dll", "empty.obj"],
+    );
+    run(
+        "lld-link",
+        &[
+            machine,
+            "/entry:mainCRTStartup",
+            "/subsystem:console",
+            "/nodefaultlib",
+            "/out:root.exe",
+            "root.obj",
+            "a.lib",
+        ],
+    );
+    let exe = root.join("root.exe");
+    let (providers, _) =
+        windows::dependency_closure(std::slice::from_ref(&exe), target, &[root.into()], &[])
+            .unwrap();
+    assert!(providers.contains_key("b.dll"));
+    for (name, source) in providers {
+        fs::copy(source, stage.join(name)).unwrap();
+    }
+    fs::copy(exe, stage.join("root.exe")).unwrap();
+    assert!(std::process::Command::new(stage.join("root.exe"))
+        .current_dir(&stage)
+        .status()
+        .unwrap()
+        .success());
+}

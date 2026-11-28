@@ -4,6 +4,133 @@
 use super::*;
 
 #[test]
+fn signed_remainder_boundaries_execute_at_o0_and_o2() {
+    run_shared_case_at_both_optimization_levels("test143");
+}
+
+#[test]
+fn aggregate_loop_reuses_value_storage_but_keeps_addressed_literals_distinct() {
+    let dir = temp_case_dir("aggregate-loop-storage");
+    let source = write_wave(
+        &dir,
+        "loop.wave",
+        r#"
+        struct Record { x: i64; y: array<i64, 2>; }
+        fun main() -> i32 {
+            var i: i32 = 0;
+            var sum: i64 = 0;
+            while (i < 500000) {
+                var record: Record = Record { x: i, y: [i, i + 1] };
+                sum += record.y[1] - record.x;
+                i += 1;
+            }
+            if (sum != 500000) { return 1; }
+            var first: ptr<array<i32, 1>> = null;
+            var j: i32 = 0;
+            while (j < 2) {
+                var current: ptr<array<i32, 1>> = &[j];
+                if (j == 0) { first = current; }
+                if (j == 1 && (first[0] != 0 || current[0] != 1)) { return 2; }
+                j += 1;
+            }
+            return 0;
+        }
+    "#,
+    );
+    for optimization in ["-O0", "-O2"] {
+        run_wavec([
+            OsStr::new("build"),
+            source.as_os_str(),
+            OsStr::new(optimization),
+            OsStr::new(if native_target_enabled() { "--run" } else { "--emit=ir,obj" }),
+            OsStr::new("--out-dir"),
+            dir.join(optimization).as_os_str(),
+        ]);
+    }
+}
+
+#[test]
+fn literal_backed_string_writes_have_source_diagnostics_and_mutable_views_remain_writable() {
+    let dir = temp_case_dir("literal-write");
+    for operation in [
+        "s[1] = 65;",
+        "var alias: str = s; alias[1] += 1;",
+        "var p: ptr<i8> = s as ptr<i8>; (deref p)++;",
+        "var p: ptr<i8> = &s[1]; deref p = 65;",
+        "input(\"{}\", s[1]);",
+    ] {
+        let source = write_wave(
+            &dir,
+            "direct.wave",
+            &format!("fun main() {{ var s: str = \"abc\"; {operation} }}"),
+        );
+        let error = run_wavec_expect_failure([OsStr::new("check"), source.as_os_str()]);
+        assert!(
+            error.contains("cannot write to read-only string literal storage"),
+            "{operation}: {error}"
+        );
+        assert!(error.contains("direct.wave:1:"), "{error}");
+    }
+
+    // The mutable and literal calls pass exactly the same raw pointer ABI.
+    let common = r#"
+        const TEXT: str = "abc";
+        fun identity(s: str) -> str { return s; }
+        fun write(s: str) { s[1] = 77; }
+    "#;
+    let mutable = write_wave(
+        &dir,
+        "mutable.wave",
+        &format!(
+            r#"{common}
+        fun main() -> i32 {{
+            var b: array<i8, 3> = [65, 66, 0];
+            var s: str = TEXT;
+            if (s[0] != 97) {{ return 1; }}
+            s = (&b[0]) as str;
+            write(identity(s));
+            if (b[1] != 77) {{ return 2; }}
+            return 0;
+        }}"#
+        ),
+    );
+    let literal = write_wave(
+        &dir,
+        "literal.wave",
+        &format!("{common} fun main() {{ write(identity(TEXT)); }}"),
+    );
+    for opt in ["-O0", "-O2"] {
+        let out = dir.join(opt);
+        for source in [&mutable, &literal] {
+            run_wavec([
+                OsStr::new("build"),
+                source.as_os_str(),
+                OsStr::new(opt),
+                OsStr::new(if native_target_enabled() { "--emit=ir,bin" } else { "--emit=ir,obj" }),
+                OsStr::new("--out-dir"),
+                out.as_os_str(),
+            ]);
+        }
+        let ir = fs::read_to_string(out.join("literal.ll")).unwrap();
+        assert!(ir.contains("call void @llvm.trap()"), "{ir}");
+        if native_target_enabled() {
+            let run = |stem: &str| {
+                Command::new(out.join(format!("{stem}{}", std::env::consts::EXE_SUFFIX)))
+                    .current_dir(&out)
+                    .output()
+                    .unwrap()
+                    .status
+            };
+            assert!(run("mutable").success());
+            let status = run("literal");
+            assert!(!status.success());
+            #[cfg(all(target_os = "linux", any(target_arch = "x86_64", target_arch = "x86")))]
+            assert_eq!(std::os::unix::process::ExitStatusExt::signal(&status), Some(4));
+        }
+    }
+}
+
+#[test]
 fn typed_pointer_expression_strides_execute_at_o0_and_o2() {
     let ir = run_shared_case_at_both_optimization_levels("test120");
     for instruction in [
