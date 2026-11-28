@@ -357,9 +357,8 @@ pub fn linux_crt(stage: &Path, target: &str) -> Result<()> {
     Ok(())
 }
 
-fn library_directories(source: &Path, sdk: &Path) -> Vec<PathBuf> {
-    let mut directories =
-        vec![source.parent().unwrap().into(), sdk.join("lib"), sdk.join("lib64"), sdk.join("bin")];
+fn library_directories(sdk: &Path) -> Vec<PathBuf> {
+    let mut directories = vec![sdk.join("lib"), sdk.join("lib64"), sdk.join("bin")];
     for name in ["WAVE_LLVM_LIB", "WAVE_WINDOWS_LLVM_BIN", "LD_LIBRARY_PATH", "DYLD_LIBRARY_PATH"] {
         if let Some(value) = std::env::var_os(name) {
             directories.extend(std::env::split_paths(&value));
@@ -388,46 +387,76 @@ fn library_directories(source: &Path, sdk: &Path) -> Vec<PathBuf> {
     directories
 }
 
+fn elf_directories(paths: &[String], source: &Path) -> Vec<PathBuf> {
+    let origin = source.parent().unwrap().to_string_lossy();
+    paths
+        .iter()
+        .filter_map(|path| {
+            let expanded = path.replace("${ORIGIN}", &origin).replace("$ORIGIN", &origin);
+            (!expanded.contains('$')).then(|| PathBuf::from(expanded))
+        })
+        .collect()
+}
+
+fn mach_path(name: &str, loader_dir: &Path, executable_dir: &Path) -> PathBuf {
+    let path = Path::new(name);
+    for (prefix, directory) in [("@loader_path", loader_dir), ("@executable_path", executable_dir)]
+    {
+        if let Ok(relative) = path.strip_prefix(prefix) {
+            return directory.join(relative);
+        }
+    }
+    path.to_owned()
+}
+
 fn resolve_library(
     name: &str,
     source: &Path,
+    executable_dir: &Path,
     info: &binary::Info,
     sdk: &Path,
     target: &str,
+    inherited_rpaths: &[PathBuf],
 ) -> Result<PathBuf> {
     let mut candidates = Vec::new();
     if Path::new(name).is_absolute() {
         candidates.push(PathBuf::from(name));
     }
-    for prefix in ["@loader_path/", "@executable_path/"] {
-        if let Some(suffix) = name.strip_prefix(prefix) {
-            candidates.push(source.parent().unwrap().join(suffix));
+    if target.contains("darwin") {
+        if let Some(suffix) = name.strip_prefix("@rpath/") {
+            candidates.extend(inherited_rpaths.iter().map(|directory| directory.join(suffix)));
+        } else if name.starts_with("@loader_path/") || name.starts_with("@executable_path/") {
+            candidates.push(mach_path(name, source.parent().unwrap(), executable_dir));
         }
     }
-    if let Some(suffix) = name.strip_prefix("@rpath/") {
-        for rpath in &info.rpaths {
-            let rpath = rpath
-                .replace("@loader_path", &source.parent().unwrap().to_string_lossy())
-                .replace("@executable_path", &source.parent().unwrap().to_string_lossy());
-            candidates.push(PathBuf::from(rpath).join(suffix));
+    if info.format == "Elf" && target.contains("-linux") {
+        // DT_RPATH is inherited. DT_RUNPATH applies only to direct dependencies
+        // and follows LD_LIBRARY_PATH. Preserve the order within each list.
+        if info.runpaths.is_empty() {
+            candidates.extend(inherited_rpaths.iter().map(|directory| directory.join(name)));
         }
+        if let Some(paths) = std::env::var_os("LD_LIBRARY_PATH") {
+            candidates.extend(std::env::split_paths(&paths).map(|directory| directory.join(name)));
+        }
+        candidates.extend(elf_directories(&info.runpaths, source).iter().map(|dir| dir.join(name)));
     }
-    for directory in library_directories(source, sdk) {
+    // ELF does not implicitly search the directory of the referring object.
+    let mut fallbacks = library_directories(sdk);
+    if !target.contains("-linux") {
+        fallbacks.insert(0, source.parent().unwrap().into());
+    }
+    for directory in &fallbacks {
         candidates
             .push(directory.join(
                 Path::new(name).file_name().ok_or_else(|| error("invalid dependency name"))?,
             ));
     }
-    for rpath in &info.rpaths {
-        let directory = rpath
-            .replace("${ORIGIN}", &source.parent().unwrap().to_string_lossy())
-            .replace("$ORIGIN", &source.parent().unwrap().to_string_lossy());
-        if !directory.contains('$') {
-            candidates.push(PathBuf::from(directory).join(name));
-        }
+    if !target.contains("-linux") {
+        candidates
+            .extend(elf_directories(info.runtime_paths(), source).iter().map(|dir| dir.join(name)));
     }
     if cfg!(windows) {
-        for directory in library_directories(source, sdk) {
+        for directory in fallbacks {
             if directory.is_dir() {
                 for entry in fs::read_dir(directory)? {
                     let entry = entry?;
@@ -464,7 +493,10 @@ pub fn runtime_closure(
 ) -> Result<Vec<PathBuf>> {
     if target.contains("windows") {
         let binaries = roots.iter().map(|(source, _)| source.clone()).collect::<Vec<_>>();
-        let mut search = library_directories(&binaries[0], sdk);
+        let mut search = library_directories(sdk);
+        if let Some(directory) = binaries.first().and_then(|path| path.parent()) {
+            search.insert(0, directory.into());
+        }
         search.extend(roots.iter().filter_map(|(source, _)| source.parent().map(Path::to_owned)));
         let system = PathBuf::from(
             std::env::var_os("SystemRoot").ok_or_else(|| error("missing Windows SystemRoot"))?,
@@ -499,17 +531,47 @@ pub fn runtime_closure(
         )?;
         return Ok(copied);
     }
-    let mut pending: VecDeque<_> = roots.iter().cloned().collect();
+    let mut pending = VecDeque::new();
+    let darwin = target.contains("darwin");
+    for (source, staged) in roots {
+        let executable_dir = if darwin {
+            fs::canonicalize(source)?.parent().unwrap().to_owned()
+        } else {
+            PathBuf::new()
+        };
+        pending.push_back((source.clone(), staged.clone(), executable_dir, Vec::new()));
+    }
+    let mut rewritten = BTreeSet::new();
     let mut visited = BTreeSet::new();
     let mut names: BTreeMap<String, PathBuf> = BTreeMap::new();
     let mut copied = Vec::new();
     let library_dir = stage.join(if target.contains("windows") { "llvm/bin" } else { "llvm/lib" });
     fs::create_dir_all(&library_dir)?;
-    while let Some((source, staged)) = pending.pop_front() {
-        if !visited.insert((fs::canonicalize(&source)?, staged.clone())) {
+    while let Some((source, staged, executable_dir, mut inherited_rpaths)) = pending.pop_front() {
+        let resolved_source = fs::canonicalize(&source)?;
+        if !visited.insert((
+            resolved_source.clone(),
+            staged.clone(),
+            executable_dir.clone(),
+            inherited_rpaths.clone(),
+        )) {
             continue;
         }
         let info = binary::inspect(&source, Some(target))?;
+        if darwin || target.contains("-linux") && info.runpaths.is_empty() {
+            let mut directories = if darwin {
+                info.rpaths
+                    .iter()
+                    .map(|path| mach_path(path, resolved_source.parent().unwrap(), &executable_dir))
+                    .collect()
+            } else {
+                elf_directories(&info.rpaths, &resolved_source)
+            };
+            let mut seen = BTreeSet::new();
+            directories.append(&mut inherited_rpaths);
+            directories.retain(|path| seen.insert(path.clone()));
+            inherited_rpaths = directories;
+        }
         for name in &info.needed {
             if binary::system_library(name, target) {
                 continue;
@@ -522,7 +584,17 @@ pub fn runtime_closure(
                 binary::inspect(&path, Some(target))?;
                 continue;
             }
-            let dependency = resolve_library(name, &source, &info, sdk, target)?;
+            let loader =
+                if darwin || target.contains("-linux") { &resolved_source } else { &source };
+            let dependency = resolve_library(
+                name,
+                loader,
+                &executable_dir,
+                &info,
+                sdk,
+                target,
+                &inherited_rpaths,
+            )?;
             binary::inspect(&dependency, Some(target))?;
             if target.contains("freebsd")
                 && freebsd_base_library(
@@ -539,21 +611,31 @@ pub fn runtime_closure(
             let key =
                 if target.contains("windows") { basename.to_lowercase() } else { basename.clone() };
             if let Some(previous) = names.get(&key) {
-                if storage::digest(previous)? != storage::digest(&dependency)? {
+                if previous != &dependency
+                    && storage::digest(previous)? != storage::digest(&dependency)?
+                {
                     return Err(error(format!("conflicting runtime library basename: {basename}")));
                 }
             }
             let destination = library_dir.join(&basename);
-            if !destination.exists() {
+            let newly_staged = !destination.exists();
+            if newly_staged {
                 fs::copy(&dependency, &destination)?;
                 copied.push(destination.clone());
                 names.insert(key, dependency.clone());
-                pending.push_back((dependency.clone(), destination.clone()));
+            }
+            if newly_staged || darwin || target.contains("-linux") {
+                pending.push_back((
+                    dependency.clone(),
+                    destination.clone(),
+                    executable_dir.clone(),
+                    inherited_rpaths.clone(),
+                ));
             }
             if target.contains("windows") {
                 fs::copy(&dependency, stage.join(&basename))?;
             }
-            if target.contains("darwin") {
+            if darwin && rewritten.insert((staged.clone(), name.clone())) {
                 let prefix = if staged.parent() == Some(library_dir.as_path()) {
                     "@loader_path"
                 } else if staged.parent() == Some(stage) {
@@ -580,7 +662,7 @@ fn freebsd_base_library(path: &Path, root: &Path) -> bool {
 
 pub fn require_rpath(path: &Path, expected: &str) -> Result<()> {
     let info = binary::inspect(path, None)?;
-    if info.format != "Elf" || !info.rpaths.contains(expected) {
+    if info.format != "Elf" || !info.runtime_paths().iter().any(|path| path == expected) {
         return Err(error(format!(
             "{}: missing exact runtime search path {expected}",
             path.display()
@@ -1510,6 +1592,11 @@ mod tests {
             fs::create_dir(stage.join("empty")).unwrap();
             archive_at_epoch(&stage, &second, "wave", 1600000001).unwrap();
             assert_eq!(fs::read(&first).unwrap(), fs::read(&second).unwrap(), "{extension}");
+            let unpacked = temp.path().join(format!("unpacked-{extension}"));
+            crate::sdk::extract(&first, &unpacked, false).unwrap();
+            assert!(unpacked.join("wave/empty").is_dir());
+            assert_eq!(fs::read(unpacked.join("wave/bin/wavec.exe")).unwrap(), b"executable bytes");
+            assert_eq!(fs::read(unpacked.join("wave/payload")).unwrap(), b"unchanged bytes");
             if extension == "tar.gz" {
                 let mut archive =
                     tar::Archive::new(flate2::read::GzDecoder::new(fs::File::open(first).unwrap()));

@@ -12,8 +12,19 @@ pub struct Info {
     pub bits: u32,
     pub flags: u32,
     pub needed: BTreeSet<String>,
-    pub rpaths: BTreeSet<String>,
+    pub rpaths: Vec<String>,
+    pub runpaths: Vec<String>,
     pub interpreter: Option<String>,
+}
+
+impl Info {
+    pub fn runtime_paths(&self) -> &[String] {
+        if self.runpaths.is_empty() {
+            &self.rpaths
+        } else {
+            &self.runpaths
+        }
+    }
 }
 
 fn arch(architecture: object::Architecture) -> String {
@@ -155,8 +166,10 @@ fn elf(bytes: &[u8], info: &mut Info, little: bool) -> Result<()> {
         if tag == 1 {
             info.needed.insert(string(strings, value)?);
         }
-        if tag == 15 || tag == 29 {
+        if tag == 15 {
             info.rpaths.extend(string(strings, value)?.split(':').map(String::from));
+        } else if tag == 29 {
+            info.runpaths.extend(string(strings, value)?.split(':').map(String::from));
         }
     }
     Ok(())
@@ -203,6 +216,23 @@ fn pe(bytes: &[u8], info: &mut Info) -> Result<()> {
             })
             .ok_or_else(|| error("PE RVA outside file-backed sections"))
     };
+    // Forwarders live in the export address table, including ordinal-only slots.
+    // Ordinary exports point at code or data and add no dependency.
+    if let Some(exports) = object::read::pe::PeFile64::parse(bytes)?.export_table()? {
+        use object::read::pe::ExportTarget;
+        for index in 0..exports.addresses().len() {
+            let library = match exports.target_by_index(u32::try_from(index)?)? {
+                ExportTarget::ForwardByName(name, _) | ExportTarget::ForwardByOrdinal(name, _) => {
+                    std::str::from_utf8(name)?
+                },
+                ExportTarget::Address(_) => continue,
+            };
+            if library.is_empty() || library.contains(['/', '\\', ':']) {
+                return Err(error("invalid forwarded DLL name"));
+            }
+            info.needed.insert(format!("{library}.dll"));
+        }
+    }
     for index in [1u64, 13] {
         if directories <= index {
             continue;
@@ -265,7 +295,7 @@ fn macho(bytes: &[u8], info: &mut Info, little: bool) -> Result<()> {
             info.needed.insert(string(data, integer(data, 8, 4, little)?)?);
         }
         if command == 0x8000001c {
-            info.rpaths.insert(string(data, integer(data, 8, 4, little)?)?);
+            info.rpaths.push(string(data, integer(data, 8, 4, little)?)?);
         }
         offset += size;
     }

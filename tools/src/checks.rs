@@ -78,6 +78,7 @@ pub fn binary(arguments: &[OsString]) -> Result<i32> {
         package::require_rpath(&path, &expected)?;
     }
     if json {
+        let rpaths = Value::strings(info.runtime_paths());
         print!(
             "{}",
             config::json(&Value::object([
@@ -86,7 +87,7 @@ pub fn binary(arguments: &[OsString]) -> Result<i32> {
                 ("bits", Value::integer(info.bits as u64)),
                 ("flags", Value::integer(info.flags as u64)),
                 ("needed", Value::strings(info.needed)),
-                ("rpaths", Value::strings(info.rpaths))
+                ("rpaths", rpaths)
             ]))?
         );
     } else {
@@ -102,6 +103,9 @@ pub fn release_assets(
     expected_revision: Option<u64>,
 ) -> Result<usize> {
     crate::publication::validate_version(version, false)?;
+    if expected_revision.is_some() && source.is_none() {
+        return Err(error("--std-revision requires --source to verify package metadata"));
+    }
     if let Some(source) = source {
         crate::publication::sha(source)?;
     }
@@ -137,7 +141,8 @@ pub fn release_assets(
         if records.len() != 1 || records[0].len() < 66 {
             return Err(error("malformed checksum record"));
         }
-        let (digest, filename) = records[0].split_at(64);
+        let (digest, filename) =
+            records[0].split_at_checked(64).ok_or_else(|| error("malformed checksum record"))?;
         if !digest.bytes().all(|b| b.is_ascii_hexdigit())
             || ![format!("  {name}"), format!(" *{name}")].contains(&filename.to_string())
             || storage::digest(&archive)? != digest.to_ascii_lowercase()
