@@ -884,17 +884,15 @@ fn archive_at_epoch(stage: &Path, output: &Path, name: &str, epoch: u64) -> Resu
         )
         .map_err(|_| error("invalid ZIP archive epoch"))?;
         let mut zip = zip::ZipWriter::new(fs::File::create(output)?);
-        zip.add_directory(
-            format!("{name}/"),
-            zip::write::SimpleFileOptions::default()
-                .last_modified_time(stamp)
-                .unix_permissions(0o755),
-        )?;
+        // ZIP readers interpret permission bits according to the creator system.
+        let options = zip::write::SimpleFileOptions::default()
+            .system(zip::System::Unix)
+            .last_modified_time(stamp);
+        zip.add_directory(format!("{name}/"), options.unix_permissions(0o755))?;
         for (relative, path) in entries {
             let directory = path.is_dir();
-            let options = zip::write::SimpleFileOptions::default()
+            let options = options
                 .compression_method(zip::CompressionMethod::Deflated)
-                .last_modified_time(stamp)
                 .unix_permissions(archive_mode(&path, directory)?);
             if directory {
                 zip.add_directory(format!("{name}/{relative}/"), options)?;
@@ -1620,14 +1618,17 @@ mod tests {
             } else {
                 let mut archive = zip::ZipArchive::new(fs::File::open(first).unwrap()).unwrap();
                 assert_eq!(archive.len(), 5);
-                assert_eq!(
-                    archive.by_name("wave/bin/wavec.exe").unwrap().unix_mode().unwrap() & 0o777,
-                    0o755
-                );
-                assert_eq!(
-                    archive.by_name("wave/payload").unwrap().unix_mode().unwrap() & 0o777,
-                    0o644
-                );
+                for (name, mode) in [
+                    ("wave/", 0o755),
+                    ("wave/bin/", 0o755),
+                    ("wave/bin/wavec.exe", 0o755),
+                    ("wave/empty/", 0o755),
+                    ("wave/payload", 0o644),
+                ] {
+                    let entry = archive.by_name(name).unwrap();
+                    assert_eq!(entry.system(), zip::System::Unix, "{name}");
+                    assert_eq!(entry.unix_mode().unwrap() & 0o777, mode, "{name}");
+                }
             }
         }
     }

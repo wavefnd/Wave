@@ -55,6 +55,9 @@ fn runner_check_preserves_frontend_results_without_requesting_artifacts() {
     let dir = directory();
     let source = dir.join("case.wave");
     let report = dir.join("report.json");
+    let triple = frontend_target();
+    let manifest = wave_tools::cases::Manifest::load(&wave_tools::root(), false).unwrap();
+    let target = manifest.resolve(&triple).unwrap();
     for (body, pass) in [("return 0;", true), ("return missing;", false)] {
         std::fs::write(
             &source,
@@ -63,7 +66,8 @@ fn runner_check_preserves_frontend_results_without_requesting_artifacts() {
         .unwrap();
         let result = wave_tools::build::test_command()
             .unwrap()
-            .args(["test", "--wavec", env!("CARGO_BIN_EXE_wavec"), "--suite", "shared", "--source"])
+            .args(["test", "--wavec", env!("CARGO_BIN_EXE_wavec")])
+            .args(["--target-id", &target.id, "--compile-only", "--source"])
             .arg(&source)
             .arg("--report-json")
             .arg(&report)
@@ -73,7 +77,21 @@ fn runner_check_preserves_frontend_results_without_requesting_artifacts() {
         let report = wave_tools::config::read_json(&report).unwrap();
         let row = &report.get_arr("tests").unwrap()[0];
         assert_eq!(row.get_str("phase"), Some("check"));
-        assert_eq!(row.get_arr("commands").unwrap().len(), 1);
+        let commands = row.get_arr("commands").unwrap();
+        assert_eq!(commands.len(), 1);
+        let args: Vec<_> = commands[0]
+            .get_arr("command")
+            .unwrap()
+            .iter()
+            .map(|arg| match arg {
+                utils::wson::Value::String(s) => s.as_str(),
+                _ => panic!("expected a string argument"),
+            })
+            .collect();
+        assert!(args.windows(2).any(|pair| pair == ["--target", &triple]));
+        assert!(!args
+            .iter()
+            .any(|arg| matches!(*arg, "-o" | "--out-dir") || arg.starts_with("--emit")));
         if !pass {
             assert!(row.get_str("stderr").unwrap().contains("undeclared identifier `missing`"));
         }
