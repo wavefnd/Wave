@@ -45,6 +45,24 @@ pub fn runtime_evidence(
     if shards == 0 || shard >= shards {
         return Err(error("invalid runtime evidence shard"));
     }
+    if report.get_u64("schema_version") != Some(1) {
+        return Err(error("unsupported runtime evidence schema version"));
+    }
+    let selection = report.get("selection").ok_or_else(|| error("missing report selection"))?;
+    for (key, expected) in [
+        ("id", target.id.as_str()),
+        ("target", target.rust_target()?.as_str()),
+        ("executor", target.executor.as_str()),
+    ] {
+        if selection.get_str(key) != Some(expected) {
+            return Err(error(format!("runtime evidence selection {key} must be {expected}")));
+        }
+    }
+    if selection.get_u64("shard_index") != Some(shard as u64)
+        || selection.get_u64("shard_count") != Some(shards as u64)
+    {
+        return Err(error("runtime evidence shard does not match the requested selection"));
+    }
     let manifest = cases::Manifest::load(&crate::root(), true)?;
     let sources = manifest.sources(Some(target))?;
     let selected = sources
@@ -64,11 +82,12 @@ pub fn runtime_evidence(
             .iter()
             .find(|row| row.get_str("name") == Some(&name))
             .ok_or_else(|| error(format!("missing runtime evidence for {name}")))?;
+        let expected_exit = config::number(metadata.expected_exit.into());
         if row.get_str("status") != Some("pass")
             || !config::array(row, "commands")?.iter().any(|command| {
                 command.get_str("phase") == Some("run")
                     && command.get_str("status") == Some("pass")
-                    && command.get_u64("actual_exit") == Some(0)
+                    && command.get("actual_exit") == Some(&expected_exit)
             })
         {
             return Err(error(format!("runtime source was not successfully executed: {name}")));

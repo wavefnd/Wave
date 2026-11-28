@@ -102,6 +102,20 @@ fn output_budget_is_bounded_and_reported() {
 }
 
 #[test]
+fn case_metadata_preserves_physical_lines_across_line_endings() {
+    use wave_tools::runner::Metadata;
+    for newline in ["\n", "\r\n", "\r"] {
+        let text = ["// header", "", "// wave-test: expected-exit=7, stdin=A", "fun main() {}"]
+            .join(newline);
+        let case = Metadata::parse(&text).unwrap();
+        assert_eq!(case.expected_exit, 7);
+        assert_eq!(case.stdin.as_deref(), Some("A"));
+        let malformed = ["// header", "", "// wave-test: stdin"].join(newline);
+        assert!(Metadata::parse(&malformed).unwrap_err().to_string().contains("line 3"));
+    }
+}
+
+#[test]
 fn metadata_rejects_ambiguous_fixtures_and_invalid_compile_contracts() {
     use wave_tools::runner::Metadata;
     for source in [
@@ -110,6 +124,8 @@ fn metadata_rejects_ambiguous_fixtures_and_invalid_compile_contracts() {
         "// wave-test: requires=clock|clock",
         "// wave-test: stdout-file=../outside",
         "// wave-test: target=aarch64-unknown-linux-gnu",
+        "// wave-test: mode=check,expected-exit=7",
+        "// wave-test: runtime=compile,expected-exit=7",
     ] {
         assert!(Metadata::parse(source).is_err(), "{source}");
     }
@@ -290,6 +306,114 @@ fn cleanup_preflights_ownership_preserves_tmp_and_recognizes_native_archives() {
     assert!(!root.join("wave-v0.0.1-alpha-dev-aarch64-pc-windows-msvc.zip.sha256").exists());
     assert!(root.join("wave-v0.0.1-alpha-dev-unknown.tar.gz").is_file());
     assert!(root.join("unrelated.zip").is_file());
+}
+
+#[test]
+#[cfg(unix)]
+fn clean_applies_the_default_exception_to_the_target_entry() {
+    use std::os::unix::fs::symlink;
+    use wave_tools::build::clean_outputs;
+
+    let work = tempfile::tempdir().unwrap();
+    let root = work.path();
+    fs::create_dir_all(root.join("tests/cases")).unwrap();
+    fs::copy(
+        wave_tools::root().join("tests/cases/cases.toml"),
+        root.join("tests/cases/cases.toml"),
+    )
+    .unwrap();
+    let data = root.join("custom");
+    let target = root.join("target");
+    let dist = root.join("dist");
+    fs::create_dir(&data).unwrap();
+    fs::create_dir(&dist).unwrap();
+    fs::write(data.join("sentinel"), "keep").unwrap();
+    symlink(&data, &target).unwrap();
+    assert!(clean_outputs(root, &data, &dist).is_err());
+    assert!(dist.is_dir());
+    clean_outputs(root, &target, &dist).unwrap();
+    assert!(!storage::exists(&target));
+    assert_eq!(fs::read(data.join("sentinel")).unwrap(), b"keep");
+    fs::write(data.join(".wave-cargo-owner"), fs::canonicalize(root).unwrap().to_str().unwrap())
+        .unwrap();
+    clean_outputs(root, &data, &dist).unwrap();
+    assert!(!data.exists());
+}
+
+#[test]
+fn runtime_evidence_checks_the_schema_target_executor_and_shard() {
+    use utils::wson::Value;
+    use wave_tools::{cases::Manifest, ci::runtime_evidence, runner};
+
+    let root = wave_tools::root();
+    let manifest = Manifest::load(&root, true).unwrap();
+    let target = manifest.target("linux-amd64").unwrap();
+    let sources = manifest.sources(Some(target)).unwrap();
+    let (index, source) = sources
+        .iter()
+        .enumerate()
+        .find(|(_, path)| {
+            let metadata = runner::Metadata::parse(&fs::read_to_string(path).unwrap()).unwrap();
+            metadata.expected_exit != 0 && runner::runtime_eligible(&metadata, target)
+        })
+        .unwrap();
+    let count = sources.len();
+    let expected =
+        runner::Metadata::parse(&fs::read_to_string(source).unwrap()).unwrap().expected_exit;
+    let selection = Value::object([
+        ("id", Value::string(&target.id)),
+        ("executor", Value::string(&target.executor)),
+        ("target", Value::string(target.rust_target().unwrap())),
+        ("shard_index", Value::integer(index as u64)),
+        ("shard_count", Value::integer(count as u64)),
+    ]);
+    let row = |actual: i32| {
+        Value::object([
+            (
+                "name",
+                Value::string(
+                    source.strip_prefix(&root).unwrap().to_string_lossy().replace('\\', "/"),
+                ),
+            ),
+            ("status", Value::string("pass")),
+            (
+                "commands",
+                Value::Array(vec![Value::object([
+                    ("phase", Value::string("run")),
+                    ("status", Value::string("pass")),
+                    ("actual_exit", config::number(actual.into())),
+                ])]),
+            ),
+        ])
+    };
+    let report = Value::object([
+        ("schema_version", Value::integer(1)),
+        ("selection", selection.clone()),
+        ("tests", Value::Array(vec![row(expected)])),
+    ]);
+    let check = |report: &Value| runtime_evidence(report, target, index, count);
+    assert_eq!(check(&report).unwrap(), 1);
+    let mut wrong_exit = report.clone();
+    config::field(&mut wrong_exit, "tests", Value::Array(vec![row(0)])).unwrap();
+    assert!(check(&wrong_exit).is_err());
+    for (key, value) in [
+        ("id", Value::string("windows-arm64")),
+        ("executor", Value::string("compile")),
+        ("target", Value::string("aarch64-pc-windows-msvc")),
+        ("shard_index", Value::integer((index + 1) as u64)),
+        ("shard_count", Value::integer((count + 1) as u64)),
+    ] {
+        let mut wrong = selection.clone();
+        config::field(&mut wrong, key, value).unwrap();
+        let mut input = report.clone();
+        config::field(&mut input, "selection", wrong).unwrap();
+        assert!(check(&input).is_err(), "{key}");
+    }
+    for (key, value) in [("schema_version", Value::integer(2)), ("selection", Value::Null)] {
+        let mut input = report.clone();
+        config::field(&mut input, key, value).unwrap();
+        assert!(check(&input).is_err(), "{key}");
+    }
 }
 
 #[test]

@@ -51,6 +51,37 @@ fn successful(output: &Output) {
 }
 
 #[test]
+fn runner_check_preserves_frontend_results_without_requesting_artifacts() {
+    let dir = directory();
+    let source = dir.join("case.wave");
+    let report = dir.join("report.json");
+    for (body, pass) in [("return 0;", true), ("return missing;", false)] {
+        std::fs::write(
+            &source,
+            format!("// wave-test: mode=check\nfun main() -> i32 {{ {body} }}\n"),
+        )
+        .unwrap();
+        let result = wave_tools::build::test_command()
+            .unwrap()
+            .args(["test", "--wavec", env!("CARGO_BIN_EXE_wavec"), "--suite", "shared", "--source"])
+            .arg(&source)
+            .arg("--report-json")
+            .arg(&report)
+            .output()
+            .unwrap();
+        assert_eq!(result.status.success(), pass, "{}", String::from_utf8_lossy(&result.stderr));
+        let report = wave_tools::config::read_json(&report).unwrap();
+        let row = &report.get_arr("tests").unwrap()[0];
+        assert_eq!(row.get_str("phase"), Some("check"));
+        assert_eq!(row.get_arr("commands").unwrap().len(), 1);
+        if !pass {
+            assert!(row.get_str("stderr").unwrap().contains("undeclared identifier `missing`"));
+        }
+    }
+    std::fs::remove_dir_all(dir).unwrap();
+}
+
+#[test]
 fn imported_variants_respect_active_and_inactive_target_attributes() {
     let dir = directory();
     let target = frontend_target();

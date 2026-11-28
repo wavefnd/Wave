@@ -145,14 +145,12 @@ pub fn clean(arguments: &[OsString]) -> Result<i32> {
 
 pub fn clean_outputs(root: &Path, selected: &Path, dist: &Path) -> Result<()> {
     let owner = fs::canonicalize(root)?;
-    let default = storage::resolved(&root.join("target"))?;
     let location = |path: &Path| -> Result<PathBuf> {
         let name =
             path.file_name().ok_or_else(|| error("cleanup requires a named output directory"))?;
         Ok(storage::resolved(path.parent().unwrap_or(Path::new(".")))?.join(name))
     };
     let selected_location = location(selected)?;
-    let selected_path = storage::resolved(selected)?;
     // Validate every destination before removing anything. Resolve parents but
     // not the final directory link: cleanup unlinks that link, never its target.
     if selected_location == owner || owner.starts_with(&selected_location) {
@@ -161,11 +159,11 @@ pub fn clean_outputs(root: &Path, selected: &Path, dist: &Path) -> Result<()> {
     if location(dist)? != owner.join("dist") {
         return Err(error("refusing to delete an unowned custom distribution directory"));
     }
-    if storage::exists(selected)
-        && !fs::symlink_metadata(selected)?.is_symlink()
-        && selected_path != default
+    if storage::exists(&selected_location)
+        && !fs::symlink_metadata(&selected_location)?.is_symlink()
+        && selected_location != owner.join("target")
     {
-        let marker = selected.join(".wave-cargo-owner");
+        let marker = selected_location.join(".wave-cargo-owner");
         if fs::read_to_string(marker).unwrap_or_default().trim() != owner.to_string_lossy() {
             return Err(error("refusing to delete unowned custom Cargo directory"));
         }
@@ -177,8 +175,8 @@ pub fn clean_outputs(root: &Path, selected: &Path, dist: &Path) -> Result<()> {
         .filter(|t| t.enabled)
         .map(|t| t.archive_target())
         .collect::<Result<Vec<_>>>()?;
-    storage::remove(selected)?;
-    storage::remove(dist)?;
+    storage::remove(&selected_location)?;
+    storage::remove(&owner.join("dist"))?;
     for entry in fs::read_dir(root)? {
         let path = entry?.path();
         let name = path.file_name().unwrap().to_string_lossy();

@@ -29,6 +29,14 @@ pub fn exists(path: &Path) -> bool {
 
 pub fn remove(path: &Path) -> Result<()> {
     if let Ok(metadata) = fs::symlink_metadata(path) {
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::FileTypeExt;
+            if metadata.file_type().is_symlink_dir() {
+                fs::remove_dir(path)?;
+                return Ok(());
+            }
+        }
         if metadata.is_dir() && !metadata.is_symlink() {
             fs::remove_dir_all(path)?;
         } else {
