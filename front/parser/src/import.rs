@@ -161,95 +161,78 @@ fn is_supported_target_item_start(line: &str) -> bool {
     false
 }
 
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum TargetItemEnd {
+    TrackComments,
+    ReadKeyword,
+    BraceOrSemicolon,
+    Semicolon,
+}
+
 fn scan_target_item_line(
     line: &str,
     in_block_comment: &mut usize,
-    depth: &mut i32,
-    seen_open: &mut bool,
-    saw_semicolon: &mut bool,
-) {
-    let mut chars = line.chars().peekable();
-    let mut in_string = false;
-    let mut in_char = false;
-    let mut escape = false;
-
+    depth: &mut usize,
+    end: &mut TargetItemEnd,
+    quote: &mut Option<char>,
+) -> Option<usize> {
+    let mut chars = line.chars();
     while let Some(ch) = chars.next() {
         if *in_block_comment > 0 {
-            if ch == '*' && chars.peek() == Some(&'/') {
+            if ch == '*' && chars.as_str().starts_with('/') {
                 chars.next();
                 *in_block_comment -= 1;
-            } else if ch == '/' && chars.peek() == Some(&'*') {
+            } else if ch == '/' && chars.as_str().starts_with('*') {
                 chars.next();
                 *in_block_comment += 1;
             }
             continue;
         }
-
-        if in_string {
-            if escape {
-                escape = false;
-                continue;
-            }
+        if let Some(delimiter) = *quote {
             if ch == '\\' {
-                escape = true;
-                continue;
-            }
-            if ch == '"' {
-                in_string = false;
-            }
-            continue;
-        }
-
-        if in_char {
-            if escape {
-                escape = false;
-                continue;
-            }
-            if ch == '\\' {
-                escape = true;
-                continue;
-            }
-            if ch == '\'' {
-                in_char = false;
-            }
-            continue;
-        }
-
-        if ch == '/' {
-            if chars.peek() == Some(&'/') {
-                break;
-            }
-            if chars.peek() == Some(&'*') {
                 chars.next();
-                *in_block_comment = 1;
-                continue;
+            } else if ch == delimiter {
+                *quote = None;
             }
-        }
-
-        if ch == '"' {
-            in_string = true;
             continue;
         }
-        if ch == '\'' {
-            in_char = true;
+        if ch == '/' && chars.as_str().starts_with('/') {
+            break;
+        }
+        if ch == '/' && chars.as_str().starts_with('*') {
+            chars.next();
+            *in_block_comment = 1;
+            continue;
+        }
+        if ch == '"' || ch == '\'' {
+            *quote = Some(ch);
             continue;
         }
 
-        if ch == '{' {
+        if *end == TargetItemEnd::ReadKeyword && ch.is_ascii_alphabetic() {
+            let start = line.len() - chars.as_str().len() - 1;
+            let word = line[start..]
+                .split(|c: char| !(c.is_ascii_alphanumeric() || c == '_'))
+                .next()
+                .unwrap();
+            chars = line[start + word.len()..].chars();
+            *end = match word {
+                "pub" | "async" => TargetItemEnd::ReadKeyword,
+                "import" | "const" | "static" | "type" => TargetItemEnd::Semicolon,
+                _ => TargetItemEnd::BraceOrSemicolon,
+            };
+        } else if ch == '{' {
             *depth += 1;
-            *seen_open = true;
-            continue;
-        }
-        if ch == '}' {
-            if *depth > 0 {
-                *depth -= 1;
+        } else if ch == '}' && *depth > 0 {
+            *depth -= 1;
+            if *depth == 0 && *end == TargetItemEnd::BraceOrSemicolon {
+                return Some(line.len() - chars.as_str().len());
             }
-            continue;
-        }
-        if ch == ';' {
-            *saw_semicolon = true;
+        } else if ch == ';' && *depth == 0 && *end != TargetItemEnd::TrackComments {
+            return Some(line.len() - chars.as_str().len());
         }
     }
+    None
 }
 
 fn consume_target_item(
@@ -261,37 +244,39 @@ fn consume_target_item(
     in_block_comment: &mut usize,
 ) -> usize {
     let first = idx;
-    let mut depth: i32 = 0;
-    let mut seen_open = false;
-
+    let mut depth = 0;
+    let mut end = TargetItemEnd::ReadKeyword;
+    let mut quote = None;
     while idx < lines.len() {
         let line = lines[idx];
-        if keep {
-            out.push(line.to_string());
-        } else {
-            out.push(" ".repeat(line.len()));
-        }
-
-        let mut saw_semicolon = false;
-        scan_target_item_line(
-            if idx == first { &line[first_offset..] } else { line },
+        let start = if idx == first { first_offset } else { 0 };
+        let boundary = scan_target_item_line(
+            &line[start..],
             in_block_comment,
             &mut depth,
-            &mut seen_open,
-            &mut saw_semicolon,
+            &mut end,
+            &mut quote,
         );
+        let stop = boundary.map_or(line.len(), |offset| start + offset);
+        if keep {
+            out.push(line.to_owned());
+        } else {
+            out.push(format!("{}{}{}", &line[..start], " ".repeat(stop - start), &line[stop..]));
+        }
 
         idx += 1;
-
-        if seen_open {
-            if depth == 0 {
-                break;
-            }
-        } else if saw_semicolon {
+        if boundary.is_some() {
+            // A following declaration or opening block comment belongs to active source.
+            scan_target_item_line(
+                &line[stop..],
+                in_block_comment,
+                &mut 0,
+                &mut TargetItemEnd::TrackComments,
+                &mut None,
+            );
             break;
         }
     }
-
     idx
 }
 
@@ -333,63 +318,36 @@ pub fn preprocess_target_attrs(source: &str, target: &TargetConditionContext) ->
     let mut idx: usize = 0;
     let mut comment_depth = 0;
 
+    let mut pending = None;
     while idx < lines.len() {
         let line = lines[idx];
-        if let Some((target_attr, tail, tail_depth)) =
-            (comment_depth == 0).then(|| parse_target_attr(line)).flatten()
-        {
-            let keep_item = target_attr.matches(target);
-            // Retain active trailing comments, including their opening delimiter,
-            // while replacing only the attribute's bytes with spaces.
-            out.push(if keep_item {
-                format!("{}{}", " ".repeat(tail), &line[tail..])
-            } else {
-                " ".repeat(line.len())
-            });
+        let Some(start) = target_item_start(line, &mut comment_depth) else {
+            out.push(line.to_owned());
+            idx += 1;
+            continue;
+        };
+        if let Some((attr, len, tail_depth)) = parse_target_attr(&line[start..]) {
+            pending = Some(pending.unwrap_or(true) && attr.matches(target));
+            out.push(format!("{}{}{}", &line[..start], " ".repeat(len), &line[start + len..]));
             comment_depth = tail_depth;
             idx += 1;
-
-            // Attribute applies to the next top-level item.
-            // Preserve line count for any leading blanks/comments.
-            while idx < lines.len() {
-                let item_line = lines[idx];
-                let code_start = target_item_start(item_line, &mut comment_depth);
-                if code_start.is_none() {
-                    if keep_item {
-                        out.push(item_line.to_string());
-                    } else {
-                        out.push(" ".repeat(item_line.len()));
-                    }
-                    idx += 1;
-                    continue;
-                }
-
-                let code_start = code_start.unwrap();
-                if is_supported_target_item_start(&item_line[code_start..]) {
-                    idx = consume_target_item(
-                        &lines,
-                        idx,
-                        code_start,
-                        keep_item,
-                        &mut out,
-                        &mut comment_depth,
-                    );
-                } else if keep_item {
-                    out.push(item_line.to_string());
-                    idx += 1;
-                } else {
-                    out.push(" ".repeat(item_line.len()));
-                    idx += 1;
-                }
-                break;
-            }
             continue;
         }
-
-        // Track comments in ordinary source too: attribute-looking text inside
-        // a comment is source text, not a preprocessing directive.
-        scan_target_item_line(line, &mut comment_depth, &mut 0, &mut false, &mut false);
-        out.push(line.to_string());
+        if let Some(keep) = pending.take() {
+            if is_supported_target_item_start(&line[start..]) {
+                idx = consume_target_item(&lines, idx, start, keep, &mut out, &mut comment_depth);
+                continue;
+            }
+        }
+        // Leave malformed attributes visible to the parser, even after a false condition.
+        scan_target_item_line(
+            &line[start..],
+            &mut comment_depth,
+            &mut 0,
+            &mut TargetItemEnd::TrackComments,
+            &mut None,
+        );
+        out.push(line.to_owned());
         idx += 1;
     }
 
@@ -1141,6 +1099,74 @@ mod tests {
             assert!(resolve_std_import_path(&std_root, "std::alias").is_ok());
         }
         std::fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
+    fn inactive_item_ends_before_other_declarations_on_the_same_line() {
+        for item in [
+            r#"pub fun absent() { var s: str = "};"; /* } ; */ if (true) { return; } }"#,
+            r#"import("absent")::{one, two};"#,
+            "struct Absent { x: i32; }",
+            "pub /* ignored } */ const ABSENT: i32 = 7;",
+            "pub\nconst ABSENT: Pair = Pair { x: 1 }\n;",
+        ] {
+            for newline in ["\n", "\r\n", "\r"] {
+                let source = format!("#[target(os=\"windows\")]\n{item} const KEEP: i32 = 7; /*\n#[target(os=\"windows\")]\n*/ fun main() -> i32 {{ return KEEP; }}").replace('\n', newline);
+                let processed = preprocess_target_attrs(
+                    &source,
+                    &TargetConditionContext { os: Some("linux".into()), ..Default::default() },
+                );
+                let after = source.find(" const KEEP").unwrap();
+                assert_eq!(&processed[after..], &source[after..]);
+                assert!(processed[..after].trim().is_empty(), "{processed}");
+                let tokens = Lexer::new(&processed).tokenize().unwrap();
+                crate::parse_syntax_only(&tokens).unwrap();
+            }
+        }
+    }
+
+    #[test]
+    fn stacked_target_attributes_require_every_condition_and_keep_source_spans() {
+        for newline in ["\n", "\r", "\r\n"] {
+            for attributes in [
+                ["os=\"windows\"", "arch=\"amd64\"", "env=\"msvc\""],
+                ["env=\"msvc\"", "os=\"windows\"", "arch=\"amd64\""],
+                ["arch=\"amd64\"", "env=\"msvc\"", "os=\"windows\""],
+            ] {
+                let mut lines = vec!["/* é */".to_owned()];
+                for attribute in attributes {
+                    lines.extend([
+                        format!("#[target({attribute})] /* start"),
+                        "  */ // next condition".into(),
+                        String::new(),
+                    ]);
+                }
+                lines.push("fun platform() {} fun after() {}".into());
+                let source = lines.join(newline);
+                for (os, arch, env, keep) in [
+                    ("windows", "x86_64", "msvc", true),
+                    ("linux", "x86_64", "msvc", false),
+                    ("windows", "arm64", "msvc", false),
+                    ("windows", "x86_64", "gnu", false),
+                ] {
+                    let target = TargetConditionContext {
+                        os: Some(os.into()),
+                        arch: Some(arch.into()),
+                        env: Some(env.into()),
+                        ..Default::default()
+                    };
+                    let output = preprocess_target_attrs(&source, &target);
+                    assert_eq!(output.len(), source.len());
+                    assert_eq!(output.find("fun after"), source.find("fun after"));
+                    assert_eq!(output.contains("fun platform"), keep);
+                    crate::parse_syntax_only(&Lexer::new(&output).tokenize().unwrap()).unwrap();
+                }
+            }
+        }
+        let malformed = "#[target(os=\"never\")]\n#[target(typo=\"linux\")]\nfun platform() {}";
+        let output = preprocess_target_attrs(malformed, &TargetConditionContext::default());
+        assert!(output.contains("#[target(typo="));
+        assert!(output.contains("fun platform"));
     }
 
     #[test]
