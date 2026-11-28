@@ -22,6 +22,68 @@ fn archive(path: &Path, links: &[(&str, &str)]) {
 }
 
 #[test]
+fn gzip_members_are_read_and_verified_through_the_last_trailer() {
+    use flate2::{write::GzEncoder, Compression};
+    use std::io::Write;
+
+    let member = |bytes: &[u8]| {
+        let mut gzip = GzEncoder::new(Vec::new(), Compression::fast());
+        gzip.write_all(bytes).unwrap();
+        gzip.finish().unwrap()
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let tar = dir.path().join("test.tar");
+    archive(&tar, &[]);
+    let bytes = fs::read(tar).unwrap();
+    let input = dir.path().join("test.tar.gz");
+    for (i, gzip) in [
+        member(&bytes),
+        [member(&bytes[..515]), member(&bytes[515..])].concat(),
+        [member(&bytes), member(&[0; 512])].concat(),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        fs::write(&input, &gzip).unwrap();
+        let output = dir.path().join(format!("valid-{i}"));
+        sdk::extract(&input, &output, false).unwrap();
+        assert_eq!(fs::read(output.join("llvm/bin/tool")).unwrap(), b"PAYLOAD");
+
+        let trailer = gzip.len() - 8;
+        let mut damaged = gzip.clone();
+        damaged[trailer] ^= 1;
+        for bad in [&damaged[..], &gzip[..trailer]] {
+            fs::write(&input, bad).unwrap();
+            let output = dir.path().join("refused");
+            assert!(sdk::extract(&input, &output, false).is_err());
+            assert!(!output.exists());
+        }
+    }
+}
+
+#[test]
+fn zip_payload_crc_is_verified_before_activation() {
+    use std::io::{Cursor, Write};
+    let mut zip = zip::ZipWriter::new(Cursor::new(Vec::new()));
+    let options =
+        zip::write::SimpleFileOptions::default().compression_method(zip::CompressionMethod::Stored);
+    zip.start_file("tool", options).unwrap();
+    zip.write_all(b"PAYLOAD").unwrap();
+    let mut bytes = zip.finish().unwrap().into_inner();
+    let dir = tempfile::tempdir().unwrap();
+    let input = dir.path().join("tool.zip");
+    fs::write(&input, &bytes).unwrap();
+    sdk::extract(&input, &dir.path().join("valid"), false).unwrap();
+    let data = bytes.windows(7).position(|window| window == b"PAYLOAD").unwrap();
+    bytes[data] ^= 1;
+    fs::write(&input, bytes).unwrap();
+    let output = dir.path().join("refused");
+    assert!(sdk::extract(&input, &output, false).is_err());
+    assert!(!output.exists());
+    assert_eq!(fs::read_dir(dir.path()).unwrap().count(), 2);
+}
+
+#[test]
 fn extraction_retains_regular_bytes_permissions_and_rejects_links_by_default() {
     let dir = tempfile::tempdir().unwrap();
     let input = dir.path().join("bundle.tar");

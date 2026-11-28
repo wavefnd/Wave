@@ -75,9 +75,7 @@ fn check_tree_policy(root: &Path, directories: bool) -> Result<()> {
                     return Err(error("cyclic LLVM bundle link"));
                 }
                 let target = fs::read_link(&current)?;
-                if target.is_absolute() {
-                    return Err(error("absolute LLVM bundle link"));
-                }
+                validate_link_target(&target)?;
                 let components: Vec<_> =
                     target.components().map(|c| c.as_os_str().to_owned()).collect();
                 for component in components.into_iter().rev() {
@@ -211,6 +209,18 @@ fn relative(path: &Path) -> Result<PathBuf> {
     Ok(output)
 }
 
+fn validate_link_target(target: &Path) -> Result<()> {
+    for component in target.components() {
+        match component {
+            Component::CurDir | Component::ParentDir => {},
+            Component::Normal(name) if !cfg!(windows) || !name.to_string_lossy().contains(':') => {
+            },
+            _ => return Err(error(format!("expected relative bundle link: {}", target.display()))),
+        }
+    }
+    Ok(())
+}
+
 #[cfg(unix)]
 fn link(target: &Path, path: &Path) -> Result<()> {
     std::os::unix::fs::symlink(target, path)?;
@@ -280,16 +290,24 @@ fn extract_policy(
         Ok(())
     };
     let name = archive.to_string_lossy();
+    let gzip = name.ends_with(".tar.gz") || name.ends_with(".tgz");
     if name.ends_with(".zip") {
         let mut zip = zip::ZipArchive::new(File::open(archive)?)?;
+        zip.validate_header_consistency()?;
         for index in 0..zip.len() {
             let mut entry = zip.by_index(index)?;
-            if entry.is_dir()
-                && Path::new(entry.name()).components().all(|c| c == Component::CurDir)
-            {
+            if entry.is_dir() && entry.read(&mut [0])? != 0 {
+                return Err(error("unexpected ZIP directory payload"));
+            }
+            let entry_name = entry.name()?;
+            let entry_path = Path::new(entry_name.as_ref());
+            if entry.is_dir() && entry_path.components().all(|c| c == Component::CurDir) {
                 continue;
             }
-            let path = relative(Path::new(entry.name()))?;
+            if entry.enclosed_name().is_none() {
+                return Err(error(format!("invalid ZIP entry path: {entry_name}")));
+            }
+            let path = relative(entry_path)?;
             let mode = entry.unix_mode().unwrap_or(0o100644);
             if entry.is_dir() {
                 fs::create_dir_all(stage.join(path))?;
@@ -298,17 +316,24 @@ fn extract_policy(
                     return Err(error("archive symlink is not allowed"));
                 }
                 let mut target = String::new();
-                entry.read_to_string(&mut target)?;
+                let size = entry.size();
+                if entry.by_ref().take(size).read_to_string(&mut target)? as u64 != size {
+                    return Err(error("truncated archive link"));
+                }
                 links.push((path, PathBuf::from(target), false));
             } else if mode & 0o170000 == 0 || mode & 0o170000 == 0o100000 {
                 put(&path, entry.size(), mode, &mut entry)?;
             } else {
                 return Err(error("unsupported archive entry type"));
             }
+            // The ZIP reader checks the CRC on the first read past the payload.
+            if entry.read(&mut [0])? != 0 {
+                return Err(error("ZIP entry exceeds its declared size"));
+            }
         }
     } else {
-        let reader: Box<dyn Read> = if name.ends_with(".tar.gz") || name.ends_with(".tgz") {
-            Box::new(flate2::read::GzDecoder::new(File::open(archive)?))
+        let reader: Box<dyn Read> = if gzip {
+            Box::new(flate2::read::MultiGzDecoder::new(File::open(archive)?))
         } else if name.ends_with(".tar.xz") || name.ends_with(".txz") {
             let compressed = work.path().join("input.tar.xz");
             fs::copy(archive, &compressed)?;
@@ -355,6 +380,15 @@ fn extract_policy(
                 return Err(error("unsupported archive entry type"));
             }
         }
+        if gzip {
+            // TAR stops at its end marker. Consume gzip padding and trailers,
+            // including any later members, before activating the staged tree.
+            let remaining = MAX_EXPANDED - expanded;
+            let mut tail = tar.into_inner().take(remaining + 1);
+            if std::io::copy(&mut tail, &mut std::io::sink())? > remaining {
+                return Err(error("expanded archive exceeds size limit"));
+            }
+        }
     }
     // Creating a link never grants permission to write through it.
     let link_names: BTreeSet<_> = links.iter().map(|(name, _, _)| name.clone()).collect();
@@ -367,9 +401,7 @@ fn extract_policy(
         if !seen.insert(name.clone()) || storage::exists(&stage.join(name)) {
             return Err(error("duplicate archive link"));
         }
-        if target.is_absolute() {
-            return Err(error("absolute archive link"));
-        }
+        validate_link_target(target)?;
         let path = stage.join(name);
         fs::create_dir_all(path.parent().unwrap())?;
         if *hard {
