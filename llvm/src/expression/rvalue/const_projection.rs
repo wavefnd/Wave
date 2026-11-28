@@ -146,7 +146,7 @@ pub(crate) fn try_gen_index_access<'ctx, 'a>(
             // LLVM extractvalue requires a fixed immediate index. Keep dynamic
             // indexing value-only by materializing an internal temporary whose
             // address is never entered in the Wave variable environment.
-            let storage = env.builder.build_alloca(array_type, "const.array.storage").unwrap();
+            let storage = env.scratch_slot(array_type, "const.array.storage");
             env.builder.build_store(storage, array).unwrap();
             let zero = env.context.i32_type().const_zero();
             let element_pointer = unsafe {

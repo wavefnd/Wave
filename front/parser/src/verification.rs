@@ -120,6 +120,7 @@ struct Validator<'a> {
     program: &'a ProgramTypes,
     scopes: Vec<HashMap<String, Binding>>,
     binding_sites: Vec<HashMap<String, (usize, Option<error::SourceSpan>)>>,
+    rebound_names: HashSet<String>,
     declaration_order: usize,
     related: Vec<error::RelatedDiagnostic>,
     suggestions: Vec<String>,
@@ -151,6 +152,7 @@ impl<'a> Validator<'a> {
             program,
             scopes: vec![HashMap::new()],
             binding_sites: vec![HashMap::new()],
+            rebound_names: HashSet::new(),
             declaration_order: 0,
             related: Vec::new(),
             suggestions: Vec::new(),
@@ -333,12 +335,18 @@ impl<'a> Validator<'a> {
             &format!("return type of function `{}`", display_name),
         )?;
 
+        let previous_rebound =
+            std::mem::replace(&mut self.rebound_names, storage::rebound_names(&function.body));
         let result = self.with_scope(|validator| {
             for parameter in &function.parameters {
                 validator.source_span = parameter.span.clone();
                 validator.insert_current_binding(
                     parameter.name.clone(),
-                    Binding { mutability: Mutability::Var, ty: parameter.param_type.clone() },
+                    Binding {
+                        literal_address: false,
+                        mutability: Mutability::Var,
+                        ty: parameter.param_type.clone(),
+                    },
                     "parameter",
                 )?;
             }
@@ -357,6 +365,7 @@ impl<'a> Validator<'a> {
             Ok(())
         });
 
+        self.rebound_names = previous_rebound;
         self.current_async = previous_async;
         self.current_function = previous_function;
         self.current_return_type = previous_return;
@@ -448,7 +457,11 @@ impl<'a> Validator<'a> {
         if asm_initializer {
             self.insert_current_binding(
                 variable.name.clone(),
-                Binding { mutability: variable.mutability, ty: variable.type_name.clone() },
+                Binding {
+                    literal_address: false,
+                    mutability: variable.mutability,
+                    ty: variable.type_name.clone(),
+                },
                 "variable",
             )?;
         }
@@ -464,9 +477,15 @@ impl<'a> Validator<'a> {
 
         if !asm_initializer {
             self.source_span = self.source_map.nodes.get(&(node as *const _ as usize)).cloned();
+            let literal_address = !self.rebound_names.contains(&variable.name)
+                && variable.initial_value.as_ref().is_some_and(|value| self.literal_address(value));
             self.insert_current_binding(
                 variable.name.clone(),
-                Binding { mutability: variable.mutability, ty: variable.type_name.clone() },
+                Binding {
+                    literal_address,
+                    mutability: variable.mutability,
+                    ty: variable.type_name.clone(),
+                },
                 "variable",
             )?;
         }
@@ -591,7 +610,7 @@ impl<'a> Validator<'a> {
             if !is_lvalue_expression(argument) {
                 return Err("input argument must be a mutable lvalue".to_string());
             }
-            self.ensure_mutable_write_target(argument, "write input into")?;
+            self.ensure_writable_storage(argument, "write input into")?;
             let ty = self.validate_expr(argument)?;
             let supported = match &ty {
                 ExpressionType::Known(ty) => matches!(
@@ -888,7 +907,7 @@ impl<'a> Validator<'a> {
                 for (name, ty) in bindings {
                     validator.insert_current_binding(
                         name,
-                        Binding { mutability: Mutability::Var, ty },
+                        Binding { literal_address: false, mutability: Mutability::Var, ty },
                         "pattern binding",
                     )?;
                 }

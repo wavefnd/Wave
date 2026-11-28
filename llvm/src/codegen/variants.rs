@@ -19,6 +19,7 @@
 //! selected case; projections reinterpret field 2 using that case's tuple type.
 
 use super::types::{wave_type_to_llvm_type, TypeFlavor};
+use crate::diagnostic::{CodegenError, CodegenErrorKind, CodegenPhase};
 use hir::{HirExpressionType, TypedProgram};
 use inkwell::context::Context;
 use inkwell::targets::TargetData;
@@ -28,16 +29,17 @@ use parser::types::{parse_type, split_top_level_generic_args, token_type_to_wave
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
 #[derive(Debug)]
-pub(crate) struct VariantDefinition {
+pub(crate) struct VariantDefinition<'ast> {
+    declaration: &'ast VariantNode,
     pub name: String,
     pub cases: Vec<Vec<WaveType>>,
 }
 
-pub(crate) fn declare_variant_types<'ctx>(
+pub(crate) fn declare_variant_types<'ctx, 'ast>(
     context: &'ctx Context,
-    program: &TypedProgram,
+    program: &'ast TypedProgram,
     struct_types: &mut HashMap<String, StructType<'ctx>>,
-) -> Vec<VariantDefinition> {
+) -> Vec<VariantDefinition<'ast>> {
     let templates = program
         .syntax()
         .iter()
@@ -70,26 +72,26 @@ pub(crate) fn declare_variant_types<'ctx>(
         names.insert(variant.name.clone());
     }
 
-    let mut definitions = BTreeMap::<String, Vec<Vec<WaveType>>>::new();
+    let mut definitions = BTreeMap::new();
     while let Some(name) = names.iter().find(|name| !definitions.contains_key(*name)).cloned() {
-        let cases = specialize_variant(&name, &templates);
+        let (declaration, cases) = specialize_variant(&name, &templates);
         for case in &cases {
             for payload in case {
                 collect_type_variants(payload, &mut names);
             }
         }
-        definitions.insert(name, cases);
+        definitions.insert(name, (declaration, cases));
     }
 
     let definitions = definitions
         .into_iter()
-        .map(|(name, cases)| {
+        .map(|(name, (declaration, cases))| {
             let llvm_name = format!("variant.{name}");
             let ty = context.opaque_struct_type(&llvm_name);
             if struct_types.insert(name.clone(), ty).is_some() {
                 panic!("variant type '{}' conflicts with another LLVM aggregate", name);
             }
-            VariantDefinition { name, cases }
+            VariantDefinition { declaration, name, cases }
         })
         .collect::<Vec<_>>();
     definitions
@@ -109,57 +111,66 @@ pub(crate) fn payload_type<'ctx>(
 
 pub(crate) fn define_variant_types<'ctx>(
     context: &'ctx Context,
-    definitions: &[VariantDefinition],
+    definitions: &[VariantDefinition<'_>],
     struct_types: &HashMap<String, StructType<'ctx>>,
     target_data: &TargetData,
-) {
+) -> Result<(), CodegenError> {
     let mut pending = definitions.iter().collect::<Vec<_>>();
     while !pending.is_empty() {
         let before = pending.len();
-        pending.retain(|definition| {
+        for definition in std::mem::take(&mut pending) {
             let payloads = definition
                 .cases
                 .iter()
                 .map(|case| payload_type(context, case, struct_types))
                 .collect::<Vec<_>>();
             if payloads.iter().any(|ty| ty.size_of().is_none()) {
-                return true;
+                pending.push(definition);
+                continue;
             }
             let mut alignment_witness = context.i8_type().as_basic_type_enum();
             let mut alignment = 1;
             let mut size = 0;
-            for payload in payloads {
-                size = size.max(target_data.get_abi_size(&payload));
+            for (case, payload) in definition.declaration.cases.iter().zip(payloads) {
+                let bytes = target_data.get_abi_size(&payload);
+                let capacity = u32::try_from(bytes).map_err(|_| {
+                    let mut diagnostic = CodegenError::new(
+                        CodegenPhase::Validation,
+                        "lay out variant payload",
+                        format!("variant `{}::{}` needs {bytes} payload bytes on this target; the maximum is {}", definition.name, case.name, u32::MAX),
+                    ).with_span(case.span.clone());
+                    diagnostic.kind = CodegenErrorKind::InvalidLayout;
+                    diagnostic
+                })?;
+                size = size.max(capacity);
                 let payload_alignment = target_data.get_abi_alignment(&payload);
                 if payload_alignment > alignment {
                     alignment = payload_alignment;
                     alignment_witness = payload.as_basic_type_enum();
                 }
             }
-            let storage_size =
-                u32::try_from(size).expect("variant payload exceeds LLVM array capacity");
             struct_types[&definition.name].set_body(
                 &[
                     context.i32_type().into(),
                     alignment_witness.array_type(0).into(),
-                    context.i8_type().array_type(storage_size).into(),
+                    context.i8_type().array_type(size).into(),
                 ],
                 false,
             );
-            false
-        });
+        }
         assert!(pending.len() < before, "validated variants contain an unsized value cycle");
     }
+    Ok(())
 }
 
-fn specialize_variant(
+fn specialize_variant<'ast>(
     concrete_name: &str,
-    templates: &HashMap<String, &VariantNode>,
-) -> Vec<Vec<WaveType>> {
+    templates: &HashMap<String, &'ast VariantNode>,
+) -> (&'ast VariantNode, Vec<Vec<WaveType>>) {
     if let Some(concrete) =
         templates.get(concrete_name).filter(|variant| variant.generic_params.is_empty())
     {
-        return concrete.cases.iter().map(|case| case.payload_types.clone()).collect();
+        return (concrete, concrete.cases.iter().map(|case| case.payload_types.clone()).collect());
     }
     let (base, arguments) = split_variant_application(concrete_name)
         .unwrap_or_else(|| (concrete_name.to_string(), Vec::new()));
@@ -175,7 +186,7 @@ fn specialize_variant(
     }
     let substitutions =
         template.generic_params.iter().cloned().zip(arguments).collect::<HashMap<_, _>>();
-    template
+    let cases = template
         .cases
         .iter()
         .map(|case| {
@@ -184,7 +195,8 @@ fn specialize_variant(
                 .map(|payload| resolve_payload_type(payload, &substitutions, templates))
                 .collect()
         })
-        .collect()
+        .collect();
+    (template, cases)
 }
 
 fn resolve_payload_type(

@@ -923,7 +923,7 @@ fn build_module(
         }
     }
 
-    define_variant_types(context, &variant_definitions, &struct_types, td);
+    define_variant_types(context, &variant_definitions, &struct_types, td)?;
 
     codegen_trace("lower global initializers");
     for ast in ast_nodes {
@@ -1365,6 +1365,10 @@ fn build_module(
     }
 
     build_wasi_start_wrapper(context, builder, module, abi_target)?;
+
+    if let Some(guard) = super::literal_storage::protect(context, module, td)? {
+        apply_function_codegen_attrs(context, guard, disable_red_zone, abi_target, cpu, features);
+    }
 
     codegen_trace("verify module");
     module

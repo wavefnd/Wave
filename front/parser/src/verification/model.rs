@@ -15,6 +15,7 @@ use crate::ast::{Expression, Mutability, WaveType};
 
 #[derive(Clone, Debug)]
 pub(super) struct Binding {
+    pub(super) literal_address: bool,
     pub(super) mutability: Mutability,
     pub(super) ty: WaveType,
 }

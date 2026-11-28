@@ -79,10 +79,10 @@ fn pack_agg_to_int<'ctx, 'a>(
 ) -> BasicValueEnum<'ctx> {
     let agg_ty = agg.get_type();
 
-    let agg_tmp = env.builder.build_alloca(agg_ty, &format!("{}_agg_tmp", tag)).unwrap();
+    let agg_tmp = env.scratch_slot(agg_ty, &format!("{}_agg_tmp", tag));
     env.builder.build_store(agg_tmp, agg).unwrap();
 
-    let int_tmp = env.builder.build_alloca(dst, &format!("{}_int_tmp", tag)).unwrap();
+    let int_tmp = env.scratch_slot(dst, &format!("{}_int_tmp", tag));
 
     // The ABI transport slot may be wider than the aggregate object (for
     // example a 3-byte RV64 aggregate transported in i64). Keep padding bits
@@ -103,8 +103,8 @@ fn unpack_int_to_agg<'ctx, 'a>(
     dst_agg_ty: BasicTypeEnum<'ctx>,
     tag: &str,
 ) -> BasicValueEnum<'ctx> {
-    let agg_tmp = env.builder.build_alloca(dst_agg_ty, &format!("{}_agg_tmp", tag)).unwrap();
-    let int_tmp = env.builder.build_alloca(iv.get_type(), &format!("{}_int_tmp", tag)).unwrap();
+    let agg_tmp = env.scratch_slot(dst_agg_ty, &format!("{}_agg_tmp", tag));
+    let int_tmp = env.scratch_slot(iv.get_type(), &format!("{}_int_tmp", tag));
 
     env.builder.build_store(int_tmp, iv).unwrap();
 
@@ -316,7 +316,7 @@ fn gen_extern_call<'ctx, 'a>(
     let mut sret_tmp: Option<PointerValue<'ctx>> = None;
     if let RetLowering::SRet { ty, .. } = &info.ret {
         let agg = any_agg_to_basic(*ty);
-        let tmp = env.builder.build_alloca(agg, &format!("{}_sret_tmp", name)).unwrap();
+        let tmp = env.scratch_slot(agg, &format!("{}_sret_tmp", name));
 
         let expected_ptr = meta_into_ptr(llvm_param_types[0]);
         let tmp2 = coerce_ptr_to(env, tmp, expected_ptr, &format!("{}_sret_ptrcast", name));
@@ -343,8 +343,7 @@ fn gen_extern_call<'ctx, 'a>(
             ParamLowering::Indirect { ty } | ParamLowering::ByVal { ty, .. } => {
                 let agg = any_agg_to_basic(*ty);
                 let v = env.gen(arg_expr, Some(agg));
-                let tmp =
-                    env.builder.build_alloca(agg, &format!("{}_byval_tmp_{}", name, i)).unwrap();
+                let tmp = env.scratch_slot(agg, &format!("{}_byval_tmp_{}", name, i));
                 // Windows x64 passes odd-sized aggregates through a caller
                 // temporary aligned to at least 16 bytes, without byval.
                 if matches!(
@@ -524,8 +523,7 @@ fn coerce_to_expected<'ctx, 'a>(
             got_agg @ (BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_)),
             BasicTypeEnum::PointerType(dst),
         ) => {
-            let source =
-                env.builder.build_alloca(got_agg, &format!("arg{}_ptr_agg", arg_index)).unwrap();
+            let source = env.scratch_slot(got_agg, &format!("arg{}_ptr_agg", arg_index));
             env.builder.build_store(source, val).unwrap();
             env.builder
                 .build_load(dst, source, &format!("arg{}_ptr_transport", arg_index))
@@ -578,13 +576,9 @@ fn coerce_to_expected<'ctx, 'a>(
                 );
             }
 
-            let source =
-                env.builder.build_alloca(got_agg, &format!("arg{}_agg_source", arg_index)).unwrap();
+            let source = env.scratch_slot(got_agg, &format!("arg{}_agg_source", arg_index));
             env.builder.build_store(source, val).unwrap();
-            let transport = env
-                .builder
-                .build_alloca(dst_agg, &format!("arg{}_agg_transport", arg_index))
-                .unwrap();
+            let transport = env.scratch_slot(dst_agg, &format!("arg{}_agg_transport", arg_index));
             env.builder.build_store(transport, dst_agg.const_zero()).unwrap();
             let bytes = env.context.i64_type().const_int(got_size, false);
             env.builder
@@ -617,8 +611,7 @@ fn coerce_to_expected<'ctx, 'a>(
                 );
             }
 
-            let tmp =
-                env.builder.build_alloca(got_agg, &format!("arg{}_agg_tmp", arg_index)).unwrap();
+            let tmp = env.scratch_slot(got_agg, &format!("arg{}_agg_tmp", arg_index));
             env.builder.build_store(tmp, val).unwrap();
 
             env.builder
@@ -641,8 +634,7 @@ fn coerce_to_expected<'ctx, 'a>(
                 );
             }
 
-            let tmp =
-                env.builder.build_alloca(dst_agg, &format!("arg{}_v2agg_tmp", arg_index)).unwrap();
+            let tmp = env.scratch_slot(dst_agg, &format!("arg{}_v2agg_tmp", arg_index));
 
             env.builder.build_store(tmp, val).unwrap();
 
@@ -727,10 +719,10 @@ fn split_agg_parts_from_agg<'ctx, 'a>(
     let aggregate_type = agg_val.get_type();
     let aggregate_size = env.target_data.get_store_size(&aggregate_type);
     let staging_type = env.context.i8_type().array_type(total_bytes as u32);
-    let staging = env.builder.build_alloca(staging_type, &format!("{tag}_staging")).unwrap();
+    let staging = env.scratch_slot(staging_type, &format!("{tag}_staging"));
     env.builder.build_store(staging, staging_type.const_zero()).unwrap();
 
-    let aggregate = env.builder.build_alloca(aggregate_type, &format!("{tag}_aggregate")).unwrap();
+    let aggregate = env.scratch_slot(aggregate_type, &format!("{tag}_aggregate"));
     env.builder.build_store(aggregate, agg_val).unwrap();
     env.builder
         .build_memcpy(
@@ -745,7 +737,7 @@ fn split_agg_parts_from_agg<'ctx, 'a>(
     let mut offset: u64 = 0;
     for (pi, part_ty) in parts.iter().enumerate() {
         let part_size = env.target_data.get_store_size(part_ty) as u64;
-        let dst = env.builder.build_alloca(*part_ty, &format!("{tag}_part_dst_{pi}")).unwrap();
+        let dst = env.scratch_slot(*part_ty, &format!("{tag}_part_dst_{pi}"));
 
         let off = env.context.i64_type().const_int(offset, false);
         let src_off = unsafe {
@@ -777,7 +769,7 @@ fn coerce_and_expand_agg_parts<'ctx, 'a>(
 ) -> Vec<BasicValueEnum<'ctx>> {
     let aggregate_type = aggregate.get_type();
     let aggregate_size = env.target_data.get_store_size(&aggregate_type);
-    let source = env.builder.build_alloca(aggregate_type, &format!("{tag}_aggregate")).unwrap();
+    let source = env.scratch_slot(aggregate_type, &format!("{tag}_aggregate"));
     env.builder.build_store(source, aggregate).unwrap();
 
     parts
@@ -789,8 +781,7 @@ fn coerce_and_expand_agg_parts<'ctx, 'a>(
                 part.offset + size <= aggregate_size,
                 "LoongArch ABI part extends past its aggregate"
             );
-            let destination =
-                env.builder.build_alloca(part.ty, &format!("{tag}_part_{index}")).unwrap();
+            let destination = env.scratch_slot(part.ty, &format!("{tag}_part_{index}"));
             let offset = env.context.i64_type().const_int(part.offset, false);
             // SAFETY: classification derives every offset from the target data
             // layout and verifies the complete part remains in the allocation.
@@ -836,8 +827,7 @@ fn coerce_lowered_ret_to_expected<'ctx, 'a>(
             BasicTypeEnum::PointerType(_),
             BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_),
         ) => {
-            let destination =
-                env.builder.build_alloca(expected, &format!("{tag}_ptr_agg")).unwrap();
+            let destination = env.scratch_slot(expected, &format!("{tag}_ptr_agg"));
             env.builder.build_store(destination, lowered_ret).unwrap();
             env.builder
                 .build_load(expected, destination, &format!("{tag}_ptr_agg_load"))
@@ -854,7 +844,7 @@ fn coerce_lowered_ret_to_expected<'ctx, 'a>(
             BasicTypeEnum::VectorType(_vt),
             BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_),
         ) => {
-            let tmp = env.builder.build_alloca(expected, &format!("{tag}_v2agg_tmp")).unwrap();
+            let tmp = env.scratch_slot(expected, &format!("{tag}_v2agg_tmp"));
             env.builder.build_store(tmp, lowered_ret).unwrap();
             env.builder
                 .build_load(expected, tmp, &format!("{tag}_v2agg_load"))
@@ -866,7 +856,7 @@ fn coerce_lowered_ret_to_expected<'ctx, 'a>(
             BasicTypeEnum::FloatType(_ft),
             BasicTypeEnum::StructType(_) | BasicTypeEnum::ArrayType(_),
         ) => {
-            let tmp = env.builder.build_alloca(expected, &format!("{tag}_f2agg_tmp")).unwrap();
+            let tmp = env.scratch_slot(expected, &format!("{tag}_f2agg_tmp"));
             env.builder.build_store(tmp, lowered_ret).unwrap();
             env.builder
                 .build_load(expected, tmp, &format!("{tag}_f2agg_load"))
@@ -887,10 +877,10 @@ fn coerce_lowered_ret_to_expected<'ctx, 'a>(
                 return lowered_ret;
             }
 
-            let src = env.builder.build_alloca(got, &format!("{tag}_agg_src")).unwrap();
+            let src = env.scratch_slot(got, &format!("{tag}_agg_src"));
             env.builder.build_store(src, lowered_ret).unwrap();
 
-            let dst = env.builder.build_alloca(expected, &format!("{tag}_agg_dst")).unwrap();
+            let dst = env.scratch_slot(expected, &format!("{tag}_agg_dst"));
 
             let bytes = env.context.i64_type().const_int(exp_sz as u64, false);
             env.builder.build_memcpy(dst, 1, src, 1, bytes).unwrap();

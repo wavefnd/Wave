@@ -19,7 +19,7 @@
 
 use hir::HirExpressionType;
 use inkwell::context::Context;
-use inkwell::module::{Linkage, Module};
+use inkwell::module::Module;
 use inkwell::targets::TargetData;
 use inkwell::types::{BasicTypeEnum, StringRadix, StructType};
 use inkwell::values::{BasicValue, BasicValueEnum};
@@ -338,12 +338,7 @@ fn const_raw<'ctx>(
             Err(ConstEvalError::Unsupported("ICE: cast missing HIR conversion facts".into()))
         },
         Expression::Literal(Literal::String(bytes)) => {
-            let value = context.const_string(bytes, true);
-            let global = module.add_global(value.get_type(), None, "$const$str");
-            global.set_initializer(&value);
-            global.set_constant(true);
-            global.set_linkage(Linkage::Private);
-            Ok(global.as_pointer_value().into())
+            Ok(super::literal_storage::literal(context, module, bytes).into())
         },
         Expression::Literal(Literal::Char(value)) => {
             Ok(context.i8_type().const_int(*value as u64, false).into())

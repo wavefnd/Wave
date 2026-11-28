@@ -42,3 +42,4 @@ mod validation;
 pub(crate) mod conversions;
 
 mod arithmetic_runtime;
+pub(crate) mod literal_storage;

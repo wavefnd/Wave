@@ -31,6 +31,7 @@ pub enum WaveType {
     Bool,
     Char,
     Byte,
+    /// NUL-terminated bytes. Literal storage is read-only; a view into a mutable buffer may be written.
     String,
     Pointer(Box<WaveType>),
     /// A lazy asynchronous computation with this completion type.

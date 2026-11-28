@@ -18,8 +18,8 @@
 
 use super::ExprGenEnv;
 use crate::statement::variable::{coerce_basic_value, wave_type_is_unsigned, CoercionMode};
-use inkwell::types::{BasicType, BasicTypeEnum};
-use inkwell::values::{BasicValue, BasicValueEnum};
+use inkwell::types::BasicTypeEnum;
+use inkwell::values::BasicValueEnum;
 use parser::ast::{Expression, WaveType};
 
 pub(crate) fn gen_struct_literal<'ctx, 'a>(
@@ -35,7 +35,7 @@ pub(crate) fn gen_struct_literal<'ctx, 'a>(
         .get(name)
         .unwrap_or_else(|| panic!("Field index map for struct '{}' not found", name));
 
-    let tmp_alloca = env.builder.build_alloca(struct_ty, &format!("tmp_{}_literal", name)).unwrap();
+    let mut literal = struct_ty.get_undef();
 
     for (field_name, field_expr) in fields {
         let idx = *field_indices
@@ -57,18 +57,14 @@ pub(crate) fn gen_struct_literal<'ctx, 'a>(
             wave_type_is_unsigned(env.wave_type(field_expr).as_ref()),
         );
 
-        let field_ptr = env
+        literal = env
             .builder
-            .build_struct_gep(struct_ty, tmp_alloca, idx, &format!("{}.{}", name, field_name))
-            .unwrap();
-
-        env.builder.build_store(field_ptr, field_val).unwrap();
+            .build_insert_value(literal, field_val, idx, field_name)
+            .unwrap()
+            .into_struct_value();
     }
 
-    env.builder
-        .build_load(struct_ty.as_basic_type_enum(), tmp_alloca, &format!("{}_literal_val", name))
-        .unwrap()
-        .as_basic_value_enum()
+    literal.into()
 }
 
 pub(crate) fn gen_field_access<'ctx, 'a>(

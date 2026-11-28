@@ -24,8 +24,8 @@ use inkwell::builder::Builder;
 use inkwell::context::Context;
 use inkwell::module::Module;
 use inkwell::targets::TargetData;
-use inkwell::types::{BasicTypeEnum, StructType};
-use inkwell::values::BasicValueEnum;
+use inkwell::types::{BasicType, BasicTypeEnum, StructType};
+use inkwell::values::{BasicValueEnum, PointerValue};
 use parser::ast::{Expression, WaveType};
 use std::collections::HashMap;
 
@@ -68,6 +68,17 @@ pub(crate) struct ExprGenEnv<'ctx, 'a> {
 }
 
 impl<'ctx, 'a> ExprGenEnv<'ctx, 'a> {
+    /// A fixed slot per call site and stack frame for private value transport.
+    /// Wave expressions that expose their temporary's address must allocate separately.
+    fn scratch_slot(&self, ty: impl BasicType<'ctx>, name: &str) -> PointerValue<'ctx> {
+        crate::statement::variable::build_entry_alloca(
+            self.context,
+            self.builder,
+            ty.as_basic_type_enum(),
+            name,
+        )
+    }
+
     #[inline]
     pub fn gen(
         &mut self,

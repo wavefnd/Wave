@@ -34,8 +34,7 @@ pub(crate) fn gen_constructor<'ctx, 'a>(
     };
     let variant_ty =
         *env.struct_types.get(name).unwrap_or_else(|| panic!("variant type '{}' not found", name));
-    let value_ptr =
-        env.builder.build_alloca(variant_ty, &format!("variant.{}.value", name)).unwrap();
+    let value_ptr = env.scratch_slot(variant_ty, &format!("variant.{}.value", name));
     env.builder.build_store(value_ptr, variant_ty.const_zero()).unwrap();
 
     let tag_ptr =
@@ -58,7 +57,7 @@ pub(crate) fn gen_constructor<'ctx, 'a>(
             name, construction.case_name
         );
     }
-    let payload_ptr = env.builder.build_alloca(payload_ty, "variant.payload.value").unwrap();
+    let payload_ptr = env.scratch_slot(payload_ty, "variant.payload.value");
     env.builder.build_store(payload_ptr, payload_ty.const_zero()).unwrap();
 
     for (index, (argument, payload_wave_type)) in

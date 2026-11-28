@@ -67,3 +67,39 @@ fn payload_variants_emit_ir_and_objects_for_every_advertised_target() {
     }
     fs::remove_dir_all(directory).unwrap();
 }
+
+#[test]
+fn unused_variant_payload_capacity_has_a_source_diagnostic_and_preserves_output() {
+    let temporary =
+        std::env::temp_dir().join(format!("wave-payload-capacity-{}", std::process::id()));
+    fs::create_dir_all(&temporary).unwrap();
+    let source = temporary.join("capacity.wave");
+    let compiler = env!("CARGO_BIN_EXE_wavec");
+    let target = llvm::codegen::target::supported_target_specs()[0].triple;
+    let build = || {
+        Command::new(compiler)
+            .arg("build")
+            .arg(&source)
+            .args(["--target", target, "--emit=ir", "--error-format=json", "--out-dir"])
+            .arg(&temporary)
+            .output()
+            .unwrap()
+    };
+    let ir = temporary.join("capacity.ll");
+    fs::write(&source, "variant V {\n Fits(array<u8, 4294967295>)\n}\nfun main() {}").unwrap();
+    let accepted = build();
+    assert!(accepted.status.success(), "{}", String::from_utf8_lossy(&accepted.stderr));
+    let original = fs::read(&ir).unwrap();
+    fs::write(&source, "variant V {\n Excess(array<u64, 536870912>)\n}\nfun main() {}").unwrap();
+    let rejected = build();
+    assert!(!rejected.status.success());
+    let text = String::from_utf8(rejected.stderr).unwrap();
+    let json = utils::wson::parse_json(&text).unwrap();
+    let error = json.get("error").unwrap();
+    assert_eq!(error.get_str("code"), Some("E3001"), "{text}");
+    assert!(error.get_str("message").unwrap().contains("V::Excess"), "{text}");
+    assert!(text.contains("4294967296") && text.contains("4294967295"), "{text}");
+    assert_eq!(error.get_u64("line"), Some(2), "{text}");
+    assert_eq!(fs::read(ir).unwrap(), original);
+    fs::remove_dir_all(temporary).unwrap();
+}

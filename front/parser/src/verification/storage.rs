@@ -112,3 +112,105 @@ pub(super) fn validate(
     }
     Ok(())
 }
+
+fn ungroup(mut value: &Expression) -> &Expression {
+    while let Expression::Grouped(inner) | Expression::Located { value: inner, .. } = value {
+        value = inner;
+    }
+    value
+}
+
+fn record_name(names: &mut HashSet<String>, expression: &Expression) {
+    if let Expression::Variable(name) = ungroup(expression) {
+        names.insert(name.clone());
+    }
+}
+
+/// A source diagnostic requires a stable address. A reassigned or escaped
+/// binding (including a loop back-edge) is checked at the actual write instead.
+pub(super) fn rebound_names(body: &[ASTNode]) -> HashSet<String> {
+    let mut expressions = HashSet::new();
+    let mut statements = HashSet::new();
+    visit::walk_nodes_with_statements(
+        body,
+        &mut |expr| match expr {
+            Expression::Assignment { target, .. }
+            | Expression::AssignOperation { target, .. }
+            | Expression::IncDec { target, .. }
+            | Expression::AddressOf(target) => record_name(&mut expressions, target),
+            Expression::AsmBlock { outputs, .. } => {
+                for (_, output) in outputs {
+                    record_name(&mut expressions, output);
+                }
+            },
+            _ => {},
+        },
+        &mut |statement| match statement {
+            StatementNode::AsmBlock { outputs, .. } => {
+                for (_, output) in outputs {
+                    record_name(&mut statements, output);
+                }
+            },
+            StatementNode::Assign { variable, .. } => {
+                statements.insert(variable.clone());
+            },
+            StatementNode::Input { args, .. } => {
+                for output in args {
+                    record_name(&mut statements, output);
+                }
+            },
+            _ => {},
+        },
+    );
+    expressions.extend(statements);
+    expressions
+}
+
+impl super::Validator<'_> {
+    fn literal_storage(&self, place: &Expression) -> bool {
+        match ungroup(place) {
+            Expression::Deref(address) | Expression::IndexAccess { target: address, .. } => {
+                self.literal_address(address)
+            },
+            Expression::FieldAccess { object, .. } => {
+                self.literal_storage(object) || self.literal_address(object)
+            },
+            _ => false,
+        }
+    }
+
+    pub(super) fn literal_address(&self, value: &Expression) -> bool {
+        match ungroup(value) {
+            Expression::Literal(Literal::String(_)) => true,
+            Expression::Variable(name) => {
+                self.lookup_binding(name).is_some_and(|b| b.literal_address)
+            },
+            Expression::Cast { expr, target_type }
+                if matches!(
+                    self.program.canonical_type(target_type),
+                    WaveType::Pointer(_) | WaveType::String
+                ) =>
+            {
+                self.literal_address(expr)
+            },
+            Expression::AddressOf(place) => self.literal_storage(place),
+            _ => false,
+        }
+    }
+
+    pub(super) fn ensure_writable_storage(
+        &mut self,
+        target: &Expression,
+        operation: &str,
+    ) -> Result<(), String> {
+        if self.literal_storage(target) {
+            if let Some(span) = self.source_map.expressions.get(&(target as *const _ as usize)) {
+                self.source_span = Some(span.clone());
+            }
+            self.diagnostic_help =
+                Some("write into a mutable byte buffer or a str backed by that buffer".into());
+            return Err("cannot write to read-only string literal storage".into());
+        }
+        self.ensure_mutable_write_target(target, operation)
+    }
+}
